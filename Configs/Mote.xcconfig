@@ -21,3 +21,7 @@ MOTE_UPDATE_KEY = c08de6213863d1f2e33cd2994c6461623409941e5b77ad01af1c6ad9bb9b9e
 SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor
 SWIFT_APPROACHABLE_CONCURRENCY = YES
 SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES
+// Keep the compile-time checks but drop the runtime traps Swift 6 adds to
+// main-actor closures: on macOS 15, SwiftUI calls view builders and colour
+// providers from its display-link thread, and the check kills the app.
+OTHER_SWIFT_FLAGS = $(inherited) -Xfrontend -disable-dynamic-actor-isolation

@@ -23,14 +23,14 @@ enum MenuMetrics {
     /// The hover highlight: the accent colour as it looks on menu material,
     /// lighter than the plain accent.
     static let selection = Color(
-        nsColor: NSColor(name: nil) { appearance in
+        nsColor: NSColor(name: nil) { @Sendable appearance in
             let accent = NSColor.controlAccentColor.usingColorSpace(.sRGB) ?? .systemBlue
             let dark = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
             return (dark ? accent.blended(withFraction: 0.15, of: .black) : accent.blended(withFraction: 0.42, of: .white)) ?? accent
         })
 
     /// The outline of a menu's panel.
-    static let edge = NSColor(name: nil) { appearance in
+    static let edge = NSColor(name: nil) { @Sendable appearance in
         appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? .white.withAlphaComponent(0.18) : .black.withAlphaComponent(0.26)
     }
 }

@@ -52,20 +52,23 @@ enum Palette {
         static let safe = rgb(light: (0.08, 0.50, 0.24), dark: (0.29, 0.87, 0.50))
         static let unsafe = rgb(light: (0.71, 0.33, 0.04), dark: (0.98, 0.75, 0.14))
 
-        private static func adaptive(_ make: @escaping (_ dark: Bool) -> NSColor) -> NSColor {
-            NSColor(name: nil) { make($0.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua) }
+        /// AppKit and SwiftUI resolve dynamic colours on whatever thread is
+        /// drawing (on macOS 15, SwiftUI's render thread), so the provider must
+        /// not be main-actor isolated or the runtime's isolation check traps.
+        nonisolated private static func adaptive(_ make: @escaping @Sendable (_ dark: Bool) -> NSColor) -> NSColor {
+            NSColor(name: nil) { @Sendable in make($0.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua) }
         }
 
-        private static func gray(light: CGFloat, dark: CGFloat) -> NSColor {
+        nonisolated private static func gray(light: CGFloat, dark: CGFloat) -> NSColor {
             adaptive { NSColor(white: $0 ? dark : light, alpha: 1) }
         }
 
         /// Black over light, white over dark, at a given strength.
-        private static func inkWash(light: CGFloat, dark: CGFloat) -> NSColor {
+        nonisolated private static func inkWash(light: CGFloat, dark: CGFloat) -> NSColor {
             adaptive { $0 ? NSColor(white: 1, alpha: dark) : NSColor(white: 0, alpha: light) }
         }
 
-        private static func rgb(light: (CGFloat, CGFloat, CGFloat), dark: (CGFloat, CGFloat, CGFloat)) -> NSColor {
+        nonisolated private static func rgb(light: (CGFloat, CGFloat, CGFloat), dark: (CGFloat, CGFloat, CGFloat)) -> NSColor {
             adaptive {
                 let (r, g, b) = $0 ? dark : light
                 return NSColor(srgbRed: r, green: g, blue: b, alpha: 1)
