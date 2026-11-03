@@ -74,6 +74,9 @@ final class Browser: NSObject, ObservableObject {
         }
     }
     @Published var peeking = false
+    /// The toolbar, when it isn't on the card, is out over the page's top
+    /// because the pointer reached it (see ToolbarReveal.swift).
+    @Published var toolbarRevealed = false
     /// A picture of the page laid over it while the chrome around it changes
     /// size (see `dissolvingPage`).
     @Published var pageVeil: NSImage?

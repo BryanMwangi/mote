@@ -125,3 +125,51 @@ struct FootIcon: View {
         .animation(Motion.hover, value: hovering)
     }
 }
+
+/// The page's address at the top of the sidebar while the toolbar is hidden:
+/// the host, with copying the link and the extensions beside it. A click
+/// brings out the toolbar with the address ready to edit, as ⌘L does.
+struct AddressPill: View {
+    @ObservedObject var browser: Browser
+
+    @State private var hovering = false
+
+    static let height: CGFloat = 32
+
+    private var host: String {
+        guard let tab = browser.active, !tab.isBlank, let url = tab.shownAddress else { return "Search or enter an address" }
+        return url.host().map { $0.replacingOccurrences(of: "www.", with: "", options: .anchored) } ?? url.absoluteString
+    }
+
+    var body: some View {
+        HStack(spacing: 2) {
+            Button(action: browser.edit) {
+                HStack(spacing: 6) {
+                    if browser.active?.isBlank == false, browser.active?.shownAddress?.scheme == "https" {
+                        Image(systemName: "lock.fill").font(.system(size: 9, weight: .medium)).foregroundStyle(Palette.faint)
+                    }
+                    Text(host)
+                        .font(.system(size: 12))
+                        .foregroundStyle(browser.active?.isBlank == false ? Palette.ink : Palette.muted)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    Spacer(minLength: 0)
+                }
+                .padding(.leading, 10)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help("Edit the address   ⌘L")
+            if browser.active?.isBlank == false {
+                Door(icon: "link", help: "Copy Address   ⇧⌘C", act: browser.copyAddress)
+            }
+            ExtensionSlot(edge: .trailing)
+        }
+        .padding(.trailing, 2)
+        .frame(height: Self.height)
+        .background(hovering ? Palette.hover : Palette.wash, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .onHover { hovering = $0 }
+        .animation(Motion.hover, value: hovering)
+    }
+}

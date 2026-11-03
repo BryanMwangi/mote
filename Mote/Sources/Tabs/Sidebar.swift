@@ -30,6 +30,8 @@ struct Sidebar: View {
     /// The band at the top that holds the traffic lights.
     static let top: CGFloat = 50
     private static let footHeight: CGFloat = 50
+    /// Under the address pill, when the toolbar is hidden.
+    private static let pillGap: CGFloat = 10
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -41,6 +43,7 @@ struct Sidebar: View {
 
             VStack(alignment: .leading, spacing: 0) {
                 Color.clear.frame(height: Self.top)
+                if browser.navInSidebar { AddressPill(browser: browser).padding(.bottom, Self.pillGap) }
                 spaces
                 Spacer(minLength: 0)
             }
@@ -57,6 +60,23 @@ struct Sidebar: View {
         .overlay(alignment: .topLeading) {
             TrafficLights(showing: showing, inset: browser.folded ? ChromeLayout.gap : 0)
                 .frame(width: Metrics.lights, height: Self.top)
+        }
+        // With the toolbar hidden, its sidebar button and back, forward and
+        // reload come here, beside the traffic lights.
+        .overlay(alignment: .topTrailing) {
+            if browser.navInSidebar {
+                // Narrow sidebars keep clear of the traffic lights: smaller
+                // buttons, and ⌘S alone for the sidebar.
+                HStack(spacing: 2) {
+                    if prefs.sideWidth >= 220 {
+                        Door(icon: "sidebar.left", help: browser.folded ? "Show Sidebar   ⌘S" : "Hide Sidebar   ⌘S") { browser.toggleFold() }
+                    }
+                    Helm(browser: browser)
+                }
+                .controlSize(prefs.sideWidth >= 260 ? .large : .regular)
+                .padding(.trailing, 8)
+                .frame(height: Self.top)
+            }
         }
         // Pages sliding in from other spaces stay inside.
         .clipped()
@@ -182,7 +202,8 @@ struct Sidebar: View {
         let kept = browser.keptCount == 0 ? 0 : CGFloat(browser.keptCount) * (Self.row + Self.gap) - Self.gap + Self.divider
         let loose = CGFloat(browser.tabs.count - browser.pinnedCount) * (Self.row + Self.gap)
         let header = prefs.usesSpaces ? SpaceHeader.height + Self.gap : 0
-        return Self.top + essentials + header + kept + loose + Self.row + 8
+        let pill = browser.navInSidebar ? AddressPill.height + Self.pillGap : 0
+        return Self.top + pill + essentials + header + kept + loose + Self.row + 8
     }
 
     // MARK: - The list

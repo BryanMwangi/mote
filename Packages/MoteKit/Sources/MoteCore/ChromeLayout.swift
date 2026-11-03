@@ -50,9 +50,11 @@ public struct ChromeLayout: Equatable, Sendable {
     ///   - bookmarked: the bookmarks bar is shown.
     ///   - chatting: the chat panel is docked on the window's trailing edge.
     ///   - panelWidth: the docked chat panel's width; the card gives it up.
+    ///   - toolbar: the toolbar sits on the card; otherwise the page takes its
+    ///     room, and the toolbar only floats over it when called for.
     public init(
         window: CGSize, tabs: Tabs, sideWidth: CGFloat, folded: Bool, immersed: Bool, bookmarked: Bool, chatting: Bool = false,
-        panelWidth: CGFloat = ChromeLayout.panel, bookmarksHeight: CGFloat = ChromeLayout.bookmarks
+        panelWidth: CGFloat = ChromeLayout.panel, bookmarksHeight: CGFloat = ChromeLayout.bookmarks, toolbar: Bool = true
     ) {
         let whole = CGRect(origin: .zero, size: window)
         guard !immersed else {
@@ -92,7 +94,7 @@ public struct ChromeLayout: Equatable, Sendable {
         bottom = max(top, bottom)
         let card = CGRect(x: left, y: top, width: right - left, height: bottom - top)
         self.init(
-            card: card, corner: ChromeLayout.corner, toolbar: ChromeLayout.toolbar,
+            card: card, corner: ChromeLayout.corner, toolbar: toolbar ? ChromeLayout.toolbar : 0,
             bookmarks: bookmarked ? bookmarksHeight : 0, sidebar: sidebar, strip: strip, chatPanel: chatPanel)
     }
 

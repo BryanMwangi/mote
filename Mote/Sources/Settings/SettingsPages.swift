@@ -158,6 +158,16 @@ struct TabSettings: View {
                 RowRule()
             }
             SettingRow(
+                "Toolbar",
+                prefs.sidebar
+                    ? "Hidden puts back, forward and the address at the top of the sidebar; on hover, reach the page's top edge"
+                    : "On hover or hidden, it slides in when the pointer reaches the page's top edge. ⌘L brings it out",
+                symbol: "menubar.rectangle", tint: Tint.green
+            ) {
+                Segmented(options: ToolbarMode.allCases.map { ($0, $0.title) }, selection: $prefs.toolbarMode)
+            }
+            RowRule()
+            SettingRow(
                 "New tabs from a floating search",
                 "⌘T opens a search over the page, and a tab only for what you pick. Escape leaves things as they were",
                 symbol: "magnifyingglass", tint: Tint.blue, on: $prefs.newTabSearch)

@@ -11,6 +11,21 @@ enum Glyph: String, CaseIterable, Identifiable, Storable {
     var title: String { self == .letters ? "Letters" : "Site icons" }
 }
 
+/// Where the toolbar is: always on the card, out of the way until the
+/// pointer reaches the card's top edge, or (beside a sidebar) moved into it.
+enum ToolbarMode: String, CaseIterable, Identifiable, Storable {
+    case shown, hover, hidden
+
+    var id: String { rawValue }
+    var title: String {
+        switch self {
+        case .shown: "Always"
+        case .hover: "On hover"
+        case .hidden: "Hidden"
+        }
+    }
+}
+
 extension Look: Storable {}
 extension SearchEngine: Storable {}
 
@@ -28,6 +43,7 @@ final class Preferences: ObservableObject {
     /// ⌘T and the new-tab buttons open a floating search over the page; a tab
     /// is only made for what's chosen.
     @Published var newTabSearch: Bool
+    @Published var toolbarMode: ToolbarMode
     /// Last manual fold, stored separately for each tab layout.
     @Published var sidebarFolded: Bool
     @Published var stripFolded: Bool
@@ -110,6 +126,7 @@ final class Preferences: ObservableObject {
         sidebar = store.object(forKey: "sidebar") as? Bool ?? (store.string(forKey: "manner") == "side")
         sideHides = store.value("sidebar.hides", or: false)
         newTabSearch = store.value("newtab.search", or: false)
+        toolbarMode = store.value("toolbar.mode", or: .shown)
         sidebarFolded = store.value("sidebar.folded", or: store.value("sidebar.hides", or: false))
         stripFolded = store.value("strip.folded", or: false)
         sideWidth = min(Metrics.sideMax, max(Metrics.sideMin, store.value("sidebar.width", or: Metrics.side)))
@@ -198,6 +215,7 @@ final class Preferences: ObservableObject {
         keep($floatsAway, "float.away")
         keep($floatsOnLeave, "float.leave")
         keep($newTabSearch, "newtab.search")
+        keep($toolbarMode, "toolbar.mode")
         keep($shielded, "shield")
         keep($extensionsInPrivate, "extensions.private")
         keep($passkeys, "passkeys")

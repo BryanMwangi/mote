@@ -22,6 +22,7 @@ struct ContentView: View {
     var body: some View {
         Chrome(browser: browser, prefs: browser.prefs)
             .overlay(alignment: .leading) { SidebarFold(browser: browser, prefs: browser.prefs) }
+            .background { ToolbarReveal(browser: browser, prefs: browser.prefs) }
             .overlay(alignment: .bottom) { Notices(browser: browser) }
             .overlay {
                 if switching { Omnibox(browser: browser) }

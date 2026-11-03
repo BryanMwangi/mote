@@ -39,11 +39,24 @@ extension Browser {
         editing && !field.switching && !field.launching && active?.isStart == false
     }
 
+    /// The toolbar sits on the card, above the page.
+    var toolbarDocked: Bool { prefs.toolbarMode == .shown }
+    /// Back, forward and the address at the top of the sidebar instead of a
+    /// toolbar.
+    var navInSidebar: Bool { prefs.toolbarMode == .hidden && prefs.sidebar }
+    /// The pointer at the page's top edge brings the toolbar out.
+    var toolbarOnHover: Bool { !toolbarDocked && !navInSidebar }
+    /// The toolbar floats over the page's top: brought out by the pointer, or
+    /// for editing the address (⌘L).
+    var toolbarFloating: Bool {
+        !toolbarDocked && active?.immersed != true && (toolbarRevealed || editingInBar)
+    }
+
     func layout(in window: CGSize, nativeSidebar: Bool = false) -> ChromeLayout {
         ChromeLayout(
             window: window, tabs: prefs.sidebar ? .sidebar : .strip, sideWidth: nativeSidebar ? 0 : prefs.sideWidth, folded: folded,
             immersed: active?.immersed == true, bookmarked: bookmarksShown, chatting: chatting, panelWidth: prefs.chatWidth,
-            bookmarksHeight: ChromeLayout.bookmarks + (active?.isStart == true ? 12 : 0))
+            bookmarksHeight: ChromeLayout.bookmarks + (active?.isStart == true ? 12 : 0), toolbar: toolbarDocked)
     }
 }
 
@@ -228,6 +241,18 @@ private struct PageCard: View {
                 }
                 .clipped()
         }
+        // Not on the card: over the page's top when called for, clipped to the card.
+        .overlay(alignment: .top) {
+            if layout.toolbar == 0, browser.toolbarFloating {
+                Toolbar(browser: browser, prefs: prefs)
+                    .environment(\.colorScheme, browser.chromeScheme ?? colorScheme)
+                    .frame(height: ChromeLayout.toolbar)
+                    .background(browser.chromeGround)
+                    .shadow(color: .black.opacity(0.12), radius: 10, y: 3)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
+        .animation(Motion.quick, value: browser.toolbarFloating)
         .background {
             if layout.strip != nil {
                 Color.clear

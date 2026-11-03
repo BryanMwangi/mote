@@ -165,9 +165,9 @@ struct SidebarFold: View {
     }
 }
 
-/// The pending show and hide of the folded tabs.
+/// The pending show and hide of the folded tabs, or of the toolbar.
 @MainActor
-private final class PeekTimers {
+final class PeekTimers {
     private var showing: Task<Void, Never>?
     private var hiding: Task<Void, Never>?
 
@@ -210,16 +210,21 @@ private final class PeekTimers {
 /// Pointer moves while folded, from other apps too, so the edge works when
 /// another app is in front.
 @MainActor
-private final class PointerWatch {
+final class PointerWatch {
     weak var window: NSWindow?
     private var monitors: [Any] = []
-    /// The window's own `acceptsMouseMovedEvents`, put back on stop.
-    private var accepted = false
+    /// Watches running, by window: the sidebar's and the toolbar's.
+    private static var watching: [ObjectIdentifier: Int] = [:]
+    /// Each window's own `acceptsMouseMovedEvents`, put back when the last
+    /// watch on it stops.
+    private static var accepted: [ObjectIdentifier: Bool] = [:]
 
     func start(_ moved: @escaping @MainActor () -> Void) {
         guard monitors.isEmpty, let window else { return }
         // Moves over the whole window, while watching.
-        accepted = window.acceptsMouseMovedEvents
+        let key = ObjectIdentifier(window)
+        if Self.watching[key, default: 0] == 0 { Self.accepted[key] = window.acceptsMouseMovedEvents }
+        Self.watching[key, default: 0] += 1
         window.acceptsMouseMovedEvents = true
         let kinds: NSEvent.EventTypeMask = [.mouseMoved, .leftMouseDragged]
         monitors = [
@@ -235,6 +240,11 @@ private final class PointerWatch {
         guard !monitors.isEmpty else { return }
         monitors.forEach(NSEvent.removeMonitor)
         monitors = []
-        window?.acceptsMouseMovedEvents = accepted
+        guard let window else { return }
+        let key = ObjectIdentifier(window)
+        Self.watching[key, default: 1] -= 1
+        if Self.watching[key] == 0, let accepted = Self.accepted.removeValue(forKey: key) {
+            window.acceptsMouseMovedEvents = accepted
+        }
     }
 }
