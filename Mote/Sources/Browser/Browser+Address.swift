@@ -110,9 +110,17 @@ extension Browser {
     }
 
     /// ⌘L: the field with the current address in it.
+    /// Where: the floating palette when new tabs come from a floating
+    /// search; the sidebar's address pill when the toolbar is hidden beside
+    /// it; otherwise the toolbar.
     func edit() {
         field.switching = false
-        field.typed = active?.shownAddress?.absoluteString ?? ""
+        let address = active?.shownAddress?.absoluteString ?? ""
+        if prefs.newTabSearch, active?.isStart == false {
+            field.clear()
+            field.relocating = true
+        }
+        field.typed = address
         editing = true
         field.askFocus()
     }
@@ -122,7 +130,7 @@ extension Browser {
     func dismiss() {
         field.switching = false
         field.cycling = false
-        if field.launching {
+        if field.launching || field.relocating {
             editing = false
             return field.clear()
         }

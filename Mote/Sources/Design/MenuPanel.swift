@@ -8,10 +8,12 @@ extension View {
     /// Used instead of a popover because a popover's arrow can't be removed,
     /// and when the button sits at the bottom of the screen the arrow is pushed
     /// into the popover's rounded corner, which then loses its shape.
+    /// - Parameter keyboard: the panel takes the keyboard when it opens.
+    ///   False leaves it where it is, for suggestions under a field.
     func menuPanel<Content: View>(
-        isPresented: Binding<Bool>, edge: Edge, @ViewBuilder content: @escaping () -> Content
+        isPresented: Binding<Bool>, edge: Edge, keyboard: Bool = true, @ViewBuilder content: @escaping () -> Content
     ) -> some View {
-        background(MenuPanelAnchor(isPresented: isPresented, edge: edge, content: content))
+        background(MenuPanelAnchor(isPresented: isPresented, edge: edge, keyboard: keyboard, content: content))
     }
 }
 
@@ -19,6 +21,7 @@ extension View {
 private struct MenuPanelAnchor<Content: View>: NSViewRepresentable {
     @Binding var isPresented: Bool
     let edge: Edge
+    let keyboard: Bool
     let content: () -> Content
 
     func makeCoordinator() -> MenuPanel { MenuPanel() }
@@ -29,7 +32,7 @@ private struct MenuPanelAnchor<Content: View>: NSViewRepresentable {
         let menu = context.coordinator
         menu.dismissed = { isPresented = false }
         if isPresented {
-            menu.show(AnyView(content()), from: anchor, edge: edge)
+            menu.show(AnyView(content()), from: anchor, edge: edge, keyboard: keyboard)
         } else {
             menu.close()
         }
@@ -93,7 +96,7 @@ final class MenuPanel {
         return NSRect(origin: origin, size: size)
     }
 
-    func show(_ content: AnyView, from anchor: NSView, edge: Edge) {
+    func show(_ content: AnyView, from anchor: NSView, edge: Edge, keyboard: Bool = true) {
         let card = AnyView(
             content
                 .background(Palette.ground)
@@ -131,7 +134,7 @@ final class MenuPanel {
 
         let anchorOnScreen = window.convertToScreen(anchor.convert(anchor.bounds, to: nil))
         panel.setFrame(MenuPanel.frame(size: size, anchor: anchorOnScreen, edge: edge, within: screen.visibleFrame), display: true)
-        panel.makeKeyAndOrderFront(nil)
+        if keyboard { panel.makeKeyAndOrderFront(nil) } else { panel.orderFront(nil) }
 
         self.panel = panel
         self.host = host

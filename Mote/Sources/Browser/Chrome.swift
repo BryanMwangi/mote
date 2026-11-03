@@ -36,7 +36,14 @@ extension Browser {
     /// blank tab edits in its own composer, and ⌘K (or ⌘T as a floating
     /// search) opens the palette instead.
     var editingInBar: Bool {
-        editing && !field.switching && !field.launching && active?.isStart == false
+        editing && !field.switching && !field.launching && !field.relocating && !editingInPill && active?.isStart == false
+    }
+
+    /// Whether the address is being edited in the sidebar's pill: the
+    /// toolbar is hidden beside a sidebar that's on screen.
+    var editingInPill: Bool {
+        editing && navInSidebar && (!folded || peeking) && !field.switching && !field.launching && !field.relocating
+            && active?.isStart == false
     }
 
     /// The toolbar sits on the card, above the page.

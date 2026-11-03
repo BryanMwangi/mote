@@ -61,6 +61,10 @@ final class AddressEntry {
         }
     }
 
+    /// ⌘L with the floating search on: the palette over the page edits this
+    /// tab's address, and Return goes there in this tab.
+    var relocating = false
+
     /// An address found on the clipboard as the floating search opened.
     var clipboard: URL? {
         didSet { if oldValue != clipboard { refresh() } }
@@ -90,6 +94,7 @@ final class AddressEntry {
     func clear() {
         input.switching = false
         launching = false
+        relocating = false
         asksAssistant = false
         clearStagedMentions()
         typed = ""

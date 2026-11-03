@@ -16,7 +16,7 @@ struct ContentView: View {
     /// The switcher, or the floating search, over a page; a blank tab
     /// switches in its own composer.
     private var switching: Bool {
-        (browser.field.switching || browser.field.launching) && browser.active?.isStart == false
+        (browser.field.switching || browser.field.launching || browser.field.relocating) && browser.active?.isStart == false
     }
 
     var body: some View {
