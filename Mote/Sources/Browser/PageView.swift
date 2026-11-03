@@ -83,9 +83,23 @@ final class PageView: WKWebView {
     /// See Scripts/src/selected-text.ts.
     static let selected = InjectedScript.call("selected-text")
 
-    /// The browser's Touch Bar, as Safari shows on pages, rather than WebKit's.
+    /// The browser's Touch Bar on pages, as Safari shows it, except while
+    /// the page has a video to control or is full screen: then WebKit's own
+    /// playback bar (play, time, scrubber, full screen), which is Safari's.
     override func makeTouchBar() -> NSTouchBar? {
-        Browser.front?.touchBarItems.make() ?? super.makeTouchBar()
+        guard let browser = Browser.front, !hasVideoControls, browser.tab(for: self)?.immersed != true else {
+            return super.makeTouchBar()
+        }
+        return browser.touchBarItems.make()
+    }
+
+    /// WebKit's own test for showing playback controls, through its private
+    /// `_hasActiveVideoForControlsManager`; without it, Mote's bar stays.
+    private var hasVideoControls: Bool {
+        let check = NSSelectorFromString("_hasActiveVideoForControlsManager")
+        guard responds(to: check) else { return false }
+        typealias Read = @convention(c) (AnyObject, Selector) -> Bool
+        return unsafeBitCast(method(for: check), to: Read.self)(self, check)
     }
 
     override func willOpenMenu(_ menu: NSMenu, with event: NSEvent) {

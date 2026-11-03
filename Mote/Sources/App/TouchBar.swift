@@ -73,6 +73,17 @@ final class BrowserTouchBar: NSObject, NSTouchBarDelegate {
         }
         watches.append(tab.$canGoBack.sink { [weak self] can in self?.back?.isEnabled = can })
         watches.append(tab.$canGoForward.sink { [weak self] can in self?.forward?.isEnabled = can })
+        // Media starting or stopping, or full screen, swaps the page's bar
+        // between this one and WebKit's playback controls: asked for again.
+        let swap = Publishers.Merge3(
+            tab.$media.map { $0?.playing }.removeDuplicates().map { _ in () },
+            tab.$noisy.removeDuplicates().map { _ in () },
+            tab.$immersed.removeDuplicates().map { _ in () }
+        )
+        watches.append(
+            swap.dropFirst().receive(on: DispatchQueue.main).sink { [weak tab] in
+                tab?.built?.touchBar = nil
+            })
     }
 
     private static func button(symbol: String, label: String, _ act: @escaping () -> Void) -> NSButton {
