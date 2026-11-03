@@ -32,6 +32,24 @@ final class HoveredLink: NSObject, WKScriptMessageHandler {
     }
 }
 
+/// Hears which site the page is loading from while it loads (see
+/// Scripts/src/load-hosts.ts). WebKit holds on to it, so the tab is weak.
+final class LoadRelay: NSObject, WKScriptMessageHandler, TabRelay {
+    static let name = "loading"
+    private struct Config: Encodable { let handler: String }
+    static let script = InjectedScript.source("load-hosts", config: Config(handler: name))
+
+    weak var tab: Tab?
+
+    func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
+        guard let host = message.body as? String, host.count < 256 else { return }
+        MainActor.assumeIsolated {
+            guard let tab, message.webView === tab.built, tab.loading else { return }
+            tab.loadingFrom = host.isEmpty ? nil : host
+        }
+    }
+}
+
 /// The address showing, if any, and which side it's on. It changes only when
 /// the page says so, never as the pointer moves.
 @MainActor
@@ -77,10 +95,24 @@ final class LinkStatus: ObservableObject {
 /// The address in a capsule at the page's bottom edge; clicks pass through.
 struct LinkBubble: View {
     @ObservedObject var status: LinkStatus
+    @ObservedObject var tab: Tab
+    /// Settings › General: the address of the link under the pointer.
+    let showsLinks: Bool
+
+    /// The link under the pointer, or what the page is loading from.
+    private var text: String? {
+        if showsLinks, let address = status.destination { return address }
+        guard tab.loading else { return nil }
+        if let host = tab.loadingFrom { return "Loading from \(host)…" }
+        return tab.address?.host().map { "Loading \($0)…" } ?? "Loading…"
+    }
+
+    /// Links can sit on the right, out of the pointer's way; loading stays left.
+    private var onRight: Bool { showsLinks && status.destination != nil && status.onRight }
 
     var body: some View {
         GeometryReader { room in
-            if let address = status.destination {
+            if let address = text {
                 Text(address)
                     .font(.system(size: 12))
                     .foregroundStyle(Palette.ink)
@@ -91,13 +123,13 @@ struct LinkBubble: View {
                     .background(Palette.ground, in: Capsule())
                     .overlay(Capsule().strokeBorder(Palette.hairline, lineWidth: 1))
                     .shadow(color: .black.opacity(0.08), radius: 12, y: 3)
-                    .frame(maxWidth: LinkBubblePlace.width(page: room.size.width), alignment: status.onRight ? .trailing : .leading)
+                    .frame(maxWidth: LinkBubblePlace.width(page: room.size.width), alignment: onRight ? .trailing : .leading)
                     .padding([.horizontal, .bottom], 10)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: status.onRight ? .bottomTrailing : .bottomLeading)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: onRight ? .bottomTrailing : .bottomLeading)
                     .transition(.opacity)
             }
         }
         .allowsHitTesting(false)
-        .animation(.easeOut(duration: 0.12), value: status.destination == nil)
+        .animation(.easeOut(duration: 0.12), value: text == nil)
     }
 }

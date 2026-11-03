@@ -36,6 +36,8 @@ enum PageScripts {
             WKUserScript(source: passkeys, injectionTime: .atDocumentStart, forMainFrameOnly: false, in: .page),
             mote(PasskeyRelay.bridge, at: .atDocumentStart, everyFrame: true),
         ]
+        // Which site it's loading from, until it has loaded.
+        scripts.append(mote(LoadRelay.script, at: .atDocumentStart))
         // In the page's world, the only one that sees the site's media session.
         scripts.append(WKUserScript(source: MediaRelay.script, injectionTime: .atDocumentStart, forMainFrameOnly: true, in: .page))
         if !hiding.selectors.isEmpty { scripts.append(mote(ElementPicker.hiding(hiding), at: .atDocumentStart)) }

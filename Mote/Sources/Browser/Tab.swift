@@ -64,6 +64,8 @@ final class Tab: ObservableObject, Identifiable {
     @Published private(set) var zoom: CGFloat = 1
     /// The page is playing sound.
     @Published var noisy = false
+    /// The site the page is loading from just now, for the status at its foot.
+    @Published var loadingFrom: String?
     /// What the page says it plays, for the media strip (MediaSession.swift).
     @Published var media: MediaState?
     /// When the page last said it was playing.
@@ -154,6 +156,7 @@ final class Tab: ObservableObject, Identifiable {
     private let passkeys = PasskeyRelay()
     private let hovered = HoveredLink()
     private let mediaRelay = MediaRelay()
+    private let loadRelay = LoadRelay()
     private let sound = AudioWatch()
     private var watches: [NSKeyValueObservation] = []
     /// This site's hidden elements, for the next document.
@@ -194,7 +197,7 @@ final class Tab: ObservableObject, Identifiable {
         Web.release(controller)
         let handlers: [(WKScriptMessageHandler, String)] = [
             (scroll, ScrollRelay.name), (hider, ElementHiderRelay.name), (images, ImageRelay.name),
-            (store_, WebStoreBridge.name), (forms, FormRelay.name), (middle, MiddleRelay.name),
+            (store_, WebStoreBridge.name), (forms, FormRelay.name), (middle, MiddleRelay.name), (loadRelay, LoadRelay.name),
         ]
         for (handler, name) in handlers { controller.add(handler, contentWorld: Web.world, name: name) }
         controller.addScriptMessageHandler(passkeys, contentWorld: Web.world, name: PasskeyRelay.name)
@@ -205,7 +208,7 @@ final class Tab: ObservableObject, Identifiable {
         built = web
         // After `built`: the form relay starts watching full screen on the view
         // it finds there.
-        for relay in [scroll, hider, forms, images, store_, middle, hovered, mediaRelay] as [TabRelay] { relay.tab = self }
+        for relay in [scroll, hider, forms, images, store_, middle, hovered, mediaRelay, loadRelay] as [TabRelay] { relay.tab = self }
         if muted { PageAudio.mute(true, web) }
         arm(hiding: hiding)
         watches = observe(web)
@@ -242,7 +245,10 @@ final class Tab: ObservableObject, Identifiable {
             if moved { takeCachedIcon() }
         }
         if progress != web.estimatedProgress { progress = web.estimatedProgress }
-        if loading != web.isLoading { loading = web.isLoading }
+        if loading != web.isLoading {
+            loading = web.isLoading
+            loadingFrom = nil
+        }
         if canGoBack != web.canGoBack { canGoBack = web.canGoBack }
         if canGoForward != web.canGoForward { canGoForward = web.canGoForward }
     }

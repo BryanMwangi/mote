@@ -17,7 +17,7 @@ enum Web {
     @MainActor private static var handlers: [(String, WKContentWorld)] {
         [
             ScrollRelay.name, ElementHiderRelay.name, FormRelay.name, ImageRelay.name, WebStoreBridge.name, PasskeyRelay.name,
-            MiddleRelay.name, MediaRelay.name,
+            MiddleRelay.name, MediaRelay.name, LoadRelay.name,
         ]
         .flatMap { [($0, world), ($0, .page)] } + [(HoveredLink.name, .defaultClient)]
     }
