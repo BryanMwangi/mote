@@ -105,27 +105,28 @@ struct Sidebar: View {
         browser.makingSpace ? browser.spaces.count : browser.spaces.firstIndex { $0.id == browser.spaceID } ?? 0
     }
 
-    /// Every space's page side by side, kept built, as Zen keeps a strip per
-    /// workspace: switching only moves another into view and makes it the
-    /// live one, rather than taking one list down and building another.
+    /// The showing space's page, and while swiping the one coming in beside
+    /// it. Other spaces' pages aren't kept built: every row watches the
+    /// browser, so each page kept would redraw on every change, which costs
+    /// far more than building the one shown.
     private var spaces: some View {
         let width = prefs.sideWidth
         let swipe = browser.spaceSwipe
         let here = spaceIndex
-        let swiping = swipe != 0
+        let shown = browser.spaces.indices.filter { $0 == here || (swipe > 0 && $0 == here - 1) || (swipe < 0 && $0 == here + 1) }
         return ZStack(alignment: .topLeading) {
-            ForEach(Array(browser.spaces.enumerated()), id: \.element.id) { index, space in
+            ForEach(shown, id: \.self) { index in
+                let space = browser.spaces[index]
                 let live = index == here && !browser.makingSpace
                 SpacePage(browser: browser, prefs: prefs, space: space, live: live, drag: $drag, keptDrag: $keptDrag)
+                    .id(space.id)
                     .padding(.horizontal, 10)
                     .frame(width: width, alignment: .topLeading)
                     .offset(x: CGFloat(index - here) * width + swipe)
-                    // Built and laid out, but only drawn when it can be seen.
-                    .opacity(live || (swiping && abs(index - here) == 1) ? 1 : 0)
                     .allowsHitTesting(live)
                     .accessibilityHidden(!live)
             }
-            if browser.makingSpace || (swiping && here == browser.spaces.count - 1 && swipe < 0) {
+            if browser.makingSpace || (swipe < 0 && here == browser.spaces.count - 1) {
                 VStack(spacing: 0) {
                     Spacer(minLength: 0)
                     NewSpaceCard(browser: browser)
@@ -191,8 +192,8 @@ struct Sidebar: View {
 }
 
 /// One space's tabs: its essentials, name, pinned tabs and the rest. The
-/// showing space's are live; another's are its parked row, drawn the same
-/// way and kept built, so it can come into view at once.
+/// showing space's are live; another's, sliding in during a swipe, are its
+/// parked row, drawn the same way but not to be touched.
 private struct SpacePage: View {
     @ObservedObject var browser: Browser
     @ObservedObject var prefs: Preferences
