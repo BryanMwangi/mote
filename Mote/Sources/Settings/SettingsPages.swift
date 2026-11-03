@@ -255,6 +255,7 @@ private struct SpaceRows: View {
                         .disabled(index == 0)
                     Door(icon: "chevron.down", help: "Move down") { browser.moveSpace(space.id, to: index + 1) }
                         .disabled(index == browser.spaces.count - 1)
+                    mergeMenu(for: space)
                     Door(icon: "trash", help: space.isFirst ? "Holds Mote's main sign-ins, so it stays" : "Delete…") {
                         SpaceMenu.confirmDelete(space, in: browser)
                     }
@@ -282,6 +283,45 @@ private struct SpaceRows: View {
             ? "Mote's main sign-ins" : space.ownData ? "Its own sign-ins" : "Shares the main sign-ins"
         let key = index < 9 ? " · ⌃\(index + 1)" : ""
         return (space.id == browser.spaceID ? "Showing · " : "") + data + key
+    }
+
+    /// Its tabs and cookies into another space, then it goes. The first
+    /// space can take others in but not go.
+    private func mergeMenu(for space: Space) -> some View {
+        Menu {
+            ForEach(browser.spaces.filter { $0.id != space.id }) { other in
+                Button(other.name) { confirmMerge(space, into: other) }
+            }
+        } label: {
+            Image(systemName: "arrow.triangle.merge").font(.system(size: 12, weight: .medium)).foregroundStyle(Palette.muted)
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .frame(width: 28, height: 28)
+        .disabled(space.isFirst || browser.spaces.count < 2)
+        .help(space.isFirst ? "Other spaces can merge into this one; it stays" : "Merge into another space…")
+    }
+
+    private func confirmMerge(_ space: Space, into other: Space) {
+        let cookies =
+            Spaces.store(for: space.id) === Spaces.store(for: other.id)
+            ? "They already share sign-ins."
+            : "Its cookies are copied too, so most sites stay signed in; a few that keep sign-ins another way will ask again."
+        Prompt.confirm(
+            "Merge “\(space.name)” into “\(other.name)”?",
+            detail:
+                "Its essentials, pinned and open tabs move to “\(other.name)”, leaving out pages already there. \(cookies) Then “\(space.name)” is deleted.",
+            confirm: "Merge"
+        ) {
+            Task {
+                let merged = await browser.mergeSpace(space.id, into: other.id)
+                let tabs = merged.tabs == 1 ? "1 tab" : "\(merged.tabs) tabs"
+                browser.announce(
+                    merged.cookies > 0
+                        ? "\(tabs) and \(merged.cookies) cookies moved to \(other.name)" : "\(tabs) moved to \(other.name)")
+            }
+        }
     }
 
     private func iconMenu(for space: Space) -> some View {

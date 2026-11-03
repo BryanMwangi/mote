@@ -418,18 +418,75 @@ final class Browser: NSObject, ObservableObject {
 
     /// Saves any space's row: this one, or one parked.
     func writeSession(now: Bool, space: UUID, tabs: [Tab], active: Tab.ID?) {
-        let entries = tabs.compactMap { tab -> Session.Entry? in
-            if !tab.shy, !tab.bench, tab.isBlank, let chat = tab.chat, !chat.messages.isEmpty {
-                return Session.Entry(
-                    url: "", title: chat.title, pin: tab.pin, kept: tab.kept ? true : nil, name: tab.name, chat: chat.id.uuidString)
-            }
-            guard !tab.shy, !tab.bench,
-                // A sleeping tab's address is in `pending`, never its released page's.
-                let url = tab.pending ?? tab.address, url.scheme?.hasPrefix("http") == true
-            else { return nil }
-            return Session.Entry(url: url.absoluteString, title: tab.title, pin: tab.pin, kept: tab.kept ? true : nil, name: tab.name)
+        Session.write(now: now, space: space, .init(tabs: tabs.compactMap(entry(for:)), active: tabs.firstIndex { $0.id == active } ?? 0))
+    }
+
+    /// A tab as the session keeps it: a page, or a kept chat. Private, bench
+    /// and blank tabs aren't kept.
+    private func entry(for tab: Tab) -> Session.Entry? {
+        if !tab.shy, !tab.bench, tab.isBlank, let chat = tab.chat, !chat.messages.isEmpty {
+            return Session.Entry(
+                url: "", title: chat.title, pin: tab.pin, kept: tab.kept ? true : nil, name: tab.name, chat: chat.id.uuidString)
         }
-        Session.write(now: now, space: space, .init(tabs: entries, active: tabs.firstIndex { $0.id == active } ?? 0))
+        guard !tab.shy, !tab.bench,
+            // A sleeping tab's address is in `pending`, never its released page's.
+            let url = tab.pending ?? tab.address, url.scheme?.hasPrefix("http") == true
+        else { return nil }
+        return Session.Entry(url: url.absoluteString, title: tab.title, pin: tab.pin, kept: tab.kept ? true : nil, name: tab.name)
+    }
+
+    // MARK: - Merging spaces
+
+    struct Merged: Equatable {
+        var tabs = 0
+        var cookies = 0
+    }
+
+    /// Settings › Tabs › Spaces › Merge: moves a space's tabs into another,
+    /// each in its tier, leaving out pages the other already has; copies its
+    /// cookies there when their website data differs, without replacing the
+    /// other's; then deletes it. Cookies are what WebKit lets go between
+    /// stores, so sites keeping a sign-in elsewhere (local storage) ask again.
+    func mergeSpace(_ source: UUID, into target: UUID) async -> Merged {
+        guard source != target, let from = spaces.first(where: { $0.id == source }), !from.isFirst,
+            spaces.contains(where: { $0.id == target })
+        else { return Merged() }
+        var merged = Merged()
+        if spaceID == source { switchSpace(to: target) }
+        let leaving = parked[source] ?? loadRow(source)
+        let showing = spaceID == target
+        let staying = showing ? tabs : (parked[target] ?? loadRow(target)).tabs
+        let present = Set(staying.compactMap { ($0.pending ?? $0.address)?.absoluteString })
+        var arriving: [Tab] = []
+        for entry in leaving.tabs.compactMap(entry(for:)) where entry.chat != nil || !present.contains(entry.url) {
+            let tab = Tab(configuration: Web.configuration(space: target))
+            if restore(entry, in: tab) { arriving.append(tab) }
+        }
+        merged.tabs = arriving.count
+        // Essentials, pinned tabs, then the rest, each keeping its order.
+        let row = [TabTier.essential, .pinned, .loose].flatMap { tier in (staying + arriving).filter { $0.section == tier } }
+        if showing {
+            tabs = row
+            writeSession(now: true)
+        } else {
+            let active = parked[target]?.active ?? row.first?.id
+            parked[target] = Parked(tabs: row, active: active)
+            writeSession(now: true, space: target, tabs: row, active: active)
+        }
+        let leavingStore = Spaces.store(for: source)
+        let stayingStore = Spaces.store(for: target)
+        if leavingStore !== stayingStore {
+            func key(_ cookie: HTTPCookie) -> String { "\(cookie.name)|\(cookie.domain)|\(cookie.path)" }
+            let kept = Set(await stayingStore.httpCookieStore.allCookies().map(key))
+            for cookie in await leavingStore.httpCookieStore.allCookies() where !kept.contains(key(cookie)) {
+                await stayingStore.httpCookieStore.setCookie(cookie)
+                merged.cookies += 1
+            }
+        }
+        // Made just for this, so not parked: deleting the space wouldn't close them.
+        if parked[source] == nil { leaving.tabs.forEach { $0.close() } }
+        deleteSpace(source)
+        return merged
     }
 
     /// Saves the session a moment after the last of a burst of changes.

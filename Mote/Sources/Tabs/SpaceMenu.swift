@@ -141,7 +141,7 @@ enum Prompt {
     }
 
     static func folder(then: @escaping (URL?) -> Void) {
-        guard let window = AppDelegate.window else { return }
+        guard let window = host else { return }
         let panel = NSOpenPanel()
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
@@ -164,8 +164,14 @@ enum Prompt {
 
     /// As a sheet on the window, or on its own without one. `done` hears
     /// whether the first button was pressed.
+    /// The window in front (Settings, when asked from there), else the browser's.
+    private static var host: NSWindow? {
+        if let key = NSApp.keyWindow, key.isVisible, !(key is NSPanel), key.attachedSheet == nil { return key }
+        return AppDelegate.window
+    }
+
     private static func ask(_ alert: NSAlert, _ done: @escaping (Bool) -> Void) {
-        guard let window = AppDelegate.window else { return done(alert.runModal() == .alertFirstButtonReturn) }
+        guard let window = host else { return done(alert.runModal() == .alertFirstButtonReturn) }
         alert.beginSheetModal(for: window) { done($0 == .alertFirstButtonReturn) }
     }
 }
