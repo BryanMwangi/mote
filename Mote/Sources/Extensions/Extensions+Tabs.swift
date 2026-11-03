@@ -17,9 +17,18 @@ extension Extensions {
 
     func shows(_ tab: Tab) -> Bool { !tab.shy || tab.carriesExtensions }
 
-    /// The showing space's tabs, while they're this set's; another space's
-    /// extensions see none.
-    var visibleTabs: [Tab] { ownsShowingSpace ? browser?.tabs.filter(shows) ?? [] : [] }
+    /// Every tab of the spaces whose website data these extensions run in,
+    /// in the spaces' order: the showing space's, and the others' parked.
+    /// Extensions see them all, as Firefox shows a workspace's hidden tabs,
+    /// so switching spaces is just another tab in front, not every tab
+    /// closing and opening.
+    var visibleTabs: [Tab] {
+        guard let browser else { return [] }
+        guard browser.prefs.usesSpaces else { return browser.tabs.filter(shows) }
+        return browser.spaces.filter { Extensions.existingRunner(for: $0.id) === self }
+            .flatMap { space in space.id == browser.spaceID ? browser.tabs : browser.parked[space.id]?.tabs ?? [] }
+            .filter(shows)
+    }
 
     var activeAdapter: ExtensionTab? {
         guard ownsShowingSpace, let tab = browser?.active, shows(tab) else { return nil }
@@ -28,9 +37,10 @@ extension Extensions {
 
     func followTabs(of browser: Browser) {
         controller.didOpenWindow(window)
-        browser.$tabs
+        // After the change has landed: a space switch moves both at once.
+        browser.$tabs.map { _ in () }.merge(with: browser.$parked.map { _ in () })
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] tabs in self?.tabsChanged(tabs) }
+            .sink { [weak self] in self?.tabsChanged() }
             .store(in: &subscriptions)
         browser.$activeID
             .removeDuplicates()
@@ -40,9 +50,9 @@ extension Extensions {
             .store(in: &subscriptions)
     }
 
-    private func tabsChanged(_ tabs: [Tab]) {
+    private func tabsChanged() {
         startIfShowing()
-        let shown = ownsShowingSpace ? tabs.filter(shows) : []
+        let shown = visibleTabs
         let changes = ExtensionRules.tabChanges(from: order, to: shown.map(\.id))
         for id in changes.closed {
             if let adapter = adapters[id] { controller.didCloseTab(adapter, windowIsClosing: false) }

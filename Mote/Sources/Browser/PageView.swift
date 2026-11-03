@@ -83,6 +83,11 @@ final class PageView: WKWebView {
     /// See Scripts/src/selected-text.ts.
     static let selected = InjectedScript.call("selected-text")
 
+    /// The browser's Touch Bar, as Safari shows on pages, rather than WebKit's.
+    override func makeTouchBar() -> NSTouchBar? {
+        Browser.front?.touchBarItems.make() ?? super.makeTouchBar()
+    }
+
     override func willOpenMenu(_ menu: NSMenu, with event: NSEvent) {
         super.willOpenMenu(menu, with: event)
         if let search = menu.items.first(where: { $0.identifier?.rawValue == "WKMenuItemIdentifierSearchWeb" }) {

@@ -34,6 +34,7 @@ struct ContentView: View {
                 WindowSetup {
                     window = $0
                     WindowDressing.dress($0)
+                    $0.touchBar = browser.touchBarItems.make()
                     arrive()
                 }
             )

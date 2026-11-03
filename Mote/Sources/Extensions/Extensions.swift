@@ -34,6 +34,11 @@ final class Extensions: NSObject, ObservableObject {
         return made
     }
 
+    /// The set a space's tabs belong to, without starting one.
+    static func existingRunner(for space: UUID) -> Extensions? {
+        space == Space.firstID || Spaces.sharing.contains(space) ? shared : runners[space]
+    }
+
     /// The showing space's extensions: the toolbar's, the popups', the keys'.
     static var current: Extensions { runner(for: Spaces.current) }
 

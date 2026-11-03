@@ -36,12 +36,17 @@ extension Browser {
         spaceID = id
         Spaces.current = id
         Storage.settings.set(id.uuidString, forKey: "space.current")
-        if let back = parked.removeValue(forKey: id), !back.tabs.isEmpty {
-            showRow(back.tabs, active: back.active)
-            if let active, !active.wake() { active.revive() }
-        } else {
-            showRow([], active: nil)
-            restoreSession()
+        // One row for another, not each row coming and going.
+        var still = Transaction()
+        still.disablesAnimations = true
+        withTransaction(still) {
+            if let back = parked.removeValue(forKey: id), !back.tabs.isEmpty {
+                showRow(back.tabs, active: back.active)
+                if let active, !active.wake() { active.revive() }
+            } else {
+                showRow([], active: nil)
+                restoreSession()
+            }
         }
         editing = active?.isStart ?? true
         field.clear()

@@ -129,7 +129,8 @@ final class Browser: NSObject, ObservableObject {
         didSet { Spaces.sharing = SpaceList(saved: spaces).sharing }
     }
     @Published var spaceID = Space.firstID
-    var parked: [UUID: Parked] = [:]
+    /// The other spaces' tabs. Published so extensions keep up with them.
+    @Published var parked: [UUID: Parked] = [:]
     /// The space swipe's offset, and whether the new-space card is shown.
     @Published var spaceSwipe: CGFloat = 0
     @Published var makingSpace = false
@@ -154,6 +155,8 @@ final class Browser: NSObject, ObservableObject {
     /// The most recently active window. macOS stops reporting a main window
     /// once the app is in the background.
     static weak var front: Browser?
+    /// The Touch Bar's buttons, on Macs that have one.
+    private(set) lazy var touchBarItems = BrowserTouchBar(browser: self)
 
     var bag = Set<AnyCancellable>()
     private var hush: Task<Void, Never>?
