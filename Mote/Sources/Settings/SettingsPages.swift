@@ -154,6 +154,7 @@ struct GeneralSettings: View {
 }
 
 struct TabSettings: View {
+    @ObservedObject var browser: Browser
     @ObservedObject var prefs: Preferences
 
     var body: some View {
@@ -179,6 +180,20 @@ struct TabSettings: View {
                 symbol: "menubar.rectangle", tint: Tint.green
             ) {
                 Segmented(options: ToolbarMode.allCases.map { ($0, $0.title) }, selection: $prefs.toolbarMode)
+            }
+            RowRule()
+            SettingRow(
+                "Slides out after",
+                "How long the pointer rests on the edge before tucked-away tabs or the toolbar come out",
+                symbol: "timer", tint: Tint.teal
+            ) {
+                HStack(spacing: 8) {
+                    Slider(value: $prefs.revealDelay, in: 0...0.5, step: 0.025).frame(width: 120)
+                    Text(prefs.revealDelay == 0 ? "At once" : "\(Int((prefs.revealDelay * 1000).rounded())) ms")
+                        .font(.system(size: 11.5).monospacedDigit())
+                        .foregroundStyle(Palette.muted)
+                        .frame(width: 52, alignment: .trailing)
+                }
             }
             RowRule()
             SettingRow(
@@ -211,7 +226,83 @@ struct TabSettings: View {
                 "Separate sets of tabs",
                 "Each space can share your sign-ins or start clean. Move between them with ⌃1–⌃9, a two-finger swipe over the tabs, or their icon",
                 symbol: "square.stack.3d.up", tint: Tint.purple, on: $prefs.usesSpaces)
+            if prefs.usesSpaces { SpaceRows(browser: browser) }
         }
+    }
+}
+
+/// Settings › Tabs › Spaces: each space, to rename, give an icon, move or
+/// delete, and a new one.
+private struct SpaceRows: View {
+    @ObservedObject var browser: Browser
+
+    var body: some View {
+        ForEach(Array(browser.spaces.enumerated()), id: \.element.id) { index, space in
+            RowRule()
+            HStack(spacing: 11) {
+                SpaceGlyph(space: space, size: 13)
+                    .frame(width: 26, height: 26)
+                    .background(Palette.wash, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(space.name).font(.system(size: 13)).foregroundStyle(Palette.ink).lineLimit(1)
+                    Text(detail(space, at: index)).font(.system(size: 11.5)).foregroundStyle(Palette.muted).lineLimit(1)
+                }
+                Spacer(minLength: 12)
+                HStack(spacing: 2) {
+                    Door(icon: "pencil", help: "Rename") { SpaceMenu.rename(space, in: browser) }
+                    iconMenu(for: space)
+                    Door(icon: "chevron.up", help: "Move up") { browser.moveSpace(space.id, to: index - 1) }
+                        .disabled(index == 0)
+                    Door(icon: "chevron.down", help: "Move down") { browser.moveSpace(space.id, to: index + 1) }
+                        .disabled(index == browser.spaces.count - 1)
+                    Door(icon: "trash", help: space.isFirst ? "Holds Mote's main sign-ins, so it stays" : "Delete…") {
+                        SpaceMenu.confirmDelete(space, in: browser)
+                    }
+                    .disabled(space.isFirst)
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+        }
+        RowRule()
+        HStack {
+            Spacer()
+            Pill("New Space…") {
+                browser.tuning = false
+                browser.askForSpace()
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+    }
+
+    private func detail(_ space: Space, at index: Int) -> String {
+        let data =
+            space.isFirst
+            ? "Mote's main sign-ins" : space.ownData ? "Its own sign-ins" : "Shares the main sign-ins"
+        let key = index < 9 ? " · ⌃\(index + 1)" : ""
+        return (space.id == browser.spaceID ? "Showing · " : "") + data + key
+    }
+
+    private func iconMenu(for space: Space) -> some View {
+        Menu {
+            ForEach(Space.icons, id: \.symbol) { symbol, name in
+                Button {
+                    browser.setSpaceIcon(space.id, to: symbol)
+                } label: {
+                    Label(name, systemImage: symbol)
+                }
+            }
+            Divider()
+            Button("Emoji…") { SpaceMenu.chooseEmoji(for: space, in: browser) }
+        } label: {
+            Image(systemName: "face.smiling").font(.system(size: 12, weight: .medium)).foregroundStyle(Palette.muted)
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .frame(width: 28, height: 28)
+        .help("Icon")
     }
 }
 

@@ -62,14 +62,14 @@ public struct Space: Codable, Identifiable, Equatable, Sendable {
     ]
 }
 
-/// The window's spaces, the first one always first.
+/// The window's spaces, in the order they were put in. The first space
+/// (the one holding Mote's main sign-ins) is always among them.
 public struct SpaceList: Equatable, Sendable {
     public private(set) var spaces: [Space]
 
-    /// From what was saved; the first space is made if it's missing.
+    /// From what was saved; the first space is made, at the front, if it's missing.
     public init(saved: [Space]) {
-        let first = saved.first(where: \.isFirst) ?? Space(id: Space.firstID, name: "Personal")
-        spaces = [first] + saved.filter { !$0.isFirst }
+        spaces = saved.contains(where: \.isFirst) ? saved : [Space(id: Space.firstID, name: "Personal")] + saved
     }
 
     public func index(of id: UUID) -> Int? { spaces.firstIndex { $0.id == id } }

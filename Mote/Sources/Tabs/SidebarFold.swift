@@ -134,14 +134,14 @@ struct SidebarFold: View {
         let reach = prefs.sidebar ? prefs.sideWidth + ChromeLayout.gap + ResizeGrip.width : ChromeLayout.strip
         // The strip always waits, as its edge is crossed on the way to the menu
         // bar; so does a sidebar that hides by itself.
-        let waits = !prefs.sidebar || prefs.sideHides
+        let waits = !prefs.sidebar || (prefs.sideHides && prefs.revealDelay > 0)
         switch EdgeReveal.step(pointer, peeking: browser.peeking, reach: reach, waits: waits) {
         case .show:
             timers.cancelShow()
             if browser.peeking { inside = true }
             show()
         case .showSoon:
-            timers.showAfter(EdgeReveal.dwell) { show() }
+            timers.showAfter(Double(prefs.revealDelay)) { show() }
         case .hideSoon:
             timers.cancelShow()
             inside = false

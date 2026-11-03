@@ -157,7 +157,7 @@ struct Sidebar: View {
                 ScrollViewReader { scroller in
                     // Into the trailing margin, so the scroller sits beside the
                     // close buttons rather than on them; the resize handle covers it.
-                    ScrollView(.vertical) { listed.padding(.trailing, 10) }
+                    ScrollView(.vertical) { listed.padding(.trailing, 10).floatingScroller() }
                         .padding(.trailing, -10)
                         .onChange(of: browser.activeID) { _, id in
                             if let id { withAnimation(Motion.glide) { scroller.scrollTo(id) } }

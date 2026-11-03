@@ -44,6 +44,9 @@ final class Preferences: ObservableObject {
     /// is only made for what's chosen.
     @Published var newTabSearch: Bool
     @Published var toolbarMode: ToolbarMode
+    /// Seconds the pointer rests on the edge before tucked-away tabs, or the
+    /// toolbar, slide out.
+    @Published var revealDelay: CGFloat
     /// Last manual fold, stored separately for each tab layout.
     @Published var sidebarFolded: Bool
     @Published var stripFolded: Bool
@@ -127,6 +130,7 @@ final class Preferences: ObservableObject {
         sideHides = store.value("sidebar.hides", or: false)
         newTabSearch = store.value("newtab.search", or: false)
         toolbarMode = store.value("toolbar.mode", or: .shown)
+        revealDelay = min(0.6, max(0, store.value("reveal.delay", or: 0.05)))
         sidebarFolded = store.value("sidebar.folded", or: store.value("sidebar.hides", or: false))
         stripFolded = store.value("strip.folded", or: false)
         sideWidth = min(Metrics.sideMax, max(Metrics.sideMin, store.value("sidebar.width", or: Metrics.side)))
@@ -216,6 +220,7 @@ final class Preferences: ObservableObject {
         keep($floatsOnLeave, "float.leave")
         keep($newTabSearch, "newtab.search")
         keep($toolbarMode, "toolbar.mode")
+        keep($revealDelay, "reveal.delay")
         keep($shielded, "shield")
         keep($extensionsInPrivate, "extensions.private")
         keep($passkeys, "passkeys")

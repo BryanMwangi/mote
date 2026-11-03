@@ -15,43 +15,39 @@ enum SpaceMenu {
         return item
     }
 
-    static func show(for browser: Browser) {
+    /// Every space, then what can be done to `space` (the one showing
+    /// unless another is given, as a right-click on its icon does).
+    static func show(for browser: Browser, space: Space? = nil) {
+        let here = space ?? browser.space
         let menu = NSMenu()
-        for (index, space) in browser.spaces.enumerated() {
-            menu.addItem(
-                item(
-                    space.name, key: index < 9 ? "\(index + 1)" : "", checked: space.id == browser.spaceID,
-                    symbol: space.emoji ?? space.symbol
-                ) {
-                    browser.switchSpace(to: space.id)
-                })
+        if space == nil {
+            for (index, space) in browser.spaces.enumerated() {
+                menu.addItem(
+                    item(
+                        space.name, key: index < 9 ? "\(index + 1)" : "", checked: space.id == browser.spaceID,
+                        symbol: space.emoji ?? space.symbol
+                    ) {
+                        browser.switchSpace(to: space.id)
+                    })
+            }
+            menu.addItem(.separator())
+            menu.addItem(item("New Space…") { browser.askForSpace() })
+        } else if here.id != browser.spaceID {
+            menu.addItem(item("Switch to “\(here.name)”") { browser.switchSpace(to: here.id) })
         }
-        menu.addItem(.separator())
-        menu.addItem(item("New Space…") { browser.askForSpace() })
-        menu.addItem(.separator())
-        for entry in actions(on: browser.space, in: browser) { menu.addItem(entry) }
+        if !menu.items.isEmpty { menu.addItem(.separator()) }
+        for entry in actions(on: here, in: browser) { menu.addItem(entry) }
         menu.popUp(positioning: nil, at: NSEvent.mouseLocation, in: nil)
     }
 
     private static func actions(on here: Space, in browser: Browser) -> [NSMenuItem] {
-        var items = [
-            item("Rename “\(here.name)”…") {
-                Prompt.name("Rename Space", placeholder: here.name, initial: here.name, confirm: "Rename") {
-                    browser.renameSpace(here.id, to: $0)
-                }
-            }
-        ]
+        var items = [item("Rename “\(here.name)”…") { rename(here, in: browser) }]
         let icons = NSMenu()
         for (symbol, name) in Space.icons {
-            icons.addItem(item(name, checked: here.symbol == symbol, symbol: symbol) { browser.setSpaceIcon(here.id, to: symbol) })
+            icons.addItem(item(name, checked: here.icon == symbol, symbol: symbol) { browser.setSpaceIcon(here.id, to: symbol) })
         }
         icons.addItem(.separator())
-        icons.addItem(
-            item(here.emoji.map { "Emoji: \($0)…" } ?? "Emoji…") {
-                Prompt.name("Space Emoji", placeholder: "💼", initial: here.emoji ?? "", confirm: "Use") { typed in
-                    if let emoji = typed.first.map(String.init), Space.isEmoji(emoji) { browser.setSpaceIcon(here.id, to: emoji) }
-                }
-            })
+        icons.addItem(item(here.emoji.map { "Emoji: \($0)…" } ?? "Emoji…") { chooseEmoji(for: here, in: browser) })
         let icon = NSMenuItem(title: "Icon", action: nil, keyEquivalent: "")
         icon.submenu = icons
         items.append(icon)
@@ -66,18 +62,41 @@ enum SpaceMenu {
                 Prompt.folder { browser.setSpaceDownloads(here.id, to: $0) }
             })
         if folder != nil { items.append(item("Use the Downloads Folder in Settings") { browser.setSpaceDownloads(here.id, to: nil) }) }
-        if !here.isFirst {
-            items.append(.separator())
-            items.append(
-                item("Delete “\(here.name)”…") {
-                    Prompt.confirm(
-                        "Delete “\(here.name)”?",
-                        detail: "Its tabs close and its cookies and sign-ins are removed from this Mac. History and bookmarks are kept.",
-                        confirm: "Delete"
-                    ) { browser.deleteSpace(here.id) }
-                })
+        items.append(.separator())
+        if here.isFirst {
+            // Said rather than left out, so it doesn't look like a mistake.
+            let kept = NSMenuItem(title: "“\(here.name)” holds Mote's main sign-ins and stays", action: nil, keyEquivalent: "")
+            kept.isEnabled = false
+            items.append(kept)
+        } else {
+            items.append(item("Delete “\(here.name)”…") { confirmDelete(here, in: browser) })
         }
         return items
+    }
+
+    // What the menus here and in Settings › Tabs › Spaces ask first.
+
+    static func rename(_ here: Space, in browser: Browser) {
+        Prompt.name("Rename Space", placeholder: here.name, initial: here.name, confirm: "Rename") {
+            browser.renameSpace(here.id, to: $0)
+        }
+    }
+
+    static func chooseEmoji(for here: Space, in browser: Browser) {
+        Prompt.name("Space Emoji", placeholder: "💼", initial: here.emoji ?? "", confirm: "Use") { typed in
+            if let emoji = typed.first.map(String.init), Space.isEmoji(emoji) { browser.setSpaceIcon(here.id, to: emoji) }
+        }
+    }
+
+    static func confirmDelete(_ here: Space, in browser: Browser) {
+        guard !here.isFirst else { return }
+        Prompt.confirm(
+            "Delete “\(here.name)”?",
+            detail: here.ownData
+                ? "Its tabs close and its cookies and sign-ins are removed from this Mac. History and bookmarks are kept."
+                : "Its tabs close. Its sign-ins are the first space's, so they stay. History and bookmarks are kept.",
+            confirm: "Delete"
+        ) { browser.deleteSpace(here.id) }
     }
 }
 

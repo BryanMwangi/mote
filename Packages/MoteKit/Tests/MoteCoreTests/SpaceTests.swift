@@ -8,11 +8,12 @@ struct SpaceTests {
     private let work = Space(id: UUID(), name: "Work", icon: "briefcase", sharesSignIns: true)
     private let play = Space(id: UUID(), name: "Play", icon: "gamecontroller")
 
-    @Test("The first space is made if missing and always comes first")
+    @Test("The first space is made if missing, and otherwise keeps its place")
     func first() {
         let list = SpaceList(saved: [work, Space(id: Space.firstID, name: "Me")])
-        #expect(list.spaces.map(\.name) == ["Me", "Work"])
+        #expect(list.spaces.map(\.name) == ["Work", "Me"])
         #expect(SpaceList(saved: []).spaces.map(\.name) == ["Personal"])
+        #expect(SpaceList(saved: [work]).spaces.map(\.name) == ["Personal", "Work"])
     }
 
     @Test("Icons fall back to a house or a briefcase, and new spaces get one not used yet")
@@ -35,6 +36,9 @@ struct SpaceTests {
         #expect(list.space(work.id)?.name == "Job")
         let first = list.remove(Space.firstID)
         #expect(first == nil)
+        let firstMoved = list.move(Space.firstID, to: 2)
+        #expect(firstMoved)
+        #expect(list.spaces.last?.isFirst == true)
         let gone = list.remove(play.id)
         #expect(gone?.name == "Play")
         #expect(list.spaces.count == 2)

@@ -63,6 +63,7 @@ struct SpaceHeader: View {
         }
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
+        .onRightClick { SpaceMenu.show(for: browser, space: space) }
         .animation(Motion.hover, value: hovering)
     }
 }
@@ -105,9 +106,7 @@ private struct SpaceIcon: View {
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
         .help(space.name)
-        .contextMenu {
-            Button("Switch to “\(space.name)”") { browser.switchSpace(to: space.id) }.disabled(here)
-        }
+        .onRightClick { SpaceMenu.show(for: browser, space: space) }
         .animation(Motion.hover, value: hovering)
         .animation(Motion.quick, value: here)
     }
@@ -204,5 +203,37 @@ struct AddressPill: View {
         .background(hovering ? Palette.hover : Palette.wash, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
         .onHover { hovering = $0 }
         .animation(Motion.hover, value: hovering)
+    }
+}
+
+extension View {
+    /// Runs `act` on a right-click (or a control-click), leaving every other
+    /// click to the view underneath.
+    func onRightClick(_ act: @escaping () -> Void) -> some View {
+        overlay(RightClickCatcher(act: act))
+    }
+}
+
+private struct RightClickCatcher: NSViewRepresentable {
+    let act: () -> Void
+
+    func makeNSView(context: Context) -> Catcher { Catcher() }
+    func updateNSView(_ view: Catcher, context: Context) { view.act = act }
+
+    final class Catcher: NSView {
+        var act: (() -> Void)?
+
+        private static func isRightClick(_ event: NSEvent?) -> Bool {
+            guard let event else { return false }
+            return event.type == .rightMouseDown || (event.type == .leftMouseDown && event.modifierFlags.contains(.control))
+        }
+
+        /// Only right-clicks land here; the rest go through to the view below.
+        override func hitTest(_ point: NSPoint) -> NSView? {
+            Self.isRightClick(NSApp.currentEvent) ? super.hitTest(point) : nil
+        }
+
+        override func rightMouseDown(with event: NSEvent) { act?() }
+        override func mouseDown(with event: NSEvent) { act?() }
     }
 }

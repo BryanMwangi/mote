@@ -38,7 +38,7 @@ struct SettingsPanel: View {
         switch page {
         case .general: GeneralSettings(browser: browser, prefs: prefs)
         case .ai: AISettings(browser: browser, prefs: prefs)
-        case .tabs: TabSettings(prefs: prefs)
+        case .tabs: TabSettings(browser: browser, prefs: prefs)
         case .passwords: PasswordSettings(browser: browser, prefs: prefs)
         case .privacy: PrivacySettings(browser: browser, prefs: prefs)
         case .extensions: ExtensionsPage(browser: browser)

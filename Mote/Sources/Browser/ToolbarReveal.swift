@@ -73,12 +73,12 @@ struct ToolbarReveal: View {
             distance: distance)
         // Its suggestions hang below it; while they show it stays.
         let reach = ChromeLayout.toolbar + (browser.field.offers.isEmpty ? 0 : 400)
-        switch EdgeReveal.step(state, peeking: browser.toolbarRevealed, reach: reach, waits: true) {
+        switch EdgeReveal.step(state, peeking: browser.toolbarRevealed, reach: reach, waits: prefs.revealDelay > 0) {
         case .show:
             timers.cancelShow()
             show()
         case .showSoon:
-            timers.showAfter(EdgeReveal.dwell) { show() }
+            timers.showAfter(Double(prefs.revealDelay)) { show() }
         case .hideSoon:
             timers.cancelShow()
             hide()
