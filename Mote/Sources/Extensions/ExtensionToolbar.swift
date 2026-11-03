@@ -12,7 +12,7 @@ struct ExtensionSlot: View {
     var edge: Edge = .bottom
 
     var body: some View {
-        if #available(macOS 15.4, *) { ExtensionBar(extensions: .shared, edge: edge) }
+        if #available(macOS 15.4, *) { ExtensionBar(extensions: .current, edge: edge) }
     }
 }
 

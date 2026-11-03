@@ -46,7 +46,12 @@ private struct InstalledList: View {
             }
         }
 
-        SettingsSection("Where they run") {
+        SettingsSection(
+            "Where they run",
+            note: browser.prefs.usesSpaces
+                ? "A space with its own sign-ins runs its own copy of each extension, with its own storage, from the first time you open it."
+                : nil
+        ) {
             SettingRow(
                 "In private tabs too", "Off at first: a private tab keeps nothing, extensions included", symbol: "eyeglasses",
                 tint: Tint.indigo

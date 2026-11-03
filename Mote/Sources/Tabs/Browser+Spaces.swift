@@ -139,6 +139,9 @@ extension Browser {
         parked.removeValue(forKey: id)?.tabs.forEach { $0.close() }
         editSpaces { $0.remove(id) }
         Session.erase(space: id)
-        if doomed.ownData { Spaces.erase(id) }
+        if doomed.ownData {
+            if #available(macOS 15.4, *) { Extensions.stop(space: id) }
+            Spaces.erase(id)
+        }
     }
 }

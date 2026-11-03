@@ -52,7 +52,7 @@ enum Web {
         // Extensions reach private tabs only when Settings › Extensions allows it,
         // and the controller has to be in place before the view exists.
         if #available(macOS 15.4, *), !shy || Storage.settings.bool(forKey: "extensions.private") {
-            MainActor.assumeIsolated { Extensions.attach(config) }
+            MainActor.assumeIsolated { Extensions.attach(config, space: space ?? Spaces.current) }
         }
         // Without it the user agent names no browser and Google serves its old page.
         config.applicationNameForUserAgent = userAgentName

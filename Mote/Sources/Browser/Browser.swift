@@ -896,7 +896,7 @@ final class Browser: NSObject, ObservableObject {
         guard #available(macOS 15.4, *) else { return nil }
         let url = Extensions.current(url)
         guard url.scheme == Extensions.scheme else { return nil }
-        return Extensions.shared.controller.extensionContext(for: url)?.webViewConfiguration
+        return Extensions.current.controller.extensionContext(for: url)?.webViewConfiguration
     }
 
     // MARK: - Wiring a tab

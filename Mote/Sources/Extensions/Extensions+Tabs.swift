@@ -17,10 +17,12 @@ extension Extensions {
 
     func shows(_ tab: Tab) -> Bool { !tab.shy || tab.carriesExtensions }
 
-    var visibleTabs: [Tab] { browser?.tabs.filter(shows) ?? [] }
+    /// The showing space's tabs, while they're this set's; another space's
+    /// extensions see none.
+    var visibleTabs: [Tab] { ownsShowingSpace ? browser?.tabs.filter(shows) ?? [] : [] }
 
     var activeAdapter: ExtensionTab? {
-        guard let tab = browser?.active, shows(tab) else { return nil }
+        guard ownsShowingSpace, let tab = browser?.active, shows(tab) else { return nil }
         return adapter(for: tab)
     }
 
@@ -39,7 +41,8 @@ extension Extensions {
     }
 
     private func tabsChanged(_ tabs: [Tab]) {
-        let shown = tabs.filter(shows)
+        startIfShowing()
+        let shown = ownsShowingSpace ? tabs.filter(shows) : []
         let changes = ExtensionRules.tabChanges(from: order, to: shown.map(\.id))
         for id in changes.closed {
             if let adapter = adapters[id] { controller.didCloseTab(adapter, windowIsClosing: false) }
@@ -71,7 +74,7 @@ extension Extensions {
     }
 
     private func selected(_ id: Tab.ID?, after previous: Tab.ID?) {
-        guard let browser, let tab = id.flatMap(browser.tab), shows(tab) else { return }
+        guard ownsShowingSpace, let browser, let tab = id.flatMap(browser.tab), shows(tab) else { return }
         controller.didActivateTab(adapter(for: tab), previousActiveTab: previous.flatMap(browser.tab).map(adapter(for:)))
         actionsChanged += 1
     }

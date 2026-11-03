@@ -104,8 +104,8 @@ final class PageView: WKWebView {
             }
         }
         // Extensions' items go last.
-        guard #available(macOS 15.4, *), let tab = Extensions.shared.browser?.tab(for: self) else { return }
-        let items = Extensions.shared.menuItems(for: tab)
+        guard #available(macOS 15.4, *), let tab = Extensions.current.browser?.tab(for: self) else { return }
+        let items = Extensions.current.menuItems(for: tab)
         guard !items.isEmpty else { return }
         menu.addItem(.separator())
         items.forEach(menu.addItem)

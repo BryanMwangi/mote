@@ -68,7 +68,7 @@ final class KeyRouter {
             return true
         }
         // Extensions get the rest of the shortcuts first.
-        if #available(macOS 15.4, *), press.command || press.option || press.control, Extensions.shared.take(event) { return true }
+        if #available(macOS 15.4, *), press.command || press.option || press.control, Extensions.current.take(event) { return true }
         guard let command else { return false }
         if !isDigit(press), leavesToPage(event, press, picking: browser.pickingElement) { return false }
         run(command, in: browser, event: event)

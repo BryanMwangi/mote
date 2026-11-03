@@ -75,7 +75,9 @@ struct Sidebar: View {
                 // buttons, and ⌘S alone for the sidebar.
                 HStack(spacing: 2) {
                     if prefs.sideWidth >= 220 {
-                        Door(icon: "sidebar.left", help: browser.folded ? "Show Sidebar   ⌘S" : "Hide Sidebar   ⌘S") { browser.toggleFold() }
+                        Door(icon: "sidebar.left", help: browser.folded ? "Show Sidebar   ⌘S" : "Hide Sidebar   ⌘S") {
+                            browser.toggleFold()
+                        }
                     }
                     Helm(browser: browser)
                 }
