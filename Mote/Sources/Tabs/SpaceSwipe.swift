@@ -220,8 +220,7 @@ struct NewSpaceCard: View {
         Button {
             choosingIcon = true
         } label: {
-            Image(systemName: icon)
-                .font(.system(size: size, weight: .medium))
+            SpaceGlyph(icon, size: size)
                 .foregroundStyle(Palette.ink)
                 .frame(width: box.width, height: box.height)
                 .background(
@@ -249,25 +248,13 @@ struct NewSpaceCard: View {
             .onSubmit(create)
     }
 
-    /// Every icon; picking one closes the picker.
+    /// Symbols or emoji; picking one closes the picker.
     private var iconPicker: some View {
-        LazyVGrid(columns: Array(repeating: GridItem(.fixed(28), spacing: 4), count: 6), spacing: 4) {
-            ForEach(Space.icons, id: \.symbol) { symbol, name in
-                Image(systemName: symbol)
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(symbol == icon ? Palette.ink : Palette.muted)
-                    .frame(width: 28, height: 28)
-                    .background(symbol == icon ? Palette.wash : .clear, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        withAnimation(Motion.quick) { icon = symbol }
-                        choosingIcon = false
-                        typing = true
-                    }
-                    .help(name)
-            }
+        IconPicker(current: icon) { picked in
+            withAnimation(Motion.quick) { icon = picked }
+            choosingIcon = false
+            typing = true
         }
-        .padding(10)
     }
 
     private func create() {

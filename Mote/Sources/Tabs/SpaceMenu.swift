@@ -42,15 +42,10 @@ enum SpaceMenu {
 
     private static func actions(on here: Space, in browser: Browser) -> [NSMenuItem] {
         var items = [item("Rename “\(here.name)”…") { rename(here, in: browser) }]
-        let icons = NSMenu()
-        for (symbol, name) in Space.icons {
-            icons.addItem(item(name, checked: here.icon == symbol, symbol: symbol) { browser.setSpaceIcon(here.id, to: symbol) })
-        }
-        icons.addItem(.separator())
-        icons.addItem(item(here.emoji.map { "Emoji: \($0)…" } ?? "Emoji…") { chooseEmoji(for: here, in: browser) })
-        let icon = NSMenuItem(title: "Icon", action: nil, keyEquivalent: "")
-        icon.submenu = icons
-        items.append(icon)
+        items.append(
+            item("Icon…", symbol: here.emoji ?? here.symbol) {
+                IconPopover.show(current: here.emoji ?? here.symbol) { browser.setSpaceIcon(here.id, to: $0) }
+            })
         // The order is the swipe order and ⌃1–⌃9's.
         if let at = browser.spaces.firstIndex(where: { $0.id == here.id }) {
             if at > 0 { items.append(item("Move Left") { browser.moveSpace(here.id, to: at - 1) }) }
@@ -79,12 +74,6 @@ enum SpaceMenu {
     static func rename(_ here: Space, in browser: Browser) {
         Prompt.name("Rename Space", placeholder: here.name, initial: here.name, confirm: "Rename") {
             browser.renameSpace(here.id, to: $0)
-        }
-    }
-
-    static func chooseEmoji(for here: Space, in browser: Browser) {
-        Prompt.name("Space Emoji", placeholder: "💼", initial: here.emoji ?? "", confirm: "Use") { typed in
-            if let emoji = typed.first.map(String.init), Space.isEmoji(emoji) { browser.setSpaceIcon(here.id, to: emoji) }
         }
     }
 

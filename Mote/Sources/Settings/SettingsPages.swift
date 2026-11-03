@@ -231,6 +231,23 @@ struct TabSettings: View {
     }
 }
 
+/// A space's icon, opening the picker.
+private struct IconButton: View {
+    let space: Space
+    let browser: Browser
+    @State private var picking = false
+
+    var body: some View {
+        Door(icon: "face.smiling", on: picking, help: "Icon") { picking = true }
+            .popover(isPresented: $picking, arrowEdge: .bottom) {
+                IconPicker(current: space.emoji ?? space.symbol) { icon in
+                    browser.setSpaceIcon(space.id, to: icon)
+                    picking = false
+                }
+            }
+    }
+}
+
 /// Settings › Tabs › Spaces: each space, to rename, give an icon or move.
 /// Clicking spaces' icons selects them: one can be deleted, several merged.
 private struct SpaceRows: View {
@@ -358,25 +375,9 @@ private struct SpaceRows: View {
     }
 
     private func iconMenu(for space: Space) -> some View {
-        Menu {
-            ForEach(Space.icons, id: \.symbol) { symbol, name in
-                Button {
-                    browser.setSpaceIcon(space.id, to: symbol)
-                } label: {
-                    Label(name, systemImage: symbol)
-                }
-            }
-            Divider()
-            Button("Emoji…") { SpaceMenu.chooseEmoji(for: space, in: browser) }
-        } label: {
-            Image(systemName: "face.smiling").font(.system(size: 12, weight: .medium)).foregroundStyle(Palette.muted)
-        }
-        .menuStyle(.borderlessButton)
-        .menuIndicator(.hidden)
-        .fixedSize()
-        .frame(width: 28, height: 28)
-        .help("Icon")
+        IconButton(space: space, browser: browser)
     }
+
 }
 
 struct PasswordSettings: View {
