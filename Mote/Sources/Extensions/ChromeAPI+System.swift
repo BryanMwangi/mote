@@ -151,9 +151,9 @@ extension ChromeAPI {
     // MARK: - system
 
     #if arch(arm64)
-        private static let cpuArch = "arm64"
+    private static let cpuArch = "arm64"
     #else
-        private static let cpuArch = "x86_64"
+    private static let cpuArch = "x86_64"
     #endif
 
     static func system(_ call: ChromeCall) async throws -> Any? {
@@ -161,7 +161,8 @@ extension ChromeAPI {
         switch call.method {
         case "cpu.getInfo":
             return [
-                "numOfProcessors": ProcessInfo.processInfo.processorCount, "archName": cpuArch, "modelName": cpuArch == "arm64" ? "Apple silicon" : "Intel",
+                "numOfProcessors": ProcessInfo.processInfo.processorCount, "archName": cpuArch,
+                "modelName": cpuArch == "arm64" ? "Apple silicon" : "Intel",
                 "features": [], "processors": [], "temperatures": [],
             ]
         case "memory.getInfo":
