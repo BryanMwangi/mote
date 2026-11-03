@@ -11,6 +11,8 @@ public struct Suggestion: Identifiable, Equatable, Sendable {
         case known
         /// A search query.
         case search
+        /// An address on the clipboard.
+        case clipboard
     }
 
     /// Normalized address without scheme or "www.".

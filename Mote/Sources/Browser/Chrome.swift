@@ -33,9 +33,10 @@ extension Browser {
     }
 
     /// Whether the address field is being edited in the toolbar, over a page. A
-    /// blank tab edits in its own composer, and ⌘K opens the palette instead.
+    /// blank tab edits in its own composer, and ⌘K (or ⌘T as a floating
+    /// search) opens the palette instead.
     var editingInBar: Bool {
-        editing && !field.switching && active?.isStart == false
+        editing && !field.switching && !field.launching && active?.isStart == false
     }
 
     func layout(in window: CGSize, nativeSidebar: Bool = false) -> ChromeLayout {

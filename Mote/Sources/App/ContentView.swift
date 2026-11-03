@@ -13,8 +13,11 @@ struct ContentView: View {
     /// Runs a key through the window's shortcuts, for the bench.
     static var keyHook: ((NSEvent) -> NSEvent?)?
 
-    /// The switcher over a page; a blank tab switches in its own composer.
-    private var switching: Bool { browser.field.switching && browser.active?.isStart == false }
+    /// The switcher, or the floating search, over a page; a blank tab
+    /// switches in its own composer.
+    private var switching: Bool {
+        (browser.field.switching || browser.field.launching) && browser.active?.isStart == false
+    }
 
     var body: some View {
         Chrome(browser: browser, prefs: browser.prefs)

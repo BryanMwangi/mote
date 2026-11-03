@@ -157,6 +157,11 @@ struct TabSettings: View {
                     symbol: "sidebar.left", tint: Tint.blue, on: $prefs.sideHides)
                 RowRule()
             }
+            SettingRow(
+                "New tabs from a floating search",
+                "⌘T opens a search over the page, and a tab only for what you pick. Escape leaves things as they were",
+                symbol: "magnifyingglass", tint: Tint.blue, on: $prefs.newTabSearch)
+            RowRule()
             SettingRow("Beside each title", "What marks a tab, pinned ones too", symbol: "app.badge", tint: Tint.orange) {
                 Segmented(options: Glyph.allCases.map { ($0, $0.title) }, selection: $prefs.glyph)
             }

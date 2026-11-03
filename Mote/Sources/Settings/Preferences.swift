@@ -25,6 +25,9 @@ final class Preferences: ObservableObject {
     /// The sidebar hides unless the pointer is at the left edge, not only
     /// after ⌘S (see SidebarFold.swift).
     @Published var sideHides: Bool
+    /// ⌘T and the new-tab buttons open a floating search over the page; a tab
+    /// is only made for what's chosen.
+    @Published var newTabSearch: Bool
     /// Last manual fold, stored separately for each tab layout.
     @Published var sidebarFolded: Bool
     @Published var stripFolded: Bool
@@ -106,6 +109,7 @@ final class Preferences: ObservableObject {
         // Older versions kept the layout as "manner".
         sidebar = store.object(forKey: "sidebar") as? Bool ?? (store.string(forKey: "manner") == "side")
         sideHides = store.value("sidebar.hides", or: false)
+        newTabSearch = store.value("newtab.search", or: false)
         sidebarFolded = store.value("sidebar.folded", or: store.value("sidebar.hides", or: false))
         stripFolded = store.value("strip.folded", or: false)
         sideWidth = min(Metrics.sideMax, max(Metrics.sideMin, store.value("sidebar.width", or: Metrics.side)))
@@ -193,6 +197,7 @@ final class Preferences: ObservableObject {
         keep($floatFlicks, "float.flicks") { FloatingVideo.flicks = $0 }
         keep($floatsAway, "float.away")
         keep($floatsOnLeave, "float.leave")
+        keep($newTabSearch, "newtab.search")
         keep($shielded, "shield")
         keep($extensionsInPrivate, "extensions.private")
         keep($passkeys, "passkeys")

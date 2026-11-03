@@ -18,6 +18,7 @@ extension Browser {
     /// address. Open tabs are left to ⌘K to keep the list short.
     func suggestions(for typed: String, switching: Bool) -> ([Suggestion], String?) {
         if switching { return (openPages(matching: typed), nil) }
+        if field.launching { return launchSuggestions(for: typed) }
         if assistantLeads, MentionMenu.query(in: typed) != nil { return ([], nil) }
         guard !typed.trimmingCharacters(in: .whitespaces).isEmpty else { return ([], nil) }
         var list = history.suggestions(for: typed, limit: 3)
@@ -29,6 +30,59 @@ extension Browser {
         // A question isn't finished for it as an address.
         if assistantLeads { return (list, nil) }
         return (list, history.completion(for: typed, among: list.filter { $0.kind != .open }))
+    }
+
+    /// The floating search: the clipboard's address while nothing is typed,
+    /// then open tabs to switch to, places from history and a search.
+    private func launchSuggestions(for typed: String) -> ([Suggestion], String?) {
+        let text = typed.trimmingCharacters(in: .whitespaces)
+        if text.isEmpty {
+            var list: [Suggestion] = []
+            if let url = field.clipboard {
+                list.append(Suggestion(key: url.absoluteString, title: "", url: url, kind: .clipboard))
+            }
+            return (list + openPages(matching: "").prefix(4), nil)
+        }
+        let open = openPages(matching: typed)
+        let openURLs = Set(open.map(\.url))
+        var list = open + history.suggestions(for: typed, limit: 3).filter { !openURLs.contains($0.url) }
+        if Address.url(from: typed) == nil, let search = searchURL(for: typed) {
+            list.append(Suggestion(key: typed, title: prefs.engine.name(custom: prefs.customEngine), url: search, kind: .search))
+        }
+        return (list, history.completion(for: typed, among: list.filter { $0.kind != .open }))
+    }
+
+    /// ⌘T with the floating search on: the palette over the page, and no tab
+    /// until something is chosen.
+    func launch() {
+        reviewing = false
+        cancelTabEdit()
+        field.clear()
+        field.launching = true
+        editing = true
+        field.askFocus()
+        Self.clipboardAddress { [weak self] url in
+            guard let self, self.field.launching, self.field.typed.isEmpty else { return }
+            self.field.clipboard = url
+        }
+    }
+
+    /// An address on the clipboard, if there is one. The pasteboard is only
+    /// read once it's known to hold one, so macOS doesn't ask about pasting
+    /// for anything else.
+    private static func clipboardAddress(_ found: @escaping @MainActor (URL?) -> Void) {
+        let board = NSPasteboard.general
+        func read() -> URL? {
+            guard let text = board.string(forType: .string)?.trimmingCharacters(in: .whitespacesAndNewlines),
+                !text.contains(where: \.isWhitespace), let url = URL(string: text), url.scheme?.hasPrefix("http") == true
+            else { return nil }
+            return url
+        }
+        guard #available(macOS 15.4, *) else { return found(read()) }
+        Task { @MainActor in
+            let seen = (try? await board.detectedPatterns(for: [\.probableWebURL])) ?? []
+            found(seen.isEmpty ? nil : read())
+        }
     }
 
     /// The new tab's composer asks the assistant on Return, rather than
@@ -68,6 +122,10 @@ extension Browser {
     func dismiss() {
         field.switching = false
         field.cycling = false
+        if field.launching {
+            editing = false
+            return field.clear()
+        }
         guard active?.isStart == false else { return }
         editing = false
         field.clear()
@@ -99,7 +157,12 @@ extension Browser {
     /// Return. `searching`: go or search even where the assistant leads.
     func submit(searching: Bool = false) {
         if !searching, field.input.asks(assistantLeads: assistantLeads, address: Address.url(from:)) { return ask() }
+        let launching = field.launching
         switch field.submit(address: Address.url(from:), destination: destination(for:)) {
+        case .switchTo(let id, let url) where launching:
+            choose(launched: url, in: tab(id))
+        case .go(let url) where launching:
+            choose(launched: url, in: nil)
         case .switchTo(let id, let url):
             if let tab = tab(id) { select(tab) } else if let tab = active ?? tabs.first { go(tab, to: url) }
         case .go(let url):
@@ -218,11 +281,24 @@ extension Browser {
     /// A clicked suggestion opens directly, without moving the keyboard pick,
     /// so a list appearing under a still pointer doesn't change the field.
     func take(_ offer: Suggestion) {
+        if field.launching { return choose(launched: offer.url, in: offer.tab.flatMap(tab)) }
         field.switching = false
         if let id = offer.tab, let tab = tab(id) {
             select(tab)
         } else if let tab = active ?? tabs.first {
             go(tab, to: offer.url)
+        }
+    }
+
+    /// The floating search's choice: the open tab it names, or a new tab.
+    private func choose(launched url: URL, in existing: Tab?) {
+        editing = false
+        field.clear()
+        if let existing {
+            select(existing)
+        } else {
+            open(url, foreground: true)
+            saveSoon()
         }
     }
 }

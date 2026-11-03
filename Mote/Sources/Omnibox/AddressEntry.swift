@@ -51,6 +51,21 @@ final class AddressEntry {
         }
     }
 
+    /// ⌘T as a floating search over the page: Return opens a new tab rather
+    /// than leaving this one.
+    var launching = false {
+        didSet {
+            guard oldValue != launching else { return }
+            if !launching { clipboard = nil }
+            refresh()
+        }
+    }
+
+    /// An address found on the clipboard as the floating search opened.
+    var clipboard: URL? {
+        didSet { if oldValue != clipboard { refresh() } }
+    }
+
     /// Tab-switcher mode (⌘K), which lists only open tabs.
     var switching: Bool {
         get { input.switching }
@@ -74,6 +89,7 @@ final class AddressEntry {
     /// Empties the field and leaves switcher mode.
     func clear() {
         input.switching = false
+        launching = false
         asksAssistant = false
         clearStagedMentions()
         typed = ""
@@ -81,6 +97,7 @@ final class AddressEntry {
 
     /// Opens the field in switcher mode, empty.
     func startSwitching() {
+        launching = false
         input.switching = true
         clearStagedMentions()
         typed = ""
@@ -114,5 +131,7 @@ final class AddressEntry {
     private func refresh() {
         let (offers, ending) = suggest(input.typed, input.switching)
         input.offer(offers, ending: ending)
+        // The floating search starts on its first offer, as the switcher does.
+        if launching, input.typed.isEmpty, !offers.isEmpty { input.picked = 0 }
     }
 }

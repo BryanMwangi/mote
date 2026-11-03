@@ -450,6 +450,15 @@ struct SuggestionList: View {
 
         @State private var hovering = false
 
+        /// What choosing it does, where that isn't just going there.
+        private var badge: String? {
+            switch offer.kind {
+            case .clipboard: "Visit from clipboard"
+            case .open: "Switch to Tab"
+            default: nil
+            }
+        }
+
         var body: some View {
             HStack(spacing: 10) {
                 Group {
@@ -462,6 +471,10 @@ struct SuggestionList: View {
                         // Already open in a tab; choosing it switches to that tab.
                         Image(systemName: "square.on.square")
                             .font(.system(size: 10, weight: .medium))
+                            .foregroundStyle(Palette.muted)
+                    case .clipboard:
+                        Image(systemName: "doc.on.clipboard")
+                            .font(.system(size: 11, weight: .medium))
                             .foregroundStyle(Palette.muted)
                     default:
                         Mark(
@@ -484,6 +497,15 @@ struct SuggestionList: View {
                         .truncationMode(.tail)
                 }
                 Spacer(minLength: 0)
+                if let badge {
+                    Text(badge)
+                        .font(.system(size: 11))
+                        .foregroundStyle(Palette.muted)
+                        .padding(.horizontal, 7)
+                        .frame(height: 20)
+                        .background(Palette.wash, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                        .fixedSize()
+                }
                 if picked {
                     Image(systemName: "return")
                         .font(.system(size: 10, weight: .medium))

@@ -425,7 +425,7 @@ final class Browser: NSObject, ObservableObject {
     }
 
     /// Saves the session a moment after the last of a burst of changes.
-    private func saveSoon() {
+    func saveSoon() {
         guard saving == nil else { return }
         saving = Task { [weak self] in
             try? await Task.sleep(for: .seconds(1.2))
@@ -445,6 +445,8 @@ final class Browser: NSObject, ObservableObject {
     func newTab() {
         // A new tab from a private tab is private too, so nothing leaks into history.
         if active?.shy == true { return newShyTab() }
+        // Over a page, the floating search; a blank tab already is one.
+        if prefs.newTabSearch, let active, !active.isStart { return launch() }
         if #available(macOS 15.4, *), let page = Extensions.shared.newTabPage {
             open(page, foreground: true)
             field.switching = false
