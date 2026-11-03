@@ -1,5 +1,9 @@
 import MoteCore
 import SwiftUI
+import os
+
+/// Space switches, for Instruments (Points of Interest).
+private let switching = OSSignposter(subsystem: "io.github.mote-browser.mote", category: .pointsOfInterest)
 
 // Switching between spaces and changing them.
 extension Browser {
@@ -26,11 +30,14 @@ extension Browser {
     /// shows the other's.
     private func enter(_ id: UUID) {
         guard id != spaceID, let to = spaces.firstIndex(where: { $0.id == id }) else { return }
+        let interval = switching.beginInterval("Switch space")
+        defer { switching.endInterval("Switch space", interval) }
         // Which way the space's icon slides.
         if !makingSpace { spaceStep = to > (spaces.firstIndex { $0.id == spaceID } ?? 0) ? 1 : -1 }
         cancelTabEdit()
         if floater.showing { land() }
-        writeSession(now: true)
+        // Saved in the background: nothing about the switch waits for the disk.
+        writeSession(now: false, space: spaceID, tabs: tabs, active: activeID)
         parked[spaceID] = Parked(tabs: tabs, active: activeID)
 
         spaceID = id
@@ -51,7 +58,17 @@ extension Browser {
         editing = active?.isStart ?? true
         field.clear()
         field.askFocus()
-        announce(space.name)
+        // After the new space's first frame.
+        let name = space.name
+        DispatchQueue.main.async { [weak self] in self?.announce(name) }
+    }
+
+    /// Readies a space before it's shown, as Zen warms the tab it's about to
+    /// select: its tab in front gets a page, so switching shows it at once.
+    func warmSpace(_ id: UUID) {
+        guard prefs.usesSpaces, id != spaceID, let row = parked[id], let tab = row.active.flatMap({ id in row.tabs.first { $0.id == id } })
+        else { return }
+        if !tab.wake() { tab.revive() }
     }
 
     /// Builds the other spaces' rows ahead, so a swipe can show the next one

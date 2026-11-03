@@ -81,6 +81,7 @@ private struct SpaceIcon: View {
     let space: Space
 
     @State private var hovering = false
+    @State private var warming: Task<Void, Never>?
 
     private var here: Bool { space.id == browser.spaceID && !browser.makingSpace }
 
@@ -96,7 +97,16 @@ private struct SpaceIcon: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .onHover { hovering = $0 }
+        .onHover { over in
+            hovering = over
+            warming?.cancel()
+            // Resting on another space's icon readies it, so the click is instant.
+            guard over, !here else { return }
+            warming = Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(150))
+                if !Task.isCancelled { browser.warmSpace(space.id) }
+            }
+        }
         .help(space.name)
         .onRightClick { SpaceMenu.show(for: browser, space: space, from: .foot) }
         .iconPicker(browser: browser, space: space, from: .foot)
