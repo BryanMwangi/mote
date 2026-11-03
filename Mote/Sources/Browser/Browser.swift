@@ -79,6 +79,8 @@ final class Browser: NSObject, ObservableObject {
     /// The toolbar, when it isn't on the card, is out over the page's top
     /// because the pointer reached it (see ToolbarReveal.swift).
     @Published var toolbarRevealed = false
+    /// The space icon picker open now, and the view it hangs from.
+    @Published var pickingIcon: IconPick?
     /// The tab the media strip shows (see Browser+Media.swift).
     @Published var playing: Tab?
     /// A picture of the page laid over it while the chrome around it changes

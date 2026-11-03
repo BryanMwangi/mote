@@ -24,7 +24,7 @@ struct SpaceDot: View {
 
     var body: some View {
         Button {
-            SpaceMenu.show(for: browser)
+            SpaceMenu.show(for: browser, from: .dot)
         } label: {
             SpaceGlyph(shown?.symbol ?? symbol)
                 .foregroundStyle(hovering ? Palette.ink : Palette.muted)
@@ -37,6 +37,7 @@ struct SpaceDot: View {
         }
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
+        .iconPicker(browser: browser, space: browser.space, from: .dot)
         .help("\(browser.space.name). Switch with ⌃1–⌃9, or two fingers \(browser.prefs.sidebar ? "sideways" : "up or down") over the tabs")
         .onChange(of: key) { _, now in
             let symbol = symbol

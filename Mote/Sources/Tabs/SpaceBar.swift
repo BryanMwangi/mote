@@ -36,35 +36,26 @@ struct SpaceGlyph: View {
     }
 }
 
-/// A space's icon and name, above its pinned tabs. A click opens the spaces
-/// menu.
+/// A space's icon and name, above its pinned tabs. A right-click opens its menu.
 struct SpaceHeader: View {
     @ObservedObject var browser: Browser
     let space: Space
 
-    @State private var hovering = false
-
     static let height: CGFloat = 28
 
+    /// A label, not a button: its menu is on right-click, as every space's is.
     var body: some View {
-        Button {
-            SpaceMenu.show(for: browser)
-        } label: {
-            HStack(spacing: 8) {
-                SpaceGlyph(space: space, size: 11).frame(width: 16)
-                Text(space.name).font(.system(size: 12, weight: .semibold)).lineLimit(1)
-                Spacer(minLength: 0)
-            }
-            .foregroundStyle(hovering ? Palette.ink : Palette.muted)
-            .padding(.leading, 10)
-            .frame(height: Self.height)
-            .background(hovering ? Palette.veil : .clear, in: Rounded.row)
-            .contentShape(Rectangle())
+        HStack(spacing: 8) {
+            SpaceGlyph(space: space, size: 11).frame(width: 16)
+            Text(space.name).font(.system(size: 12, weight: .semibold)).lineLimit(1)
+            Spacer(minLength: 0)
         }
-        .buttonStyle(.plain)
-        .onHover { hovering = $0 }
-        .onRightClick { SpaceMenu.show(for: browser, space: space) }
-        .animation(Motion.hover, value: hovering)
+        .foregroundStyle(Palette.muted)
+        .padding(.leading, 10)
+        .frame(height: Self.height)
+        .contentShape(Rectangle())
+        .onRightClick { SpaceMenu.show(for: browser, space: space, from: .header) }
+        .iconPicker(browser: browser, space: space, from: .header)
     }
 }
 
@@ -95,7 +86,8 @@ private struct SpaceIcon: View {
 
     var body: some View {
         Button {
-            if here { SpaceMenu.show(for: browser) } else { browser.switchSpace(to: space.id) }
+            // The menu is on right-click only, for every space's icon.
+            if !here { browser.switchSpace(to: space.id) }
         } label: {
             SpaceGlyph(space: space)
                 .foregroundStyle(here || hovering ? Palette.ink : Palette.muted.opacity(0.8))
@@ -106,7 +98,8 @@ private struct SpaceIcon: View {
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
         .help(space.name)
-        .onRightClick { SpaceMenu.show(for: browser, space: space) }
+        .onRightClick { SpaceMenu.show(for: browser, space: space, from: .foot) }
+        .iconPicker(browser: browser, space: space, from: .foot)
         .animation(Motion.hover, value: hovering)
         .animation(Motion.quick, value: here)
     }
@@ -173,36 +166,68 @@ struct AddressPill: View {
         return url.host().map { $0.replacingOccurrences(of: "www.", with: "", options: .anchored) } ?? url.absoluteString
     }
 
+    private var editing: Bool { browser.editingInPill }
+
     var body: some View {
         HStack(spacing: 2) {
-            Button(action: browser.edit) {
+            if editing {
                 HStack(spacing: 6) {
-                    if browser.active?.isBlank == false, browser.active?.shownAddress?.scheme == "https" {
-                        Image(systemName: "lock.fill").font(.system(size: 9, weight: .medium)).foregroundStyle(Palette.faint)
-                    }
-                    Text(host)
-                        .font(.system(size: 12))
-                        .foregroundStyle(browser.active?.isBlank == false ? Palette.ink : Palette.muted)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                    Spacer(minLength: 0)
+                    Image(systemName: "magnifyingglass").font(.system(size: 10, weight: .medium)).foregroundStyle(Palette.muted)
+                    AddressField(browser: browser, size: 12, placeholder: "Search or enter address") { browser.dismiss() }
+                        .frame(height: 18)
                 }
                 .padding(.leading, 10)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-                .contentShape(Rectangle())
+                .background(KeepZone())
+            } else {
+                shown
             }
-            .buttonStyle(.plain)
-            .help("Edit the address   ⌘L")
-            if browser.active?.isBlank == false {
+            if !editing, browser.active?.isBlank == false {
                 Door(icon: "link", help: "Copy Address   ⇧⌘C", act: browser.copyAddress)
             }
-            ExtensionSlot(edge: .trailing)
+            if !editing { ExtensionSlot(edge: .trailing) }
         }
         .padding(.trailing, 2)
         .frame(height: Self.height)
-        .background(hovering ? Palette.hover : Palette.wash, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .background(editing || hovering ? Palette.hover : Palette.wash, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Palette.ink.opacity(editing ? 0.14 : 0))
+                .allowsHitTesting(false)
+        }
         .onHover { hovering = $0 }
+        // Suggestions in a panel of their own: the sidebar is too narrow and
+        // clipped, and the field keeps the keyboard.
+        .menuPanel(
+            isPresented: Binding(
+                get: { editing && !browser.field.offers.isEmpty },
+                set: { if !$0 { browser.dismiss() } }),
+            edge: .bottom, keyboard: false
+        ) {
+            SuggestionList(browser: browser).frame(width: 440)
+        }
         .animation(Motion.hover, value: hovering)
+        .animation(Motion.quick, value: editing)
+    }
+
+    private var shown: some View {
+        Button(action: browser.edit) {
+            HStack(spacing: 6) {
+                if browser.active?.isBlank == false, browser.active?.shownAddress?.scheme == "https" {
+                    Image(systemName: "lock.fill").font(.system(size: 9, weight: .medium)).foregroundStyle(Palette.faint)
+                }
+                Text(host)
+                    .font(.system(size: 12))
+                    .foregroundStyle(browser.active?.isBlank == false ? Palette.ink : Palette.muted)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                Spacer(minLength: 0)
+            }
+            .padding(.leading, 10)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help("Edit the address   ⌘L")
     }
 }
 
@@ -235,5 +260,43 @@ private struct RightClickCatcher: NSViewRepresentable {
 
         override func rightMouseDown(with event: NSEvent) { act?() }
         override func mouseDown(with event: NSEvent) { act?() }
+    }
+}
+
+/// Which view a space's icon picker hangs from.
+enum IconAnchor { case foot, header, dot }
+
+/// The icon picker open now: for which space, from which view.
+struct IconPick: Equatable {
+    let space: UUID
+    let from: IconAnchor
+}
+
+extension View {
+    /// The icon picker for `space`, hanging from this view while it's the one
+    /// asked for. It goes with the view, as when the sidebar tucks away.
+    func iconPicker(browser: Browser, space: Space, from anchor: IconAnchor) -> some View {
+        modifier(IconPickerHost(browser: browser, space: space, anchor: anchor))
+    }
+}
+
+private struct IconPickerHost: ViewModifier {
+    @ObservedObject var browser: Browser
+    let space: Space
+    let anchor: IconAnchor
+
+    private var mine: Bool { browser.pickingIcon == IconPick(space: space.id, from: anchor) }
+
+    func body(content: Content) -> some View {
+        content
+            .popover(
+                isPresented: Binding(get: { mine }, set: { if !$0, mine { browser.pickingIcon = nil } }), arrowEdge: .top
+            ) {
+                IconPicker(current: space.emoji ?? space.symbol) { icon in
+                    browser.setSpaceIcon(space.id, to: icon)
+                    browser.pickingIcon = nil
+                }
+            }
+            .onDisappear { if mine { browser.pickingIcon = nil } }
     }
 }

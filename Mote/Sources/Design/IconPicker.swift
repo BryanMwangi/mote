@@ -118,24 +118,3 @@ enum EmojiCatalog {
         return all.filter { item in words.allSatisfy { item.name.contains($0) } }
     }
 }
-
-/// The picker in a popover by the pointer, for menus that can't hold it.
-@MainActor
-enum IconPopover {
-    private static var showing: NSPopover?
-
-    static func show(current: String?, choose: @escaping (String) -> Void) {
-        guard let window = NSApp.keyWindow ?? AppDelegate.window, let view = window.contentView else { return }
-        showing?.close()
-        let popover = NSPopover()
-        popover.behavior = .transient
-        popover.contentViewController = NSHostingController(
-            rootView: IconPicker(current: current) { [weak popover] icon in
-                choose(icon)
-                popover?.close()
-            })
-        let point = view.convert(window.convertPoint(fromScreen: NSEvent.mouseLocation), from: nil)
-        popover.show(relativeTo: NSRect(x: point.x, y: point.y, width: 1, height: 1), of: view, preferredEdge: .maxY)
-        showing = popover
-    }
-}

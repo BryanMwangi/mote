@@ -17,7 +17,8 @@ enum SpaceMenu {
 
     /// Every space, then what can be done to `space` (the one showing
     /// unless another is given, as a right-click on its icon does).
-    static func show(for browser: Browser, space: Space? = nil) {
+    /// `from`: the view it was opened from, which the icon picker then hangs from.
+    static func show(for browser: Browser, space: Space? = nil, from anchor: IconAnchor = .dot) {
         let here = space ?? browser.space
         let menu = NSMenu()
         if space == nil {
@@ -36,15 +37,15 @@ enum SpaceMenu {
             menu.addItem(item("Switch to “\(here.name)”") { browser.switchSpace(to: here.id) })
         }
         if !menu.items.isEmpty { menu.addItem(.separator()) }
-        for entry in actions(on: here, in: browser) { menu.addItem(entry) }
+        for entry in actions(on: here, in: browser, from: anchor) { menu.addItem(entry) }
         menu.popUp(positioning: nil, at: NSEvent.mouseLocation, in: nil)
     }
 
-    private static func actions(on here: Space, in browser: Browser) -> [NSMenuItem] {
+    private static func actions(on here: Space, in browser: Browser, from anchor: IconAnchor) -> [NSMenuItem] {
         var items = [item("Rename “\(here.name)”…") { rename(here, in: browser) }]
         items.append(
             item("Icon…", symbol: here.emoji ?? here.symbol) {
-                IconPopover.show(current: here.emoji ?? here.symbol) { browser.setSpaceIcon(here.id, to: $0) }
+                browser.pickingIcon = IconPick(space: here.id, from: anchor)
             })
         // The order is the swipe order and ⌃1–⌃9's.
         if let at = browser.spaces.firstIndex(where: { $0.id == here.id }) {
