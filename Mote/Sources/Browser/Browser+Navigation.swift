@@ -151,6 +151,7 @@ extension Browser: WKNavigationDelegate, WKUIDelegate {
         guard let tab = tab(for: webView) else { return }
         if let home = tab.opener.flatMap(self.tab) { select(home) }
         tab.pin = nil
+        tab.kept = false
         close(tab)
     }
 

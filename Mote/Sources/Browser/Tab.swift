@@ -66,8 +66,11 @@ final class Tab: ObservableObject, Identifiable {
     @Published var noisy = false
     /// Muted by the user; the page keeps playing.
     @Published private(set) var muted = false
-    /// The pin letter; pinned tabs sit first in the row and show it instead of a title.
+    /// The letter of an essential: essentials sit first in the row, as small
+    /// squares that show it instead of a title.
     @Published var pin: String?
+    /// A pinned tab: a full row after the essentials, kept when closed.
+    @Published var kept = false
     /// A name given by the user, kept across navigations.
     @Published var name: String?
     /// The extension whose Web Store page already shows its own "Add to Mote".
@@ -570,6 +573,11 @@ final class Tab: ObservableObject, Identifiable {
     var asleep: Bool { rested != nil }
     /// The address a resting tab comes back to.
     var pending: URL? { rested?.url }
+
+    /// Where the tab sits in the row.
+    var section: TabTier { pin != nil ? .essential : kept ? .pinned : .loose }
+    /// An essential or pinned tab: closing it only lets its page go.
+    var held: Bool { pin != nil || kept }
 
     /// ⌘W on a pinned tab: keeps its place and address, lets the page go.
     func rest() {

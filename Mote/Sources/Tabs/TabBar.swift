@@ -111,7 +111,6 @@ struct TabBar: View {
 
     private func liveRow(_ layout: Layout) -> some View {
         let tabs = browser.tabs
-        let pinned = browser.pinnedCount
         let active = browser.activeID
         /// A rule shows between two tabs that are neither active nor hovered.
         func quiet(_ id: Tab.ID) -> Bool { id != active && id != hovered && id != drag?.id }
@@ -126,7 +125,7 @@ struct TabBar: View {
                 )
                 .modifier(
                     Reorderable(
-                        id: tab.id, index: index, places: tab.pin == nil ? pinned..<tabs.count : 0..<pinned,
+                        id: tab.id, index: index, places: browser.places(of: tab.section),
                         lattice: .row(step: (tab.pin == nil ? layout.each : Metrics.pinWidth) + Metrics.tabGap), space: "strip",
                         drag: $drag, leadingLimit: Metrics.lights + layout.dot + TabShape.foot
                     ) { browser.move(tab, to: $0) }
@@ -193,11 +192,11 @@ struct TabBar: View {
             TabStrip.room(
                 strip: strip, lights: Metrics.lights, dot: dot, plus: TabBar.plusWidth, dragRoom: TabBar.dragRoom, foot: TabShape.foot)
         }
-        var each: CGFloat { TabBar.widths.loose(room: room, pins: browser.pinnedCount, count: browser.tabs.count) }
-        var overflowing: Bool { TabBar.widths.overflows(room: room, pins: browser.pinnedCount, count: browser.tabs.count) }
+        var each: CGFloat { TabBar.widths.loose(room: room, pins: browser.essentialCount, count: browser.tabs.count) }
+        var overflowing: Bool { TabBar.widths.overflows(room: room, pins: browser.essentialCount, count: browser.tabs.count) }
         /// The scroll view: the row, or the room if the row is wider.
         var run: CGFloat {
-            min(TabBar.widths.row(room: room, pins: browser.pinnedCount, count: browser.tabs.count), room) + 2 * TabShape.foot
+            min(TabBar.widths.row(room: room, pins: browser.essentialCount, count: browser.tabs.count), room) + 2 * TabShape.foot
         }
 
         func tabsWidth(making: Bool) -> CGFloat { making ? min(540, room) : run }

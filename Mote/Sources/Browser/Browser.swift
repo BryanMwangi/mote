@@ -209,7 +209,12 @@ final class Browser: NSObject, ObservableObject {
         }
     }
 
+    /// Essentials and pinned tabs together.
     var pinnedCount: Int { row.pinnedCount }
+    var essentialCount: Int { row.count(in: .essential) }
+    var keptCount: Int { row.count(in: .pinned) }
+    /// The places a section's tabs occupy in the row.
+    func places(of section: TabTier) -> Range<Int> { row.places(of: section) }
     var recentlyVisited: [History.Entry] { history.recent() }
 
     func tab(_ id: Tab.ID) -> Tab? { tabs.first { $0.id == id } }
@@ -229,7 +234,7 @@ final class Browser: NSObject, ObservableObject {
         }
     }
 
-    private var row: TabRow<Tab> { TabRow(tabs, isPinned: { $0.pin != nil }) }
+    private var row: TabRow<Tab> { TabRow(tabs, section: \.section) }
 
     /// Changes the tab order under `TabRow`'s rules.
     @discardableResult
@@ -388,25 +393,28 @@ final class Browser: NSObject, ObservableObject {
             tab.chat = chat
             tab.name = entry.name
             tab.pin = entry.pin
+            tab.kept = entry.kept == true
             return true
         }
         guard let url = URL(string: entry.url) else { return false }
         prepare(tab)
         tab.restore(url: url, title: entry.title, name: entry.name)
         tab.pin = entry.pin
+        tab.kept = entry.kept == true
         return true
     }
 
     func writeSession(now: Bool = false) {
         let entries = tabs.compactMap { tab -> Session.Entry? in
             if !tab.shy, !tab.bench, tab.isBlank, let chat = tab.chat, !chat.messages.isEmpty {
-                return Session.Entry(url: "", title: chat.title, pin: tab.pin, name: tab.name, chat: chat.id.uuidString)
+                return Session.Entry(
+                    url: "", title: chat.title, pin: tab.pin, kept: tab.kept ? true : nil, name: tab.name, chat: chat.id.uuidString)
             }
             guard !tab.shy, !tab.bench,
                 // A sleeping tab's address is in `pending`, never its released page's.
                 let url = tab.pending ?? tab.address, url.scheme?.hasPrefix("http") == true
             else { return nil }
-            return Session.Entry(url: url.absoluteString, title: tab.title, pin: tab.pin, name: tab.name)
+            return Session.Entry(url: url.absoluteString, title: tab.title, pin: tab.pin, kept: tab.kept ? true : nil, name: tab.name)
         }
         Session.write(now: now, space: spaceID, .init(tabs: entries, active: tabs.firstIndex { $0.id == activeID } ?? 0))
     }
@@ -641,17 +649,17 @@ final class Browser: NSObject, ObservableObject {
     // MARK: - Closing
 
     /// ⌘W or a tab's close button. The last tab is replaced by a blank one;
-    /// closing that blank tab closes the window. A pinned tab only lets go of
-    /// its page and stays in the row; Unpin removes it.
+    /// closing that blank tab closes the window. An essential or pinned tab
+    /// only lets go of its page and stays in the row; Unpin removes it.
     func close(_ tab: Tab) {
         guard let index = row.index(of: tab.id) else { return }
         if floating == tab.id { land() }
 
-        if tab.pin != nil {
+        if tab.held {
             tab.rest()
-            // Prefer the most recent unpinned tab, so ⌘W doesn't bounce between pins.
+            // Prefer the most recent loose tab, so ⌘W doesn't bounce between pins.
             let awake = tabs.filter { $0.id != tab.id && !$0.asleep }
-            let loose = awake.filter { $0.pin == nil }
+            let loose = awake.filter { !$0.held }
             if let back = (loose.isEmpty ? awake : loose).max(by: { $0.touched < $1.touched }) {
                 select(back)
             } else {
@@ -757,11 +765,30 @@ final class Browser: NSObject, ObservableObject {
 
     // MARK: - Pinning and naming
 
+    /// Add to Essentials.
     func pin(_ tab: Tab) {
         if tab.pin == nil {
             tab.pin = tab.monogram
+            tab.kept = false
             reorder { $0.settle(tab.id) }
         }
+        writeSession(now: true)
+    }
+
+    /// Pin Tab: a row of its own under the essentials.
+    func keep(_ tab: Tab) {
+        if !tab.kept || tab.pin != nil {
+            if editingPin == tab.id { editingPin = nil }
+            tab.pin = nil
+            tab.kept = true
+            reorder { $0.settle(tab.id) }
+        }
+        writeSession(now: true)
+    }
+
+    func unkeep(_ tab: Tab) {
+        tab.kept = false
+        reorder { $0.settle(tab.id) }
         writeSession(now: true)
     }
 

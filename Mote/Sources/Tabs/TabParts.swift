@@ -115,6 +115,27 @@ struct Lifted<Content: View>: View {
     }
 }
 
+/// Essentials and pinning, for a tab's menus.
+struct TabHoldItems: View {
+    @ObservedObject var browser: Browser
+    @ObservedObject var tab: Tab
+
+    var body: some View {
+        if tab.pin != nil {
+            Button("Change Letter") { browser.editLetter(tab) }
+            Button("Remove from Essentials") { browser.unpin(tab) }
+            Button("Pin Tab") { browser.keep(tab) }
+        } else {
+            Button("Add to Essentials") { browser.pin(tab) }.disabled(tab.isBlank)
+            if tab.kept {
+                Button("Unpin Tab") { browser.unkeep(tab) }
+            } else {
+                Button("Pin Tab") { browser.keep(tab) }.disabled(tab.isBlank)
+            }
+        }
+    }
+}
+
 /// A tab's context menu.
 struct TabMenu: View {
     @ObservedObject var browser: Browser
@@ -122,12 +143,7 @@ struct TabMenu: View {
     let close: () -> Void
 
     var body: some View {
-        if tab.pin == nil {
-            Button("Pin") { browser.pin(tab) }.disabled(tab.isBlank)
-        } else {
-            Button("Change Letter") { browser.editLetter(tab) }
-            Button("Unpin") { browser.unpin(tab) }
-        }
+        TabHoldItems(browser: browser, tab: tab)
         Divider()
         Button("Rename") { browser.beginTabRename(tab) }
         Group {

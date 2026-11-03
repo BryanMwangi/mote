@@ -137,7 +137,7 @@ extension Bench {
         }
         call.answer([
             "littles": LinkWindow.all.map { $0.tab.address?.absoluteString ?? "" },
-            "tabs": browser.tabs.map { ($0.pin != nil ? "PIN " : "") + ($0.address?.host() ?? "blank") },
+            "tabs": browser.tabs.map { ($0.pin != nil ? "PIN " : $0.kept ? "KEPT " : "") + ($0.address?.host() ?? "blank") },
             "active": browser.active?.address?.host() ?? "",
         ])
     }

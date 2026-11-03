@@ -7,6 +7,7 @@ struct TabRowTests {
     struct Tab: Identifiable, Equatable {
         let id: String
         var pinned = false
+        var section: TabTier = .loose
     }
 
     /// A row from a spec like "A* B* c d": starred names are pinned.
@@ -15,6 +16,15 @@ struct TabRowTests {
             Tab(id: String(word.filter { $0 != "*" }), pinned: word.hasSuffix("*"))
         }
         return TabRow(tabs, isPinned: \.pinned)
+    }
+
+    /// A three-section row: "E!" an essential, "P*" pinned, "l" loose.
+    private func tiered(_ spec: String) -> TabRow<Tab> {
+        let tabs = spec.split(separator: " ").map { word in
+            let section: TabTier = word.hasSuffix("!") ? .essential : word.hasSuffix("*") ? .pinned : .loose
+            return Tab(id: String(word.filter { $0 != "*" && $0 != "!" }), section: section)
+        }
+        return TabRow(tabs, section: \.section)
     }
 
     private func names(_ row: TabRow<Tab>) -> String {
@@ -99,6 +109,44 @@ struct TabRowTests {
         var tabs = row("a B* C* d")
         tabs.settle("a")
         #expect(names(tabs) == "B C a d")
+    }
+
+    @Test("Sections are measured in order: essentials, pinned, loose")
+    func sections() {
+        let tabs = tiered("A! B! c* d* e f")
+        #expect(tabs.count(in: .essential) == 2)
+        #expect(tabs.places(of: .pinned) == 2..<4)
+        #expect(tabs.start(of: .loose) == 4)
+        #expect(tabs.pinnedCount == 4)
+    }
+
+    @Test("New tabs open after the pinned tabs too")
+    func afterKept() {
+        #expect(tiered("A! b* c").slotForNew(after: "A") == 2)
+        #expect(tiered("A! b* c").slotForNew(after: "b") == 2)
+    }
+
+    @Test("Dragging stays within each of three sections")
+    func dragThreeSections() {
+        var tabs = tiered("A! B! c* d* e f")
+        #expect(!moved(&tabs, "c", to: 1))
+        #expect(!moved(&tabs, "d", to: 4))
+        #expect(!moved(&tabs, "e", to: 3))
+        #expect(moved(&tabs, "d", to: 2))
+        #expect(names(tabs) == "A B d c e f")
+    }
+
+    @Test("A tab moving between sections lands at the edge of its new one")
+    func settleThreeSections() {
+        var tabs = tiered("A! b* c d* e")
+        tabs.settle("d")
+        #expect(names(tabs) == "A b d c e")
+        var essential = tiered("A! b* c D! e")
+        essential.settle("D")
+        #expect(names(essential) == "A D b c e")
+        var loose = tiered("A! b c* e")
+        loose.settle("b")
+        #expect(names(loose) == "A c b e")
     }
 
     @Test("Closed tabs keep only the most recent")

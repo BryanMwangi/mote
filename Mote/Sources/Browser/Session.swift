@@ -2,12 +2,14 @@ import Foundation
 import MoteCore
 
 /// Each space's open tabs, saved so they come back at launch: address,
-/// title, pin letter and given name, and which tab was in front.
+/// title, essential letter, pinned or not, given name, and which tab was in front.
 enum Session {
     nonisolated struct Entry: Codable, Sendable {
         var url: String
         var title: String
         var pin: String?
+        /// A pinned tab; nil in older files and for the others.
+        var kept: Bool?
         /// A name the user gave the tab.
         var name: String?
         /// A chat tab: the kept chat it shows, by id; `url` is empty.

@@ -40,7 +40,7 @@ extension Browser {
     func awake(because tab: Tab) -> String? {
         var facts = TabSleep.Facts()
         facts.onScreen = tab.id == activeID
-        facts.pinned = tab.pin != nil
+        facts.pinned = tab.held
         facts.bench = tab.bench
         facts.blank = tab.isBlank
         facts.asleep = tab.asleep

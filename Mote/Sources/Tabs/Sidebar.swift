@@ -19,11 +19,14 @@ struct Sidebar: View {
     @State private var chatsOpen = false
     /// A tab being dragged to a new place in the list.
     @State private var drag: ReorderDrag<Tab.ID>?
+    @State private var keptDrag: ReorderDrag<Tab.ID>?
 
     /// A tab row's height and the gap between rows.
     private static let row = Metrics.row
     private static let gap: CGFloat = 2
     private static let pinGap: CGFloat = 6
+    /// The line under the pinned tabs, with the room around it.
+    private static let divider: CGFloat = 13
     /// The band at the top that holds the traffic lights.
     static let top: CGFloat = 50
     private static let footHeight: CGFloat = 50
@@ -66,6 +69,7 @@ struct Sidebar: View {
         .animation(Motion.glide, value: browser.editingTab)
         .animation(Motion.settle, value: browser.tabs.map(\.id))
         .animation(Motion.settle, value: browser.pinnedCount)
+        .animation(Motion.settle, value: browser.keptCount)
     }
 
     // MARK: - Spaces, side by side
@@ -114,7 +118,8 @@ struct Sidebar: View {
 
     private var live: some View {
         VStack(alignment: .leading, spacing: 0) {
-            if browser.pinnedCount > 0 { PinnedTabs(browser: browser, prefs: prefs, ground: ground).padding(.bottom, 10) }
+            if browser.essentialCount > 0 { PinnedTabs(browser: browser, prefs: prefs, ground: ground).padding(.bottom, 10) }
+            if browser.keptCount > 0 { kept }
             // A plain stack until the tabs overflow, so the room below them still drags the window.
             ViewThatFits(in: .vertical) {
                 listed
@@ -134,7 +139,8 @@ struct Sidebar: View {
 
     /// Another space's tabs, drawn like the live ones but not to be touched.
     private func still(_ row: Parked, ground: Namespace.ID) -> some View {
-        let pins = row.tabs.filter { $0.pin != nil }
+        let pins = row.tabs.filter { $0.section == .essential }
+        let kept = row.tabs.filter { $0.section == .pinned }
         let grid = PinGrid(count: pins.count, width: prefs.sideWidth - 20, gap: Self.pinGap)
         return VStack(alignment: .leading, spacing: 0) {
             if !pins.isEmpty {
@@ -145,8 +151,16 @@ struct Sidebar: View {
                 }
                 .padding(.bottom, 10)
             }
+            if !kept.isEmpty {
+                VStack(spacing: Self.gap) {
+                    ForEach(kept) {
+                        SideRow(browser: browser, prefs: prefs, tab: $0, live: $0.id == row.active, ground: ground, close: {})
+                    }
+                }
+                Self.rule
+            }
             VStack(spacing: Self.gap) {
-                ForEach(row.tabs.filter { $0.pin == nil }) {
+                ForEach(row.tabs.filter { $0.section == .loose }) {
                     SideRow(browser: browser, prefs: prefs, tab: $0, live: $0.id == row.active, ground: ground, close: {})
                 }
             }
@@ -159,24 +173,52 @@ struct Sidebar: View {
     /// measured: a measurement is a frame late, and for that frame the whole
     /// sidebar would drag the window.
     private var rowsEnd: CGFloat {
-        let pins = browser.pinnedCount
+        let pins = browser.essentialCount
         let grid = PinGrid(count: pins, width: prefs.sideWidth - 20, gap: Self.pinGap)
-        let pinned = pins == 0 ? 0 : grid.height(pins) + 10
-        let loose = CGFloat(browser.tabs.count - pins) * (Self.row + Self.gap)
-        return Self.top + pinned + loose + Self.row + 8
+        let essentials = pins == 0 ? 0 : grid.height(pins) + 10
+        let kept = browser.keptCount == 0 ? 0 : CGFloat(browser.keptCount) * (Self.row + Self.gap) - Self.gap + Self.divider
+        let loose = CGFloat(browser.tabs.count - browser.pinnedCount) * (Self.row + Self.gap)
+        return Self.top + essentials + kept + loose + Self.row + 8
     }
 
     // MARK: - The list
 
+    /// The line between the pinned tabs and the others.
+    private static var rule: some View {
+        Rectangle().fill(Palette.hairline).frame(height: 1).padding(.horizontal, 6).padding(.vertical, (divider - 1) / 2)
+    }
+
+    /// Pinned tabs: rows that stay when closed, above the others.
+    private var kept: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            let kept = browser.tabs.filter { $0.section == .pinned }
+            VStack(spacing: Self.gap) {
+                ForEach(Array(kept.enumerated()), id: \.element.id) { index, tab in
+                    SideRow(browser: browser, prefs: prefs, tab: tab, live: tab.id == browser.activeID, ground: ground) {
+                        browser.close(tab)
+                    }
+                    // Places count among the pinned tabs, after the essentials.
+                    .modifier(
+                        Reorderable(
+                            id: tab.id, index: index, places: 0..<kept.count, lattice: .column(step: Self.row + Self.gap),
+                            space: "kept", drag: $keptDrag
+                        ) { browser.move(tab, to: $0 + browser.essentialCount) })
+                }
+            }
+            .coordinateSpace(name: "kept")
+            Self.rule
+        }
+    }
+
     private var listed: some View {
         VStack(alignment: .leading, spacing: 0) {
-            let loose = browser.tabs.filter { $0.pin == nil }
+            let loose = browser.tabs.filter { $0.section == .loose }
             VStack(spacing: Self.gap) {
                 ForEach(Array(loose.enumerated()), id: \.element.id) { index, tab in
                     SideRow(browser: browser, prefs: prefs, tab: tab, live: tab.id == browser.activeID, ground: ground) {
                         browser.close(tab)
                     }
-                    // Places count among the unpinned tabs, after the pinned ones.
+                    // Places count among the loose tabs, after the essentials and pinned ones.
                     .modifier(
                         Reorderable(
                             id: tab.id, index: index, places: 0..<loose.count, lattice: .column(step: Self.row + Self.gap),

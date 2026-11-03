@@ -1,25 +1,54 @@
+/// Where a tab sits in the row. Sections keep this order along the row.
+public enum TabTier: Int, Comparable, Sendable {
+    /// Kept as a small square at the top: an essential.
+    case essential
+    /// Kept as a full row under the essentials: a pinned tab.
+    case pinned
+    /// Every other tab.
+    case loose
+
+    public static func < (a: TabTier, b: TabTier) -> Bool { a.rawValue < b.rawValue }
+}
+
 /// The order of a window's tabs.
 ///
-/// Pinned tabs form a section at the start of the row and every other tab
-/// follows. A tab never crosses between the two sections by dragging; pinning
-/// or unpinning moves it to the edge of its new section.
+/// Essentials come first, then pinned tabs, then every other tab. A tab never
+/// crosses between sections by dragging; pinning or unpinning moves it to the
+/// edge of its new section.
 public struct TabRow<Tab: Identifiable> {
     public private(set) var tabs: [Tab]
-    private let isPinned: (Tab) -> Bool
+    private let section: (Tab) -> TabTier
 
-    public init(_ tabs: [Tab], isPinned: @escaping (Tab) -> Bool) {
+    public init(_ tabs: [Tab], section: @escaping (Tab) -> TabTier) {
         self.tabs = tabs
-        self.isPinned = isPinned
+        self.section = section
     }
 
-    public var pinnedCount: Int { tabs.lazy.filter(isPinned).count }
+    /// Two sections only: pinned tabs as essentials, and the rest.
+    public init(_ tabs: [Tab], isPinned: @escaping (Tab) -> Bool) {
+        self.init(tabs) { isPinned($0) ? .essential : .loose }
+    }
+
+    /// Essentials and pinned tabs together: everything before the loose tabs.
+    public var pinnedCount: Int { start(of: .loose) }
+
+    public func count(in kind: TabTier) -> Int { tabs.lazy.filter { section($0) == kind }.count }
+
+    /// Where a section begins in the row.
+    public func start(of kind: TabTier) -> Int { tabs.lazy.filter { section($0) < kind }.count }
+
+    /// The places a section's tabs occupy.
+    public func places(of kind: TabTier) -> Range<Int> {
+        let from = start(of: kind)
+        return from..<(from + count(in: kind))
+    }
 
     public func index(of id: Tab.ID) -> Int? {
         tabs.firstIndex { $0.id == id }
     }
 
-    /// Where a new tab opens: right after `active`, but never among the pinned
-    /// tabs. With no active tab, at the end.
+    /// Where a new tab opens: right after `active`, but never among the
+    /// essentials or pinned tabs. With no active tab, at the end.
     public func slotForNew(after active: Tab.ID?) -> Int {
         guard let active, let here = index(of: active) else { return tabs.count }
         return max(here + 1, pinnedCount)
@@ -44,19 +73,19 @@ public struct TabRow<Tab: Identifiable> {
     @discardableResult
     public mutating func move(_ id: Tab.ID, to index: Int) -> Bool {
         guard let here = self.index(of: id), index != here, tabs.indices.contains(index) else { return false }
-        let pinned = pinnedCount
-        guard isPinned(tabs[here]) ? index < pinned : index >= pinned else { return false }
+        guard places(of: section(tabs[here])).contains(index) else { return false }
         relocate(from: here, to: index)
         return true
     }
 
-    /// After a tab was pinned or unpinned, moves it to the edge of its new
-    /// section: last of the pinned tabs, or first of the others.
+    /// After a tab changed section, moves it to the edge of its new one: last
+    /// of the essentials or pinned tabs, or first of the others.
     public mutating func settle(_ id: Tab.ID) {
         guard let here = index(of: id) else { return }
-        let home = isPinned(tabs[here]) ? pinnedCount - 1 : pinnedCount
-        guard here != home else { return }
-        relocate(from: here, to: home)
+        let tab = tabs.remove(at: here)
+        let kind = section(tab)
+        let home = kind == .loose ? start(of: .loose) : start(of: kind) + count(in: kind)
+        tabs.insert(tab, at: home)
     }
 
     public mutating func insert(_ tab: Tab, at index: Int) {
