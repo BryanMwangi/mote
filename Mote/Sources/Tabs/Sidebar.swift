@@ -48,10 +48,16 @@ struct Sidebar: View {
                 Spacer(minLength: 0)
             }
             .padding(.horizontal, 10)
-            .padding(.bottom, Self.footHeight)
+            .padding(.bottom, Self.footHeight + (browser.playing == nil ? 0 : MediaStrip.height + MediaStrip.gap))
 
-            VStack {
+            VStack(spacing: 0) {
                 Spacer()
+                if let tab = browser.playing {
+                    MediaStrip(browser: browser, tab: tab)
+                        .padding(.horizontal, 10)
+                        .padding(.bottom, MediaStrip.gap)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
                 foot
             }
         }
@@ -90,6 +96,7 @@ struct Sidebar: View {
         .animation(Motion.settle, value: browser.tabs.map(\.id))
         .animation(Motion.settle, value: browser.pinnedCount)
         .animation(Motion.settle, value: browser.keptCount)
+        .animation(Motion.settle, value: browser.playing?.id)
     }
 
     // MARK: - Spaces, side by side

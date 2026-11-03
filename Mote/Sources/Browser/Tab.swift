@@ -64,6 +64,10 @@ final class Tab: ObservableObject, Identifiable {
     @Published private(set) var zoom: CGFloat = 1
     /// The page is playing sound.
     @Published var noisy = false
+    /// What the page says it plays, for the media strip (MediaSession.swift).
+    @Published var media: MediaState?
+    /// When the page last said it was playing.
+    var lastPlayed: Date?
     /// Muted by the user; the page keeps playing.
     @Published private(set) var muted = false
     /// The letter of an essential: essentials sit first in the row, as small
@@ -149,6 +153,7 @@ final class Tab: ObservableObject, Identifiable {
     private let middle = MiddleRelay()
     private let passkeys = PasskeyRelay()
     private let hovered = HoveredLink()
+    private let mediaRelay = MediaRelay()
     private let sound = AudioWatch()
     private var watches: [NSKeyValueObservation] = []
     /// This site's hidden elements, for the next document.
@@ -194,12 +199,13 @@ final class Tab: ObservableObject, Identifiable {
         for (handler, name) in handlers { controller.add(handler, contentWorld: Web.world, name: name) }
         controller.addScriptMessageHandler(passkeys, contentWorld: Web.world, name: PasskeyRelay.name)
         controller.add(hovered, contentWorld: .defaultClient, name: HoveredLink.name)
+        controller.add(mediaRelay, contentWorld: .page, name: MediaRelay.name)
         AdBlocker.shared.protect(controller)
 
         built = web
         // After `built`: the form relay starts watching full screen on the view
         // it finds there.
-        for relay in [scroll, hider, forms, images, store_, middle, hovered] as [TabRelay] { relay.tab = self }
+        for relay in [scroll, hider, forms, images, store_, middle, hovered, mediaRelay] as [TabRelay] { relay.tab = self }
         if muted { PageAudio.mute(true, web) }
         arm(hiding: hiding)
         watches = observe(web)
@@ -742,6 +748,7 @@ final class Tab: ObservableObject, Identifiable {
     private func letPageGo() {
         stale = false
         pull = nil
+        media = nil
         watches = []
         sound.stop()
         guard let web = built else { return }

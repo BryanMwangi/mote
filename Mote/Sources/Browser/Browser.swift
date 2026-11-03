@@ -77,6 +77,8 @@ final class Browser: NSObject, ObservableObject {
     /// The toolbar, when it isn't on the card, is out over the page's top
     /// because the pointer reached it (see ToolbarReveal.swift).
     @Published var toolbarRevealed = false
+    /// The tab the media strip shows (see Browser+Media.swift).
+    @Published var playing: Tab?
     /// A picture of the page laid over it while the chrome around it changes
     /// size (see `dissolvingPage`).
     @Published var pageVeil: NSImage?
@@ -276,6 +278,7 @@ final class Browser: NSObject, ObservableObject {
             for tab in self?.tabs ?? [] where tab.address?.host()?.lowercased() == host { tab.icon = image }
         }
         wireFloater()
+        $activeID.dropFirst().sink { [weak self] _ in self?.notePlayingSoon() }.store(in: &bag)
 
         Spaces.sweep()
         Spaces.sharing = SpaceList(saved: spaces).sharing
@@ -909,6 +912,8 @@ final class Browser: NSObject, ObservableObject {
             if self?.activeID == tab?.id { self?.objectWillChange.send() }
         }.store(in: &bag)
         tab.$address.dropFirst().sink { [weak self] _ in self?.saveSoon() }.store(in: &bag)
+        tab.$media.dropFirst().sink { [weak self] _ in self?.notePlayingSoon() }.store(in: &bag)
+        tab.$noisy.dropFirst().sink { [weak self] _ in self?.notePlayingSoon() }.store(in: &bag)
         // The panel's open state lives on the tab, but the chrome, the toolbar
         // and the menu read it through this object (`chatting`); pass the tab's
         // changes on so they redraw when the active tab's panel opens or closes.
