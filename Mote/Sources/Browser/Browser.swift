@@ -405,6 +405,11 @@ final class Browser: NSObject, ObservableObject {
     }
 
     func writeSession(now: Bool = false) {
+        writeSession(now: now, space: spaceID, tabs: tabs, active: activeID)
+    }
+
+    /// Saves any space's row: this one, or one parked.
+    func writeSession(now: Bool, space: UUID, tabs: [Tab], active: Tab.ID?) {
         let entries = tabs.compactMap { tab -> Session.Entry? in
             if !tab.shy, !tab.bench, tab.isBlank, let chat = tab.chat, !chat.messages.isEmpty {
                 return Session.Entry(
@@ -416,7 +421,7 @@ final class Browser: NSObject, ObservableObject {
             else { return nil }
             return Session.Entry(url: url.absoluteString, title: tab.title, pin: tab.pin, kept: tab.kept ? true : nil, name: tab.name)
         }
-        Session.write(now: now, space: spaceID, .init(tabs: entries, active: tabs.firstIndex { $0.id == activeID } ?? 0))
+        Session.write(now: now, space: space, .init(tabs: entries, active: tabs.firstIndex { $0.id == active } ?? 0))
     }
 
     /// Saves the session a moment after the last of a burst of changes.
@@ -692,6 +697,27 @@ final class Browser: NSObject, ObservableObject {
             select(next)
         }
         saveSoon()
+    }
+
+    /// Takes a tab out of the row without closing it, for another space to
+    /// have. The last tab is replaced by a blank one.
+    @discardableResult
+    func detach(_ tab: Tab) -> Bool {
+        guard let index = row.index(of: tab.id) else { return false }
+        if floating == tab.id { land() }
+        if editingPin == tab.id { editingPin = nil }
+        if tabs.count == 1 {
+            let fresh = Tab()
+            prepare(fresh)
+            tabs = [fresh]
+            activeID = fresh.id
+            field.clear()
+            return true
+        }
+        reorder { $0.remove(tab.id) }
+        if activeID == tab.id, let next = row.successor(ofRemovedAt: index).flatMap(self.tab) { select(next) }
+        saveSoon()
+        return true
     }
 
     /// Closes every other tab; pinned ones are put to rest instead.

@@ -144,17 +144,17 @@ struct NewSpaceCard: View {
     @State private var name = ""
     @State private var icon = "briefcase"
     @State private var choosingIcon = false
-    /// Signed in wherever the other spaces are.
-    @State private var shared = true
+    /// Signed in wherever the first space is; new spaces keep their own data.
+    @State private var shared = false
     @State private var hovering = false
     @FocusState private var typing: Bool
 
     private var explanation: String {
-        shared ? "Signed in to the same sites as your other spaces." : "Separate cookies and sign-ins, starting empty."
+        shared ? "Signed in to the same sites as your first space." : "Its own cookies, sign-ins and site data, starting empty."
     }
 
     private var sharing: some View {
-        Segmented(options: [(true, "Signed in"), (false, "Signed out")], selection: $shared, wide: !inline)
+        Segmented(options: [(false, "Separate"), (true, "Shared")], selection: $shared, wide: !inline)
     }
 
     var body: some View {
@@ -169,27 +169,42 @@ struct NewSpaceCard: View {
                 }
                 .frame(height: ChromeLayout.strip)
             } else {
-                VStack(spacing: 12) {
-                    iconButton(size: 20, box: CGSize(width: 44, height: 40))
+                VStack(spacing: 10) {
                     VStack(spacing: 4) {
-                        Text("New space").font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.ink)
-                        Text("A separate set of tabs.").font(.system(size: 11)).foregroundStyle(Palette.muted)
-                    }
-                    nameField
-                    VStack(spacing: 6) {
-                        sharing
-                        Text(explanation)
+                        Text("Create a Space").font(.system(size: 15, weight: .semibold)).foregroundStyle(Palette.ink)
+                        Text("Spaces keep their own tabs, and can keep their own sign-ins.")
                             .font(.system(size: 11))
                             .foregroundStyle(Palette.muted)
                             .multilineTextAlignment(.center)
                             .fixedSize(horizontal: false, vertical: true)
                     }
+                    .padding(.bottom, 6)
+                    HStack(spacing: 4) {
+                        iconButton(size: 13, box: CGSize(width: 28, height: 26))
+                        nameField
+                    }
+                    .padding(.leading, 2)
+                    .background(Palette.wash, in: Rounded.row)
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack {
+                            Text("Site data").font(.system(size: 12)).foregroundStyle(Palette.ink)
+                            Spacer()
+                            sharing.fixedSize()
+                        }
+                        Text(explanation)
+                            .font(.system(size: 11))
+                            .foregroundStyle(Palette.muted)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .padding(.horizontal, 2)
                     HStack(spacing: 8) {
                         Pill("Cancel", action: cancel)
-                        Pill("Create", filled: true, action: create)
+                        Pill("Create Space", filled: true, action: create)
                     }
+                    .padding(.top, 6)
                 }
-                .padding(16)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 16)
                 .frame(maxWidth: .infinity)
             }
         }
@@ -224,12 +239,12 @@ struct NewSpaceCard: View {
     }
 
     private var nameField: some View {
-        TextField(inline ? "New space" : "Name", text: $name)
+        TextField(inline ? "New space" : "Space name", text: $name)
             .textFieldStyle(.plain)
             .font(.system(size: inline ? 12.5 : 13))
-            .padding(.horizontal, 10)
+            .padding(.horizontal, inline ? 10 : 4)
             .frame(height: inline ? 26 : 30)
-            .background(Palette.wash, in: Rounded.row)
+            .background(inline ? Palette.wash : .clear, in: Rounded.row)
             .focused($typing)
             .onSubmit(create)
     }

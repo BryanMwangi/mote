@@ -109,7 +109,8 @@ struct Sidebar: View {
             } else if browser.spaces[index].id == browser.spaceID {
                 live
             } else {
-                still(browser.parked[browser.spaces[index].id] ?? Parked(tabs: [], active: nil), ground: ground)
+                still(
+                    browser.parked[browser.spaces[index].id] ?? Parked(tabs: [], active: nil), of: browser.spaces[index], ground: ground)
             }
         }
         .padding(.horizontal, 10)
@@ -119,6 +120,7 @@ struct Sidebar: View {
     private var live: some View {
         VStack(alignment: .leading, spacing: 0) {
             if browser.essentialCount > 0 { PinnedTabs(browser: browser, prefs: prefs, ground: ground).padding(.bottom, 10) }
+            if prefs.usesSpaces { SpaceHeader(browser: browser, space: browser.space).padding(.bottom, Self.gap) }
             if browser.keptCount > 0 { kept }
             // A plain stack until the tabs overflow, so the room below them still drags the window.
             ViewThatFits(in: .vertical) {
@@ -138,7 +140,7 @@ struct Sidebar: View {
     }
 
     /// Another space's tabs, drawn like the live ones but not to be touched.
-    private func still(_ row: Parked, ground: Namespace.ID) -> some View {
+    private func still(_ row: Parked, of space: Space, ground: Namespace.ID) -> some View {
         let pins = row.tabs.filter { $0.section == .essential }
         let kept = row.tabs.filter { $0.section == .pinned }
         let grid = PinGrid(count: pins.count, width: prefs.sideWidth - 20, gap: Self.pinGap)
@@ -151,6 +153,7 @@ struct Sidebar: View {
                 }
                 .padding(.bottom, 10)
             }
+            if prefs.usesSpaces { SpaceHeader(browser: browser, space: space).padding(.bottom, Self.gap) }
             if !kept.isEmpty {
                 VStack(spacing: Self.gap) {
                     ForEach(kept) {
@@ -178,7 +181,8 @@ struct Sidebar: View {
         let essentials = pins == 0 ? 0 : grid.height(pins) + 10
         let kept = browser.keptCount == 0 ? 0 : CGFloat(browser.keptCount) * (Self.row + Self.gap) - Self.gap + Self.divider
         let loose = CGFloat(browser.tabs.count - browser.pinnedCount) * (Self.row + Self.gap)
-        return Self.top + essentials + kept + loose + Self.row + 8
+        let header = prefs.usesSpaces ? SpaceHeader.height + Self.gap : 0
+        return Self.top + essentials + header + kept + loose + Self.row + 8
     }
 
     // MARK: - The list
@@ -236,15 +240,33 @@ struct Sidebar: View {
         Quiet(icon: "plus", title: "New tab", height: Self.row) { browser.newTab() }.padding(.top, Self.gap)
     }
 
-    /// The spaces switcher and the chat archive.
+    /// The chat archive, in a panel beside the sidebar.
+    private func chats(titled: Bool) -> some View {
+        Group {
+            if titled {
+                Quiet(icon: "bubble.left.and.bubble.right", title: "Chats", height: Self.footHeight - 10) { chatsOpen.toggle() }
+            } else {
+                FootIcon(symbol: "bubble.left.and.bubble.right", help: "Chats") { chatsOpen.toggle() }
+            }
+        }
+        .menuPanel(isPresented: showing ? $chatsOpen : .constant(false), edge: .trailing) {
+            ChatsPage(browser: browser, inPanel: true) { chatsOpen = false }
+                .frame(width: 380, height: 440)
+        }
+    }
+
+    /// The chat archive, every space, and a plus for a new tab or space.
     private var foot: some View {
         HStack(spacing: 2) {
-            if browser.prefs.usesSpaces { SpaceDot(browser: browser) }
-            Quiet(icon: "bubble.left.and.bubble.right", title: "Chats", height: Self.footHeight - 10) { chatsOpen.toggle() }
-                .menuPanel(isPresented: showing ? $chatsOpen : .constant(false), edge: .trailing) {
-                    ChatsPage(browser: browser, inPanel: true) { chatsOpen = false }
-                        .frame(width: 380, height: 440)
-                }
+            if browser.prefs.usesSpaces {
+                chats(titled: false)
+                Spacer(minLength: 4)
+                SpaceIcons(browser: browser)
+                Spacer(minLength: 4)
+            } else {
+                chats(titled: true)
+            }
+            AddMenuButton(browser: browser)
         }
         .padding(EdgeInsets(top: 0, leading: 10, bottom: 10, trailing: 10))
     }

@@ -90,6 +90,7 @@ enum Prompt {
         let field = NSTextField(frame: NSRect(x: 0, y: 30, width: 260, height: 24))
         field.placeholderString = "Work"
         let fresh = NSButton(checkboxWithTitle: "Start signed out, with separate cookies", target: nil, action: nil)
+        fresh.state = .on
         fresh.frame = NSRect(x: 0, y: 0, width: 260, height: 22)
         let box = NSView(frame: NSRect(x: 0, y: 0, width: 260, height: 56))
         box.addSubview(field)

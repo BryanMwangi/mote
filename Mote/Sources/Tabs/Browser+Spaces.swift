@@ -100,6 +100,37 @@ extension Browser {
         }
     }
 
+    /// Whether a tab here would keep its sign-ins in another space.
+    func sharesData(with id: UUID) -> Bool { Spaces.store(for: id) === Spaces.store(for: spaceID) }
+
+    /// Moves a tab to the end of another space's row. Between spaces with the
+    /// same website data the page goes as it is; otherwise it opens again in
+    /// the other space's data, signed in only as that space is, and its back
+    /// history stays behind.
+    func move(_ tab: Tab, toSpace id: UUID) {
+        guard prefs.usesSpaces, id != spaceID, let to = spaces.first(where: { $0.id == id }),
+            let url = tab.pending ?? tab.address
+        else { return }
+        var row = parked[id] ?? loadRow(id)
+        tab.pin = nil
+        tab.kept = false
+        if sharesData(with: id) {
+            guard detach(tab) else { return }
+            row.tabs.append(tab)
+        } else {
+            let moved = Tab(configuration: Web.configuration(space: id))
+            prepare(moved)
+            moved.restore(url: url, title: tab.title, name: tab.name)
+            close(tab)
+            row.tabs.append(moved)
+        }
+        if row.active == nil { row.active = row.tabs.last?.id }
+        parked[id] = row
+        writeSession(now: true, space: id, tabs: row.tabs, active: row.active)
+        writeSession(now: true)
+        announce("Moved to \(to.name)")
+    }
+
     /// Deletes a space, its tabs and, unless it shared the first space's,
     /// its website data. The first space stays.
     func deleteSpace(_ id: UUID) {

@@ -1,3 +1,4 @@
+import MoteCore
 import SwiftUI
 
 /// A tab's close button: there on hover, with a hit area bigger than its cross.
@@ -144,6 +145,16 @@ struct TabMenu: View {
 
     var body: some View {
         TabHoldItems(browser: browser, tab: tab)
+        if browser.prefs.usesSpaces, browser.spaces.count > 1 {
+            Menu("Move to Space") {
+                ForEach(browser.spaces.filter { $0.id != browser.spaceID }) { space in
+                    Button(browser.sharesData(with: space.id) ? space.name : "\(space.name) (separate sign-ins)") {
+                        browser.move(tab, toSpace: space.id)
+                    }
+                }
+            }
+            .disabled(tab.isBlank)
+        }
         Divider()
         Button("Rename") { browser.beginTabRename(tab) }
         Group {
