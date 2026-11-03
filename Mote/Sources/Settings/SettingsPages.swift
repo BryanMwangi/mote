@@ -231,18 +231,20 @@ struct TabSettings: View {
     }
 }
 
-/// Settings › Tabs › Spaces: each space, to rename, give an icon, move or
-/// delete, and a new one.
+/// Settings › Tabs › Spaces: each space, to rename, give an icon or move.
+/// Clicking spaces' icons selects them: one can be deleted, several merged.
 private struct SpaceRows: View {
     @ObservedObject var browser: Browser
+    @State private var picked: Set<UUID> = []
+
+    /// What's picked of what's still there.
+    private var chosen: [Space] { browser.spaces.filter { picked.contains($0.id) } }
 
     var body: some View {
         ForEach(Array(browser.spaces.enumerated()), id: \.element.id) { index, space in
             RowRule()
             HStack(spacing: 11) {
-                SpaceGlyph(space: space, size: 13)
-                    .frame(width: 26, height: 26)
-                    .background(Palette.wash, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+                pickButton(for: space)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(space.name).font(.system(size: 13)).foregroundStyle(Palette.ink).lineLimit(1)
                     Text(detail(space, at: index)).font(.system(size: 11.5)).foregroundStyle(Palette.muted).lineLimit(1)
@@ -255,19 +257,22 @@ private struct SpaceRows: View {
                         .disabled(index == 0)
                     Door(icon: "chevron.down", help: "Move down") { browser.moveSpace(space.id, to: index + 1) }
                         .disabled(index == browser.spaces.count - 1)
-                    mergeMenu(for: space)
-                    Door(icon: "trash", help: space.isFirst ? "Holds Mote's main sign-ins, so it stays" : "Delete…") {
-                        SpaceMenu.confirmDelete(space, in: browser)
-                    }
-                    .disabled(space.isFirst)
                 }
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
         }
         RowRule()
-        HStack {
+        HStack(spacing: 8) {
+            footNote
             Spacer()
+            if chosen.count == 1, let space = chosen.first {
+                Pill("Delete") { SpaceMenu.confirmDelete(space, in: browser) }
+                    .disabled(space.isFirst)
+                    .help(space.isFirst ? "Holds Mote's main sign-ins, so it stays" : "Delete “\(space.name)”…")
+            } else if chosen.count > 1 {
+                Pill("Merge…") { confirmMerge(chosen) }
+            }
             Pill("New Space…") {
                 browser.tuning = false
                 browser.askForSpace()
@@ -275,6 +280,47 @@ private struct SpaceRows: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
+        .animation(Motion.quick, value: chosen.count)
+        // A space deleted or merged away is no longer picked.
+        .onChange(of: browser.spaces.map(\.id)) { _, ids in picked.formIntersection(ids) }
+    }
+
+    @ViewBuilder
+    private var footNote: some View {
+        let text =
+            switch chosen.count {
+            case 0: "Click a space's icon to select it"
+            case 1: chosen[0].isFirst ? "The first space holds Mote's main sign-ins and stays" : "1 selected"
+            default: "\(chosen.count) selected"
+            }
+        Text(text).font(.system(size: 11.5)).foregroundStyle(Palette.muted).lineLimit(1)
+    }
+
+    /// The icon, which picks the space or lets it go.
+    private func pickButton(for space: Space) -> some View {
+        let on = picked.contains(space.id)
+        return Button {
+            if on { picked.remove(space.id) } else { picked.insert(space.id) }
+        } label: {
+            SpaceGlyph(space: space, size: 13)
+                .frame(width: 26, height: 26)
+                .background(on ? Color.accentColor.opacity(0.18) : Palette.wash, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+                .overlay {
+                    if on { RoundedRectangle(cornerRadius: 7, style: .continuous).strokeBorder(Color.accentColor, lineWidth: 1.5) }
+                }
+                .overlay(alignment: .bottomTrailing) {
+                    if on {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundStyle(.white, Color.accentColor)
+                            .offset(x: 4, y: 4)
+                    }
+                }
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(on ? "Deselect" : "Select")
+        .animation(Motion.quick, value: on)
     }
 
     private func detail(_ space: Space, at index: Int) -> String {
@@ -285,41 +331,28 @@ private struct SpaceRows: View {
         return (space.id == browser.spaceID ? "Showing · " : "") + data + key
     }
 
-    /// Its tabs and cookies into another space, then it goes. The first
-    /// space can take others in but not go.
-    private func mergeMenu(for space: Space) -> some View {
-        Menu {
-            ForEach(browser.spaces.filter { $0.id != space.id }) { other in
-                Button(other.name) { confirmMerge(space, into: other) }
-            }
-        } label: {
-            Image(systemName: "arrow.triangle.merge").font(.system(size: 12, weight: .medium)).foregroundStyle(Palette.muted)
-        }
-        .menuStyle(.borderlessButton)
-        .menuIndicator(.hidden)
-        .fixedSize()
-        .frame(width: 28, height: 28)
-        .disabled(space.isFirst || browser.spaces.count < 2)
-        .help(space.isFirst ? "Other spaces can merge into this one; it stays" : "Merge into another space…")
-    }
-
-    private func confirmMerge(_ space: Space, into other: Space) {
-        let cookies =
-            Spaces.store(for: space.id) === Spaces.store(for: other.id)
-            ? "They already share sign-ins."
-            : "Its cookies are copied too, so most sites stay signed in; a few that keep sign-ins another way will ask again."
-        Prompt.confirm(
-            "Merge “\(space.name)” into “\(other.name)”?",
-            detail:
-                "Its essentials, pinned and open tabs move to “\(other.name)”, leaving out pages already there. \(cookies) Then “\(space.name)” is deleted.",
-            confirm: "Merge"
-        ) {
+    /// Asks what the merged space is called, then merges.
+    private func confirmMerge(_ spaces: [Space]) {
+        let ids = Set(spaces.map(\.id))
+        guard let target = browser.mergeTarget(of: ids) else { return }
+        let others = spaces.filter { $0.id != target.id }
+        let separate = others.contains { Spaces.store(for: $0.id) !== Spaces.store(for: target.id) }
+        let names = others.map { "“\($0.name)”" }.joined(separator: ", ")
+        let detail =
+            "Their essentials, pinned and open tabs go into one space, without duplicates. \(names) "
+            + (others.count == 1 ? "goes" : "go") + " into “\(target.name)”, which keeps all its own sign-ins"
+            + (separate
+                ? "; their cookies come along too, so most sites stay signed in, though a few that keep sign-ins another way will ask again."
+                : ".")
+        Prompt.name(
+            "Merge \(spaces.count) Spaces", placeholder: target.name, initial: target.name, detail: detail, confirm: "Merge"
+        ) { name in
             Task {
-                let merged = await browser.mergeSpace(space.id, into: other.id)
+                let merged = await browser.mergeSpaces(ids, named: name)
+                picked = []
                 let tabs = merged.tabs == 1 ? "1 tab" : "\(merged.tabs) tabs"
                 browser.announce(
-                    merged.cookies > 0
-                        ? "\(tabs) and \(merged.cookies) cookies moved to \(other.name)" : "\(tabs) moved to \(other.name)")
+                    merged.cookies > 0 ? "\(tabs) and \(merged.cookies) cookies merged into \(name)" : "\(tabs) merged into \(name)")
             }
         }
     }

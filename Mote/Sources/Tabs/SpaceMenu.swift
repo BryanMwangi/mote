@@ -103,11 +103,15 @@ enum SpaceMenu {
 /// Small questions, asked as sheets on the window.
 @MainActor
 enum Prompt {
-    static func name(_ title: String, placeholder: String, initial: String = "", confirm: String, then: @escaping (String) -> Void) {
+    static func name(
+        _ title: String, placeholder: String, initial: String = "", detail: String? = nil, confirm: String,
+        then: @escaping (String) -> Void
+    ) {
         let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 240, height: 24))
         field.placeholderString = placeholder
         field.stringValue = initial
         let alert = alert(title, accessory: field, focus: field, buttons: [confirm, "Cancel"])
+        if let detail { alert.informativeText = detail }
         ask(alert) { ok in
             let name = field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
             if ok, !name.isEmpty { then(name) }

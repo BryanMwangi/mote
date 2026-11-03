@@ -81,6 +81,26 @@ extension Browser {
         switchSpace(to: made.id)
     }
 
+    /// The space several merge into: the first space when it's among them,
+    /// as it can't go, otherwise the highest in the list. It keeps all its
+    /// own website data, which a new space couldn't be given.
+    func mergeTarget(of ids: Set<UUID>) -> Space? {
+        spaces.first { $0.isFirst && ids.contains($0.id) } ?? spaces.first { ids.contains($0.id) }
+    }
+
+    /// Merges the spaces into one (see `mergeTarget`), which takes `name`.
+    func mergeSpaces(_ ids: Set<UUID>, named name: String) async -> Merged {
+        guard ids.count > 1, let target = mergeTarget(of: ids) else { return Merged() }
+        var total = Merged()
+        for space in spaces where ids.contains(space.id) && space.id != target.id {
+            let merged = await mergeSpace(space.id, into: target.id)
+            total.tabs += merged.tabs
+            total.cookies += merged.cookies
+        }
+        renameSpace(target.id, to: name)
+        return total
+    }
+
     /// Spaces made elsewhere (an import), after the others.
     func addSpaces(_ made: [Space]) { editSpaces { list in made.forEach { list.add($0) } } }
 
