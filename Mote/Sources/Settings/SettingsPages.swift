@@ -8,6 +8,7 @@ struct GeneralSettings: View {
     let browser: Browser
     @ObservedObject var prefs: Preferences
     @State private var isDefault = AppDelegate.isDefault
+    @State private var hasZen = !ZenImporter.profiles().isEmpty
 
     var body: some View {
         SettingsSection("Mote and your Mac") {
@@ -29,6 +30,19 @@ struct GeneralSettings: View {
                 tint: Tint.teal, on: $prefs.showsFullAddress)
         }
 
+        if hasZen {
+            SettingsSection("Coming from another browser") {
+                SettingRow(
+                    "Zen", "Its spaces, essentials, pinned and open tabs. Nothing in Zen changes", symbol: "square.and.arrow.down",
+                    tint: Tint.blue
+                ) {
+                    Pill("Import…") {
+                        browser.tuning = false
+                        browser.importingZen = true
+                    }
+                }
+            }
+        }
         SettingsSection("Searching", note: searchNote) {
             SettingRow("Search with", "Used whenever what you type isn't an address", symbol: "magnifyingglass", tint: Tint.blue) {
                 Picker("", selection: $prefs.engine) { ForEach(SearchEngine.allCases) { Text($0.title).tag($0) } }

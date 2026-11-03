@@ -4,13 +4,14 @@ import MoteCore
 /// The spaces menu: every space, then what can be done to this one.
 @MainActor
 enum SpaceMenu {
+    /// `symbol`: a symbol's name or an emoji.
     private static func item(
         _ title: String, key: String = "", checked: Bool = false, symbol: String? = nil, _ run: @escaping () -> Void
     ) -> NSMenuItem {
         let item = ActionItem(title, key: key, run)
         item.keyEquivalentModifierMask = key.isEmpty ? [] : .control
         item.state = checked ? .on : .off
-        item.image = symbol.flatMap { NSImage(systemSymbolName: $0, accessibilityDescription: title) }
+        item.image = symbol.flatMap { SpaceGlyph.image($0, name: title) }
         return item
     }
 
@@ -18,7 +19,10 @@ enum SpaceMenu {
         let menu = NSMenu()
         for (index, space) in browser.spaces.enumerated() {
             menu.addItem(
-                item(space.name, key: index < 9 ? "\(index + 1)" : "", checked: space.id == browser.spaceID, symbol: space.symbol) {
+                item(
+                    space.name, key: index < 9 ? "\(index + 1)" : "", checked: space.id == browser.spaceID,
+                    symbol: space.emoji ?? space.symbol
+                ) {
                     browser.switchSpace(to: space.id)
                 })
         }
@@ -41,6 +45,13 @@ enum SpaceMenu {
         for (symbol, name) in Space.icons {
             icons.addItem(item(name, checked: here.symbol == symbol, symbol: symbol) { browser.setSpaceIcon(here.id, to: symbol) })
         }
+        icons.addItem(.separator())
+        icons.addItem(
+            item(here.emoji.map { "Emoji: \($0)…" } ?? "Emoji…") {
+                Prompt.name("Space Emoji", placeholder: "💼", initial: here.emoji ?? "", confirm: "Use") { typed in
+                    if let emoji = typed.first.map(String.init), Space.isEmoji(emoji) { browser.setSpaceIcon(here.id, to: emoji) }
+                }
+            })
         let icon = NSMenuItem(title: "Icon", action: nil, keyEquivalent: "")
         icon.submenu = icons
         items.append(icon)

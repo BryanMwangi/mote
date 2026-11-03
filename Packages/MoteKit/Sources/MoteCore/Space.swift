@@ -7,21 +7,27 @@ public struct Space: Codable, Identifiable, Equatable, Sendable {
     public var name: String
     /// No longer used; kept so older files still read.
     public var colour: Int
-    /// One of `Space.icons`' symbols.
+    /// One of `Space.icons`' symbols, or an emoji.
     public var icon: String?
     /// Signed in wherever the first space is, sharing its website data. nil,
     /// in older spaces, means data of its own.
     public var sharesSignIns: Bool?
     /// Where its downloads go; nil for the folder in Settings.
     public var downloads: String?
+    /// Where it came from when imported ("zen:<uuid>"), so importing again
+    /// doesn't make it twice.
+    public var origin: String?
 
-    public init(id: UUID, name: String, icon: String? = nil, sharesSignIns: Bool? = nil, downloads: String? = nil) {
+    public init(
+        id: UUID, name: String, icon: String? = nil, sharesSignIns: Bool? = nil, downloads: String? = nil, origin: String? = nil
+    ) {
         self.id = id
         self.name = name
         colour = 0
         self.icon = icon
         self.sharesSignIns = sharesSignIns
         self.downloads = downloads
+        self.origin = origin
     }
 
     /// The first space: the default session and data store, so turning spaces
@@ -33,6 +39,16 @@ public struct Space: Codable, Identifiable, Equatable, Sendable {
     /// Its icon, or a house for the first space and a briefcase for others.
     public var symbol: String {
         icon.flatMap { icon in Self.icons.contains { $0.symbol == icon } ? icon : nil } ?? (isFirst ? "house" : "briefcase")
+    }
+
+    /// Its icon when that's an emoji rather than a symbol.
+    public var emoji: String? { icon.flatMap { Self.isEmoji($0) ? $0 : nil } }
+
+    /// A single emoji: one character, drawn as a picture. Digits, # and *
+    /// count as emoji in Unicode but aren't pictures, so they don't.
+    public static func isEmoji(_ text: String) -> Bool {
+        text.count == 1
+            && text.unicodeScalars.contains { $0.properties.isEmojiPresentation || ($0.properties.isEmoji && $0.value > 0x238C) }
     }
 
     /// The icons a space can have: SF Symbols and their names.

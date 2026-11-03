@@ -12,8 +12,9 @@ struct SpaceDot: View {
 
     static let width: CGFloat = 26
 
-    private var symbol: String { browser.makingSpace ? "plus" : browser.space.symbol }
-    private var key: String { browser.makingSpace ? "new" : "\(browser.spaceID.uuidString)-\(browser.space.symbol)" }
+    /// A symbol's name or an emoji (see SpaceGlyph).
+    private var symbol: String { browser.makingSpace ? "plus" : browser.space.emoji ?? browser.space.symbol }
+    private var key: String { browser.makingSpace ? "new" : "\(browser.spaceID.uuidString)-\(symbol)" }
 
     /// Sideways in the sidebar, up and down in the strip.
     private var arrival: Edge {
@@ -25,8 +26,7 @@ struct SpaceDot: View {
         Button {
             SpaceMenu.show(for: browser)
         } label: {
-            Image(systemName: shown?.symbol ?? symbol)
-                .font(.system(size: 12, weight: .medium))
+            SpaceGlyph(shown?.symbol ?? symbol)
                 .foregroundStyle(hovering ? Palette.ink : Palette.muted)
                 .id(shown?.key ?? key)
                 .transition(.push(from: arrival))

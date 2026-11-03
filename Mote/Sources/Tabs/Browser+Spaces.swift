@@ -81,6 +81,9 @@ extension Browser {
         switchSpace(to: made.id)
     }
 
+    /// Spaces made elsewhere (an import), after the others.
+    func addSpaces(_ made: [Space]) { editSpaces { list in made.forEach { list.add($0) } } }
+
     func moveSpace(_ id: UUID, to index: Int) { editSpaces { $0.move(id, to: index) } }
 
     func renameSpace(_ id: UUID, to name: String) {

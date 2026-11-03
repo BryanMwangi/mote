@@ -2,6 +2,40 @@ import AppKit
 import MoteCore
 import SwiftUI
 
+/// A space's icon: its emoji, or its symbol. `icon` is either.
+struct SpaceGlyph: View {
+    let icon: String
+    var size: CGFloat = 12
+
+    init(_ icon: String, size: CGFloat = 12) {
+        self.icon = icon
+        self.size = size
+    }
+
+    init(space: Space, size: CGFloat = 12) {
+        self.init(space.emoji ?? space.symbol, size: size)
+    }
+
+    var body: some View {
+        if Space.isEmoji(icon) {
+            Text(icon).font(.system(size: size + 1))
+        } else {
+            Image(systemName: icon).font(.system(size: size, weight: .medium))
+        }
+    }
+
+    /// For menus: the emoji drawn as a picture, or the symbol.
+    static func image(_ icon: String, name: String) -> NSImage? {
+        guard Space.isEmoji(icon) else { return NSImage(systemSymbolName: icon, accessibilityDescription: name) }
+        let text = NSAttributedString(string: icon, attributes: [.font: NSFont.systemFont(ofSize: 13)])
+        let size = text.size()
+        return NSImage(size: size, flipped: false) { _ in
+            text.draw(at: .zero)
+            return true
+        }
+    }
+}
+
 /// A space's icon and name, above its pinned tabs. A click opens the spaces
 /// menu.
 struct SpaceHeader: View {
@@ -17,7 +51,7 @@ struct SpaceHeader: View {
             SpaceMenu.show(for: browser)
         } label: {
             HStack(spacing: 8) {
-                Image(systemName: space.symbol).font(.system(size: 11, weight: .medium)).frame(width: 16)
+                SpaceGlyph(space: space, size: 11).frame(width: 16)
                 Text(space.name).font(.system(size: 12, weight: .semibold)).lineLimit(1)
                 Spacer(minLength: 0)
             }
@@ -62,8 +96,7 @@ private struct SpaceIcon: View {
         Button {
             if here { SpaceMenu.show(for: browser) } else { browser.switchSpace(to: space.id) }
         } label: {
-            Image(systemName: space.symbol)
-                .font(.system(size: 12, weight: .medium))
+            SpaceGlyph(space: space)
                 .foregroundStyle(here || hovering ? Palette.ink : Palette.muted.opacity(0.8))
                 .frame(width: SpaceDot.width, height: 26)
                 .background(here ? Palette.wash : hovering ? Palette.hover : .clear, in: Rounded.row)

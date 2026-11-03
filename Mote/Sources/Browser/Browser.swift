@@ -54,6 +54,8 @@ final class Browser: NSObject, ObservableObject {
     @Published var arriving = false
     @Published var bookmarking = false
     @Published var bookmarksOpen = false
+    /// Settings › General › Import from Zen.
+    @Published var importingZen = false
     @Published var recalling = false
     @Published var showingDownloads = false
     /// The chat about the active page is docked on the window's trailing edge,

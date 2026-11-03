@@ -22,6 +22,9 @@ struct WelcomePanel: View {
     @State private var wantsPasswords = true
     @State private var wantsHistory = true
     @State private var wantsBookmarks = true
+    /// Zen's default profile, when Zen is on this Mac: its spaces and tabs.
+    @State private var zen: ZenImporter.Profile?
+    @State private var wantsZen = true
     @State private var bringing = false
     @State private var brought: Brought?
 
@@ -85,7 +88,7 @@ struct WelcomePanel: View {
 
     private var bring: some View {
         VStack(alignment: .leading, spacing: 18) {
-            heading("Bring your things over", "Nothing in \(chosen?.name ?? "the other browser") changes.")
+            heading("Bring your things over", "Nothing in \(fromNames) changes.")
 
             if sources.count > 1 {
                 Segmented(
@@ -95,6 +98,8 @@ struct WelcomePanel: View {
 
             if let brought {
                 HStack(spacing: 18) {
+                    if let n = brought.spaces { Tally(value: n, label: "spaces") }
+                    if let n = brought.tabs { Tally(value: n, label: "tabs") }
                     if let n = brought.bookmarks { Tally(value: n, label: "bookmarks") }
                     if let n = brought.places { Tally(value: n, label: "places") }
                     if let n = brought.passwords { Tally(value: n, label: "passwords") }
@@ -104,16 +109,22 @@ struct WelcomePanel: View {
                 }
             } else {
                 VStack(alignment: .leading, spacing: 12) {
-                    Choice("Bookmarks", on: $wantsBookmarks)
-                    Choice("History", on: $wantsHistory)
-                    Choice("Passwords", "macOS asks once for its keychain key", on: $wantsPasswords)
+                    if zen != nil {
+                        Choice("Spaces and tabs from Zen", "Essentials, pinned and open tabs, each in its space", on: $wantsZen)
+                    }
+                    if !sources.isEmpty {
+                        Choice("Bookmarks", on: $wantsBookmarks)
+                        Choice("History", on: $wantsHistory)
+                        Choice("Passwords", "macOS asks once for its keychain key", on: $wantsPasswords)
+                    }
                 }
             }
 
             HStack(spacing: 10) {
                 if brought == nil {
                     Big(bringing ? "Bringing…" : "Bring them over", filled: true) { bringAll() }
-                        .disabled(bringing || !(wantsPasswords || wantsHistory || wantsBookmarks))
+                        .disabled(
+                            bringing || !(wantsZen && zen != nil || !sources.isEmpty && (wantsPasswords || wantsHistory || wantsBookmarks)))
                     if bringing { Ring(size: 10) }
                     Spacer()
                     if !bringing { Quiet("Not now") { next() } }
@@ -170,7 +181,8 @@ struct WelcomePanel: View {
 
     private func begin() async {
         sources = ChromiumImporter.installed()
-        steps = [sources.isEmpty ? nil : .bring, .hold, isDefault ? nil : .links].compactMap { $0 }
+        zen = ZenImporter.profiles().first
+        steps = [sources.isEmpty && zen == nil ? nil : .bring, .hold, isDefault ? nil : .links].compactMap { $0 }
         // Let the window settle in after the arrival before the card rises.
         try? await Task.sleep(for: .seconds(0.35))
         shown = true
@@ -198,7 +210,14 @@ struct WelcomePanel: View {
 
     private var chosen: ChromiumImporter.Source? { source ?? sources.first }
 
+    /// The browsers things come from, for "Nothing in … changes".
+    private var fromNames: String {
+        [chosen?.name, zen.map { _ in "Zen" }].compactMap { $0 }.joined(separator: " or ")
+    }
+
     private struct Brought: Equatable {
+        var spaces: Int?
+        var tabs: Int?
         var bookmarks: Int?
         var places: Int?
         var passwords: Int?
@@ -206,10 +225,23 @@ struct WelcomePanel: View {
     }
 
     private func bringAll() {
-        guard let source = chosen else { return }
         bringing = true
         Task {
             var result = Brought()
+            if wantsZen, let zen {
+                if let plan = try? ZenImporter.plan(for: zen) {
+                    let made = browser.importZen(plan)
+                    result.spaces = made.spaces
+                    result.tabs = made.tabs
+                } else {
+                    result.trouble = "Zen's saved tabs couldn't be read. Settings › General can try again."
+                }
+            }
+            guard let source = chosen else {
+                bringing = false
+                brought = result
+                return
+            }
             if wantsBookmarks { result.bookmarks = browser.takeBookmarks(from: source) }
             if wantsHistory { result.places = await browser.takePlaces(from: source) }
             if wantsPasswords {
