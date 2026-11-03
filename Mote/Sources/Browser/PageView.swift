@@ -87,10 +87,52 @@ final class PageView: WKWebView {
     /// the page has a video to control or is full screen: then WebKit's own
     /// playback bar (play, time, scrubber, full screen), which is Safari's.
     override func makeTouchBar() -> NSTouchBar? {
-        guard let browser = Browser.front, !hasVideoControls, browser.tab(for: self)?.immersed != true else {
-            return super.makeTouchBar()
-        }
-        return browser.touchBarItems.make()
+        let immersed = Browser.front?.tab(for: self)?.immersed == true
+        let playback = wantsPlaybackBar(immersed: immersed)
+        barIsPlayback = playback
+        barImmersed = immersed
+        guard let browser = Browser.front else { return super.makeTouchBar() }
+        guard playback else { return browser.touchBarItems.make() }
+        // WebKit's controls inside Mote's bar, beside reload and full screen.
+        guard let controls = super.makeTouchBar() else { return browser.touchBarItems.make() }
+        return browser.touchBarItems.makePlayback(around: controls)
+    }
+
+    /// Which kind of bar was last made: nil before the first.
+    private var barIsPlayback: Bool?
+    /// Full screen when it was made, for the full-screen button's look.
+    private var barImmersed = false
+
+    private func wantsPlaybackBar(immersed: Bool) -> Bool { immersed || hasVideoControls }
+
+    /// Asks for the bar again only when it should change kind (or, for the
+    /// playback bar, full screen came or went), so making it can never lead
+    /// to asking again.
+    func refreshTouchBar(immersed: Bool) {
+        guard let made = barIsPlayback else { return }
+        let changed = made != wantsPlaybackBar(immersed: immersed) || (made && immersed != barImmersed)
+        if changed { touchBar = nil }
+    }
+
+    /// The Touch Bar's full-screen button: the playing video (or the largest)
+    /// in full screen, or out of it. Run from the app, which WebKit counts
+    /// as the person asking, as full screen needs.
+    func toggleVideoFullScreen() {
+        evaluateInAppWorld(
+            """
+            (() => {
+              const doc = document;
+              if (doc.fullscreenElement || doc.webkitFullscreenElement) {
+                (doc.exitFullscreen || doc.webkitExitFullscreen).call(doc);
+                return;
+              }
+              const videos = [...doc.querySelectorAll('video')];
+              const video = videos.find((v) => !v.paused)
+                ?? videos.sort((a, b) => b.clientWidth * b.clientHeight - a.clientWidth * a.clientHeight)[0];
+              if (!video) return;
+              if (video.requestFullscreen) video.requestFullscreen(); else video.webkitEnterFullscreen?.();
+            })();
+            """)
     }
 
     /// WebKit's own test for showing playback controls, through its private
