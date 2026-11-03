@@ -63,13 +63,15 @@ final class Tab: ObservableObject, Identifiable {
     @Published var pull: Pull?
     @Published private(set) var zoom: CGFloat = 1
     /// The page is playing sound.
-    @Published var noisy = false
+    @Published var noisy = false {
+        didSet { if noisy || oldValue { lastAudible = Date() } }
+    }
     /// The site the page is loading from just now, for the status at its foot.
     @Published var loadingFrom: String?
     /// What the page says it plays, for the media strip (MediaSession.swift).
     @Published var media: MediaState?
-    /// When the page last said it was playing.
-    var lastPlayed: Date?
+    /// When the page was last heard, from WebKit rather than the page.
+    var lastAudible: Date?
     /// Muted by the user; the page keeps playing.
     @Published private(set) var muted = false
     /// The letter of an essential: essentials sit first in the row, as small

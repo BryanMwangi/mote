@@ -5,13 +5,22 @@
 /** Titles and names are cut to this many characters. */
 	const LIMIT = 200;
 	/**
-	* The element the strip controls: one playing with sound, else one playing
-	* at all, else the one furthest into its media (paused part way).
+	* Whether an element can be heard: not muted, not at zero volume, and, once
+	* it has played a couple of seconds, with some audio decoded. Muted autoplay
+	* backgrounds and GIF-like videos aren't.
+	*/
+	function audible(media) {
+		if (media.muted || media.volume === 0) return false;
+		const decoded = media.webkitAudioDecodedByteCount;
+		return typeof decoded !== "number" || decoded > 0 || media.currentTime < 2;
+	}
+	/**
+	* The element the strip controls: one playing that can be heard, else the
+	* audible one furthest into its media (paused part way). Silent ones never.
 	*/
 	function currentMedia(root) {
-		const all = [...root.querySelectorAll("video, audio")];
-		const playing = all.filter((media) => !media.paused && !media.ended);
-		return playing.find((media) => !media.muted && media.volume > 0) ?? playing[0] ?? all.filter((media) => media.currentTime > 0 && !media.ended).toSorted((a, b) => b.currentTime - a.currentTime)[0] ?? null;
+		const all = [...root.querySelectorAll("video, audio")].filter(audible);
+		return all.find((media) => !media.paused && !media.ended) ?? all.filter((media) => media.currentTime > 0 && !media.ended).toSorted((a, b) => b.currentTime - a.currentTime)[0] ?? null;
 	}
 	function clip(text) {
 		return (text ?? "").trim().slice(0, 200);
@@ -19,11 +28,13 @@
 	/** The report for `media`, or null when there is nothing to control. */
 	function describe(media, metadata, pageTitle, actions) {
 		if (!media) return null;
+		const handled = [...actions].toSorted();
 		return {
 			title: clip(metadata?.title) || clip(pageTitle),
 			artist: clip(metadata?.artist),
 			playing: !media.paused && !media.ended,
-			actions: [...actions].toSorted()
+			actions: handled,
+			session: Boolean(metadata?.title) || handled.length > 0
 		};
 	}
 

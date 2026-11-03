@@ -12,6 +12,8 @@ struct MediaState: Equatable, Decodable {
     var playing: Bool
     /// The media session actions the site handles itself.
     var actions: [String]
+    /// The site describes what plays or handles its controls: a player.
+    var session: Bool?
 
     var hasNext: Bool { actions.contains("nexttrack") }
 }
@@ -49,7 +51,6 @@ enum MediaCommand: String {
 
 extension Tab {
     func mediaChanged(_ state: MediaState?) {
-        if state?.playing == true { lastPlayed = Date() }
         if media != state { media = state }
     }
 
