@@ -170,9 +170,10 @@ final class Browser: NSObject, ObservableObject {
     static weak var front: Browser?
     /// This browser's window, once it has one.
     weak var window: NSWindow?
-    /// A window opened after the main one (⌘N, a link): it starts with a new
-    /// tab and saves no session yet (see Windows.swift).
+    /// A window opened after the main one (⌘N, a link), with its own open
+    /// tabs, saved under its id (see Windows.swift).
     let extra: Bool
+    let windowID: UUID?
     /// The Touch Bar's buttons, on Macs that have one.
     private(set) lazy var touchBarItems = BrowserTouchBar(browser: self)
 
@@ -278,8 +279,9 @@ final class Browser: NSObject, ObservableObject {
     /// The main window's browser restores the session and starts what the app
     /// runs once; an `extra` one starts on `space` with its held tabs and a
     /// new tab.
-    init(extra: Bool = false, space: UUID? = nil) {
+    init(extra: Bool = false, id: UUID? = nil, space: UUID? = nil) {
         self.extra = extra
+        windowID = extra ? id ?? UUID() : nil
         super.init()
         if !extra { startApp() }
 
@@ -335,7 +337,9 @@ final class Browser: NSObject, ObservableObject {
     /// A space's essentials and pinned tabs, from its saved session, asleep:
     /// what a new window shows of it.
     func heldTabs(of space: UUID) -> [Tab] {
-        Session.read(space: space).tabs.filter { $0.pin != nil || $0.kept == true }.compactMap { entry -> Tab? in
+        let saved = Session.read(space: space).tabs
+        HeldSync.seed(saved, in: space)
+        return saved.filter(\.isHeld).compactMap { entry -> Tab? in
             let tab = Tab(configuration: Web.configuration(space: space))
             return restore(entry, in: tab) ? tab : nil
         }
@@ -345,13 +349,18 @@ final class Browser: NSObject, ObservableObject {
     func restoreSession() {
         // A window opened since the main one: the space's held tabs and a new tab.
         if extra {
-            let blank = Tab()
-            showRow(heldTabs(of: spaceID), active: nil)
-            adopt(blank)
-            activeID = blank.id
+            let parked = loadRow(spaceID)
+            showRow(parked.tabs, active: parked.active)
+            if !tabs.contains(where: { !$0.held }) {
+                let blank = Tab()
+                adopt(blank)
+                activeID = blank.id
+            }
+            active?.wake()
             return
         }
         let saved = Session.read(space: spaceID)
+        HeldSync.seed(saved.tabs, in: spaceID)
         let restored = saved.tabs.compactMap { entry -> Tab? in
             let tab = Tab()
             return restore(entry, in: tab) ? tab : nil
@@ -448,7 +457,7 @@ final class Browser: NSObject, ObservableObject {
     // MARK: - Session
 
     /// Puts a saved tab back: a page, which loads when opened, or a kept chat.
-    private func restore(_ entry: Session.Entry, in tab: Tab) -> Bool {
+    func restore(_ entry: Session.Entry, in tab: Tab) -> Bool {
         if let id = entry.chat.flatMap(UUID.init(uuidString:)) {
             guard let chat = Assistant.shared.reopen(id) else { return false }
             prepare(tab)
@@ -456,6 +465,7 @@ final class Browser: NSObject, ObservableObject {
             tab.name = entry.name
             tab.pin = entry.pin
             tab.kept = entry.kept == true
+            tab.heldID = entry.held.flatMap(UUID.init(uuidString:))
             return true
         }
         guard let url = URL(string: entry.url) else { return false }
@@ -463,6 +473,7 @@ final class Browser: NSObject, ObservableObject {
         tab.restore(url: url, title: entry.title, name: entry.name)
         tab.pin = entry.pin
         tab.kept = entry.kept == true
+        tab.heldID = entry.held.flatMap(UUID.init(uuidString:))
         return true
     }
 
@@ -472,23 +483,35 @@ final class Browser: NSObject, ObservableObject {
 
     /// Saves any space's row: this one, or one parked.
     func writeSession(now: Bool, space: UUID, tabs: [Tab], active: Tab.ID?) {
-        // Windows opened since the main one don't save theirs yet.
-        guard !extra else { return }
+        let entries = tabs.compactMap(entry(for:))
+        HeldSync.saved(entries, in: space, by: self)
+        // A window opened since the main one keeps only its open tabs.
+        if extra, let windowID {
+            let loose = tabs.filter { !$0.held }
+            let saved = loose.compactMap(entry(for:))
+            Session.write(now: now, window: windowID, space: space, .init(tabs: saved, active: loose.firstIndex { $0.id == active } ?? 0))
+            return
+        }
         Session.write(now: now, space: space, .init(tabs: tabs.compactMap(entry(for:)), active: tabs.firstIndex { $0.id == active } ?? 0))
     }
 
     /// A tab as the session keeps it: a page, or a kept chat. Private, bench
     /// and blank tabs aren't kept.
-    private func entry(for tab: Tab) -> Session.Entry? {
+    func entry(for tab: Tab) -> Session.Entry? {
+        // A held tab keeps one id from window to window.
+        if tab.held, tab.heldID == nil { tab.heldID = UUID() }
+        let held = tab.held ? tab.heldID?.uuidString : nil
         if !tab.shy, !tab.bench, tab.isBlank, let chat = tab.chat, !chat.messages.isEmpty {
             return Session.Entry(
-                url: "", title: chat.title, pin: tab.pin, kept: tab.kept ? true : nil, name: tab.name, chat: chat.id.uuidString)
+                url: "", title: chat.title, pin: tab.pin, kept: tab.kept ? true : nil, name: tab.name, chat: chat.id.uuidString,
+                held: held)
         }
         guard !tab.shy, !tab.bench,
             // A sleeping tab's address is in `pending`, never its released page's.
             let url = tab.pending ?? tab.address, url.scheme?.hasPrefix("http") == true
         else { return nil }
-        return Session.Entry(url: url.absoluteString, title: tab.title, pin: tab.pin, kept: tab.kept ? true : nil, name: tab.name)
+        return Session.Entry(
+            url: url.absoluteString, title: tab.title, pin: tab.pin, kept: tab.kept ? true : nil, name: tab.name, held: held)
     }
 
     // MARK: - Merging spaces
@@ -768,11 +791,19 @@ final class Browser: NSObject, ObservableObject {
     /// Builds a space's row from its saved session without touching the
     /// current one. Its tabs wait and cost little until opened.
     func loadRow(_ space: UUID) -> Parked {
-        if extra {
+        if extra, let windowID {
+            // The space's held tabs, and this window's own open ones.
+            let saved = Session.read(window: windowID, space: space)
+            let loose = saved.tabs.compactMap { entry -> Tab? in
+                let tab = Tab(configuration: Web.configuration(space: space))
+                return restore(entry, in: tab) ? tab : nil
+            }
             let held = heldTabs(of: space)
-            return Parked(tabs: held, active: held.first?.id)
+            let active = loose.indices.contains(saved.active) ? loose[saved.active].id : loose.first?.id ?? held.first?.id
+            return Parked(tabs: held + loose, active: active)
         }
         let saved = Session.read(space: space)
+        HeldSync.seed(saved.tabs, in: space)
         let row = saved.tabs.compactMap { entry -> Tab? in
             let tab = Tab(configuration: Web.configuration(space: space))
             return restore(entry, in: tab) ? tab : nil

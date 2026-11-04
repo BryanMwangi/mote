@@ -36,7 +36,7 @@ struct ContentView: View {
                 WindowSetup {
                     window = $0
                     browser.window = $0
-                    WindowDressing.dress($0, main: !browser.extra)
+                    WindowDressing.dress($0, main: !browser.extra, id: browser.windowID)
                     $0.touchBar = browser.touchBarItems.make()
                     arrive()
                 }
@@ -73,6 +73,8 @@ struct ContentView: View {
                 // The rest belongs to the main window, as before there were others.
                 guard !browser.extra else { return }
                 Windows.shared.main = browser
+                // The windows open at the last quit come back beside it.
+                Windows.shared.restore()
                 AppDelegate.hand(to: browser)
                 SettingsWindow.watch(browser)
                 BookmarkMenu.shared.start(for: browser)

@@ -25,7 +25,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
-        MainActor.assumeIsolated { LinkInbox.browser?.flushSession() }
+        MainActor.assumeIsolated {
+            LinkInbox.browser?.flushSession()
+            Windows.shared.flush()
+        }
     }
 
     @objc private func openLink(_ event: NSAppleEventDescriptor, reply: NSAppleEventDescriptor) {

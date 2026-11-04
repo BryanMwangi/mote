@@ -10,7 +10,7 @@ extension Bench {
     var chromeCommands: [String: Command] {
         [
             "probe": Self.probe, "ui": Self.ui, "consent": Self.consent, "little": Self.little, "space": Self.space, "peek": Self.peek,
-            "window": Self.window, "windows": Self.windows,
+            "window": Self.window, "windows": Self.windows, "quit": Self.quit,
         ]
     }
 
@@ -109,6 +109,10 @@ extension Bench {
             browser.tabDraft = text
         }
         if request.flag("finishedit") { browser.finishTabEdit() }
+        // A tab of the front window made an essential, or not (test runs).
+        let tab = { (id: String) in browser.tabs.first { $0.id.uuidString.lowercased().hasPrefix(id.lowercased()) } }
+        if Storage.testing, let id = request.string("essential"), let found = tab(id) { browser.pin(found) }
+        if Storage.testing, let id = request.string("unessential"), let found = tab(id) { browser.unpin(found) }
         // Responsive Design Mode for the tab in front: a preset's name, or off.
         if let name = request.string("device") { browser.active?.device = DeviceList.shared.device(named: name) }
         if #available(macOS 15.4, *), let on = request.bool("extensions") { Extensions.shared.menuOpen = on }
@@ -242,6 +246,13 @@ extension Bench {
                 }
             ])
         }
+    }
+
+    /// Quits as the menu would, saving every window (test runs).
+    private static func quit(_ call: BenchCall) {
+        guard call.testRun() else { return }
+        call.answer(["quitting": true])
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { NSApp.terminate(nil) }
     }
 
     private static func window(_ call: BenchCall) {

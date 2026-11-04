@@ -14,6 +14,9 @@ enum Session {
         var name: String?
         /// A chat tab: the kept chat it shows, by id; `url` is empty.
         var chat: String?
+        /// An essential or pinned tab's id, the same in every window (see
+        /// Browser+Held.swift); nil in older files and for the others.
+        var held: String?
     }
 
     nonisolated struct Saved: Codable, Sendable {
@@ -39,5 +42,25 @@ enum Session {
 
     static func erase(space: UUID) {
         if space != Space.firstID { file(space).delete() }
+    }
+
+    // MARK: - Windows opened since the main one
+
+    /// Such a window's open tabs in a space; its essentials and pinned tabs
+    /// are the space's, kept in the main window's file.
+    private static func file(window: UUID, space: UUID) -> JSONFile<Saved> {
+        JSONFile("window-\(window.uuidString)-session-\(space.uuidString).json")
+    }
+
+    static func read(window: UUID, space: UUID) -> Saved {
+        file(window: window, space: space).load() ?? .empty
+    }
+
+    static func write(now: Bool = false, window: UUID, space: UUID, _ saved: Saved) {
+        now ? file(window: window, space: space).saveNow(saved) : file(window: window, space: space).save(saved)
+    }
+
+    static func erase(window: UUID, spaces: [UUID]) {
+        for space in spaces { file(window: window, space: space).delete() }
     }
 }

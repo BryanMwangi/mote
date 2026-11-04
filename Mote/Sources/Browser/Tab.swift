@@ -87,6 +87,8 @@ final class Tab: ObservableObject, Identifiable {
     @Published var pin: String?
     /// A pinned tab: a full row after the essentials, kept when closed.
     @Published var kept = false
+    /// As an essential or pinned tab, its id in every window (Browser+Held.swift).
+    var heldID: UUID?
     /// A name given by the user, kept across navigations.
     @Published var name: String?
     /// The extension whose Web Store page already shows its own "Add to Mote".
