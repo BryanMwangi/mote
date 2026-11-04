@@ -61,6 +61,7 @@ struct SidebarFold: View {
             timers.cancelShow()
             timers.cancelHide()
             inside = false
+            if !folding { browser.peeking = false }
             watch()
         }
         // Each layout owns its persisted fold; a temporary peek never carries over.
@@ -81,7 +82,9 @@ struct SidebarFold: View {
     /// and lifted off the card by a deep, soft shadow.
     private var floatingSidebar: some View {
         let shape = RoundedRectangle(cornerRadius: ChromeLayout.corner, style: .continuous)
-        return Sidebar(browser: browser, prefs: prefs, showing: browser.peeking)
+        // The traffic lights only while it's out: on its way away it mustn't
+        // take them from the docked sidebar.
+        return Sidebar(browser: browser, prefs: prefs, showing: folding && browser.peeking)
             .frame(maxHeight: .infinity)
             .background(Palette.frame)
             .clipShape(shape)

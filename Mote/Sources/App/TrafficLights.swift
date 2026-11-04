@@ -34,6 +34,15 @@ struct TrafficLights: NSViewRepresentable {
             super.viewDidMoveToWindow()
             mount()
         }
+        /// Leaving the window with the buttons would take them along: the
+        /// host showing them now takes them, once this one has gone.
+        override func viewWillMove(toWindow newWindow: NSWindow?) {
+            super.viewWillMove(toWindow: newWindow)
+            guard let window, newWindow !== window, Self.groups.object(forKey: window)?.superview === self else { return }
+            DispatchQueue.main.async { [weak window] in
+                if let window { TrafficLights.refresh(in: window) }
+            }
+        }
         func mount() {
             guard let window, !window.styleMask.contains(.fullScreen) else { return }
             guard let group = Self.group(in: window), showing else { return }
