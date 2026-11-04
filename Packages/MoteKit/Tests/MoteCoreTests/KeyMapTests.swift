@@ -27,6 +27,14 @@ struct KeyMapTests {
         #expect(!KeyMap.switchesAsking(KeyMap.Press(key: "j", code: KeyMap.jKey), inComposer: true))
     }
 
+    @Test("F12 opens the Web Inspector; with a modifier it's left alone")
+    func f12() {
+        #expect(command("", KeyMap.f12, command: false) == .inspector)
+        #expect(command("", KeyMap.f12) == nil)
+        #expect(command("", KeyMap.f12, command: false, shift: true) == nil)
+        #expect(command("", KeyMap.f12, command: false, option: true) == nil)
+    }
+
     @Test("Everyday shortcuts")
     func everyday() {
         #expect(command("t") == .newTab)

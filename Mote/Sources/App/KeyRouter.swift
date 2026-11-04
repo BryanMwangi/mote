@@ -163,6 +163,7 @@ final class KeyRouter {
         case .zoomIn: browser.zoom(by: 1.1)
         case .zoomOut: browser.zoom(by: 1 / 1.1)
         case .actualSize: browser.resetZoom()
+        case .inspector: browser.toggleInspector()
         }
     }
 

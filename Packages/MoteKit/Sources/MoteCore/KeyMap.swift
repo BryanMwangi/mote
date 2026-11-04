@@ -35,6 +35,7 @@ public enum KeyMap {
         case bookmark, history, downloads, settings
         case hideElements, hiddenElements, undoHiding
         case zoomIn, zoomOut, actualSize
+        case inspector
     }
 
     public static let escape: UInt16 = 53
@@ -43,6 +44,9 @@ public enum KeyMap {
     public static let rightArrow: UInt16 = 124
     public static let returnKey: UInt16 = 36
     public static let enterKey: UInt16 = 76
+
+    /// F12, as macOS sends it with fn held or from the Touch Bar's F-keys.
+    public static let f12: UInt16 = 111
 
     /// The J key, by position.
     public static let jKey: UInt16 = 38
@@ -66,6 +70,8 @@ public enum KeyMap {
         if spaces, press.control, !press.command, !press.option, !press.shift, let number = digits[press.code], number > 0 {
             return .space(number - 1)
         }
+        // F12 opens and closes the Web Inspector, as in Chrome, Firefox and Zen.
+        if press.code == f12, !press.command, !press.option, !press.control, !press.shift { return .inspector }
         guard press.command, !press.option, !press.control else { return nil }
         if !press.shift, let number = digits[press.code] {
             return number == 0 ? .actualSize : number == 9 ? .lastTab : .tab(number - 1)
