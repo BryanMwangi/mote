@@ -44,7 +44,7 @@ struct TabBar: View {
                 DragStrip().frame(width: Metrics.lights)
 
                 HStack(alignment: .top, spacing: 0) {
-                    if browser.prefs.usesSpaces { SpaceDot(browser: browser).frame(height: ChromeLayout.strip) }
+                    if browser.usesSpaces { SpaceDot(browser: browser).frame(height: ChromeLayout.strip) }
                     rows(layout)
                         .zIndex(drag == nil ? 0 : 1)
                     Plus { browser.newTab() }
@@ -68,7 +68,7 @@ struct TabBar: View {
         .animation(Motion.settle, value: browser.tabs.map(\.id))
     }
 
-    private var making: Bool { browser.prefs.usesSpaces && browser.makingSpace }
+    private var making: Bool { browser.usesSpaces && browser.makingSpace }
 
     /// This space's row, and during a swipe the neighbouring space's sliding in
     /// from above or below.
@@ -195,7 +195,7 @@ struct TabBar: View {
         let browser: Browser
         let strip: CGFloat
 
-        var dot: CGFloat { browser.prefs.usesSpaces ? SpaceDot.width + 4 : 0 }
+        var dot: CGFloat { browser.usesSpaces ? SpaceDot.width + 4 : 0 }
         var room: CGFloat {
             TabStrip.room(
                 strip: strip, lights: Metrics.lights, dot: dot, plus: TabBar.plusWidth, dragRoom: TabBar.dragRoom, foot: TabShape.foot)

@@ -21,7 +21,7 @@ public enum KeyMap {
     }
 
     public enum Command: Equatable, Sendable {
-        case newTab, newPrivateTab, reopenTab, closeTab, duplicateTab
+        case newTab, newPrivateWindow, reopenTab, closeTab, duplicateTab
         case nextTab, previousTab
         /// A tab by position; `last` for ⌘9.
         case tab(Int), lastTab
@@ -79,7 +79,7 @@ public enum KeyMap {
         switch (press.key, press.shift) {
         case ("t", false): return .newTab
         case ("t", true): return .reopenTab
-        case ("n", true): return .newPrivateTab
+        case ("n", true): return .newPrivateWindow
         case ("w", false): return .closeTab
         case ("d", false): return .duplicateTab
         case ("c", true): return .copyAddress

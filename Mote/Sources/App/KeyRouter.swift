@@ -66,7 +66,7 @@ final class KeyRouter {
             return true
         }
         let inText = browser.active?.typing == true || event.window?.firstResponder is NSTextView
-        let command = KeyMap.command(for: press, spaces: browser.prefs.usesSpaces, picking: browser.pickingElement, inText: inText)
+        let command = KeyMap.command(for: press, spaces: browser.usesSpaces, picking: browser.pickingElement, inText: inText)
         // ⌃ shortcuts of Mote's own (spaces, ⌃⇥) come before extensions'.
         if let command, !press.command {
             run(command, in: browser, event: event)
@@ -129,7 +129,7 @@ final class KeyRouter {
     private func run(_ command: KeyMap.Command, in browser: Browser, event: NSEvent) {
         switch command {
         case .newTab: browser.newTab()
-        case .newPrivateTab: browser.newShyTab()
+        case .newPrivateWindow: Windows.shared.open(private: true)
         case .reopenTab: browser.reopen()
         case .closeTab:
             if browser.peekTab != nil { browser.closePeek() } else if let tab = browser.active { browser.close(tab) }

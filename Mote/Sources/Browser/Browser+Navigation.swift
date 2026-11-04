@@ -97,6 +97,22 @@ extension Browser: WKNavigationDelegate, WKUIDelegate {
         windowFeatures: WKWindowFeatures
     ) -> WKWebView? {
         let opener = tab(for: webView)
+        // A link from Mote's own menu items, to open somewhere else (Browser+Links.swift).
+        if let opening = linkOpening, let url = action.request.url {
+            linkOpening = nil
+            guard case .tab(let background) = opening else {
+                open(url, as: opening, from: opener)
+                return nil
+            }
+            // A tab here, as below, left behind when asked.
+            configuration.userContentController = WKUserContentController()
+            let tab = Tab(shy: opener?.shy ?? isPrivate, configuration: configuration)
+            adopt(tab)
+            tab.opener = opener?.id ?? activeID
+            if !background { activeID = tab.id }
+            tab.setAddressOptimistically(url)
+            return tab.web
+        }
         // WebKit's copy still points at the opener's content controller; sharing it
         // would let the new tab remove the opener's message handlers when it closes.
         configuration.userContentController = WKUserContentController()

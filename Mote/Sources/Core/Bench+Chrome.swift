@@ -10,7 +10,7 @@ extension Bench {
     var chromeCommands: [String: Command] {
         [
             "probe": Self.probe, "ui": Self.ui, "consent": Self.consent, "little": Self.little, "space": Self.space, "peek": Self.peek,
-            "window": Self.window, "windows": Self.windows, "quit": Self.quit,
+            "window": Self.window, "windows": Self.windows, "quit": Self.quit, "link": Self.link,
         ]
     }
 
@@ -246,6 +246,27 @@ extension Bench {
                 }
             ])
         }
+    }
+
+    /// A link opened as a page menu item would (Browser+Links.swift), from
+    /// the front window's tab in front (test runs).
+    private static func link(_ call: BenchCall) {
+        guard call.testRun(), let address = call.request.string("url"), let url = URL(string: address) else { return }
+        let browser = call.browser
+        let opening: LinkOpening? =
+            switch call.request.string("where") ?? "" {
+            case "tab": .tab(background: false)
+            case "background": .tab(background: true)
+            case "window": .window(private: false)
+            case "private": .window(private: true)
+            case "preview": .preview
+            case "bookmark": .bookmark
+            case "space": browser.spaces.first { $0.id != browser.spaceID }.map { .space($0.id) }
+            default: nil
+            }
+        guard let opening else { return call.fail("where: tab, background, window, private, space, preview or bookmark") }
+        browser.open(url, as: opening, from: browser.active)
+        call.answer(["opened": true])
     }
 
     /// Quits as the menu would, saving every window (test runs).

@@ -123,7 +123,7 @@ struct AddMenuButton: View {
         FootIcon(symbol: "plus", help: "New tab or space") {
             let menu = NSMenu()
             menu.addItem(item("New Tab", symbol: "plus") { browser.newTab() })
-            if browser.prefs.usesSpaces {
+            if browser.usesSpaces {
                 menu.addItem(item("Create Space…", symbol: "square.on.square") { browser.askForSpace() })
             }
             menu.popUp(positioning: nil, at: NSEvent.mouseLocation, in: nil)

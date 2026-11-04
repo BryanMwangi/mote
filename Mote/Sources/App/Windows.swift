@@ -33,8 +33,8 @@ final class Windows {
     /// space's essentials and pinned tabs and its own open tabs (a new tab for
     /// a new window). `prepare` runs before it shows, to put a tab in it.
     @discardableResult
-    func open(id: UUID = UUID(), space: UUID? = nil, prepare: (Browser) -> Void = { _ in }) -> Browser {
-        let browser = Browser(extra: true, id: id, space: space ?? (Browser.front ?? main)?.spaceID)
+    func open(id: UUID = UUID(), space: UUID? = nil, private isPrivate: Bool = false, prepare: (Browser) -> Void = { _ in }) -> Browser {
+        let browser = Browser(extra: true, id: id, space: space ?? (Browser.front ?? main)?.spaceID, isPrivate: isPrivate)
         prepare(browser)
         extra[id] = browser
         opener?(id)
@@ -59,14 +59,17 @@ final class Windows {
 
     /// Which space each window shows changed, or a window came or went.
     func save() {
-        file.save(extra.map { Record(id: $0.key, space: $0.value.spaceID) })
+        file.save(records)
     }
+
+    /// The windows to bring back: not the private ones.
+    private var records: [Record] { extra.filter { !$0.value.isPrivate }.map { Record(id: $0.key, space: $0.value.spaceID) } }
 
     /// Before quitting: every window's tabs, now.
     func flush() {
         quitting = true
         for browser in extra.values { browser.writeSession(now: true) }
-        file.saveNow(extra.map { Record(id: $0.key, space: $0.value.spaceID) })
+        file.saveNow(records)
     }
 
     /// A window opened since the main one has closed: its tabs go with it,

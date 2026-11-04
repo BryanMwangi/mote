@@ -145,7 +145,7 @@ struct TabMenu: View {
 
     var body: some View {
         TabHoldItems(browser: browser, tab: tab)
-        if browser.prefs.usesSpaces, browser.spaces.count > 1 {
+        if browser.usesSpaces, browser.spaces.count > 1 {
             Menu("Move to Space") {
                 ForEach(browser.spaces.filter { $0.id != browser.spaceID }) { space in
                     Button(browser.sharesData(with: space.id) ? space.name : "\(space.name) (separate sign-ins)") {

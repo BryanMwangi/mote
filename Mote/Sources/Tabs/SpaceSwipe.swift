@@ -41,7 +41,7 @@ final class SpaceSwipe {
     private func keeps(_ event: NSEvent) -> Bool {
         // The window under the gesture; not mid-swipe, which stays with its window.
         if !gate.tracking, let owner = Windows.shared.browser(for: event.window) { browser = owner }
-        guard let browser, browser.prefs.usesSpaces, !browser.folded || browser.peeking else { return false }
+        guard let browser, browser.usesSpaces, !browser.folded || browser.peeking else { return false }
         guard event.hasPreciseScrollingDeltas else { return wheel(event, in: browser) }
         switch gate.verdict(Self.phase(of: event), over: overTabs(event, in: browser)) {
         case .pass:

@@ -110,7 +110,7 @@ struct Sidebar: View {
         let pill = browser.navInSidebar ? AddressPill.height + Self.pillGap : 0
         let rows = Self.rowsHeight(
             essentials: browser.essentialCount, kept: browser.keptCount, loose: browser.tabs.count - browser.pinnedCount,
-            width: prefs.sideWidth, named: prefs.usesSpaces)
+            width: prefs.sideWidth, named: browser.usesSpaces)
         return Self.top + pill + rows + 8
     }
 
@@ -142,7 +142,15 @@ struct Sidebar: View {
     /// The chat archive, every space, and a plus for a new tab or space.
     private var foot: some View {
         HStack(spacing: 2) {
-            if browser.prefs.usesSpaces {
+            if browser.isPrivate {
+                // Where the spaces would be: this window keeps nothing.
+                Label("Private", systemImage: "eye.slash")
+                    .font(TextStyle.secondary.font.weight(.medium))
+                    .foregroundStyle(Palette.muted)
+                    .padding(.leading, 6)
+                    .help("A private window: no history, and nothing kept once it closes")
+                Spacer(minLength: 4)
+            } else if browser.usesSpaces {
                 chats(titled: false)
                 Spacer(minLength: 4)
                 SpaceIcons(browser: browser)
@@ -243,14 +251,14 @@ private struct SpacePage: View {
                 PinnedTabs(browser: browser, prefs: prefs, tabs: essentials, active: active, live: live)
                     .padding(.bottom, 10)
             }
-            if prefs.usesSpaces { SpaceHeader(browser: browser, space: space).padding(.bottom, Self.gap) }
+            if browser.usesSpaces { SpaceHeader(browser: browser, space: space).padding(.bottom, Self.gap) }
             if !kept.isEmpty { keptRows(kept) }
             // A plain stack until the tabs overflow, so the room below them
             // still drags the window. Worked out, not measured: ViewThatFits
             // lays the rows out twice, on every page, on every change.
             let overflows =
                 Sidebar.rowsHeight(
-                    essentials: essentials.count, kept: kept.count, loose: loose.count, width: prefs.sideWidth, named: prefs.usesSpaces)
+                    essentials: essentials.count, kept: kept.count, loose: loose.count, width: prefs.sideWidth, named: browser.usesSpaces)
                 > room
             if !overflows {
                 listed(loose)

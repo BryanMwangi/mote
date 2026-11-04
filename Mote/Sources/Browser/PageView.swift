@@ -164,12 +164,54 @@ final class PageView: WKWebView {
                 menu.insertItem(ask(), at: index + 1)
             }
         }
+        linkItems(in: menu)
         // Extensions' items go last.
         guard #available(macOS 15.4, *), let tab = Extensions.shared.browser?.tab(for: self) else { return }
         let items = Extensions.shared.menuItems(for: tab)
         guard !items.isEmpty else { return }
         menu.addItem(.separator())
         items.forEach(menu.addItem)
+    }
+
+    /// On a link: WebKit's "Open Link in New Window" knows the link, so Mote's
+    /// items say where it goes, then send it on through WebKit's action (see
+    /// Browser+Links.swift), in Zen's order. "Download Linked File" is "Save
+    /// Link As…", as Firefox calls it.
+    private func linkItems(in menu: NSMenu) {
+        guard let open = menu.items.first(where: { $0.identifier?.rawValue == "WKMenuItemIdentifierOpenLinkInNewWindow" }),
+            let action = open.action, let browser = Windows.shared.all.first(where: { $0.tab(for: self) != nil }),
+            let at = menu.items.firstIndex(of: open)
+        else { return }
+        let target = open.target
+        let send = { (opening: LinkOpening) in
+            ActionItem("") {
+                browser.linkOpening = opening
+                NSApp.sendAction(action, to: target, from: open)
+            }
+        }
+        func item(_ title: String, _ opening: LinkOpening) -> NSMenuItem {
+            let made = send(opening)
+            made.title = title
+            return made
+        }
+        var items = [item("Open Link in New Tab", .tab(background: true))]
+        let others = browser.usesSpaces ? browser.spaces.filter { $0.id != browser.spaceID } : []
+        if !others.isEmpty {
+            let spaces = NSMenuItem(title: "Open Link in New Tab in Space", action: nil, keyEquivalent: "")
+            spaces.submenu = NSMenu()
+            for space in others { spaces.submenu?.addItem(item(space.name, .space(space.id))) }
+            items.append(spaces)
+        }
+        items += [
+            item("Open Link in New Window", .window(private: false)),
+            item("Open Link in New Private Window", .window(private: true)),
+            item("Open Link in Preview", .preview),
+            .separator(),
+            item("Bookmark Link…", .bookmark),
+        ]
+        menu.removeItem(open)
+        for (offset, made) in items.enumerated() { menu.insertItem(made, at: at + offset) }
+        menu.items.first { $0.identifier?.rawValue == "WKMenuItemIdentifierDownloadLinkedFile" }?.title = "Save Link As…"
     }
 
     /// The chat's way in from the page: the words under the pointer are quoted

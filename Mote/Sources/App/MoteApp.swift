@@ -47,7 +47,8 @@ private struct MenuBar: Commands {
         CommandGroup(replacing: .newItem) {
             Button("New Tab", action: browser.newTab).keyboardShortcut("t")
             Button("New Window") { Windows.shared.open(space: browser.spaceID) }.keyboardShortcut("n")
-            Button("New Private Tab", action: browser.newShyTab).keyboardShortcut("n", modifiers: [.command, .shift])
+            Button("New Private Window") { Windows.shared.open(private: true) }.keyboardShortcut("n", modifiers: [.command, .shift])
+            Button("New Private Tab", action: browser.newShyTab).keyboardShortcut("n", modifiers: [.command, .option, .shift])
             Button("Reopen Closed Tab") { browser.reopen() }.keyboardShortcut("t", modifiers: [.command, .shift]).disabled(
                 browser.ghosts.isEmpty)
             Divider()

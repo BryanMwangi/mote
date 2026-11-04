@@ -20,7 +20,7 @@ extension Browser {
     }
 
     func switchSpace(to id: UUID) {
-        if prefs.usesSpaces { enter(id) }
+        if usesSpaces { enter(id) }
     }
 
     func switchSpace(index: Int) {
@@ -71,7 +71,7 @@ extension Browser {
     /// Readies a space before it's shown, as Zen warms the tab it's about to
     /// select: its tab in front gets a page, so switching shows it at once.
     func warmSpace(_ id: UUID) {
-        guard prefs.usesSpaces, id != spaceID, let row = parked[id], let tab = row.active.flatMap({ id in row.tabs.first { $0.id == id } })
+        guard usesSpaces, id != spaceID, let row = parked[id], let tab = row.active.flatMap({ id in row.tabs.first { $0.id == id } })
         else { return }
         if !tab.wake() { tab.revive() }
     }
@@ -158,7 +158,7 @@ extension Browser {
     /// the other space's data, signed in only as that space is, and its back
     /// history stays behind.
     func move(_ tab: Tab, toSpace id: UUID) {
-        guard prefs.usesSpaces, id != spaceID, let to = spaces.first(where: { $0.id == id }),
+        guard usesSpaces, id != spaceID, let to = spaces.first(where: { $0.id == id }),
             let url = tab.pending ?? tab.address
         else { return }
         var row = parked[id] ?? loadRow(id)

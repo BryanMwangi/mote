@@ -174,6 +174,14 @@ final class Browser: NSObject, ObservableObject {
     /// tabs, saved under its id (see Windows.swift).
     let extra: Bool
     let windowID: UUID?
+    /// A private window (⇧⌘N): its tabs share one store that keeps nothing,
+    /// and it saves no session and shows no spaces.
+    let isPrivate: Bool
+    private(set) lazy var privateStore = WKWebsiteDataStore.nonPersistent()
+    /// Spaces show here: they're on, and this isn't a private window.
+    var usesSpaces: Bool { prefs.usesSpaces && !isPrivate }
+    /// Where the next link WebKit opens goes (see Browser+Links.swift).
+    var linkOpening: LinkOpening?
     /// The Touch Bar's buttons, on Macs that have one.
     private(set) lazy var touchBarItems = BrowserTouchBar(browser: self)
 
@@ -279,9 +287,10 @@ final class Browser: NSObject, ObservableObject {
     /// The main window's browser restores the session and starts what the app
     /// runs once; an `extra` one starts on `space` with its held tabs and a
     /// new tab.
-    init(extra: Bool = false, id: UUID? = nil, space: UUID? = nil) {
-        self.extra = extra
-        windowID = extra ? id ?? UUID() : nil
+    init(extra: Bool = false, id: UUID? = nil, space: UUID? = nil, isPrivate: Bool = false) {
+        self.extra = extra || isPrivate
+        self.isPrivate = isPrivate
+        windowID = extra || isPrivate ? id ?? UUID() : nil
         super.init()
         if !extra { startApp() }
 
@@ -309,7 +318,7 @@ final class Browser: NSObject, ObservableObject {
             }
             restoreSession()
         }
-        if prefs.usesSpaces { preloadSpaces() }
+        if usesSpaces { preloadSpaces() }
         follow()
         watchForSleep()
     }
@@ -347,6 +356,8 @@ final class Browser: NSObject, ObservableObject {
 
     /// Restores the current space's tabs, or opens one blank tab.
     func restoreSession() {
+        // A private window: one new private tab.
+        if isPrivate { return show(privateTab(), adopting: true) }
         // A window opened since the main one: the space's held tabs and a new tab.
         if extra {
             let parked = loadRow(spaceID)
@@ -483,6 +494,8 @@ final class Browser: NSObject, ObservableObject {
 
     /// Saves any space's row: this one, or one parked.
     func writeSession(now: Bool, space: UUID, tabs: [Tab], active: Tab.ID?) {
+        // A private window keeps nothing.
+        guard !isPrivate else { return }
         let entries = tabs.compactMap(entry(for:))
         HeldSync.saved(entries, in: space, by: self)
         // A window opened since the main one keeps only its open tabs.
@@ -588,6 +601,7 @@ final class Browser: NSObject, ObservableObject {
 
     func newTab() {
         // A new tab from a private tab is private too, so nothing leaks into history.
+        if isPrivate { return show(privateTab(), adopting: true) }
         if active?.shy == true { return newShyTab() }
         // Over a page, the floating search; a blank tab already is one.
         if prefs.newTabSearch, let active, !active.isStart { return launch() }
@@ -605,6 +619,7 @@ final class Browser: NSObject, ObservableObject {
 
     /// ⌘⇧N: a tab that keeps nothing.
     func newShyTab() {
+        if isPrivate { return show(privateTab(), adopting: true) }
         show(Tab(shy: true), adopting: true)
         announce("A tab that keeps nothing")
     }
@@ -627,7 +642,9 @@ final class Browser: NSObject, ObservableObject {
         let url = Browser.page(url)
         let page = Browser.extensionConfiguration(for: url)
         let tab =
-            if let source, source.shy, page == nil {
+            if isPrivate, page == nil {
+                privateTab()
+            } else if let source, source.shy, page == nil {
                 Tab(shy: true, configuration: Web.configuration(shy: true, store: source.store))
             } else {
                 Tab(configuration: page)

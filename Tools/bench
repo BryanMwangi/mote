@@ -59,6 +59,7 @@ COMMANDS = {
     "consent": ("[grant|revoke]", "test run: the bench switch's keychain mark, before and after"),
     "window": ("", "test run: open the browser's window if a hidden run came up without it"),
     "quit": ("", "test run: quit as the menu would, saving every window"),
+    "link": ("url where", "test run: open a link as the page menu would — tab, background, window, private, space, preview or bookmark"),
     "windows": ("[new | close N | front N]", "the browser windows, the front one marked; test run: open, close or bring one forward"),
     "pages": ("on|off", "test run: let a hidden run's pages paint, off every screen (for picture)"),
     "picture": ("path:path", "test run: the whole window, pages included, drawn to a PNG"),
