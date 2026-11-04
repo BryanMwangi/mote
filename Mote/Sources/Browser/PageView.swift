@@ -165,12 +165,32 @@ final class PageView: WKWebView {
             }
         }
         linkItems(in: menu)
+        pageItems(in: menu)
         // Extensions' items go last.
         guard #available(macOS 15.4, *), let tab = Extensions.shared.browser?.tab(for: self) else { return }
         let items = Extensions.shared.menuItems(for: tab)
         guard !items.isEmpty else { return }
         menu.addItem(.separator())
         items.forEach(menu.addItem)
+    }
+
+    /// On the page itself (after WebKit's Reload), as Zen's page menu: keep
+    /// it, save it, select it all, take a picture of it, ask about it.
+    private func pageItems(in menu: NSMenu) {
+        guard let reload = menu.items.first(where: { $0.identifier?.rawValue == "WKMenuItemIdentifierReload" }),
+            let at = menu.items.firstIndex(of: reload), let browser = Windows.shared.all.first(where: { $0.tab(for: self) != nil }),
+            let tab = browser.tab(for: self)
+        else { return }
+        let items: [NSMenuItem] = [
+            .separator(),
+            ActionItem("Bookmark Page…") { browser.bookmarkCurrent() },
+            ActionItem("Save Page As…") { browser.savePage() },
+            NSMenuItem(title: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: ""),
+            .separator(),
+            ActionItem("Take Screenshot") { tab.screenshot() },
+            ActionItem("Ask about This Page") { if !browser.chatting { browser.togglePageChat() } },
+        ]
+        for (offset, item) in items.enumerated() { menu.insertItem(item, at: at + 1 + offset) }
     }
 
     /// On a link: WebKit's "Open Link in New Window" knows the link, so Mote's

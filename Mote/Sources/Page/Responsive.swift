@@ -91,12 +91,16 @@ extension Tab {
         web.customUserAgent = device?.userAgent ?? ""
     }
 
-    /// A picture of the page at the device's size, into the downloads folder.
-    func screenshotDevice() {
-        guard let web = built, let device, let browser = owner as? Browser else { return }
+    /// A picture of what the page shows (at the device's width in
+    /// Responsive Design Mode), into the downloads folder.
+    func screenshot() {
+        guard let web = built, let browser = owner as? Browser else { return }
         let shot = WKSnapshotConfiguration()
-        shot.snapshotWidth = NSNumber(value: Double(device.width))
-        let name = "\(label) – \(device.name) \(Int(device.width))×\(Int(device.height)).png"
+        var name = "\(label) – screenshot.png"
+        if let device {
+            shot.snapshotWidth = NSNumber(value: Double(device.width))
+            name = "\(label) – \(device.name) \(Int(device.width))×\(Int(device.height)).png"
+        }
         let file = browser.downloadsFolder.appendingPathComponent(name.replacingOccurrences(of: "/", with: "-"))
         web.takeSnapshot(with: shot) { image, _ in
             MainActor.assumeIsolated {
@@ -165,7 +169,7 @@ struct DeviceBar: View {
         }
         .overlay(alignment: .trailing) {
             HStack(spacing: 2) {
-                Door(icon: "camera", help: "Screenshot") { tab.screenshotDevice() }
+                Door(icon: "camera", help: "Screenshot") { tab.screenshot() }
                 Door(icon: "xmark", help: "Leave Responsive Design Mode   ⌃⌘R") { tab.device = nil }
             }
         }

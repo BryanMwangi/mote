@@ -58,6 +58,9 @@ enum SpaceMenu {
                 Prompt.folder { browser.setSpaceDownloads(here.id, to: $0) }
             })
         if folder != nil { items.append(item("Use the Downloads Folder in Settings") { browser.setSpaceDownloads(here.id, to: nil) }) }
+        // As Zen's: their pages let go, the tabs kept.
+        items.append(item("Unload “\(here.name)”") { browser.unload(space: here.id) })
+        if browser.spaces.count > 1 { items.append(item("Unload Other Spaces") { browser.unloadOtherSpaces() }) }
         items.append(.separator())
         if here.isFirst {
             // Said rather than left out, so it doesn't look like a mistake.

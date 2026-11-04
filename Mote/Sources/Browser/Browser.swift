@@ -271,11 +271,11 @@ final class Browser: NSObject, ObservableObject {
         }
     }
 
-    private var row: TabRow<Tab> { TabRow(tabs, section: \.section) }
+    var row: TabRow<Tab> { TabRow(tabs, section: \.section) }
 
     /// Changes the tab order under `TabRow`'s rules.
     @discardableResult
-    private func reorder<Result>(_ change: (inout TabRow<Tab>) -> Result) -> Result {
+    func reorder<Result>(_ change: (inout TabRow<Tab>) -> Result) -> Result {
         var next = row
         let result = change(&next)
         if next.tabs.map(\.id) != tabs.map(\.id) { tabs = next.tabs }

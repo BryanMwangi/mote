@@ -113,6 +113,7 @@ extension Bench {
         let tab = { (id: String) in browser.tabs.first { $0.id.uuidString.lowercased().hasPrefix(id.lowercased()) } }
         if Storage.testing, let id = request.string("essential"), let found = tab(id) { browser.pin(found) }
         if Storage.testing, let id = request.string("unessential"), let found = tab(id) { browser.unpin(found) }
+        if Storage.testing, let id = request.string("newwindow"), let found = tab(id) { browser.moveToNewWindow(found) }
         // Responsive Design Mode for the tab in front: a preset's name, or off.
         if let name = request.string("device") { browser.active?.device = DeviceList.shared.device(named: name) }
         if #available(macOS 15.4, *), let on = request.bool("extensions") { Extensions.shared.menuOpen = on }

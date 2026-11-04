@@ -144,7 +144,12 @@ struct TabMenu: View {
     let close: () -> Void
 
     var body: some View {
+        // In Zen's order.
+        Button("Reload Tab") { tab.reload() }.disabled(tab.isBlank)
+        Button(tab.muted ? "Unmute Tab" : "Mute Tab") { tab.toggleMute() }
+        Divider()
         TabHoldItems(browser: browser, tab: tab)
+        Button("Unload Tab") { browser.sleep(tab) }.disabled(tab.isBlank || tab.asleep)
         if browser.usesSpaces, browser.spaces.count > 1 {
             Menu("Move to Space") {
                 ForEach(browser.spaces.filter { $0.id != browser.spaceID }) { space in
@@ -166,11 +171,16 @@ struct TabMenu: View {
             }
             Button("Copy Address") { onThisTab(browser.copyAddress) }
             Button("Copy as Markdown Link") { onThisTab(browser.copyMarkdownLink) }
+            Divider()
+            Button("Bookmark Tab…") { onThisTab(browser.bookmarkCurrent) }
+            Button("Share…") { onThisTab(browser.share) }
         }
         .disabled(tab.isBlank)
-        Button(tab.muted ? "Unmute Tab" : "Mute Tab") { tab.toggleMute() }
+        Button("Move to New Window") { browser.moveToNewWindow(tab) }.disabled(tab.held || browser.tabs.count < 2)
         Divider()
         Button("Close Tab", action: close)
+        Button("Close Duplicate Tabs") { browser.closeDuplicates(of: tab) }.disabled(tab.isBlank)
+        Button("Close Tabs Below") { browser.closeTabs(below: tab) }.disabled(browser.tabs.last === tab)
         Button("Close Other Tabs") { browser.closeOthers(but: tab) }.disabled(browser.tabs.count < 2)
         Button("Reopen Closed Tab") { browser.reopen() }.disabled(browser.ghosts.isEmpty)
     }
