@@ -146,8 +146,11 @@ final class PageView: WKWebView {
 
     override func willOpenMenu(_ menu: NSMenu, with event: NSEvent) {
         super.willOpenMenu(menu, with: event)
-        // Where it was opened, for what hangs from the link (Share).
-        menuSpot = NSRect(origin: convert(event.locationInWindow, from: nil), size: .zero).insetBy(dx: -2, dy: -2)
+        // Where it was opened, for what hangs from the link (Share), then the
+        // link's own box, as Safari hangs its share picker from it.
+        let click = convert(event.locationInWindow, from: nil)
+        menuSpot = NSRect(origin: click, size: .zero).insetBy(dx: -2, dy: -2)
+        findLinkBox(at: click)
         // No Services: macOS's list does nothing useful for what's under the pointer.
         menu.allowsContextMenuPlugIns = false
         for item in menu.items where item.submenu != nil && item.submenu === NSApp.servicesMenu { menu.removeItem(item) }
@@ -245,7 +248,12 @@ final class PageView: WKWebView {
             item("Open Link in Preview", .preview),
             .separator(),
             item("Bookmark Link…", .bookmark),
-            item("Share Link…", .share(at: menuSpot, in: self)),
+            // Where the link is, as known when it's picked: the page answers after the menu opens.
+            ActionItem("Share Link…") { [weak self] in
+                guard let self else { return }
+                browser.linkOpening = .share(at: menuSpot, in: self)
+                NSApp.sendAction(action, to: target, from: open)
+            },
         ]
         // WebKit's own Share hangs its picker from the middle of the page.
         for share in menu.items where share.identifier?.rawValue == "WKMenuItemIdentifierShareMenu" { menu.removeItem(share) }
@@ -292,8 +300,28 @@ final class PageView: WKWebView {
         super.mouseDown(with: event)
     }
 
-    /// Where the page's menu was last opened, in this view.
+    /// Where the page's menu was last opened, in this view: the link's box
+    /// once the page has said, a little apart from it.
     private var menuSpot = NSRect.zero
+
+    private static let linkBox = """
+        const hit = document.elementFromPoint(x, y);
+        const link = hit && hit.closest("a[href]");
+        if (!link) return null;
+        const box = link.getBoundingClientRect();
+        return [box.left, box.top, box.width, box.height];
+        """
+
+    private func findLinkBox(at click: NSPoint) {
+        let scale = pageZoom * magnification
+        let css = NSPoint(x: click.x / scale, y: (isFlipped ? click.y : bounds.height - click.y) / scale)
+        callAsyncJavaScript(Self.linkBox, arguments: ["x": css.x, "y": css.y], in: nil, in: .defaultClient) { [weak self] result in
+            guard let self, let box = (try? result.get()) as? [Double], box.count == 4 else { return }
+            let height = box[3] * scale
+            let y = isFlipped ? box[1] * scale : bounds.height - box[1] * scale - height
+            menuSpot = NSRect(x: box[0] * scale, y: y, width: box[2] * scale, height: height).insetBy(dx: 0, dy: -4)
+        }
+    }
 
     // MARK: - Touch (Responsive Design Mode)
 
