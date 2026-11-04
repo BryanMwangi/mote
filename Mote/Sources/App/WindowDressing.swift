@@ -3,8 +3,9 @@ import MoteCore
 
 @MainActor
 enum WindowDressing {
-    static func dress(_ window: NSWindow) {
-        AppDelegate.window = window
+    /// `main`: the main window, the one the Dock and links bring back.
+    static func dress(_ window: NSWindow, main: Bool = true) {
+        if main { AppDelegate.window = window }
         window.titlebarAppearsTransparent = true
         window.titleVisibility = .hidden
         window.isOpaque = false

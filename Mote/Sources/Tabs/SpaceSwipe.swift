@@ -33,12 +33,14 @@ final class SpaceSwipe {
     }
 
     private func overTabs(_ event: NSEvent, in browser: Browser) -> Bool {
-        guard let window = event.window, window === AppDelegate.window else { return false }
+        guard let window = event.window, window === browser.window else { return false }
         let at = event.locationInWindow
         return browser.prefs.sidebar ? at.x < browser.prefs.sideWidth : at.y > window.frame.height - ChromeLayout.strip
     }
 
     private func keeps(_ event: NSEvent) -> Bool {
+        // The window under the gesture; not mid-swipe, which stays with its window.
+        if !gate.tracking, let owner = Windows.shared.browser(for: event.window) { browser = owner }
         guard let browser, browser.prefs.usesSpaces, !browser.folded || browser.peeking else { return false }
         guard event.hasPreciseScrollingDeltas else { return wheel(event, in: browser) }
         switch gate.verdict(Self.phase(of: event), over: overTabs(event, in: browser)) {

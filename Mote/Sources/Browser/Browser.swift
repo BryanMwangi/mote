@@ -168,6 +168,11 @@ final class Browser: NSObject, ObservableObject {
     /// The most recently active window. macOS stops reporting a main window
     /// once the app is in the background.
     static weak var front: Browser?
+    /// This browser's window, once it has one.
+    weak var window: NSWindow?
+    /// A window opened after the main one (⌘N, a link): it starts with a new
+    /// tab and saves no session yet (see Windows.swift).
+    let extra: Bool
     /// The Touch Bar's buttons, on Macs that have one.
     private(set) lazy var touchBarItems = BrowserTouchBar(browser: self)
 
@@ -270,8 +275,45 @@ final class Browser: NSObject, ObservableObject {
 
     // MARK: - Starting
 
-    override init() {
+    /// The main window's browser restores the session and starts what the app
+    /// runs once; an `extra` one starts on `space` with its held tabs and a
+    /// new tab.
+    init(extra: Bool = false, space: UUID? = nil) {
+        self.extra = extra
         super.init()
+        if !extra { startApp() }
+
+        field.suggest = { [weak self] typed, switching in self?.suggestions(for: typed, switching: switching) ?? ([], nil) }
+        finder.page = { [weak self] in self?.active?.web }
+
+        // Views read bookmarks and preferences through this object, so pass on
+        // their changes. Not history's: it changes on every page loaded and
+        // titled, and only the menu bar shows it, which watches it itself.
+        for source in [bookmarks.objectWillChange, prefs.objectWillChange] {
+            source.sink { [weak self] in self?.objectWillChange.send() }.store(in: &bag)
+        }
+        wireFloater()
+        $activeID.dropFirst().sink { [weak self] _ in self?.notePlayingSoon() }.store(in: &bag)
+
+        if extra {
+            if let space, spaces.contains(where: { $0.id == space }) { spaceID = space }
+            restoreSession()
+        } else {
+            if prefs.usesSpaces, let last = Storage.settings.string(forKey: "space.current").flatMap(UUID.init),
+                spaces.contains(where: { $0.id == last })
+            {
+                spaceID = last
+                Spaces.current = last
+            }
+            restoreSession()
+        }
+        if prefs.usesSpaces { preloadSpaces() }
+        follow()
+        watchForSleep()
+    }
+
+    /// What the app starts once, with its first window.
+    private func startApp() {
         AdBlocker.shared.enabled = prefs.shielded
         AdBlocker.shared.compile()
         if #available(macOS 15.4, *) { Extensions.shared.start(for: self) }
@@ -283,38 +325,32 @@ final class Browser: NSObject, ObservableObject {
         welcoming = !prefs.welcomed
         Updater.shared.checkIfDue { [weak self] news in self?.tell(news) }
         FormRelay.passkeysOffered = prefs.passkeys
-
-        field.suggest = { [weak self] typed, switching in self?.suggestions(for: typed, switching: switching) ?? ([], nil) }
-        finder.page = { [weak self] in self?.active?.web }
-
-        // Views read bookmarks and preferences through this object, so pass on
-        // their changes. Not history's: it changes on every page loaded and
-        // titled, and only the menu bar shows it, which watches it itself.
-        for source in [bookmarks.objectWillChange, prefs.objectWillChange] {
-            source.sink { [weak self] in self?.objectWillChange.send() }.store(in: &bag)
+        Favicons.shared.arrived = { host, image in
+            for tab in Windows.shared.all.flatMap(\.tabs) where tab.address?.host()?.lowercased() == host { tab.icon = image }
         }
-        Favicons.shared.arrived = { [weak self] host, image in
-            for tab in self?.tabs ?? [] where tab.address?.host()?.lowercased() == host { tab.icon = image }
-        }
-        wireFloater()
-        $activeID.dropFirst().sink { [weak self] _ in self?.notePlayingSoon() }.store(in: &bag)
-
         Spaces.sweep()
         Spaces.sharing = SpaceList(saved: spaces).sharing
-        if prefs.usesSpaces, let last = Storage.settings.string(forKey: "space.current").flatMap(UUID.init),
-            spaces.contains(where: { $0.id == last })
-        {
-            spaceID = last
-            Spaces.current = last
+    }
+
+    /// A space's essentials and pinned tabs, from its saved session, asleep:
+    /// what a new window shows of it.
+    func heldTabs(of space: UUID) -> [Tab] {
+        Session.read(space: space).tabs.filter { $0.pin != nil || $0.kept == true }.compactMap { entry -> Tab? in
+            let tab = Tab(configuration: Web.configuration(space: space))
+            return restore(entry, in: tab) ? tab : nil
         }
-        restoreSession()
-        if prefs.usesSpaces { preloadSpaces() }
-        follow()
-        watchForSleep()
     }
 
     /// Restores the current space's tabs, or opens one blank tab.
     func restoreSession() {
+        // A window opened since the main one: the space's held tabs and a new tab.
+        if extra {
+            let blank = Tab()
+            showRow(heldTabs(of: spaceID), active: nil)
+            adopt(blank)
+            activeID = blank.id
+            return
+        }
         let saved = Session.read(space: spaceID)
         let restored = saved.tabs.compactMap { entry -> Tab? in
             let tab = Tab()
@@ -352,6 +388,7 @@ final class Browser: NSObject, ObservableObject {
         }
         on(prefs.$look) { browser, _ in browser.refreshIconsSoon() }
         on(prefs.$bench) { browser, on in
+            guard !browser.extra else { return }
             if on { Bench.shared.start(for: browser) } else { Bench.shared.stop() }
             browser.announce(on ? "Scripts can drive Mote — see ./bench" : "The bench is closed")
         }
@@ -435,6 +472,8 @@ final class Browser: NSObject, ObservableObject {
 
     /// Saves any space's row: this one, or one parked.
     func writeSession(now: Bool, space: UUID, tabs: [Tab], active: Tab.ID?) {
+        // Windows opened since the main one don't save theirs yet.
+        guard !extra else { return }
         Session.write(now: now, space: space, .init(tabs: tabs.compactMap(entry(for:)), active: tabs.firstIndex { $0.id == active } ?? 0))
     }
 
@@ -729,6 +768,10 @@ final class Browser: NSObject, ObservableObject {
     /// Builds a space's row from its saved session without touching the
     /// current one. Its tabs wait and cost little until opened.
     func loadRow(_ space: UUID) -> Parked {
+        if extra {
+            let held = heldTabs(of: space)
+            return Parked(tabs: held, active: held.first?.id)
+        }
         let saved = Session.read(space: space)
         let row = saved.tabs.compactMap { entry -> Tab? in
             let tab = Tab(configuration: Web.configuration(space: space))

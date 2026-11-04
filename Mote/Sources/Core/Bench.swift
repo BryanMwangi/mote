@@ -227,7 +227,8 @@ final class Bench {
         guard let command = commands[request.verb] else {
             return answer(["error": "unknown command “\(request.verb)”", "commands": commands.keys.sorted()])
         }
-        command(BenchCall(request: request, browser: browser, bench: self, answer: answer))
+        // The window in front, as the menus do.
+        command(BenchCall(request: request, browser: Browser.front ?? browser, bench: self, answer: answer))
     }
 }
 

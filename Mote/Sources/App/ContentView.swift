@@ -9,6 +9,7 @@ struct ContentView: View {
 
     @State private var window: NSWindow?
     @State private var keys = KeyRouter()
+    @Environment(\.openWindow) private var openWindow
 
     /// Runs a key through the window's shortcuts, for the bench.
     static var keyHook: ((NSEvent) -> NSEvent?)?
@@ -34,7 +35,8 @@ struct ContentView: View {
             .background(
                 WindowSetup {
                     window = $0
-                    WindowDressing.dress($0)
+                    browser.window = $0
+                    WindowDressing.dress($0, main: !browser.extra)
                     $0.touchBar = browser.touchBarItems.make()
                     arrive()
                 }
@@ -48,7 +50,11 @@ struct ContentView: View {
                 browser.appBack()
             }
             .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { note in
-                if let window, note.object as? NSWindow === window { Browser.front = browser }
+                guard let window, note.object as? NSWindow === window else { return }
+                Browser.front = browser
+                Spaces.current = browser.spaceID
+                // The bench's keys go to the window in front.
+                Self.keyHook = { [keys] in keys.route($0) }
             }
             .onChange(of: browser.fieldShowing) { _, showing in
                 if showing { Task { @MainActor in browser.field.askFocus() } } else { keyboardToPage() }
@@ -63,10 +69,17 @@ struct ContentView: View {
                 keys.start(for: browser)
                 Self.keyHook = { [keys] in keys.route($0) }
                 browser.field.askFocus()
+                Windows.shared.opener = { [openWindow] in openWindow(id: "window", value: $0) }
+                // The rest belongs to the main window, as before there were others.
+                guard !browser.extra else { return }
+                Windows.shared.main = browser
                 AppDelegate.hand(to: browser)
                 SettingsWindow.watch(browser)
                 BookmarkMenu.shared.start(for: browser)
             }
+            // A window opened since the main one takes its tabs with it.
+            .onDisappear { Windows.shared.closed(browser) }
+            .focusedSceneObject(browser)
     }
 
     @ViewBuilder

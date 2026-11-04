@@ -34,6 +34,11 @@ final class KeyRouter {
     }
 
     private func take(_ event: NSEvent) -> Bool {
+        // Every window has a router, and each takes its own window's keys; the
+        // main window's also takes those of the small windows below.
+        let owner = Windows.shared.browser(for: event.window)
+        if let owner, owner !== browser { return false }
+        if owner == nil, browser?.extra == true { return false }
         // The small link window and Settings have keys of their own.
         if let little = LinkWindow.owning(event.window) { return little.take(event) }
         if let settings = SettingsWindow.owning(event.window) { return settings.take(event) }

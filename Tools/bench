@@ -58,6 +58,7 @@ COMMANDS = {
     "space": ("[space…]", "test run: the spaces; new NAME [fresh], go N, delete, swipe DX, hold DX, release, move N"),
     "consent": ("[grant|revoke]", "test run: the bench switch's keychain mark, before and after"),
     "window": ("", "test run: open the browser's window if a hidden run came up without it"),
+    "windows": ("[new | close N | front N]", "the browser windows, the front one marked; test run: open, close or bring one forward"),
     "pages": ("on|off", "test run: let a hidden run's pages paint, off every screen (for picture)"),
     "picture": ("path:path", "test run: the whole window, pages included, drawn to a PNG"),
     "frames": ("[fold|peek|unpeek|scroll|chat|chatdown|tab|space] [seconds:float]", "test run: run that animation and time the frames drawn — missed ones"),
@@ -150,6 +151,16 @@ def read_site(args):
     if not 1 <= len(args) <= 2:
         sys.exit(usage("site"))
     return {"path": os.path.abspath(args[0]), **({"security": args[1] == "security"} if len(args) == 2 else {})}
+
+
+def read_windows(args):
+    if not args:
+        return {}
+    if args[0] == "new" and len(args) == 1:
+        return {"action": "new"}
+    if args[0] in ("close", "front") and len(args) == 2:
+        return {"action": args[0], "index": int(args[1])}
+    sys.exit(usage("windows"))
 
 
 def read_space(args):
@@ -259,6 +270,7 @@ READERS = {
     "eval": read_eval,
     "site": read_site,
     "space": read_space,
+    "windows": read_windows,
     "ui": read_ui,
     "hit": read_hit,
     "field": read_words("field", ("text",), ("type", "go")),

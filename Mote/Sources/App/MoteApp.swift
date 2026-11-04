@@ -14,21 +14,39 @@ struct MoteApp: App {
         }
         .windowStyle(.hiddenTitleBar)
         .defaultSize(width: 1180, height: 780)
-        .commands { MenuBar(browser: browser, visits: browser.history) }
+        .commands { MenuBar(main: browser, visits: browser.history) }
+
+        // Windows opened since the main one (⌘N, a link), each with its own
+        // browser (Windows.swift). They come back at launch through the
+        // session, not macOS.
+        WindowGroup(id: "window", for: UUID.self) { $id in
+            if let id, let browser = Windows.shared.browser(for: id) {
+                ContentView(browser: browser).frame(minWidth: 640, minHeight: 420)
+            } else {
+                // One macOS brought back from a past launch, with no browser behind it.
+                WindowSetup { $0.close() }
+            }
+        }
+        .windowStyle(.hiddenTitleBar)
+        .defaultSize(width: 1180, height: 780)
     }
 }
 
-/// The menu bar. One window, so "New" makes tabs.
+/// The menu bar, for the window in front, or the main one.
 private struct MenuBar: Commands {
-    @ObservedObject var browser: Browser
+    @ObservedObject var main: Browser
+    @FocusedObject private var focused: Browser?
     /// For Recently Visited; the browser doesn't pass on its changes.
     @ObservedObject var visits: History
+
+    private var browser: Browser { focused ?? main }
 
     private var blank: Bool { browser.active?.isBlank ?? true }
 
     var body: some Commands {
         CommandGroup(replacing: .newItem) {
             Button("New Tab", action: browser.newTab).keyboardShortcut("t")
+            Button("New Window") { Windows.shared.open(space: browser.spaceID) }.keyboardShortcut("n")
             Button("New Private Tab", action: browser.newShyTab).keyboardShortcut("n", modifiers: [.command, .shift])
             Button("Reopen Closed Tab") { browser.reopen() }.keyboardShortcut("t", modifiers: [.command, .shift]).disabled(
                 browser.ghosts.isEmpty)

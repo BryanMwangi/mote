@@ -10,7 +10,7 @@ extension Bench {
     var chromeCommands: [String: Command] {
         [
             "probe": Self.probe, "ui": Self.ui, "consent": Self.consent, "little": Self.little, "space": Self.space, "peek": Self.peek,
-            "window": Self.window,
+            "window": Self.window, "windows": Self.windows,
         ]
     }
 
@@ -217,6 +217,33 @@ extension Bench {
     }
 
     /// The browser window, through the Window menu, when a hidden launch has none.
+    /// The browser windows, the front one marked; `new` opens one, `close N`
+    /// and `front N` close it or bring it forward (test runs).
+    private static func windows(_ call: BenchCall) {
+        let request = call.request
+        let all = { Windows.shared.all }
+        if let action = request.string("action") {
+            guard call.testRun() else { return }
+            let index = (request.int("index") ?? 1) - 1
+            switch action {
+            case "new": Windows.shared.open()
+            case "close": if all().indices.contains(index) { all()[index].window?.performClose(nil) }
+            case "front": if all().indices.contains(index) { all()[index].window?.makeKeyAndOrderFront(nil) }
+            default: break
+            }
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+            call.answer([
+                "windows": all().enumerated().map { index, browser in
+                    [
+                        "index": index + 1, "front": browser === Browser.front, "extra": browser.extra, "space": browser.space.name,
+                        "tabs": browser.tabs.map { $0.address?.host() ?? "blank" }, "shown": browser.window?.isVisible ?? false,
+                    ] as [String: Any]
+                }
+            ])
+        }
+    }
+
     private static func window(_ call: BenchCall) {
         guard call.testRun() else { return }
         if AppDelegate.window?.contentView != nil, NSApp.windows.contains(where: { $0 === AppDelegate.window }) {

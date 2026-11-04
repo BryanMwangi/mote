@@ -48,8 +48,9 @@ extension Browser {
             parked[spaceID] = Parked(tabs: tabs, active: activeID)
 
             spaceID = id
-            Spaces.current = id
-            Storage.settings.set(id.uuidString, forKey: "space.current")
+            // The app's current space is the front window's; the main window's is the one kept.
+            if Browser.front === self || Browser.front == nil { Spaces.current = id }
+            if !extra { Storage.settings.set(id.uuidString, forKey: "space.current") }
             if let back = parked.removeValue(forKey: id), !back.tabs.isEmpty {
                 showRow(back.tabs, active: back.active)
                 if let active, !active.wake() { active.revive() }
