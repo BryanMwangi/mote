@@ -34,8 +34,8 @@ final class BrowserTouchBar: NSObject, NSTouchBarDelegate {
     func make() -> NSTouchBar {
         let bar = NSTouchBar()
         bar.delegate = self
-        bar.defaultItemIdentifiers = [Self.navigationID, Self.reloadID, .flexibleSpace, Self.addressID, .flexibleSpace, Self.newTabID]
-        bar.principalItemIdentifier = Self.addressID
+        // No spacers: the address button stretches to fill the room left.
+        bar.defaultItemIdentifiers = [Self.navigationID, Self.reloadID, Self.addressID, Self.newTabID]
         return bar
     }
 
@@ -70,13 +70,18 @@ final class BrowserTouchBar: NSObject, NSTouchBarDelegate {
                 self?.browser?.edit()
             }
             button.imageHugsTitle = true
-            let wide = button.widthAnchor.constraint(equalToConstant: 560)
-            wide.priority = .defaultHigh
-            wide.isActive = true
+            // Sized by the bar, not by a number: as wide as the room left
+            // allows, and no narrower than its text needs to stay readable.
+            button.setContentHuggingPriority(.init(1), for: .horizontal)
+            button.setContentCompressionResistancePriority(.init(250), for: .horizontal)
+            button.widthAnchor.constraint(greaterThanOrEqualToConstant: 200).isActive = true
             item.view = button
+            item.visibilityPriority = .high
             item.customizationLabel = "Address"
         case Self.reloadID:
             item.view = ActionButton(title: "", symbol: "arrow.clockwise", label: "Reload") { [weak self] in self?.browser?.reload() }
+            // The first to go when the bar is short of room.
+            item.visibilityPriority = .low
             item.customizationLabel = "Reload"
         case Self.fullScreenID:
             let full = browser?.active?.immersed == true
@@ -96,6 +101,7 @@ final class BrowserTouchBar: NSObject, NSTouchBarDelegate {
             item.view = ActionButton(title: "", symbol: "plus.square.on.square", label: "New Tab") { [weak self] in
                 self?.browser?.newTab()
             }
+            item.visibilityPriority = .high
             item.customizationLabel = "New Tab"
         default:
             return nil
@@ -122,10 +128,17 @@ final class BrowserTouchBar: NSObject, NSTouchBarDelegate {
         watches.append(tab.$canGoBack.merge(with: tab.$canGoForward).sink { [weak self] _ in Task { @MainActor in self?.showWhereToGo() } })
         // Video starting or stopping, or full screen: the page checks whether
         // its bar should change, and asks for it again only if so.
+        // WebKit decides about its playback controls a moment after full
+        // screen ends, without telling anyone, so while the tab has media
+        // it's asked again each second too. Asking is cheap; the bar is only
+        // made again when the answer changes.
         let media = Publishers.Merge3(
             tab.$media.map { _ in () }, tab.$noisy.map { _ in () }, tab.$immersed.map { _ in () })
+        let ticks = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
+            .filter { [weak tab] _ in tab?.media != nil || tab?.noisy == true || tab?.immersed == true }
+            .map { _ in () }
         watches.append(
-            media.debounce(for: .milliseconds(200), scheduler: DispatchQueue.main).sink { [weak tab] in
+            media.debounce(for: .milliseconds(200), scheduler: DispatchQueue.main).merge(with: ticks).sink { [weak tab] in
                 guard let tab, let page = tab.built as? PageView else { return }
                 page.refreshTouchBar(immersed: tab.immersed)
             })
