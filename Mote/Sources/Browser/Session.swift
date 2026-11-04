@@ -22,6 +22,8 @@ enum Session {
     nonisolated struct Saved: Codable, Sendable {
         var tabs: [Entry]
         var active: Int
+        /// Split views, by their tabs' places in `tabs`; nil in older files.
+        var splits: [SplitLayout<Int>]? = nil
 
         static let empty = Saved(tabs: [], active: 0)
     }

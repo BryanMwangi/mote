@@ -39,7 +39,7 @@ extension Browser {
     /// Why a tab has to stay awake, or nil. Idle time is the caller's to check.
     func awake(because tab: Tab) -> String? {
         var facts = TabSleep.Facts()
-        facts.onScreen = tab.id == activeID
+        facts.onScreen = tab.id == activeID || shownSplit?.contains(tab.id) == true
         facts.pinned = tab.held
         facts.bench = tab.bench
         facts.blank = tab.isBlank

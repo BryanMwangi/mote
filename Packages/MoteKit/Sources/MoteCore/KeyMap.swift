@@ -36,6 +36,9 @@ public enum KeyMap {
         case hideElements, hiddenElements, undoHiding
         case zoomIn, zoomOut, actualSize
         case inspector
+        /// Split view, as Zen's keys: the tab in front with the one before it,
+        /// or its group, laid out so; or the group undone.
+        case split(SplitGrid), unsplit
     }
 
     public static let escape: UInt16 = 53
@@ -50,6 +53,9 @@ public enum KeyMap {
 
     /// The J key, by position.
     public static let jKey: UInt16 = 38
+
+    /// ⌃⌥G, V, H and U, by position, as Zen's split view keys.
+    public static let splitKeys: [UInt16: Command] = [5: .split(.grid), 9: .split(.across), 4: .split(.down), 32: .unsplit]
 
     /// ⌘J in a new tab's composer: Return asks the assistant instead of
     /// searching, or searches again.
@@ -72,6 +78,7 @@ public enum KeyMap {
         }
         // F12 opens and closes the Web Inspector, as in Chrome, Firefox and Zen.
         if press.code == f12, !press.command, !press.option, !press.control, !press.shift { return .inspector }
+        if press.control, press.option, !press.command, !press.shift, let split = splitKeys[press.code] { return split }
         guard press.command, !press.option, !press.control else { return nil }
         if !press.shift, let number = digits[press.code] {
             return number == 0 ? .actualSize : number == 9 ? .lastTab : .tab(number - 1)

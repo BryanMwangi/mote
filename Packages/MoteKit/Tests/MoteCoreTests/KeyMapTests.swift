@@ -27,6 +27,17 @@ struct KeyMapTests {
         #expect(!KeyMap.switchesAsking(KeyMap.Press(key: "j", code: KeyMap.jKey), inComposer: true))
     }
 
+    @Test("⌃⌥G, V, H split as Zen's keys do, and ⌃⌥U unsplits, whatever the layout types")
+    func splitKeys() {
+        let press = { (code: UInt16) in command("©", code, command: false, option: true, control: true) }
+        #expect(press(5) == .split(.grid))
+        #expect(press(9) == .split(.across))
+        #expect(press(4) == .split(.down))
+        #expect(press(32) == .unsplit)
+        #expect(command("g", 5, command: false, control: true) == nil)
+        #expect(command("g", 5, option: true, control: true) == nil)
+    }
+
     @Test("F12 opens the Web Inspector; with a modifier it's left alone")
     func f12() {
         #expect(command("", KeyMap.f12, command: false) == .inspector)

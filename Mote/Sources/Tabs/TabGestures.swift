@@ -7,6 +7,10 @@ import SwiftUI
 /// across the pin grid (see ReorderDrag). The held tab follows the pointer
 /// and the tabs it passes step aside; the order changes on letting go, when
 /// the held tab eases from where it was dropped into its new place.
+///
+/// An open tab can go further (`away`): over the page its row holds still, a
+/// card of it follows the pointer and the page shows where it would split
+/// in; out of the window, it goes to another window or a new one.
 struct Reorderable: ViewModifier {
     let id: Tab.ID
     let index: Int
@@ -20,11 +24,9 @@ struct Reorderable: ViewModifier {
     @Binding var drag: ReorderDrag<Tab.ID>?
     /// The leading edge reserved for window controls, when dragging along a strip.
     var leadingLimit: CGFloat? = nil
-    /// Let go outside the window: the tab leaves for another window, or a new
-    /// one (Browser.drop). Open tabs only: essentials and pinned tabs are the space's.
-    var dropOutside: (() -> Void)? = nil
-    /// What the tab shows while it's dragged outside its window (TabGhost).
-    var title = ""
+    /// The open tab, which may leave its list for the page or another window
+    /// (see DragZone). Essentials and pinned tabs are the space's, and stay.
+    var away: (browser: Browser, tab: Tab)? = nil
     let move: (Int) -> Void
     @State private var originX: CGFloat?
 
@@ -56,17 +58,26 @@ struct Reorderable: ViewModifier {
             }
     }
 
+    /// Where the pointer is, for a tab that may leave its list; a scripted
+    /// drag stays in it.
+    private var zone: DragZone {
+        guard let away, ScriptedDrag.shared.tab == nil else { return .list }
+        return away.browser.zone(dragging: away.tab, at: NSEvent.mouseLocation)
+    }
+
     private func changed(_ travel: CGSize) {
-        // Outside the window the row can't follow: a card of it does, so where
-        // it's going shows.
-        if dropOutside != nil, let window = NSApp.keyWindow {
-            let pointer = NSEvent.mouseLocation
-            if window.frame.contains(pointer) { TabGhost.hide() } else { TabGhost.show(title, at: pointer) }
-        }
         // A tab still easing home is done; one held elsewhere keeps the drag.
         if drag?.landed == true { drag = nil }
         if let drag, drag.id != id { return }
         var next = drag ?? ReorderDrag(id: id, start: index)
+        // Away from the list the row can't follow: it holds still, and a card
+        // of it does, so where it's going shows.
+        if let away, zone != .list {
+            TabGhost.show(away.tab.label, at: NSEvent.mouseLocation)
+            if drag == nil { drag = next }
+            return
+        }
+        TabGhost.hide()
         let before = next.target
         var bounded = travel
         if let leadingLimit, let originX { bounded.width = max(leadingLimit - originX, bounded.width) }
@@ -81,9 +92,9 @@ struct Reorderable: ViewModifier {
     private func ended() {
         TabGhost.hide()
         guard var landing = drag, landing.id == id, !landing.landed else { return }
-        if let dropOutside, let window = NSApp.keyWindow, !window.frame.contains(NSEvent.mouseLocation) {
-            drag = nil
-            return dropOutside()
+        if let away, case let zone = zone, zone != .list {
+            withAnimation(Motion.settle) { drag = nil }
+            return zone == .page ? away.browser.dropOnPage(away.tab) : away.browser.drop(away.tab)
         }
         landing.land()
         // The new order and the offsets that keep every tab where it is on

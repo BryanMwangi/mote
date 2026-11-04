@@ -53,6 +53,16 @@ extension Bench {
             out["barZones"] = KeepZone.views.allObjects.filter { $0.window === window }.map {
                 BenchCall.topLeft($0.convert($0.bounds, to: nil), in: window.contentLayoutRect.height)
             }
+            // The split view's panes, by tab, from the window's top left.
+            out["splits"] = browser.splits.values.map { $0.ids.map { String($0.uuidString.lowercased().prefix(8)) } }
+            if let stage = browser.stageView, let active = browser.activeID {
+                let frames = (browser.shownSplit ?? SplitLayout(active)).frames(in: stage.bounds, gap: Browser.splitGap)
+                out["panes"] = Dictionary(
+                    uniqueKeysWithValues: frames.map { id, frame in
+                        let shown = stage.convert(frame, to: nil)
+                        return (String(id.uuidString.lowercased().prefix(8)), BenchCall.topLeft(shown, in: window.contentLayoutRect.height))
+                    })
+            }
             if let content = window.contentView {
                 let card = browser.layout(in: content.bounds.size).card
                 out["card"] = [Int(card.minX), Int(card.minY), Int(card.width), Int(card.height)]
@@ -115,6 +125,17 @@ extension Bench {
         if Storage.testing, let id = request.string("unessential"), let found = tab(id) { browser.unpin(found) }
         if Storage.testing, let id = request.string("newwindow"), let found = tab(id) { browser.moveToNewWindow(found) }
         if Storage.testing, let id = request.string("source"), let found = tab(id) { browser.viewSource(of: found) }
+        // Split view (test runs): TAB:SIDE beside the tab in front, a layout, or undone.
+        if Storage.testing, let what = request.string("split") {
+            let parts = what.split(separator: ":").map(String.init)
+            if let found = tab(parts[0]), let side = parts.last.flatMap(SplitSide.init(rawValue:)), let active = browser.active {
+                browser.split(found, beside: active, side: side)
+            } else if let grid = SplitGrid(rawValue: what), let group = browser.activeID.flatMap(browser.group(of:)) {
+                browser.relayout(group, grid)
+            } else if what == "off", let group = browser.activeID.flatMap(browser.group(of:)) {
+                browser.unsplit(group: group)
+            }
+        }
         // Responsive Design Mode for the tab in front: a preset's name, or off.
         if let name = request.string("device") { browser.active?.device = DeviceList.shared.device(named: name) }
         if #available(macOS 15.4, *), let on = request.bool("extensions") { Extensions.shared.menuOpen = on }

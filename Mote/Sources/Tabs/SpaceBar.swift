@@ -115,17 +115,27 @@ private struct SpaceIcon: View {
     }
 }
 
-/// The plus at the foot: a new tab, or a new space.
+/// The plus at the foot, in Zen's order: a space or folder, then a split
+/// or a tab.
 struct AddMenuButton: View {
     @ObservedObject var browser: Browser
 
     var body: some View {
-        FootIcon(symbol: "plus", help: "New tab or space") {
+        FootIcon(symbol: "plus", help: "New tab, split or space") {
             let menu = NSMenu()
-            menu.addItem(item("New Tab", symbol: "plus") { browser.newTab() })
+            menu.autoenablesItems = false
             if browser.usesSpaces {
                 menu.addItem(item("Create Space…", symbol: "square.on.square") { browser.askForSpace() })
             }
+            // Folders are still to come.
+            let folder = item("Create Folder", symbol: "folder.badge.plus") {}
+            folder.isEnabled = false
+            menu.addItem(folder)
+            menu.addItem(.separator())
+            let split = item("New Split", symbol: "rectangle.split.2x1") { browser.newSplit() }
+            split.isEnabled = browser.active.map(browser.splittable) == true
+            menu.addItem(split)
+            menu.addItem(item("New Tab", symbol: "plus") { browser.newTab() })
             menu.popUp(positioning: nil, at: NSEvent.mouseLocation, in: nil)
         }
     }

@@ -31,6 +31,8 @@ protocol TabOwner: AnyObject {
     /// The page is going between the web and extension pages, which one web
     /// view can't do; the tab has to be replaced.
     func tab(_ tab: Tab, crosses url: URL)
+    /// The page was clicked: in a split, that pane comes to the front.
+    func tabPressed(_ tab: Tab)
 }
 
 extension TabOwner {
@@ -47,4 +49,5 @@ extension TabOwner {
     func tabAddsFromStore(_ tab: Tab) {}
     func tab(_ tab: Tab, middleClicked link: URL) {}
     func tab(_ tab: Tab, crosses url: URL) {}
+    func tabPressed(_ tab: Tab) {}
 }

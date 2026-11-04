@@ -137,6 +137,27 @@ struct TabHoldItems: View {
     }
 }
 
+/// Split view, for a tab's menu, as Zen's.
+struct SplitItems: View {
+    @ObservedObject var browser: Browser
+    @ObservedObject var tab: Tab
+
+    var body: some View {
+        if let group = browser.group(of: tab.id) {
+            Menu("Split Layout") {
+                Button("Grid") { browser.relayout(group, .grid) }
+                Button("Vertical") { browser.relayout(group, .across) }
+                Button("Horizontal") { browser.relayout(group, .down) }
+            }
+            Button("Remove from Split View") { browser.unsplit(tab: tab.id) }
+            Button("Unsplit All") { browser.unsplit(group: group) }
+        } else if !tab.held {
+            Button("Split with Current Tab") { browser.splitWithActive(tab) }
+                .disabled(tab.id == browser.activeID || browser.active.map(browser.splittable) != true)
+        }
+    }
+}
+
 /// A tab's context menu.
 struct TabMenu: View {
     @ObservedObject var browser: Browser
@@ -160,6 +181,7 @@ struct TabMenu: View {
             }
             .disabled(tab.isBlank)
         }
+        SplitItems(browser: browser, tab: tab)
         Divider()
         Button("Rename") { browser.beginTabRename(tab) }
         Group {

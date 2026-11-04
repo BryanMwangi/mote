@@ -12,6 +12,8 @@ enum LinkOpening: Equatable {
     case window(private: Bool)
     /// A tab in another space, with that space's sign-ins.
     case space(UUID)
+    /// A new tab split in beside the page, as Zen's "Split Link to New Tab".
+    case split
     /// The preview over the page (shift-click's).
     case preview
     case bookmark
@@ -48,6 +50,9 @@ extension Browser {
             parked[id]?.tabs.append(tab)
             writeSession(now: false, space: id, tabs: parked[id]?.tabs ?? [], active: parked[id]?.active)
             announce("Opened in \(space.name)")
+        case .split:
+            let tab = open(url, foreground: false, from: opener)
+            if let beside = opener ?? active { split(tab, beside: beside, side: .right) }
         case .preview:
             if let opener { peek(url, from: opener) }
         case .bookmark:

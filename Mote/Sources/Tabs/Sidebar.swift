@@ -328,11 +328,16 @@ private struct SpacePage: View {
             VStack(spacing: Self.gap) {
                 ForEach(Array(loose.enumerated()), id: \.element.id) { index, tab in
                     row(tab)
+                        .background {
+                            if let run = browser.splitRun(at: index, in: loose) {
+                                SplitRun(axis: .vertical, first: run.first, last: run.last, gap: Self.gap)
+                            }
+                        }
                         // Places count among the loose tabs, after the essentials and pinned ones.
                         .modifier(
                             Reorderable(
                                 id: tab.id, index: index, places: 0..<loose.count, lattice: .column(step: Self.row + Self.gap),
-                                space: "rows", drag: $drag, dropOutside: { browser.drop(tab) }, title: tab.label
+                                space: "rows", drag: $drag, away: (browser, tab)
                             ) { browser.move(tab, to: $0 + browser.pinnedCount) })
                 }
             }

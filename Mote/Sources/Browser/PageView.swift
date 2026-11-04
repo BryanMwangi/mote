@@ -18,6 +18,8 @@ final class PageView: WKWebView {
     var onPull: ((Pull?) -> Void)?
     /// Any click or scroll, so a wake snapshot never gets in the way.
     var onTouch: (() -> Void)?
+    /// A click, not a scroll.
+    var onPress: (() -> Void)?
 
     /// WebKit does the sampling in its renderer, including fixed/sticky headers.
     /// These optional SPI are guarded so older engines keep the page background.
@@ -242,6 +244,7 @@ final class PageView: WKWebView {
             for space in others { spaces.submenu?.addItem(item(space.name, .space(space.id))) }
             items.append(spaces)
         }
+        if let page = browser.tab(for: self), browser.splittable(page) { items.append(item("Split Link to New Tab", .split)) }
         items += [
             item("Open Link in New Window", .window(private: false)),
             item("Open Link in New Private Window", .window(private: true)),
@@ -292,6 +295,7 @@ final class PageView: WKWebView {
 
     override func mouseDown(with event: NSEvent) {
         onTouch?()
+        onPress?()
         // A touch device: held until it's known whether it's a tap or a drag.
         if touchScrolls, event.clickCount == 1 {
             pressed = (event, false)

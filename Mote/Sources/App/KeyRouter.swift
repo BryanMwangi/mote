@@ -170,6 +170,8 @@ final class KeyRouter {
         case .zoomOut: browser.zoom(by: 1 / 1.1)
         case .actualSize: browser.resetZoom()
         case .inspector: browser.toggleInspector()
+        case .split(let grid): browser.splitKey(grid)
+        case .unsplit: if let group = browser.activeID.flatMap(browser.group(of:)) { browser.unsplit(group: group) }
         }
     }
 

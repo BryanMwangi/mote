@@ -131,12 +131,17 @@ struct TabBar: View {
                         get: { hovered == tab.id }, set: { over in hovered = over ? tab.id : hovered == tab.id ? nil : hovered }),
                     close: { browser.close(tab) }, sharedGround: sharedGround, dragging: drag?.id == tab.id
                 )
+                .background {
+                    if let run = browser.splitRun(at: index, in: tabs) {
+                        SplitRun(axis: .horizontal, first: run.first, last: run.last, gap: Metrics.tabGap, bleed: -5)
+                    }
+                }
                 .modifier(
                     Reorderable(
                         id: tab.id, index: index, places: browser.places(of: tab.section),
                         lattice: .row(step: (tab.pin == nil ? layout.each : Metrics.pinWidth) + Metrics.tabGap), space: "strip",
                         drag: $drag, leadingLimit: Metrics.lights + layout.dot + TabShape.foot,
-                        dropOutside: tab.held ? nil : { browser.drop(tab) }, title: tab.label
+                        away: tab.held ? nil : (browser, tab)
                     ) { browser.move(tab, to: $0) }
                 )
                 .mask {

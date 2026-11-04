@@ -151,6 +151,12 @@ final class Browser: NSObject, ObservableObject {
     @Published var spaceStep = 1
     /// A link preview over the page (see LinkPeek.swift).
     @Published var peekTab: Tab?
+    /// Split views, every space's, each by its own id (see Browser+Split.swift).
+    @Published var splits: [UUID: SplitLayout<Tab.ID>] = [:]
+    /// Where a tab dragged over the page would split in.
+    @Published var splitHover: SplitHover?
+    /// The page area, where a dragged tab's place is measured (see SplitStage).
+    weak var stageView: NSView?
 
     /// File names extensions asked for their downloads.
     var namedDownloads: [URL: String] = [:]
@@ -344,7 +350,11 @@ final class Browser: NSObject, ObservableObject {
     private func titleWindow() {
         guard let window else { return }
         let title = active.map { $0.isBlank ? "Mote" : $0.label } ?? "Mote"
-        if window.title != title { window.title = title }
+        guard window.title != title else { return }
+        window.title = title
+        // AppKit lays its title bar's buttons out afresh for a new title, back
+        // at their stock place; put them back where the chrome keeps them.
+        TrafficLights.refresh(in: window)
     }
 
     /// What the app starts once, with its first window.
@@ -396,10 +406,11 @@ final class Browser: NSObject, ObservableObject {
         }
         let saved = Session.read(space: spaceID)
         HeldSync.seed(saved.tabs, in: spaceID)
-        let restored = saved.tabs.compactMap { entry -> Tab? in
+        let made = saved.tabs.map { entry -> Tab? in
             let tab = Tab()
             return restore(entry, in: tab) ? tab : nil
         }
+        let restored = made.compactMap(\.self)
         guard !restored.isEmpty else {
             let tab = Tab()
             adopt(tab)
@@ -414,8 +425,10 @@ final class Browser: NSObject, ObservableObject {
         tabs = restored
         let here = min(max(0, saved.active), restored.count - 1)
         activeID = restored[here].id
-        // Only the active tab loads; the rest wait until they are opened.
+        restoreSplits(saved.splits, made)
+        // Only the active tab, or its split, loads; the rest wait until they are opened.
         restored[here].wake()
+        wakeSplit()
     }
 
     /// Side effects of preferences that change while the window is open.
@@ -525,11 +538,16 @@ final class Browser: NSObject, ObservableObject {
         // A window opened since the main one keeps only its open tabs.
         if extra, let windowID {
             let loose = tabs.filter { !$0.held }
-            let saved = loose.compactMap(entry(for:))
-            Session.write(now: now, window: windowID, space: space, .init(tabs: saved, active: loose.firstIndex { $0.id == active } ?? 0))
+            let kept = loose.filter { entry(for: $0) != nil }
+            Session.write(
+                now: now, window: windowID, space: space,
+                .init(tabs: kept.compactMap(entry(for:)), active: loose.firstIndex { $0.id == active } ?? 0, splits: savedSplits(kept)))
             return
         }
-        Session.write(now: now, space: space, .init(tabs: tabs.compactMap(entry(for:)), active: tabs.firstIndex { $0.id == active } ?? 0))
+        let kept = tabs.filter { entry(for: $0) != nil }
+        Session.write(
+            now: now, space: space,
+            .init(tabs: kept.compactMap(entry(for:)), active: tabs.firstIndex { $0.id == active } ?? 0, splits: savedSplits(kept)))
     }
 
     /// A tab as the session keeps it: a page, or a kept chat. Private, bench
@@ -802,6 +820,7 @@ final class Browser: NSObject, ObservableObject {
         // Load a waiting tab now; only when there was nothing to wake, check
         // whether a background page's process died (doing both races two loads).
         if !tab.wake() { tab.revive() }
+        wakeSplit()
         saveSoon()
         editing = false
         field.clear()
@@ -820,7 +839,10 @@ final class Browser: NSObject, ObservableObject {
 
     /// Drag and drop within the row; tabs stay in their section.
     func move(_ tab: Tab, to index: Int) {
-        if reorder({ $0.move(tab.id, to: index) }) { saveSoon() }
+        if let group = group(of: tab.id) { return moveGroup(group, by: tab, to: index) }
+        guard reorder({ $0.move(tab.id, to: index) }) else { return }
+        gatherAll()
+        saveSoon()
     }
 
     /// Shows another space's row in place of this one (see Spaces.swift).
@@ -835,20 +857,24 @@ final class Browser: NSObject, ObservableObject {
         if extra, let windowID {
             // The space's held tabs, and this window's own open ones.
             let saved = Session.read(window: windowID, space: space)
-            let loose = saved.tabs.compactMap { entry -> Tab? in
+            let made = saved.tabs.map { entry -> Tab? in
                 let tab = Tab(configuration: Web.configuration(space: space))
                 return restore(entry, in: tab) ? tab : nil
             }
+            let loose = made.compactMap(\.self)
+            restoreSplits(saved.splits, made)
             let held = heldTabs(of: space)
             let active = loose.indices.contains(saved.active) ? loose[saved.active].id : loose.first?.id ?? held.first?.id
             return Parked(tabs: held + loose, active: active)
         }
         let saved = Session.read(space: space)
         HeldSync.seed(saved.tabs, in: space)
-        let row = saved.tabs.compactMap { entry -> Tab? in
+        let made = saved.tabs.map { entry -> Tab? in
             let tab = Tab(configuration: Web.configuration(space: space))
             return restore(entry, in: tab) ? tab : nil
         }
+        let row = made.compactMap(\.self)
+        restoreSplits(saved.splits, made)
         return Parked(tabs: row, active: row.indices.contains(saved.active) ? row[saved.active].id : row.first?.id)
     }
 
@@ -892,6 +918,7 @@ final class Browser: NSObject, ObservableObject {
 
         remember(tab, at: index)
         tab.close()
+        unsplit(tab: tab.id)
         reorder { $0.remove(tab.id) }
         if activeID == tab.id, let next = row.successor(ofRemovedAt: index).flatMap(self.tab) {
             // Through select(), so a waiting tab wakes.
@@ -907,6 +934,7 @@ final class Browser: NSObject, ObservableObject {
         guard let index = row.index(of: tab.id) else { return false }
         if floating == tab.id { land() }
         if editingPin == tab.id { editingPin = nil }
+        unsplit(tab: tab.id)
         if tabs.count == 1 {
             let fresh = Tab()
             prepare(fresh)
@@ -995,6 +1023,7 @@ final class Browser: NSObject, ObservableObject {
     /// Add to Essentials.
     func pin(_ tab: Tab) {
         if tab.pin == nil {
+            unsplit(tab: tab.id)
             tab.pin = tab.monogram
             tab.kept = false
             reorder { $0.settle(tab.id) }
@@ -1006,6 +1035,7 @@ final class Browser: NSObject, ObservableObject {
     func keep(_ tab: Tab) {
         if !tab.kept || tab.pin != nil {
             if editingPin == tab.id { editingPin = nil }
+            unsplit(tab: tab.id)
             tab.pin = nil
             tab.kept = true
             reorder { $0.settle(tab.id) }
@@ -1228,5 +1258,6 @@ extension Browser: TabOwner {
     var searchEngineName: String? { prefs.engine.name(custom: prefs.customEngine) }
     func tabAddsFromStore(_ tab: Tab) { addFromStore(tab) }
     func tab(_ tab: Tab, middleClicked link: URL) { open(link, foreground: false, from: tab) }
+    func tabPressed(_ tab: Tab) { if tab.id != activeID, shownSplit?.contains(tab.id) == true { select(tab) } }
     func tab(_ tab: Tab, crosses url: URL) { replace(tab, going: url) }
 }

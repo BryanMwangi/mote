@@ -190,6 +190,7 @@ final class Tab: ObservableObject, Identifiable {
         Swipe.calm(web)
         web.onPull = { [weak self] in self?.pull = $0 }
         web.onTouch = { [weak self] in self?.uncover() }
+        web.onPress = { [weak self] in if let self { owner?.tabPressed(self) } }
         web.searchName = { [weak self] in self?.owner?.searchEngineName }
         web.onSearch = { [weak self] text in
             guard let self else { return }
@@ -778,6 +779,7 @@ final class Tab: ObservableObject, Identifiable {
         controller.removeAllUserScripts()
         web.onPull = nil
         web.onTouch = nil
+        web.onPress = nil
         web.searchName = nil
         web.onSearch = nil
         web.onAsk = nil

@@ -65,6 +65,7 @@ extension Browser {
         if activeID == tab.id, let next = row.neighbour(of: tab.id, by: 1) ?? row.neighbour(of: tab.id, by: -1) {
             activeID = next
         }
+        unsplit(tab: tab.id)
         reorder { $0.remove(tab.id) }
         let window = target ?? Windows.shared.open(space: spaceID, private: isPrivate)
         let blank = target == nil ? window.active : nil

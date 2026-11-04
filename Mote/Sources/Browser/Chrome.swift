@@ -302,31 +302,8 @@ private struct PageCard: View {
     private var stage: some View {
         if let tab = browser.active {
             ZStack(alignment: .topLeading) {
-                if let chat = tab.chat, tab.isBlank {
-                    // One per chat, so a draft and scrolling never carry over to another.
-                    ChatView(browser: browser, conversation: chat).id(chat.id)
-                } else if tab.chats, tab.isBlank {
-                    ChatsPage(browser: browser)
-                } else if tab.isBlank {
-                    NewTabPage(browser: browser, prefs: prefs)
-                } else {
-                    Page(tab: tab)
-                        .overlay {
-                            LinkBubble(status: browser.linkStatus, tab: tab, loadingFrom: tab.loadingFrom, showsLinks: prefs.showsLinks)
-                        }
-                        .overlay(alignment: .topTrailing) {
-                            if browser.finder.showing {
-                                FindBar(finder: browser.finder)
-                                    .transition(.move(edge: .top).combined(with: .opacity))
-                            }
-                        }
-                        .overlay(alignment: .topLeading) {
-                            if let asked = browser.logins.choices, asked.tab == tab.id {
-                                AccountList(logins: browser.logins, choices: asked)
-                                    .transition(.opacity)
-                            }
-                        }
-                        .animation(Motion.quick, value: browser.logins.choices)
+                SplitStage(browser: browser, layout: browser.shownSplit ?? SplitLayout(tab.id)) { pane in
+                    if pane.id == tab.id { content(tab) } else { Page(tab: pane) }
                 }
                 PeekLayer(browser: browser)
                 if browser.reviewing {
@@ -345,6 +322,37 @@ private struct PageCard: View {
             }
         } else {
             Palette.ground
+        }
+    }
+
+    /// The active tab's own page, chat or new tab page, with what shows over it.
+    @ViewBuilder
+    private func content(_ tab: Tab) -> some View {
+        if let chat = tab.chat, tab.isBlank {
+            // One per chat, so a draft and scrolling never carry over to another.
+            ChatView(browser: browser, conversation: chat).id(chat.id)
+        } else if tab.chats, tab.isBlank {
+            ChatsPage(browser: browser)
+        } else if tab.isBlank {
+            NewTabPage(browser: browser, prefs: prefs)
+        } else {
+            Page(tab: tab)
+                .overlay {
+                    LinkBubble(status: browser.linkStatus, tab: tab, loadingFrom: tab.loadingFrom, showsLinks: prefs.showsLinks)
+                }
+                .overlay(alignment: .topTrailing) {
+                    if browser.finder.showing {
+                        FindBar(finder: browser.finder)
+                            .transition(.move(edge: .top).combined(with: .opacity))
+                    }
+                }
+                .overlay(alignment: .topLeading) {
+                    if let asked = browser.logins.choices, asked.tab == tab.id {
+                        AccountList(logins: browser.logins, choices: asked)
+                            .transition(.opacity)
+                    }
+                }
+                .animation(Motion.quick, value: browser.logins.choices)
         }
     }
 }
