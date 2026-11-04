@@ -39,10 +39,11 @@ private struct InstalledList: View {
                     .foregroundStyle(Palette.muted)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 18)
+                    .settingsSearch(["No extensions installed"])
             }
             ForEach(Array(extensions.installed.enumerated()), id: \.element.id) { index, item in
                 if index > 0 { RowRule() }
-                ExtensionRow(item: item, extensions: extensions)
+                ExtensionRow(item: item, extensions: extensions).settingsSearch([item.name, "extension"])
             }
         }
 

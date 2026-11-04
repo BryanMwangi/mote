@@ -16,6 +16,9 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     /// Called when the window closes while settings are still asked for.
     private let dismissed: () -> Void
     private var watching: AnyCancellable?
+    /// Its keys, before the menus see them: its own, not a browser window's
+    /// router's, as a browser window may not be open.
+    private var keys: Any?
 
     /// Starts following the browser's settings state. Called once the browser
     /// window exists.
@@ -55,6 +58,10 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         window.isReleasedWhenClosed = false
         window.backgroundColor = Palette.NS.ground
         window.delegate = self
+        keys = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard let self, event.window === self.window else { return event }
+            return self.take(event) ? nil : event
+        }
         // Receives the current value too, so settings asked for before the
         // browser window appeared still open. On the next turn, since
         // @Published sends before the value is stored.
@@ -67,8 +74,19 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     /// Handles the window's key shortcuts before the browser: Escape and ⌘W
     /// close it. Other keys go to the settings controls and the menus.
     func take(_ event: NSEvent) -> Bool {
+        // A shortcut being recorded gets every key (Settings › Keyboard).
+        if let recording = KeyRecorder.recording { return recording(event) }
         let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
         let key = event.charactersIgnoringModifiers?.lowercased() ?? ""
+        // ⌘F searches Settings; Escape clears a search before it closes the window.
+        if key == "f", flags == .command {
+            SettingsSearch.shared.focusAsked += 1
+            return true
+        }
+        if event.keyCode == 53, flags.isEmpty, !SettingsSearch.shared.query.isEmpty {
+            SettingsSearch.shared.query = ""
+            return true
+        }
         guard event.keyCode == 53 && flags.isEmpty || key == "w" && flags == .command else { return false }
         window.performClose(nil)
         return true

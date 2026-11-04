@@ -26,7 +26,7 @@ extension Bench {
         let mods = call.request.modifiers
         for kind in [NSEvent.EventType.keyDown, .keyUp] {
             let event = BenchInput.key(
-                kind, characters, code: UInt16(code), flags: BenchInput.flags(mods), in: AppDelegate.window,
+                kind, characters, code: UInt16(code), flags: BenchInput.flags(mods), in: NSApp.keyWindow ?? AppDelegate.window,
                 repeats: mods.contains("repeat"))
             event.map { NSApp.postEvent($0, atStart: false) }
         }

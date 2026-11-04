@@ -29,7 +29,7 @@ struct GeneralSettings: View {
             RowRule()
             SettingRow(
                 "Look", "Light, dark, or whatever the Mac is using. Pages follow when they can", symbol: "circle.lefthalf.filled",
-                tint: Tint.indigo
+                tint: Tint.indigo, keywords: ["appearance", "theme"] + Look.allCases.map(\.title)
             ) {
                 Segmented(options: Look.allCases.map { ($0, $0.title) }, selection: $prefs.look)
             }
@@ -53,7 +53,10 @@ struct GeneralSettings: View {
             }
         }
         SettingsSection("Searching", note: searchNote) {
-            SettingRow("Search with", "Used whenever what you type isn't an address", symbol: "magnifyingglass", tint: Tint.blue) {
+            SettingRow(
+                "Search with", "Used whenever what you type isn't an address", symbol: "magnifyingglass", tint: Tint.blue,
+                keywords: ["search engine"] + SearchEngine.allCases.map(\.title)
+            ) {
                 Picker("", selection: $prefs.engine) { ForEach(SearchEngine.allCases) { Text($0.title).tag($0) } }
                     .labelsHidden()
                     .pickerStyle(.menu)
@@ -77,7 +80,10 @@ struct GeneralSettings: View {
                 symbol: "eye", tint: Tint.teal, on: $prefs.peeksLinks)
             if prefs.peeksLinks {
                 RowRule()
-                SettingRow("Preview with", "Option-click is Zen's Glance", symbol: "cursorarrow.click", tint: Tint.teal) {
+                SettingRow(
+                    "Preview with", "Option-click is Zen's Glance", symbol: "cursorarrow.click", tint: Tint.teal,
+                    keywords: ["glance", "peek"] + PeekClick.allCases.map(\.title)
+                ) {
                     Picker("", selection: $prefs.peekClick) { ForEach(PeekClick.allCases) { Text($0.title).tag($0) } }
                         .labelsHidden()
                         .pickerStyle(.menu)
@@ -195,7 +201,7 @@ struct TabSettings: View {
                 prefs.sidebar
                     ? "Hidden puts back, forward and the address at the top of the sidebar; on hover, reach the page's top edge"
                     : "On hover or hidden, it slides in when the pointer reaches the page's top edge. ⌘L brings it out",
-                symbol: "menubar.rectangle", tint: Tint.green
+                symbol: "menubar.rectangle", tint: Tint.green, keywords: ["compact"] + ToolbarMode.allCases.map(\.title)
             ) {
                 Segmented(options: ToolbarMode.allCases.map { ($0, $0.title) }, selection: $prefs.toolbarMode)
             }
@@ -219,7 +225,10 @@ struct TabSettings: View {
                 "⌘T opens a search over the page, and a tab only for what you pick. Escape leaves things as they were",
                 symbol: "magnifyingglass", tint: Tint.blue, on: $prefs.newTabSearch)
             RowRule()
-            SettingRow("Beside each title", "What marks a tab, pinned ones too", symbol: "app.badge", tint: Tint.orange) {
+            SettingRow(
+                "Beside each title", "What marks a tab, pinned ones too", symbol: "app.badge", tint: Tint.orange,
+                keywords: ["favicon", "icon"] + Glyph.allCases.map(\.title)
+            ) {
                 Segmented(options: Glyph.allCases.map { ($0, $0.title) }, selection: $prefs.glyph)
             }
             RowRule()
@@ -296,6 +305,7 @@ private struct SpaceRows: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
+            .settingsSearch([space.name, "space"])
         }
         RowRule()
         HStack(spacing: 8) {
@@ -315,6 +325,7 @@ private struct SpaceRows: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
+        .settingsSearch(["New Space", "Delete or merge spaces"])
         .animation(Motion.quick, value: chosen.count)
         // A space deleted or merged away is no longer picked.
         .onChange(of: browser.spaces.map(\.id)) { _, ids in picked.formIntersection(ids) }
@@ -512,14 +523,6 @@ struct AboutSettings: View {
     @ObservedObject var prefs: Preferences
     @ObservedObject private var updater = Updater.shared
 
-    private static let keys = [
-        ("⌘L", "Type an address"), ("⌘J", "Ask AI in a new tab"), ("⌘K", "Jump to a tab"),
-        ("⌘T  ⌘W  ⇧⌘T", "Open, close, bring back a tab"), ("⇧⌘V", "Paste and go"),
-        ("⇧⌘C", "Copy the address"), ("⌃⇥  ⌘1–9", "Next tab, or by position"), ("⇧⌘S", "Tabs on top or at the side"),
-        ("⌘S", "Tuck the sidebar away"),
-        ("⇧⌘R", "Reading mode"), ("⇧⌘H", "Hide part of a page"), ("⇧⌘P", "Float a video"),
-    ]
-
     var body: some View {
         VStack(spacing: 8) {
             Logomark().fill(Palette.ink).aspectRatio(Logomark.canvas.width / Logomark.canvas.height, contentMode: .fit).frame(height: 44)
@@ -528,6 +531,7 @@ struct AboutSettings: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 6)
+        .settingsSearch(["About Mote", "version \(Updater.version)"])
 
         SettingsSection("Updates") {
             if Updater.enabled {
@@ -552,19 +556,6 @@ struct AboutSettings: View {
                 "Something wrong?", "Opens a report with your version filled in", symbol: "exclamationmark.bubble", tint: Tint.orange
             ) {
                 Pill("Report…") { AppDelegate.writeFeedback() }
-            }
-        }
-
-        SettingsSection("Keys worth knowing") {
-            ForEach(Array(Self.keys.enumerated()), id: \.offset) { index, key in
-                if index > 0 { Palette.hairline.frame(height: 1).padding(.leading, 12) }
-                HStack {
-                    Text(key.1).font(.system(size: 13)).foregroundStyle(Palette.ink)
-                    Spacer()
-                    Text(key.0).font(.system(size: 12, design: .rounded)).foregroundStyle(Palette.muted)
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
             }
         }
     }

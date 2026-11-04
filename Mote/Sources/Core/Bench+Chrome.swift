@@ -29,6 +29,9 @@ extension Bench {
             "keysQuieted": PageView.quieted, "peek": browser.peekTab?.address?.absoluteString ?? "", "folded": browser.folded,
             "peeking": browser.peeking, "toolbarMode": browser.prefs.toolbarMode.rawValue, "peekClick": browser.prefs.peekClick.rawValue,
             "spaceIndex": browser.spaces.firstIndex { $0.id == browser.spaceID } ?? -1,
+            "settingsQuery": SettingsSearch.shared.query, "settingsFocusAsked": SettingsSearch.shared.focusAsked,
+            "finding": browser.finder.showing, "settingsMatches": SettingsSearch.shared.found,
+            "shortcutsChanged": browser.prefs.shortcuts.changed.keys.map(\.rawValue).sorted(),
             "sideHides": browser.prefs.sideHides, "lightsHidden": window.map { !TrafficLights.visible(in: $0) } ?? true,
             "siteCard": SiteCardPanel.isShown,
             "barEditing": browser.editingInBar, "firstResponder": window?.firstResponder.map { String(describing: type(of: $0)) } ?? "",
@@ -128,6 +131,22 @@ extension Bench {
         if Storage.testing, let id = request.string("source"), let found = tab(id) { browser.viewSource(of: found) }
         // An essential or pinned tab back to its pinned page; the click that previews.
         if Storage.testing, let id = request.string("home"), let found = tab(id) { browser.goHome(found) }
+        if let query = request.string("settingsquery") { SettingsSearch.shared.query = query == "-" ? "" : query }
+        // A command given a key (test runs): ID=cmd+e, ID=none, or reset.
+        if Storage.testing, let what = request.string("shortcut") {
+            let parts = what.split(separator: "=").map(String.init)
+            if what == "reset" {
+                prefs.shortcuts = Shortcuts()
+            } else if parts.count == 2, let id = ShortcutID(rawValue: parts[0]) {
+                let mods = parts[1].split(separator: "+").map(String.init)
+                let combo = mods.last.map {
+                    KeyCombo(
+                        $0, command: mods.contains("cmd"), shift: mods.contains("shift"), option: mods.contains("opt"),
+                        control: mods.contains("ctrl"))
+                }
+                prefs.shortcuts.set(id, to: parts[1] == "none" ? nil : combo)
+            }
+        }
         if let click = request.string("peekclick").flatMap(PeekClick.init(rawValue:)) { prefs.peekClick = click }
         // Split view (test runs): TAB:SIDE beside the tab in front, a layout, or undone.
         if Storage.testing, let what = request.string("split") {

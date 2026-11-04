@@ -47,39 +47,44 @@ private struct MenuBar: Commands {
 
     private var blank: Bool { browser.active?.isBlank ?? true }
 
+    /// A command's key as the user has it (Settings › Keyboard), or none.
+    private func keys(_ id: ShortcutID) -> KeyboardShortcut? {
+        browser.prefs.shortcuts.combos(for: id).first.map(\.keyboardShortcut)
+    }
+
     var body: some Commands {
         CommandGroup(replacing: .newItem) {
-            Button("New Tab", action: browser.newTab).keyboardShortcut("t")
-            Button("New Window") { Windows.shared.open(space: browser.spaceID) }.keyboardShortcut("n")
-            Button("New Private Window") { Windows.shared.open(private: true) }.keyboardShortcut("n", modifiers: [.command, .shift])
-            Button("New Private Tab", action: browser.newShyTab).keyboardShortcut("n", modifiers: [.command, .option, .shift])
-            Button("Reopen Closed Tab") { browser.reopen() }.keyboardShortcut("t", modifiers: [.command, .shift]).disabled(
+            Button("New Tab", action: browser.newTab).keyboardShortcut(keys(.newTab))
+            Button("New Window") { Windows.shared.open(space: browser.spaceID) }.keyboardShortcut(keys(.newWindow))
+            Button("New Private Window") { Windows.shared.open(private: true) }.keyboardShortcut(keys(.newPrivateWindow))
+            Button("New Private Tab", action: browser.newShyTab).keyboardShortcut(keys(.newPrivateTab))
+            Button("Reopen Closed Tab") { browser.reopen() }.keyboardShortcut(keys(.reopenTab)).disabled(
                 browser.ghosts.isEmpty)
             Button("Reopen Closed Window") { Windows.shared.reopenClosed() }.disabled(!Windows.shared.canReopen)
             Divider()
-            Button("Open Address…", action: browser.edit).keyboardShortcut("l")
-            Button("Open File…", action: browser.openFile).keyboardShortcut("o")
+            Button("Open Address…", action: browser.edit).keyboardShortcut(keys(.editAddress))
+            Button("Open File…", action: browser.openFile).keyboardShortcut(keys(.openFile))
             Divider()
-            Button("Close Tab") { if let tab = browser.active { browser.close(tab) } }.keyboardShortcut("w")
+            Button("Close Tab") { if let tab = browser.active { browser.close(tab) } }.keyboardShortcut(keys(.closeTab))
         }
         CommandGroup(replacing: .printItem) {
             Button("Share…", action: browser.share).disabled(blank)
-            Button("Save Page As…", action: browser.savePage).keyboardShortcut("s", modifiers: [.command, .option]).disabled(blank)
-            Button("Take Screenshot") { browser.active?.screenshot() }.keyboardShortcut("s", modifiers: [.command, .option, .shift])
+            Button("Save Page As…", action: browser.savePage).keyboardShortcut(keys(.savePage)).disabled(blank)
+            Button("Take Screenshot") { browser.active?.screenshot() }.keyboardShortcut(keys(.screenshot))
                 .disabled(blank)
-            Button("Print…", action: browser.printPage).keyboardShortcut("p").disabled(blank)
+            Button("Print…", action: browser.printPage).keyboardShortcut(keys(.print)).disabled(blank)
         }
         CommandGroup(after: .pasteboard) {
             Divider()
-            Button("Find on Page…", action: browser.openFind).keyboardShortcut("f").disabled(blank)
-            Button("Find Next") { browser.finder.look(forward: true) }.keyboardShortcut("g").disabled(!browser.finder.showing)
-            Button("Find Previous") { browser.finder.look(forward: false) }.keyboardShortcut("g", modifiers: [.command, .shift])
+            Button("Find on Page…", action: browser.openFind).keyboardShortcut(keys(.find)).disabled(blank)
+            Button("Find Next") { browser.finder.look(forward: true) }.keyboardShortcut(keys(.findNext)).disabled(!browser.finder.showing)
+            Button("Find Previous") { browser.finder.look(forward: false) }.keyboardShortcut(keys(.findPrevious))
                 .disabled(!browser.finder.showing)
         }
         CommandGroup(replacing: .toolbar) { view }
         CommandMenu("Tabs") { tabs }
         CommandMenu("Bookmarks") {
-            Button("Add This Page", action: browser.bookmarkCurrent).keyboardShortcut("b", modifiers: [.command, .shift]).disabled(blank)
+            Button("Add This Page", action: browser.bookmarkCurrent).keyboardShortcut(keys(.bookmark)).disabled(blank)
             Button("Show Bookmarks…") { browser.bookmarking = true }
             Toggle(
                 "Show Bookmarks Bar",
@@ -89,9 +94,9 @@ private struct MenuBar: Commands {
         }
         CommandMenu("History") { history }
         CommandGroup(after: .appSettings) {
-            Button("Settings…") { browser.tuning = true }.keyboardShortcut(",")
+            Button("Settings…") { browser.tuning = true }.keyboardShortcut(keys(.settings))
             Button("Welcome…") { browser.welcoming = true }
-            Button("Passwords…") { browser.logins.managing = true }.keyboardShortcut("l", modifiers: [.command, .option])
+            Button("Passwords…") { browser.logins.managing = true }.keyboardShortcut(keys(.passwords))
         }
         CommandGroup(replacing: .help) {
             Button("Send Feedback…") { AppDelegate.writeFeedback() }
@@ -101,69 +106,69 @@ private struct MenuBar: Commands {
     @ViewBuilder
     private var view: some View {
         Toggle("Show Tabs in Sidebar", isOn: Binding(get: { browser.prefs.sidebar }, set: { _ in browser.toggleSidebar() }))
-            .keyboardShortcut("s", modifiers: [.command, .shift])
+            .keyboardShortcut(keys(.toggleSidebar))
         // Folds the sidebar or strip away (see SidebarFold).
         Button("\(browser.folded ? "Show" : "Hide") \(browser.prefs.sidebar ? "Sidebar" : "Tab Bar")", action: browser.toggleFold)
-            .keyboardShortcut("s")
+            .keyboardShortcut(keys(.foldTabs))
         // Zen's keys; KeyRouter takes them first, so they work over a page too.
-        Button("Compact Mode", action: browser.toggleCompact).keyboardShortcut("c", modifiers: [.control, .option])
+        Button("Compact Mode", action: browser.toggleCompact).keyboardShortcut(keys(.compactMode))
         Button(browser.prefs.toolbarMode == .shown ? "Toolbar on Hover" : "Always Show Toolbar", action: browser.toggleToolbar)
-            .keyboardShortcut("t", modifiers: [.control, .option])
+            .keyboardShortcut(keys(.toggleToolbar))
         if browser.usesSpaces {
-            Button("Previous Space") { browser.stepSpace(-1) }.keyboardShortcut("q", modifiers: [.control, .option])
-            Button("Next Space") { browser.stepSpace(1) }.keyboardShortcut("e", modifiers: [.control, .option])
+            Button("Previous Space") { browser.stepSpace(-1) }.keyboardShortcut(keys(.previousSpace))
+            Button("Next Space") { browser.stepSpace(1) }.keyboardShortcut(keys(.nextSpace))
         }
         Picker("Tabs Wear", selection: Binding(get: { browser.prefs.glyph }, set: { browser.prefs.glyph = $0 })) {
             ForEach(Glyph.allCases) { Text($0.title).tag($0) }
         }
         Divider()
-        Button("Reload Page", action: browser.reload).keyboardShortcut("r")
-        Button("Reload Skipping Cache", action: browser.reloadFromOrigin).keyboardShortcut("r", modifiers: [.command, .option])
+        Button("Reload Page", action: browser.reload).keyboardShortcut(keys(.reload))
+        Button("Reload Skipping Cache", action: browser.reloadFromOrigin).keyboardShortcut(keys(.reloadFromOrigin))
             .disabled(blank)
-        Button("Reading Mode", action: browser.toggleReader).keyboardShortcut("r", modifiers: [.command, .shift])
-        Button("Float Video", action: browser.toggleFloat).keyboardShortcut("p", modifiers: [.command, .shift])
+        Button("Reading Mode", action: browser.toggleReader).keyboardShortcut(keys(.reader))
+        Button("Float Video", action: browser.toggleFloat).keyboardShortcut(keys(.floatVideo))
         Toggle(
             "Chat about This Page",
             isOn: Binding(get: { browser.chatting }, set: { _ in browser.togglePageChat() })
         )
-        .keyboardShortcut("a", modifiers: [.command, .shift])
+        .keyboardShortcut(keys(.pageChat))
         .disabled(!browser.pageChatPossible)
         Divider()
-        Button("Hide Elements…", action: browser.toggleHiding).keyboardShortcut("h", modifiers: [.command, .shift])
-        Button("Hidden on This Site…") { browser.reviewing.toggle() }.keyboardShortcut("u", modifiers: [.command, .shift])
+        Button("Hide Elements…", action: browser.toggleHiding).keyboardShortcut(keys(.hideElements))
+        Button("Hidden on This Site…") { browser.reviewing.toggle() }.keyboardShortcut(keys(.hiddenElements))
         Divider()
-        Button("Zoom In") { browser.zoom(by: 1.1) }.keyboardShortcut("+")
-        Button("Zoom Out") { browser.zoom(by: 1 / 1.1) }.keyboardShortcut("-")
-        Button("Actual Size", action: browser.resetZoom).keyboardShortcut("0")
+        Button("Zoom In") { browser.zoom(by: 1.1) }.keyboardShortcut(keys(.zoomIn))
+        Button("Zoom Out") { browser.zoom(by: 1 / 1.1) }.keyboardShortcut(keys(.zoomOut))
+        Button("Actual Size", action: browser.resetZoom).keyboardShortcut(keys(.actualSize))
         Divider()
         // Chrome's shortcuts (see Inspector.swift).
-        Button("Web Inspector", action: browser.toggleInspector).keyboardShortcut("i", modifiers: [.command, .option])
-        Button("JavaScript Console", action: browser.showConsole).keyboardShortcut("j", modifiers: [.command, .option])
-        Button("Inspect Element", action: browser.inspectElement).keyboardShortcut("c", modifiers: [.command, .option])
+        Button("Web Inspector", action: browser.toggleInspector).keyboardShortcut(keys(.inspector))
+        Button("JavaScript Console", action: browser.showConsole).keyboardShortcut(keys(.console))
+        Button("Inspect Element", action: browser.inspectElement).keyboardShortcut(keys(.inspectElement))
         Button("View Page Source") { if let tab = browser.active { browser.viewSource(of: tab) } }
-            .keyboardShortcut("u", modifiers: [.command, .option]).disabled(blank)
-        Button("Responsive Design Mode", action: browser.toggleResponsive).keyboardShortcut("r", modifiers: [.command, .control])
+            .keyboardShortcut(keys(.viewSource)).disabled(blank)
+        Button("Responsive Design Mode", action: browser.toggleResponsive).keyboardShortcut(keys(.responsive))
             .disabled(blank)
     }
 
     @ViewBuilder
     private var tabs: some View {
-        Button("Back", action: browser.back).keyboardShortcut("[").disabled(browser.active?.canGoBack != true)
-        Button("Forward", action: browser.forward).keyboardShortcut("]").disabled(browser.active?.canGoForward != true)
+        Button("Back", action: browser.back).keyboardShortcut(keys(.back)).disabled(browser.active?.canGoBack != true)
+        Button("Forward", action: browser.forward).keyboardShortcut(keys(.forward)).disabled(browser.active?.canGoForward != true)
         Divider()
-        Button("Next Tab") { browser.step(1) }.keyboardShortcut("]", modifiers: [.command, .shift])
-        Button("Previous Tab") { browser.step(-1) }.keyboardShortcut("[", modifiers: [.command, .shift])
-        Button("Search Tabs…", action: browser.summon).keyboardShortcut("k")
+        Button("Next Tab") { browser.step(1) }.keyboardShortcut(keys(.nextTab))
+        Button("Previous Tab") { browser.step(-1) }.keyboardShortcut(keys(.previousTab))
+        Button("Search Tabs…", action: browser.summon).keyboardShortcut(keys(.switcher))
         Divider()
         if let tab = browser.active { TabHoldItems(browser: browser, tab: tab) }
         Button("Rename Tab") { if let tab = browser.active { browser.beginTabRename(tab) } }.disabled(browser.active == nil)
-        Button("Duplicate Tab", action: browser.duplicate).keyboardShortcut("d").disabled(blank)
-        Button("Copy Address", action: browser.copyAddress).keyboardShortcut("c", modifiers: [.command, .shift]).disabled(blank)
+        Button("Duplicate Tab", action: browser.duplicate).keyboardShortcut(keys(.duplicateTab)).disabled(blank)
+        Button("Copy Address", action: browser.copyAddress).keyboardShortcut(keys(.copyAddress)).disabled(blank)
         Button("Copy as Markdown Link", action: browser.copyMarkdownLink).disabled(blank)
-        Button("Paste and Go", action: browser.pasteAndGo).keyboardShortcut("v", modifiers: [.command, .shift])
+        Button("Paste and Go", action: browser.pasteAndGo).keyboardShortcut(keys(.pasteAndGo))
         Divider()
         Button("Close Other Tabs") { if let tab = browser.active { browser.closeOthers(but: tab) } }.disabled(browser.tabs.count < 2)
-        Button("Stop Sound in Tab", action: browser.pauseMedia).keyboardShortcut("m", modifiers: [.command, .shift])
+        Button("Stop Sound in Tab", action: browser.pauseMedia).keyboardShortcut(keys(.pauseSound))
     }
 
     @ViewBuilder
@@ -189,8 +194,8 @@ private struct MenuBar: Commands {
             }
         }
         Divider()
-        Button("Show History…") { browser.recalling = true }.keyboardShortcut("y")
-        Button("Downloads…") { browser.showingDownloads = true }.keyboardShortcut("j", modifiers: [.command, .shift])
+        Button("Show History…") { browser.recalling = true }.keyboardShortcut(keys(.history))
+        Button("Downloads…") { browser.showingDownloads = true }.keyboardShortcut(keys(.downloads))
         Divider()
         Button("Clear History", action: browser.clearHistory)
     }

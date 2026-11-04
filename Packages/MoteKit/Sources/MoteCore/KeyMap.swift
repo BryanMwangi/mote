@@ -56,15 +56,6 @@ public enum KeyMap {
     /// The J key, by position.
     public static let jKey: UInt16 = 38
 
-    /// ⌃⌥G, V, H and U, by position, as Zen's split view keys.
-    public static let splitKeys: [UInt16: Command] = [5: .split(.grid), 9: .split(.across), 4: .split(.down), 32: .unsplit]
-
-    /// Zen's other ⌃⌥ keys, by position: C compact mode, T the toolbar, S the
-    /// sidebar folded away.
-    public static let viewKeys: [UInt16: Command] = [8: .compactMode, 17: .toggleToolbar, 1: .foldTabs]
-    /// ⌃⌥Q and ⌃⌥E, with spaces on.
-    public static let spaceKeys: [UInt16: Command] = [12: .stepSpace(-1), 14: .stepSpace(1)]
-
     /// ⌘J in a new tab's composer: Return asks the assistant instead of
     /// searching, or searches again.
     public static func switchesAsking(_ press: Press, inComposer: Bool) -> Bool {
@@ -78,7 +69,9 @@ public enum KeyMap {
     /// What `press` means. `spaces`: spaces are on (⌃1–⌃9 switch them).
     /// `picking`: elements are being picked (⌘Z undoes a hide). `inText`:
     /// the keyboard is in something editable (⌘← and ⌘→ belong to it).
-    public static func command(for press: Press, spaces: Bool, picking: Bool, inText: Bool) -> Command? {
+    public static func command(
+        for press: Press, spaces: Bool, picking: Bool, inText: Bool, shortcuts: Shortcuts = Shortcuts()
+    ) -> Command? {
         // ⌃⇥ and ⌃⇧⇥ step through the tabs.
         if press.code == tabKey, press.control, !press.command, !press.option { return press.shift ? .previousTab : .nextTab }
         if spaces, press.control, !press.command, !press.option, !press.shift, let number = digits[press.code], number > 0 {
@@ -86,67 +79,25 @@ public enum KeyMap {
         }
         // F12 opens and closes the Web Inspector, as in Chrome, Firefox and Zen.
         if press.code == f12, !press.command, !press.option, !press.control, !press.shift { return .inspector }
-        if press.control, press.option, !press.command, !press.shift {
-            if let command = splitKeys[press.code] ?? viewKeys[press.code] { return command }
-            if spaces, let command = spaceKeys[press.code] { return command }
+        // The user's keys (Settings › Keyboard); a menu-only command is left to its menu.
+        if let id = shortcuts.id(matching: press) {
+            if case .stepSpace = id.command, !spaces { return nil }
+            return id.command
         }
         guard press.command, !press.option, !press.control else { return nil }
-        if !press.shift, let number = digits[press.code] {
-            return number == 0 ? .actualSize : number == 9 ? .lastTab : .tab(number - 1)
-        }
-        switch (press.key, press.shift) {
-        case ("t", false): return .newTab
-        case ("t", true): return .reopenTab
-        case ("n", true): return .newPrivateWindow
-        case ("w", false): return .closeTab
-        case ("d", false): return .duplicateTab
-        case ("c", true): return .copyAddress
-        case ("v", true): return .pasteAndGo
-        case ("l", false): return .editAddress
-        case ("k", false): return .switcher
-        case ("r", false): return .reload
-        case ("r", true): return .reader
-        case ("y", false): return .history
-        case ("j", true): return .downloads
-        case ("p", false): return .print
-        case ("p", true): return .floatVideo
-        case ("f", false): return .find
-        case ("g", let shift): return .findAgain(backwards: shift)
-        case ("m", true): return .pauseSound
-        // ⇧⌘A: the assistant's view toggle, beside the other View-menu toggles.
-        case ("a", true): return .pageChat
-        case ("s", true): return .toggleSidebar
-        case ("s", false): return .foldTabs
-        case ("b", true): return .bookmark
-        case (",", false): return .settings
-        case ("h", true): return .hideElements
-        case ("u", true): return .hiddenElements
-        case ("z", false): return picking ? .undoHiding : nil
-        // ⌘+ comes as "=" or "+" depending on the layout.
-        case ("=", _), ("+", _): return .zoomIn
-        case ("-", _): return .zoomOut
-        case ("0", _): return .actualSize
-        case ("[", let shift): return shift ? .previousTab : .back
-        case ("]", let shift): return shift ? .nextTab : .forward
-        case ("{", true): return .previousTab
-        case ("}", true): return .nextTab
-        default:
-            guard !press.shift, !inText else { return nil }
-            return press.code == leftArrow ? .back : press.code == rightArrow ? .forward : nil
-        }
+        if !press.shift, let number = digits[press.code], number > 0 { return number == 9 ? .lastTab : .tab(number - 1) }
+        if press.key == "z", !press.shift, picking { return .undoHiding }
+        guard !press.shift, !inText else { return nil }
+        return press.code == leftArrow ? .back : press.code == rightArrow ? .forward : nil
     }
 
     /// Shortcuts the page gets to see first, as in Chrome: if it doesn't use
     /// one, WebKit sends it back and Mote takes it then. Opening, closing and
     /// switching tabs are always Mote's, and so is ⌘Z while picking.
-    public static func pageGoesFirst(_ press: Press, picking: Bool) -> Bool {
-        let tabs = ["[", "]", "{", "}"]
-        switch (press.key, press.shift) {
-        case ("t", _), ("w", false), ("n", true): return false
-        case (let key, true) where tabs.contains(key): return false
-        case ("z", _) where picking: return false
-        default: return true
-        }
+    public static func pageGoesFirst(_ press: Press, picking: Bool, shortcuts: Shortcuts = Shortcuts()) -> Bool {
+        if press.key == "z", picking { return false }
+        let mote: Set<ShortcutID> = [.newTab, .reopenTab, .closeTab, .newPrivateWindow, .nextTab, .previousTab]
+        return shortcuts.id(matching: press).map { !mote.contains($0) } ?? true
     }
 
     /// What a key does in the small window for links from other apps: ⌘O

@@ -22,6 +22,29 @@ enum PeekClick: String, CaseIterable, Identifiable, Storable {
     var keys: NavigationPolicy.Keys { self == .shift ? .shift : .option }
 }
 
+/// Kept as JSON text.
+extension Shortcuts: Storable {
+    init?(stored: Any) {
+        guard let text = stored as? String, let shortcuts = try? JSONDecoder().decode(Shortcuts.self, from: Data(text.utf8)) else {
+            return nil
+        }
+        self = shortcuts
+    }
+    var stored: Any { (try? JSONEncoder().encode(self)).flatMap { String(data: $0, encoding: .utf8) } ?? "" }
+}
+
+extension KeyCombo {
+    /// As a SwiftUI menu item takes it.
+    var keyboardShortcut: KeyboardShortcut {
+        var modifiers: EventModifiers = []
+        if command { modifiers.insert(.command) }
+        if shift { modifiers.insert(.shift) }
+        if option { modifiers.insert(.option) }
+        if control { modifiers.insert(.control) }
+        return KeyboardShortcut(KeyEquivalent(key.first ?? " "), modifiers: modifiers)
+    }
+}
+
 enum ToolbarMode: String, CaseIterable, Identifiable, Storable {
     case shown, hover, hidden
 
@@ -80,9 +103,11 @@ final class Preferences: ObservableObject {
     @Published var autoScroll: Bool
     /// 120 Hz pages on ProMotion displays (see FrameRate.swift).
     @Published var fastPages: Bool
-    /// Shift-click previews a link over the page (see LinkPeek.swift).
+    /// Option-click (or shift-click) previews a link over the page (see LinkPeek.swift).
     @Published var peeksLinks: Bool
     @Published var peekClick: PeekClick
+    /// The user's keys over Mote's (Settings › Keyboard).
+    @Published var shortcuts: Shortcuts
     /// Links from other apps open in a small window (see LinkWindow.swift).
     @Published var littleLinks: Bool
     /// The hovered link's address at the bottom of the page (see StatusLine.swift).
@@ -156,8 +181,9 @@ final class Preferences: ObservableObject {
         autocorrect = store.value("autocorrect", or: false)
         autoScroll = store.value("autoscroll", or: false)
         fastPages = store.value("pages.120", or: false)
-        peeksLinks = store.value("links.peek", or: false)
-        peekClick = store.value("links.peekClick", or: .shift)
+        peeksLinks = store.value("links.peek", or: true)
+        peekClick = store.value("links.peekClick", or: .option)
+        shortcuts = store.value("keys.custom", or: Shortcuts())
         littleLinks = store.value("links.little", or: false)
         showsLinks = store.value("links.show", or: false)
         sleepsTabs = store.value("tabs.sleep", or: true)
@@ -223,6 +249,14 @@ final class Preferences: ObservableObject {
         keep($fastPages, "pages.120") { FrameRate.fast = $0 }
         keep($peeksLinks, "links.peek")
         keep($peekClick, "links.peekClick")
+        keep($shortcuts, "keys.custom") { _ in
+            // SwiftUI rebuilds a menu only as it opens, so a menu not opened
+            // since would keep answering to the old key. Ask each to rebuild
+            // now, once the new keys are in.
+            DispatchQueue.main.async {
+                for item in NSApp.mainMenu?.items ?? [] { if let menu = item.submenu { menu.delegate?.menuNeedsUpdate?(menu) } }
+            }
+        }
         keep($littleLinks, "links.little")
         keep($showsLinks, "links.show") { HoveredLink.on = $0 }
         keep($sleepsTabs, "tabs.sleep")

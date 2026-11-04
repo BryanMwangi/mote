@@ -41,7 +41,8 @@ final class KeyRouter {
         if owner == nil, browser?.extra == true { return false }
         // The small link window and Settings have keys of their own.
         if let little = LinkWindow.owning(event.window) { return little.take(event) }
-        if let settings = SettingsWindow.owning(event.window) { return settings.take(event) }
+        // Settings takes its own keys (see SettingsWindow), whichever windows are open.
+        if SettingsWindow.owning(event.window) != nil { return false }
         guard let browser else { return false }
         let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
         let press = KeyMap.Press(
@@ -66,7 +67,8 @@ final class KeyRouter {
             return true
         }
         let inText = browser.active?.typing == true || event.window?.firstResponder is NSTextView
-        let command = KeyMap.command(for: press, spaces: browser.usesSpaces, picking: browser.pickingElement, inText: inText)
+        let command = KeyMap.command(
+            for: press, spaces: browser.usesSpaces, picking: browser.pickingElement, inText: inText, shortcuts: browser.prefs.shortcuts)
         // ⌃ shortcuts of Mote's own (spaces, ⌃⇥) come before extensions'.
         if let command, !press.command {
             run(command, in: browser, event: event)
@@ -86,7 +88,9 @@ final class KeyRouter {
     /// the keyboard. If it doesn't use it, WebKit sends the same key again,
     /// and this time Mote takes it.
     private func leavesToPage(_ event: NSEvent, _ press: KeyMap.Press, picking: Bool) -> Bool {
-        guard KeyMap.pageGoesFirst(press, picking: picking), event.window?.firstResponder is PageView else { return false }
+        guard KeyMap.pageGoesFirst(press, picking: picking, shortcuts: browser?.prefs.shortcuts ?? Shortcuts()),
+            event.window?.firstResponder is PageView
+        else { return false }
         if let earlier = leftToPage, PageView.same(earlier, event) {
             leftToPage = nil
             return false
