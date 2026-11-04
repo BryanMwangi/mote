@@ -2,6 +2,7 @@ import AppKit
 import Combine
 import MoteCore
 import SwiftUI
+import UniformTypeIdentifiers
 import WebKit
 
 // Actions on the page showing and on the window's data: zoom, reader,
@@ -10,6 +11,32 @@ extension Browser {
     func zoom(by factor: CGFloat) { active?.magnify(by: factor) }
     func resetZoom() { active?.resetZoom() }
     func reload() { active?.reload() }
+    func reloadFromOrigin() { active?.reloadFromOrigin() }
+
+    /// ⌘O: pages, PDFs and pictures from the Mac, each in a tab.
+    func openFile() {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = true
+        panel.allowedContentTypes = [.html, .pdf, .image, .plainText, .webArchive, .svg]
+        guard panel.runModal() == .OK else { return }
+        for url in panel.urls { open(url, foreground: true) }
+    }
+
+    /// ⌃⌥C, Zen's compact mode: the sidebar tucked away and the toolbar on hover.
+    func toggleCompact() {
+        let on = !(prefs.sideHides && prefs.toolbarMode == .hover)
+        if on { Self.beforeCompact = (prefs.sideHides, prefs.toolbarMode == .hover ? .shown : prefs.toolbarMode) }
+        prefs.sideHides = on ? true : Self.beforeCompact.sideHides
+        prefs.toolbarMode = on ? .hover : Self.beforeCompact.toolbar
+    }
+
+    /// How the sidebar and toolbar were before compact mode, to go back to.
+    private static var beforeCompact: (sideHides: Bool, toolbar: ToolbarMode) = (false, .shown)
+
+    /// ⌃⌥T: the toolbar always there, or on hover.
+    func toggleToolbar() {
+        prefs.toolbarMode = prefs.toolbarMode == .shown ? .hover : .shown
+    }
     func back() { active?.back() }
     func forward() { active?.forward() }
 

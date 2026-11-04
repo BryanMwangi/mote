@@ -17,6 +17,9 @@ enum Session {
         /// An essential or pinned tab's id, the same in every window (see
         /// Browser+Held.swift); nil in older files and for the others.
         var held: String?
+        /// An essential or pinned tab's pinned address, when it has browsed
+        /// on; nil in older files, where it's `url`.
+        var home: String?
     }
 
     nonisolated struct Saved: Codable, Sendable {

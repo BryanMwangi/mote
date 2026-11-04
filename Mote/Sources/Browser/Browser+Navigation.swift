@@ -35,7 +35,7 @@ extension Browser: WKNavigationDelegate, WKUIDelegate {
             button: action.buttonNumber,
             keys: Self.keys(action.modifierFlags),
             // Only tabs in the row preview; links inside a preview just navigate.
-            canPeek: prefs.peeksLinks && from != nil && peekTab == nil)
+            peekKeys: prefs.peeksLinks && from != nil && peekTab == nil ? prefs.peekClick.keys : nil)
 
         switch NavigationPolicy.decide(request) {
         case .ignore:

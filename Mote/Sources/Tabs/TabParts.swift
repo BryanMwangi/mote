@@ -4,6 +4,8 @@ import SwiftUI
 /// A tab's close button: there on hover, with a hit area bigger than its cross.
 struct Shut: View {
     let shown: Bool
+    /// A pinned tab browsed away goes home instead (see `Tab.wandered`).
+    var home = false
     let act: () -> Void
 
     @State private var hovering = false
@@ -11,8 +13,8 @@ struct Shut: View {
     var body: some View {
         ZStack {
             if shown {
-                Image(systemName: "xmark")
-                    .font(.system(size: 8.5, weight: .semibold))
+                Image(systemName: home ? "arrow.uturn.backward" : "xmark")
+                    .font(.system(size: home ? 9 : 8.5, weight: .semibold))
                     .foregroundStyle(hovering ? Palette.ink.opacity(0.8) : Palette.muted)
                     .frame(width: 18, height: 18)
                     .background(Palette.veil.opacity(hovering ? 1.8 : 0), in: RoundedRectangle(cornerRadius: 5, style: .continuous))
@@ -27,8 +29,8 @@ struct Shut: View {
                 .onTapGesture { if shown { act() } }
                 .onHover { hovering = $0 }
         }
-        .help(shown ? "Close Tab   ⌘W" : "")
-        .accessibilityLabel("Close Tab")
+        .help(shown ? home ? "Back to Pinned Page" : "Close Tab   ⌘W" : "")
+        .accessibilityLabel(home ? "Back to Pinned Page" : "Close Tab")
         .animation(Motion.hover, value: hovering)
         .animation(Motion.hover, value: shown)
     }
@@ -133,6 +135,11 @@ struct TabHoldItems: View {
             } else {
                 Button("Pin Tab") { browser.keep(tab) }.disabled(tab.isBlank)
             }
+        }
+        // As Zen's: a held tab that has browsed on can go home, or move home here.
+        if tab.wandered {
+            Button("Back to Pinned Page") { browser.goHome(tab) }
+            Button("Replace Pinned Page with Current") { browser.moveHome(tab) }
         }
     }
 }

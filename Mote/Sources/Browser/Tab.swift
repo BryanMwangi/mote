@@ -89,6 +89,20 @@ final class Tab: ObservableObject, Identifiable {
     @Published var kept = false
     /// As an essential or pinned tab, its id in every window (Browser+Held.swift).
     var heldID: UUID?
+    /// As an essential or pinned tab, the address it was pinned at, which it
+    /// can go back to, as Zen's.
+    @Published var home: URL?
+    /// Held, and browsed away from its pinned address.
+    var wandered: Bool {
+        guard held, let home, let here = pending ?? address else { return false }
+        return Self.withoutFragment(here) != Self.withoutFragment(home)
+    }
+
+    private static func withoutFragment(_ url: URL) -> String {
+        var parts = URLComponents(url: url, resolvingAgainstBaseURL: false)
+        parts?.fragment = nil
+        return parts?.string ?? url.absoluteString
+    }
     /// A name given by the user, kept across navigations.
     @Published var name: String?
     /// The extension whose Web Store page already shows its own "Add to Mote".
@@ -325,6 +339,12 @@ final class Tab: ObservableObject, Identifiable {
 
     func reload() {
         // A waiting tab has no view to reload; waking it loads the page.
+        guard !wake() else { return }
+        if hollow, let address { web.open(address) } else { web.reload() }
+    }
+
+    /// ⌥⌘R: everything asked for again, nothing from the cache.
+    func reloadFromOrigin() {
         guard !wake() else { return }
         if hollow, let address { web.open(address) } else { web.reloadFromOrigin() }
     }

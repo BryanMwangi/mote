@@ -39,6 +39,8 @@ public enum KeyMap {
         /// Split view, as Zen's keys: the tab in front with the one before it,
         /// or its group, laid out so; or the group undone.
         case split(SplitGrid), unsplit
+        /// Zen's ⌃⌥ keys: the space before or after, compact mode, the toolbar.
+        case stepSpace(Int), compactMode, toggleToolbar
     }
 
     public static let escape: UInt16 = 53
@@ -56,6 +58,12 @@ public enum KeyMap {
 
     /// ⌃⌥G, V, H and U, by position, as Zen's split view keys.
     public static let splitKeys: [UInt16: Command] = [5: .split(.grid), 9: .split(.across), 4: .split(.down), 32: .unsplit]
+
+    /// Zen's other ⌃⌥ keys, by position: C compact mode, T the toolbar, S the
+    /// sidebar folded away.
+    public static let viewKeys: [UInt16: Command] = [8: .compactMode, 17: .toggleToolbar, 1: .foldTabs]
+    /// ⌃⌥Q and ⌃⌥E, with spaces on.
+    public static let spaceKeys: [UInt16: Command] = [12: .stepSpace(-1), 14: .stepSpace(1)]
 
     /// ⌘J in a new tab's composer: Return asks the assistant instead of
     /// searching, or searches again.
@@ -78,7 +86,10 @@ public enum KeyMap {
         }
         // F12 opens and closes the Web Inspector, as in Chrome, Firefox and Zen.
         if press.code == f12, !press.command, !press.option, !press.control, !press.shift { return .inspector }
-        if press.control, press.option, !press.command, !press.shift, let split = splitKeys[press.code] { return split }
+        if press.control, press.option, !press.command, !press.shift {
+            if let command = splitKeys[press.code] ?? viewKeys[press.code] { return command }
+            if spaces, let command = spaceKeys[press.code] { return command }
+        }
         guard press.command, !press.option, !press.control else { return nil }
         if !press.shift, let number = digits[press.code] {
             return number == 0 ? .actualSize : number == 9 ? .lastTab : .tab(number - 1)

@@ -27,7 +27,8 @@ extension Bench {
             "look": browser.prefs.look.rawValue, "appearance": NSApp.appearance?.name.rawValue ?? "system",
             "key": NSApp.keyWindow.map(describe) ?? "",
             "keysQuieted": PageView.quieted, "peek": browser.peekTab?.address?.absoluteString ?? "", "folded": browser.folded,
-            "peeking": browser.peeking,
+            "peeking": browser.peeking, "toolbarMode": browser.prefs.toolbarMode.rawValue, "peekClick": browser.prefs.peekClick.rawValue,
+            "spaceIndex": browser.spaces.firstIndex { $0.id == browser.spaceID } ?? -1,
             "sideHides": browser.prefs.sideHides, "lightsHidden": window.map { !TrafficLights.visible(in: $0) } ?? true,
             "siteCard": SiteCardPanel.isShown,
             "barEditing": browser.editingInBar, "firstResponder": window?.firstResponder.map { String(describing: type(of: $0)) } ?? "",
@@ -90,7 +91,7 @@ extension Bench {
             ("hidden", { browser.reviewing = $0 }), ("pages120", { prefs.fastPages = $0 }), ("sidebar", { prefs.sidebar = $0 }),
             ("spaces", { prefs.usesSpaces = $0 }), ("hides", { prefs.sideHides = $0 }), ("folded", { browser.folded = $0 }),
             ("peek", { browser.peeking = $0 }), ("bar", { if $0 { browser.edit() } else { browser.dismiss() } }),
-            ("chats", { if $0 { browser.showChats() } }),
+            ("chats", { if $0 { browser.showChats() } }), ("peeklinks", { prefs.peeksLinks = $0 }),
 
         ]
         for (key, set) in switches { request.bool(key).map(set) }
@@ -125,6 +126,9 @@ extension Bench {
         if Storage.testing, let id = request.string("unessential"), let found = tab(id) { browser.unpin(found) }
         if Storage.testing, let id = request.string("newwindow"), let found = tab(id) { browser.moveToNewWindow(found) }
         if Storage.testing, let id = request.string("source"), let found = tab(id) { browser.viewSource(of: found) }
+        // An essential or pinned tab back to its pinned page; the click that previews.
+        if Storage.testing, let id = request.string("home"), let found = tab(id) { browser.goHome(found) }
+        if let click = request.string("peekclick").flatMap(PeekClick.init(rawValue:)) { prefs.peekClick = click }
         // Split view (test runs): TAB:SIDE beside the tab in front, a layout, or undone.
         if Storage.testing, let what = request.string("split") {
             let parts = what.split(separator: ":").map(String.init)

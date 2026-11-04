@@ -12,9 +12,9 @@ import MoteCore
 @MainActor
 enum HeldSync {
     private struct Shape: Equatable {
-        let held: String?, pin: String?, kept: Bool, name: String?, chat: String?
+        let held: String?, pin: String?, kept: Bool, name: String?, chat: String?, home: String?
         init(_ entry: Session.Entry) {
-            (held, pin, kept, name, chat) = (entry.held, entry.pin, entry.kept == true, entry.name, entry.chat)
+            (held, pin, kept, name, chat, home) = (entry.held, entry.pin, entry.kept == true, entry.name, entry.chat, entry.home)
         }
     }
 
@@ -59,6 +59,9 @@ extension Browser {
                 if tab.pin != entry.pin { tab.pin = entry.pin }
                 if tab.kept != (entry.kept == true) { tab.kept = entry.kept == true }
                 if tab.name != entry.name { tab.name = entry.name }
+                // Home is the saved one, or the saved address when it's still there.
+                let home = entry.home.flatMap(URL.init(string:)) ?? (entry.chat == nil ? URL(string: entry.url) : nil)
+                if tab.home != home { tab.home = home }
                 held.append(tab)
             } else {
                 let tab = Tab(configuration: Web.configuration(space: space))

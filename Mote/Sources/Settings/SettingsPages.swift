@@ -73,8 +73,17 @@ struct GeneralSettings: View {
 
         SettingsSection("Links") {
             SettingRow(
-                "Preview with Shift", "Shift-click a link to see it over the page; keep it as a tab if you like it", symbol: "eye",
-                tint: Tint.teal, on: $prefs.peeksLinks)
+                "Preview links", "\(prefs.peekClick.title) a link to see it over the page; keep it as a tab if you like it",
+                symbol: "eye", tint: Tint.teal, on: $prefs.peeksLinks)
+            if prefs.peeksLinks {
+                RowRule()
+                SettingRow("Preview with", "Option-click is Zen's Glance", symbol: "cursorarrow.click", tint: Tint.teal) {
+                    Picker("", selection: $prefs.peekClick) { ForEach(PeekClick.allCases) { Text($0.title).tag($0) } }
+                        .labelsHidden()
+                        .pickerStyle(.menu)
+                        .fixedSize()
+                }
+            }
             RowRule()
             SettingRow(
                 "Links from other apps in a small window", "Handy for a quick look. ⌘O moves it into your tabs",

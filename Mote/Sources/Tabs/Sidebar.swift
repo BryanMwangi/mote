@@ -388,6 +388,34 @@ private struct PinnedTabs: View {
     }
 }
 
+/// The essential in front, as Zen's (`zen.theme.essentials-favicon-bg`):
+/// its own icon blown up to twice the square and blurred behind it, under
+/// a frosted panel inset by 2 points, so the icon's colours ring the edge
+/// and wash the middle. Drawn only for the one in front.
+private struct IconGlow: View {
+    let icon: NSImage
+    let corner: CGFloat
+    let dark: Bool
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: corner, style: .continuous)
+        GeometryReader { room in
+            ZStack {
+                Image(nsImage: icon)
+                    .resizable()
+                    .frame(width: room.size.width * 2, height: room.size.height * 2)
+                    .blur(radius: 20)
+                RoundedRectangle(cornerRadius: corner - 2, style: .continuous)
+                    .fill(dark ? Color(red: 68 / 255, green: 64 / 255, blue: 64 / 255).opacity(0.85) : .white.opacity(0.85))
+                    .padding(2)
+            }
+            .frame(width: room.size.width, height: room.size.height)
+        }
+        .clipShape(shape)
+        .allowsHitTesting(false)
+    }
+}
+
 /// Fixed cells, row by row, a short last row keeping to the left. Not a
 /// LazyVGrid: that makes cells only once on screen, so they missed the
 /// sidebar's slide in.
@@ -420,6 +448,7 @@ private struct PinSquare: View {
     let size: CGSize
 
     @State private var hovering = false
+    @Environment(\.colorScheme) private var colorScheme
 
     /// Contents scale with the shorter side, so the mark stays its usual size.
     private var side: CGFloat { min(size.width, size.height) }
@@ -431,7 +460,9 @@ private struct PinSquare: View {
             .frame(width: side * 16 / 34, height: side * 16 / 34)
             .frame(width: size.width, height: size.height)
             .background {
-                if live {
+                if live, let icon = tab.icon {
+                    IconGlow(icon: icon, corner: corner, dark: colorScheme == .dark)
+                } else if live {
                     Lifted(corner: corner)
                 } else {
                     shape.fill(Palette.veil.opacity(hovering ? 1.8 : 1))
@@ -534,7 +565,11 @@ private struct SideRow: View {
         // Over the row, not inside it: inside, its click would wait out the
         // double-click interval of the tab you're on before closing it.
         .overlay(alignment: .trailing) {
-            if !renaming { Shut(shown: hovering, act: close).padding(.trailing, preview == nil ? 7 : 30) }
+            if !renaming {
+                let home = tab.wandered
+                Shut(shown: hovering, home: home, act: home ? { browser.goHome(tab) } : close)
+                    .padding(.trailing, preview == nil ? 7 : 30)
+            }
         }
         .onHover { over in
             hovering = over

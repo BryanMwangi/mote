@@ -38,6 +38,19 @@ struct KeyMapTests {
         #expect(command("g", 5, option: true, control: true) == nil)
     }
 
+    @Test("Zen's ⌃⌥ keys: Q and E step through spaces when they're on; C, T and S change the view")
+    func zenViewKeys() {
+        let press = { (code: UInt16, spaces: Bool) in command("œ", code, command: false, option: true, control: true, spaces: spaces) }
+        #expect(press(12, true) == .stepSpace(-1))
+        #expect(press(14, true) == .stepSpace(1))
+        #expect(press(12, false) == nil)
+        #expect(press(8, false) == .compactMode)
+        #expect(press(17, false) == .toggleToolbar)
+        #expect(press(1, false) == .foldTabs)
+        #expect(command("c", 8, command: false, control: true) == nil)
+        #expect(command("c", 8, command: false, shift: true, option: true, control: true) == nil)
+    }
+
     @Test("F12 opens the Web Inspector; with a modifier it's left alone")
     func f12() {
         #expect(command("", KeyMap.f12, command: false) == .inspector)

@@ -27,6 +27,12 @@ extension Browser {
         if spaces.indices.contains(index) { switchSpace(to: spaces[index].id) }
     }
 
+    /// ⌃⌥Q and ⌃⌥E: the space before or after, round from the ends, as Zen.
+    func stepSpace(_ by: Int) {
+        guard spaces.count > 1, let here = spaces.firstIndex(where: { $0.id == spaceID }) else { return }
+        switchSpace(index: (here + by + spaces.count) % spaces.count)
+    }
+
     /// Parks this space's tabs as they are (their media keeps playing) and
     /// shows the other's.
     private func enter(_ id: UUID) {

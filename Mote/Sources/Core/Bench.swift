@@ -266,7 +266,8 @@ struct BenchCall {
         [
             "id": BenchWire.short(tab.id), "url": tab.address?.absoluteString ?? "", "title": tab.title, "name": tab.name ?? "",
             "loading": tab.loading, "hollow": tab.hollow, "view": tab.built?.url?.absoluteString ?? "", "bench": tab.bench,
-            "active": tab.id == browser.activeID, "asleep": tab.asleep, "shy": tab.shy, "noisy": tab.noisy, "muted": tab.muted,
+            "active": tab.id == browser.activeID, "asleep": tab.asleep, "home": tab.home?.absoluteString ?? "", "wandered": tab.wandered,
+            "shy": tab.shy, "noisy": tab.noisy, "muted": tab.muted,
             "extensions": { if #available(macOS 15.4, *) { tab.carriesExtensions } else { false } }(),
         ]
     }

@@ -13,6 +13,15 @@ enum Glyph: String, CaseIterable, Identifiable, Storable {
 
 /// Where the toolbar is: always on the card, out of the way until the
 /// pointer reaches the card's top edge, or (beside a sidebar) moved into it.
+/// The click that previews a link: shift, or option as Zen's Glance.
+enum PeekClick: String, CaseIterable, Identifiable, Storable {
+    case shift, option
+
+    var id: String { rawValue }
+    var title: String { self == .shift ? "Shift-click" : "Option-click" }
+    var keys: NavigationPolicy.Keys { self == .shift ? .shift : .option }
+}
+
 enum ToolbarMode: String, CaseIterable, Identifiable, Storable {
     case shown, hover, hidden
 
@@ -73,6 +82,7 @@ final class Preferences: ObservableObject {
     @Published var fastPages: Bool
     /// Shift-click previews a link over the page (see LinkPeek.swift).
     @Published var peeksLinks: Bool
+    @Published var peekClick: PeekClick
     /// Links from other apps open in a small window (see LinkWindow.swift).
     @Published var littleLinks: Bool
     /// The hovered link's address at the bottom of the page (see StatusLine.swift).
@@ -147,6 +157,7 @@ final class Preferences: ObservableObject {
         autoScroll = store.value("autoscroll", or: false)
         fastPages = store.value("pages.120", or: false)
         peeksLinks = store.value("links.peek", or: false)
+        peekClick = store.value("links.peekClick", or: .shift)
         littleLinks = store.value("links.little", or: false)
         showsLinks = store.value("links.show", or: false)
         sleepsTabs = store.value("tabs.sleep", or: true)
@@ -211,6 +222,7 @@ final class Preferences: ObservableObject {
         keep($autoScroll, "autoscroll") { AutoScroll.on = $0 }
         keep($fastPages, "pages.120") { FrameRate.fast = $0 }
         keep($peeksLinks, "links.peek")
+        keep($peekClick, "links.peekClick")
         keep($littleLinks, "links.little")
         keep($showsLinks, "links.show") { HoveredLink.on = $0 }
         keep($sleepsTabs, "tabs.sleep")

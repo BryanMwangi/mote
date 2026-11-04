@@ -171,6 +171,9 @@ final class KeyRouter {
         case .actualSize: browser.resetZoom()
         case .inspector: browser.toggleInspector()
         case .split(let grid): browser.splitKey(grid)
+        case .stepSpace(let by): browser.stepSpace(by)
+        case .compactMode: browser.toggleCompact()
+        case .toggleToolbar: browser.toggleToolbar()
         case .unsplit: if let group = browser.activeID.flatMap(browser.group(of:)) { browser.unsplit(group: group) }
         }
     }

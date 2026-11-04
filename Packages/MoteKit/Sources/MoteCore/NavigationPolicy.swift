@@ -26,15 +26,16 @@ public enum NavigationPolicy {
         /// WebKit's button mask: 1 left, 2 right, 4 middle.
         public var button: Int
         public var keys: Keys
-        /// Shift-click previews are on and this tab can show one.
-        public var canPeek: Bool
+        /// The keys that preview a link (shift, or option as in Zen); nil
+        /// when previews are off or this tab can't show one.
+        public var peekKeys: Keys?
 
-        public init(scheme: String, clicked: Bool, button: Int = 1, keys: Keys = [], canPeek: Bool = false) {
+        public init(scheme: String, clicked: Bool, button: Int = 1, keys: Keys = [], peekKeys: Keys? = nil) {
             self.scheme = scheme.lowercased()
             self.clicked = clicked
             self.button = button
             self.keys = keys
-            self.canPeek = canPeek
+            self.peekKeys = peekKeys
         }
 
         var isWeb: Bool { scheme == "http" || scheme == "https" }
@@ -55,8 +56,8 @@ public enum NavigationPolicy {
         // Middle-clicks are opened by the page script, which sees them first.
         if request.clicked, request.button == 4 { return .ignore }
         if request.clicked, request.isWeb {
-            // Shift alone previews; ⌘ opens a background tab, ⌘⇧ a foreground one.
-            if request.canPeek, request.keys == .shift { return .peek }
+            // The preview's key alone previews; ⌘ opens a background tab, ⌘⇧ a foreground one.
+            if let peek = request.peekKeys, request.keys == peek { return .peek }
             if request.keys.contains(.command) { return .openTab(foreground: request.keys.contains(.shift)) }
         }
         return loadable.contains(request.scheme) ? .load : .handOff

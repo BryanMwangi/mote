@@ -58,11 +58,15 @@ private struct MenuBar: Commands {
             Button("Reopen Closed Window") { Windows.shared.reopenClosed() }.disabled(!Windows.shared.canReopen)
             Divider()
             Button("Open Address…", action: browser.edit).keyboardShortcut("l")
+            Button("Open File…", action: browser.openFile).keyboardShortcut("o")
             Divider()
             Button("Close Tab") { if let tab = browser.active { browser.close(tab) } }.keyboardShortcut("w")
         }
         CommandGroup(replacing: .printItem) {
             Button("Share…", action: browser.share).disabled(blank)
+            Button("Save Page As…", action: browser.savePage).keyboardShortcut("s", modifiers: [.command, .option]).disabled(blank)
+            Button("Take Screenshot") { browser.active?.screenshot() }.keyboardShortcut("s", modifiers: [.command, .option, .shift])
+                .disabled(blank)
             Button("Print…", action: browser.printPage).keyboardShortcut("p").disabled(blank)
         }
         CommandGroup(after: .pasteboard) {
@@ -101,11 +105,21 @@ private struct MenuBar: Commands {
         // Folds the sidebar or strip away (see SidebarFold).
         Button("\(browser.folded ? "Show" : "Hide") \(browser.prefs.sidebar ? "Sidebar" : "Tab Bar")", action: browser.toggleFold)
             .keyboardShortcut("s")
+        // Zen's keys; KeyRouter takes them first, so they work over a page too.
+        Button("Compact Mode", action: browser.toggleCompact).keyboardShortcut("c", modifiers: [.control, .option])
+        Button(browser.prefs.toolbarMode == .shown ? "Toolbar on Hover" : "Always Show Toolbar", action: browser.toggleToolbar)
+            .keyboardShortcut("t", modifiers: [.control, .option])
+        if browser.usesSpaces {
+            Button("Previous Space") { browser.stepSpace(-1) }.keyboardShortcut("q", modifiers: [.control, .option])
+            Button("Next Space") { browser.stepSpace(1) }.keyboardShortcut("e", modifiers: [.control, .option])
+        }
         Picker("Tabs Wear", selection: Binding(get: { browser.prefs.glyph }, set: { browser.prefs.glyph = $0 })) {
             ForEach(Glyph.allCases) { Text($0.title).tag($0) }
         }
         Divider()
         Button("Reload Page", action: browser.reload).keyboardShortcut("r")
+        Button("Reload Skipping Cache", action: browser.reloadFromOrigin).keyboardShortcut("r", modifiers: [.command, .option])
+            .disabled(blank)
         Button("Reading Mode", action: browser.toggleReader).keyboardShortcut("r", modifiers: [.command, .shift])
         Button("Float Video", action: browser.toggleFloat).keyboardShortcut("p", modifiers: [.command, .shift])
         Toggle(
@@ -126,6 +140,8 @@ private struct MenuBar: Commands {
         Button("Web Inspector", action: browser.toggleInspector).keyboardShortcut("i", modifiers: [.command, .option])
         Button("JavaScript Console", action: browser.showConsole).keyboardShortcut("j", modifiers: [.command, .option])
         Button("Inspect Element", action: browser.inspectElement).keyboardShortcut("c", modifiers: [.command, .option])
+        Button("View Page Source") { if let tab = browser.active { browser.viewSource(of: tab) } }
+            .keyboardShortcut("u", modifiers: [.command, .option]).disabled(blank)
         Button("Responsive Design Mode", action: browser.toggleResponsive).keyboardShortcut("r", modifiers: [.command, .control])
             .disabled(blank)
     }

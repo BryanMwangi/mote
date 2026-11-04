@@ -27,12 +27,21 @@ struct NavigationPolicyTests {
             NavigationPolicy.decide(Request(scheme: "https", clicked: true, keys: [.command, .shift])) == .openTab(foreground: true))
     }
 
-    @Test("Shift-click previews only when previews are possible, and only with shift alone")
+    @Test("The preview's click previews only when previews are possible, and only with its key alone")
     func peeks() {
-        #expect(NavigationPolicy.decide(Request(scheme: "https", clicked: true, keys: .shift, canPeek: true)) == .peek)
+        #expect(NavigationPolicy.decide(Request(scheme: "https", clicked: true, keys: .shift, peekKeys: .shift)) == .peek)
         #expect(NavigationPolicy.decide(Request(scheme: "https", clicked: true, keys: .shift)) == .load)
         #expect(
-            NavigationPolicy.decide(Request(scheme: "https", clicked: true, keys: [.shift, .option], canPeek: true)) == .load)
+            NavigationPolicy.decide(Request(scheme: "https", clicked: true, keys: [.shift, .option], peekKeys: .shift)) == .load)
+    }
+
+    @Test("Option-click previews when chosen, as Zen's Glance; then shift-click doesn't, and ⌘-click still opens a tab")
+    func peeksWithOption() {
+        #expect(NavigationPolicy.decide(Request(scheme: "https", clicked: true, keys: .option, peekKeys: .option)) == .peek)
+        #expect(NavigationPolicy.decide(Request(scheme: "https", clicked: true, keys: .shift, peekKeys: .option)) == .load)
+        #expect(
+            NavigationPolicy.decide(Request(scheme: "https", clicked: true, keys: .command, peekKeys: .option))
+                == .openTab(foreground: false))
     }
 
     @Test("A middle-click is left to the page script")
