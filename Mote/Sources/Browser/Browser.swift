@@ -32,12 +32,14 @@ final class Browser: NSObject, ObservableObject {
         }
     }
 
-    let prefs = Preferences()
+    // Shared by every window (AppState).
+    let prefs = AppState.shared.prefs
+    let history = AppState.shared.history
+    let bookmarks = AppState.shared.bookmarks
+    let downloads = AppState.shared.downloads
+    let elementHider = AppState.shared.elementHider
+    // This window's own.
     let linkStatus = LinkStatus()
-    let history = History()
-    let bookmarks = Bookmarks()
-    let downloads = Downloads()
-    let elementHider = ElementHider()
     let floater = FloatingVideo()
 
     let field = AddressEntry()
