@@ -61,6 +61,20 @@ public struct TabRow<Tab: Identifiable> {
         return tabs[next].id
     }
 
+    /// The open tabs at the same address as `id`, not it (Close Duplicate
+    /// Tabs). Essentials and pinned tabs stay; a tab without an address has no
+    /// duplicates.
+    public func duplicates(of id: Tab.ID, address: (Tab) -> String?) -> [Tab.ID] {
+        guard let here = tabs.first(where: { $0.id == id }), let wanted = address(here) else { return [] }
+        return tabs.filter { $0.id != id && section($0) == .loose && address($0) == wanted }.map(\.id)
+    }
+
+    /// The open tabs after `id` (Close Tabs Below).
+    public func below(_ id: Tab.ID) -> [Tab.ID] {
+        guard let here = index(of: id) else { return [] }
+        return tabs[(here + 1)...].filter { section($0) == .loose }.map(\.id)
+    }
+
     /// The tab that takes over after the tab at `index` was removed: the one
     /// that slid into its place, or the new last tab.
     public func successor(ofRemovedAt index: Int) -> Tab.ID? {

@@ -34,14 +34,19 @@ final class Extensions: NSObject, ObservableObject {
     /// Each extension's latest errors, oldest first.
     @Published private(set) var errors: [String: [String]] = [:]
 
+    /// The main window's browser; `front` is the window in front.
     weak var browser: Browser?
+    var front: Browser? { Browser.front ?? browser }
     var subscriptions = Set<AnyCancellable>()
 
-    // Tabs as extensions see them (Extensions+Tabs).
+    // Windows and their tabs as extensions see them (Extensions+Tabs), by browser.
     var adapters: [Tab.ID: ExtensionTab] = [:]
-    var order: [Tab.ID] = []
+    var orders: [ObjectIdentifier: [Tab.ID]] = [:]
+    var windows: [ObjectIdentifier: ExtensionWindow] = [:]
+    var windowWatches: [ObjectIdentifier: [AnyCancellable]] = [:]
+    /// Tabs announced as moved to another window, so that window doesn't announce them as new.
+    var moved: Set<Tab.ID> = []
     var tabWatches: [Tab.ID: [AnyCancellable]] = [:]
-    private(set) lazy var window = ExtensionWindow(owner: self)
     /// The toolbar views popups hang from, by extension id or `menuAnchor`.
     var anchors: [String: WeakView] = [:]
     /// The puzzle button's menu is open.

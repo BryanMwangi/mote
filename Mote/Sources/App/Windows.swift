@@ -26,6 +26,9 @@ final class Windows {
 
     private let file = JSONFile<[Record]>("windows.json")
     private var restored = false
+    /// Windows closed by hand, the latest last, their tabs' files kept to reopen them.
+    private var closedWindows: [(record: Record, spaces: [UUID])] = []
+    var canReopen: Bool { !closedWindows.isEmpty }
 
     var all: [Browser] { (main.map { [$0] } ?? []) + extra.values }
 
@@ -38,6 +41,7 @@ final class Windows {
         prepare(browser)
         extra[id] = browser
         opener?(id)
+        if #available(macOS 15.4, *) { Extensions.shared.followTabs(of: browser) }
         save()
         return browser
     }
@@ -65,19 +69,43 @@ final class Windows {
     /// The windows to bring back: not the private ones.
     private var records: [Record] { extra.filter { !$0.value.isPrivate }.map { Record(id: $0.key, space: $0.value.spaceID) } }
 
+    /// The window closed last, back with its tabs.
+    func reopenClosed() {
+        guard let last = closedWindows.popLast() else { return }
+        open(id: last.record.id, space: last.record.space)
+    }
+
     /// Before quitting: every window's tabs, now.
     func flush() {
         quitting = true
+        for closed in closedWindows { Session.erase(window: closed.record.id, spaces: closed.spaces) }
+        closedWindows = []
         for browser in extra.values { browser.writeSession(now: true) }
         file.saveNow(records)
     }
 
-    /// A window opened since the main one has closed: its tabs go with it,
-    /// and it's forgotten, unless the app is quitting.
+    /// A window opened since the main one has closed: its tabs go with it.
+    /// The last few are kept to reopen (a private one isn't); at quit, all
+    /// come back.
     func closed(_ browser: Browser) {
         guard browser.extra, !quitting, let id = extra.first(where: { $0.value === browser })?.key else { return }
         extra[id] = nil
-        Session.erase(window: id, spaces: browser.spaces.map(\.id))
+        if #available(macOS 15.4, *) { Extensions.shared.forget(browser) }
+        let spaces = browser.spaces.map(\.id)
+        if browser.isPrivate {
+            Session.erase(window: id, spaces: spaces)
+        } else {
+            for space in spaces {
+                browser.writeSession(
+                    now: true, space: space, tabs: space == browser.spaceID ? browser.tabs : browser.parked[space]?.tabs ?? [],
+                    active: space == browser.spaceID ? browser.activeID : browser.parked[space]?.active)
+            }
+            closedWindows.append((Record(id: id, space: browser.spaceID), spaces))
+            if closedWindows.count > 5 {
+                let oldest = closedWindows.removeFirst()
+                Session.erase(window: oldest.record.id, spaces: oldest.spaces)
+            }
+        }
         browser.tabs.forEach { $0.close() }
         browser.parkedTabs.forEach { $0.close() }
         if Browser.front === browser { Browser.front = main }

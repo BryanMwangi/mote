@@ -3,8 +3,9 @@ import Combine
 import MoteCore
 import WebKit
 
-// The browser as extensions see it: one window, and its tabs. Private tabs
-// stay out of sight unless made to carry extensions (Settings › Extensions).
+// The browser as extensions see it: every window, each with its tabs. Private
+// tabs stay out of sight unless made to carry extensions (Settings ›
+// Extensions); a private window's do too.
 
 @available(macOS 15.4, *)
 extension Extensions {
@@ -17,53 +18,98 @@ extension Extensions {
 
     func shows(_ tab: Tab) -> Bool { !tab.shy || tab.carriesExtensions }
 
-    /// Every tab of every space, in the spaces' order: the showing space's,
-    /// and the others' parked. Extensions see them all, as Firefox shows a
-    /// workspace's hidden tabs, so switching spaces is just another tab in
-    /// front, not every tab closing and opening.
-    var visibleTabs: [Tab] {
-        guard let browser else { return [] }
-        guard browser.prefs.usesSpaces else { return browser.tabs.filter(shows) }
+    /// A browser's window, as extensions see it.
+    func window(for browser: Browser) -> ExtensionWindow {
+        let key = ObjectIdentifier(browser)
+        if let known = windows[key] { return known }
+        let made = ExtensionWindow(owner: self, browser: browser)
+        windows[key] = made
+        return made
+    }
+
+    /// The window holding a tab now: tabs move between windows.
+    func holder(of tab: Tab) -> Browser? {
+        Windows.shared.all.first { browser in browser.tabs.contains { $0 === tab } || browser.parkedTabs.contains { $0 === tab } }
+    }
+
+    /// A window's tabs in every space, in the spaces' order: the showing
+    /// space's, and the others' parked. Extensions see them all, as Firefox
+    /// shows a workspace's hidden tabs, so switching spaces is just another tab
+    /// in front, not every tab closing and opening.
+    func visibleTabs(in browser: Browser) -> [Tab] {
+        guard browser.usesSpaces else { return browser.tabs.filter(shows) }
         return browser.spaces.flatMap { space in space.id == browser.spaceID ? browser.tabs : browser.parked[space.id]?.tabs ?? [] }
             .filter(shows)
     }
 
+    /// Every window's, the main one first.
+    var visibleTabs: [Tab] { Windows.shared.all.flatMap(visibleTabs(in:)) }
+
     var activeAdapter: ExtensionTab? {
-        guard let tab = browser?.active, shows(tab) else { return nil }
+        guard let tab = front?.active, shows(tab) else { return nil }
         return adapter(for: tab)
     }
 
     func followTabs(of browser: Browser) {
-        controller.didOpenWindow(window)
-        // After the change has landed: a space switch moves both at once.
-        browser.$tabs.map { _ in () }.merge(with: browser.$parked.map { _ in () })
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] in self?.tabsChanged() }
-            .store(in: &subscriptions)
-        browser.$activeID
-            .removeDuplicates()
-            .scan((nil, nil)) { ($0.1, $1) }
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] pair in self?.selected(pair.1, after: pair.0) }
-            .store(in: &subscriptions)
+        let key = ObjectIdentifier(browser)
+        guard windowWatches[key] == nil else { return }
+        controller.didOpenWindow(window(for: browser))
+        windowWatches[key] = [
+            // After the change has landed: a space switch moves both at once.
+            browser.$tabs.map { _ in () }.merge(with: browser.$parked.map { _ in () })
+                .receive(on: DispatchQueue.main)
+                .sink { [weak self, weak browser] in if let browser { self?.tabsChanged(in: browser) } },
+            browser.$activeID
+                .removeDuplicates()
+                .scan((nil, nil)) { ($0.1, $1) }
+                .receive(on: DispatchQueue.main)
+                .sink { [weak self, weak browser] pair in if let browser { self?.selected(pair.1, after: pair.0, in: browser) } },
+        ]
     }
 
-    private func tabsChanged() {
-        let shown = visibleTabs
-        let changes = ExtensionRules.tabChanges(from: order, to: shown.map(\.id))
+    /// A window closed: its tabs went with it.
+    func forget(_ browser: Browser) {
+        let key = ObjectIdentifier(browser)
+        guard windowWatches.removeValue(forKey: key) != nil, let window = windows.removeValue(forKey: key) else { return }
+        for id in orders.removeValue(forKey: key) ?? [] {
+            if let adapter = adapters.removeValue(forKey: id) { controller.didCloseTab(adapter, windowIsClosing: true) }
+            tabWatches[id] = nil
+        }
+        controller.didCloseWindow(window)
+    }
+
+    /// The window in front changed.
+    func focused(_ browser: Browser) {
+        if windowWatches[ObjectIdentifier(browser)] != nil { controller.didFocusWindow(window(for: browser)) }
+    }
+
+    private func tabsChanged(in browser: Browser) {
+        let key = ObjectIdentifier(browser)
+        let shown = visibleTabs(in: browser)
+        let before = orders[key] ?? []
+        let changes = ExtensionRules.tabChanges(from: before, to: shown.map(\.id))
         for id in changes.closed {
-            if let adapter = adapters[id] { controller.didCloseTab(adapter, windowIsClosing: false) }
+            guard let adapter = adapters[id] else { continue }
+            // Gone to another window: a move there, not a close.
+            if let tab = adapter.tab, let there = holder(of: tab), there !== browser {
+                moved.insert(id)
+                controller.didMoveTab(adapter, from: before.firstIndex(of: id) ?? 0, in: window(for: browser))
+                continue
+            }
+            controller.didCloseTab(adapter, windowIsClosing: false)
             adapters[id] = nil
             tabWatches[id] = nil
         }
         for tab in shown where changes.opened.contains(tab.id) {
+            // Come from another window, which tells extensions it moved.
+            if moved.remove(tab.id) != nil || orders.contains(where: { $0.key != key && $0.value.contains(tab.id) }) { continue }
             controller.didOpenTab(adapter(for: tab))
             watch(tab)
         }
         for (id, from) in changes.moved {
-            if let adapter = adapters[id] { controller.didMoveTab(adapter, from: from, in: window) }
+            if let adapter = adapters[id] { controller.didMoveTab(adapter, from: from, in: window(for: browser)) }
         }
-        order = shown.map(\.id)
+        orders[key] = shown.map(\.id)
     }
 
     private func watch(_ tab: Tab) {
@@ -80,8 +126,8 @@ extension Extensions {
         ]
     }
 
-    private func selected(_ id: Tab.ID?, after previous: Tab.ID?) {
-        guard let browser, let tab = id.flatMap(browser.tab), shows(tab) else { return }
+    private func selected(_ id: Tab.ID?, after previous: Tab.ID?, in browser: Browser) {
+        guard let tab = id.flatMap(browser.tab), shows(tab) else { return }
         controller.didActivateTab(adapter(for: tab), previousActiveTab: previous.flatMap(browser.tab).map(adapter(for:)))
         actionsChanged += 1
     }
@@ -99,13 +145,15 @@ final class ExtensionTab: NSObject, WKWebExtensionTab {
         self.owner = owner
     }
 
-    private var browser: Browser? { owner.browser }
+    /// The window the tab is in now.
+    private var browser: Browser? { tab.flatMap(owner.holder(of:)) }
     private var page: WKWebView? { tab?.built }
 
-    func window(for context: WKWebExtensionContext) -> (any WKWebExtensionWindow)? { owner.window }
+    func window(for context: WKWebExtensionContext) -> (any WKWebExtensionWindow)? { browser.map(owner.window(for:)) }
 
     func indexInWindow(for context: WKWebExtensionContext) -> Int {
-        tab.flatMap { tab in owner.visibleTabs.firstIndex { $0.id == tab.id } } ?? NSNotFound
+        guard let tab, let browser else { return NSNotFound }
+        return owner.visibleTabs(in: browser).firstIndex { $0.id == tab.id } ?? NSNotFound
     }
 
     func webView(for context: WKWebExtensionContext) -> WKWebView? { page }
@@ -160,22 +208,31 @@ final class ExtensionTab: NSObject, WKWebExtensionTab {
     }
 }
 
-/// The browser window, for WebKit's extension APIs. Mote has just the one.
+/// A browser window, for WebKit's extension APIs: one per Browser.
 @available(macOS 15.4, *)
 @MainActor
 final class ExtensionWindow: NSObject, WKWebExtensionWindow {
     unowned let owner: Extensions
+    weak var browser: Browser?
 
-    init(owner: Extensions) { self.owner = owner }
-
-    private var shown: NSWindow? {
-        NSApp.windows.first { $0.isVisible && $0.contentView != nil && $0.frameAutosaveName == "mote" } ?? NSApp.mainWindow
+    init(owner: Extensions, browser: Browser) {
+        self.owner = owner
+        self.browser = browser
     }
 
-    func tabs(for context: WKWebExtensionContext) -> [any WKWebExtensionTab] { owner.visibleTabs.map(owner.adapter(for:)) }
-    func activeTab(for context: WKWebExtensionContext) -> (any WKWebExtensionTab)? { owner.activeAdapter }
+    private var shown: NSWindow? { browser?.window }
+
+    func tabs(for context: WKWebExtensionContext) -> [any WKWebExtensionTab] {
+        browser.map { owner.visibleTabs(in: $0).map(owner.adapter(for:)) } ?? []
+    }
+
+    func activeTab(for context: WKWebExtensionContext) -> (any WKWebExtensionTab)? {
+        guard let tab = browser?.active, owner.shows(tab) else { return nil }
+        return owner.adapter(for: tab)
+    }
+
     func windowType(for context: WKWebExtensionContext) -> WKWebExtension.WindowType { .normal }
-    func isPrivate(for context: WKWebExtensionContext) -> Bool { false }
+    func isPrivate(for context: WKWebExtensionContext) -> Bool { browser?.isPrivate == true }
     func frame(for context: WKWebExtensionContext) -> CGRect { shown?.frame ?? .null }
     func screenFrame(for context: WKWebExtensionContext) -> CGRect { shown?.screen?.frame ?? NSScreen.main?.frame ?? .null }
 

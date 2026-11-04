@@ -20,6 +20,9 @@ struct Reorderable: ViewModifier {
     @Binding var drag: ReorderDrag<Tab.ID>?
     /// The leading edge reserved for window controls, when dragging along a strip.
     var leadingLimit: CGFloat? = nil
+    /// Let go outside the window: the tab leaves for another window, or a new
+    /// one (Browser.drop). Open tabs only: essentials and pinned tabs are the space's.
+    var dropOutside: (() -> Void)? = nil
     let move: (Int) -> Void
     @State private var originX: CGFloat?
 
@@ -69,6 +72,10 @@ struct Reorderable: ViewModifier {
 
     private func ended() {
         guard var landing = drag, landing.id == id, !landing.landed else { return }
+        if let dropOutside, let window = NSApp.keyWindow, !window.frame.contains(NSEvent.mouseLocation) {
+            drag = nil
+            return dropOutside()
+        }
         landing.land()
         // The new order and the offsets that keep every tab where it is on
         // screen, in one update with nothing animated: the list's own animation

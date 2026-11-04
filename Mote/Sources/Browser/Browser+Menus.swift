@@ -19,35 +19,54 @@ extension Browser {
         for space in spaces where space.id != spaceID { unload(space: space.id) }
     }
 
-    /// Other open tabs at the same address; essentials and pinned tabs stay.
+    /// Other open tabs at the same address; essentials and pinned tabs stay (TabRow).
     func closeDuplicates(of tab: Tab) {
-        let address = (tab.pending ?? tab.address)?.absoluteString
-        guard let address else { return }
-        for other in tabs where other !== tab && !other.held && (other.pending ?? other.address)?.absoluteString == address {
-            close(other)
-        }
+        let ids = row.duplicates(of: tab.id) { ($0.pending ?? $0.address)?.absoluteString }
+        for id in ids { if let other = self.tab(id) { close(other) } }
     }
 
-    /// The open tabs after this one.
+    /// The open tabs after this one (TabRow).
     func closeTabs(below tab: Tab) {
-        guard let at = tabs.firstIndex(where: { $0 === tab }) else { return }
-        for other in tabs[(at + 1)...] where !other.held { close(other) }
+        for id in row.below(tab.id) { if let other = self.tab(id) { close(other) } }
     }
 
     /// The tab, its page and history as they are, in a window of its own.
     /// Essentials and pinned tabs belong to the space, so they stay.
-    func moveToNewWindow(_ tab: Tab) {
-        guard !tab.held, tabs.count > 1 else { return }
+    func moveToNewWindow(_ tab: Tab) { move(tab, to: nil) }
+
+    /// A tab let go outside its window: onto another Mote window, it goes
+    /// there; elsewhere, into a new window where it was let go.
+    func drop(_ tab: Tab) {
+        let pointer = NSEvent.mouseLocation
+        let under = NSWindow.windowNumber(at: pointer, belowWindowWithWindowNumber: 0)
+        let target = Windows.shared.browser(for: NSApp.windows.first { $0.windowNumber == under })
+        if let target, target !== self {
+            move(tab, to: target)
+        } else if target == nil {
+            move(tab, to: nil, at: pointer)
+        }
+    }
+
+    /// Hands a tab, page and all, to another window, or a new one (`nil`),
+    /// placed with its top left at `point` when given. A private window's
+    /// tabs only go to private windows, and the others' only to others.
+    func move(_ tab: Tab, to target: Browser?, at point: NSPoint? = nil) {
+        guard !tab.held, tabs.count > 1, target !== self, (target?.isPrivate ?? isPrivate) == isPrivate else { return }
         if activeID == tab.id, let next = row.neighbour(of: tab.id, by: 1) ?? row.neighbour(of: tab.id, by: -1) {
             activeID = next
         }
         reorder { $0.remove(tab.id) }
-        let window = Windows.shared.open(space: spaceID, private: isPrivate)
-        let blank = window.active
+        let window = target ?? Windows.shared.open(space: spaceID, private: isPrivate)
+        let blank = target == nil ? window.active : nil
         window.adopt(tab)
         window.activeID = tab.id
         if let blank, blank.isBlank { window.close(blank) }
+        if let point {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { window.window?.setFrameTopLeftPoint(point) }
+        }
+        window.window?.makeKeyAndOrderFront(nil)
         saveSoon()
+        window.saveSoon()
     }
 
     /// The page in front, as a web archive where the user says.

@@ -222,7 +222,7 @@ final class ExtensionPopup: NSObject, WKUIDelegate, WKNavigationDelegate, NSPopo
         _ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration, for action: WKNavigationAction,
         windowFeatures: WKWindowFeatures
     ) -> WKWebView? {
-        if let url = action.request.url { Extensions.shared.browser?.open(url, foreground: true) }
+        if let url = action.request.url { Extensions.shared.front?.open(url, foreground: true) }
         close()
         return nil
     }
@@ -253,7 +253,9 @@ final class PopupPage: NSObject, WKWebExtensionTab {
 
     init(web: WKWebView) { self.web = web }
 
-    func window(for context: WKWebExtensionContext) -> (any WKWebExtensionWindow)? { Extensions.shared.window }
+    func window(for context: WKWebExtensionContext) -> (any WKWebExtensionWindow)? {
+        Extensions.shared.front.map(Extensions.shared.window(for:))
+    }
     func indexInWindow(for context: WKWebExtensionContext) -> Int { NSNotFound }
     func webView(for context: WKWebExtensionContext) -> WKWebView? { web }
     func title(for context: WKWebExtensionContext) -> String? { web?.title }

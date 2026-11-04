@@ -130,7 +130,8 @@ final class KeyRouter {
         switch command {
         case .newTab: browser.newTab()
         case .newPrivateWindow: Windows.shared.open(private: true)
-        case .reopenTab: browser.reopen()
+        // As Safari: a closed window once there's no closed tab left here.
+        case .reopenTab: browser.ghosts.isEmpty ? Windows.shared.reopenClosed() : browser.reopen()
         case .closeTab:
             if browser.peekTab != nil { browser.closePeek() } else if let tab = browser.active { browser.close(tab) }
         case .duplicateTab: browser.duplicate()

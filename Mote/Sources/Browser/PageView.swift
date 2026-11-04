@@ -189,8 +189,20 @@ final class PageView: WKWebView {
             .separator(),
             ActionItem("Take Screenshot") { tab.screenshot() },
             ActionItem("Ask about This Page") { if !browser.chatting { browser.togglePageChat() } },
+            .separator(),
+            ActionItem("View Page Source") { browser.viewSource(of: tab) },
         ]
         for (offset, item) in items.enumerated() { menu.insertItem(item, at: at + 1 + offset) }
+        // WebKit's inspector shows an element's accessibility in its Node panel:
+        // Inspect Element opens it there; there's no way to open that panel itself.
+        if let inspect = menu.items.first(where: { $0.identifier?.rawValue == "WKMenuItemIdentifierInspectElement" }),
+            let action = inspect.action, let spot = menu.items.firstIndex(of: inspect)
+        {
+            let target = inspect.target
+            let accessibility = ActionItem("Inspect Accessibility Properties") { NSApp.sendAction(action, to: target, from: inspect) }
+            accessibility.toolTip = "Opens the Web Inspector on this element: accessibility is in its Node panel"
+            menu.insertItem(accessibility, at: spot)
+        }
     }
 
     /// On a link: WebKit's "Open Link in New Window" knows the link, so Mote's

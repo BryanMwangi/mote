@@ -9,35 +9,38 @@ extension Extensions: WKWebExtensionControllerDelegate {
     func webExtensionController(
         _ controller: WKWebExtensionController, openWindowsFor extensionContext: WKWebExtensionContext
     ) -> [any WKWebExtensionWindow] {
-        [window]
+        // Windows extensions are shown: a private one only if its tabs carry them.
+        Windows.shared.all.filter { !$0.isPrivate || !visibleTabs(in: $0).isEmpty }.map(window(for:))
     }
 
     func webExtensionController(
         _ controller: WKWebExtensionController, focusedWindowFor extensionContext: WKWebExtensionContext
     ) -> (any WKWebExtensionWindow)? {
-        window
+        front.map(window(for:))
     }
 
+    /// In the window asked for, else the one in front.
     func webExtensionController(
         _ controller: WKWebExtensionController, openNewTabUsing configuration: WKWebExtension.TabConfiguration,
         for extensionContext: WKWebExtensionContext
     ) async throws -> (any WKWebExtensionTab)? {
-        guard let browser else { return nil }
+        guard let browser = (configuration.window as? ExtensionWindow)?.browser ?? front else { return nil }
         let tab = browser.open(configuration.url ?? URL(string: "about:blank")!, foreground: configuration.shouldBeActive, atEnd: true)
         if configuration.shouldBePinned { browser.pin(tab) }
         return adapter(for: tab)
     }
 
-    /// There's one window: a new one's tabs open in it.
+    /// `chrome.windows.create`: a Mote window with those tabs.
     func webExtensionController(
         _ controller: WKWebExtensionController, openNewWindowUsing configuration: WKWebExtension.WindowConfiguration,
         for extensionContext: WKWebExtensionContext
     ) async throws -> (any WKWebExtensionWindow)? {
-        guard let browser else { return nil }
-        for (index, page) in configuration.tabURLs.enumerated() {
-            browser.open(page, foreground: index == 0 && configuration.shouldBeFocused, atEnd: true)
-        }
-        return window
+        let browser = Windows.shared.open(private: configuration.shouldBePrivate)
+        let blank = browser.active
+        for (index, page) in configuration.tabURLs.enumerated() { browser.open(page, foreground: index == 0, atEnd: true) }
+        if !configuration.tabURLs.isEmpty, let blank, blank.isBlank { browser.close(blank) }
+        if !configuration.shouldBeFocused { Browser.front?.window?.makeKeyAndOrderFront(nil) }
+        return window(for: browser)
     }
 
     func webExtensionController(

@@ -38,7 +38,7 @@ COMMANDS = {
     "probe": ("", "the window's own state: panels, modal, windows"),
     "chat": ("[show|ask|follow|wait|use|mode|lead|search|providers] [args…]", "the chat in front; ask TEXT as the new tab's Ask does, follow TEXT in the chat "
              "(test run); wait [SECONDS] for its reply; use PROVIDER [MODEL] [ADDRESS], mode chat|search|research, search on|off, demo [SOURCES] [MS] [plain] (a long researched reply, streamed from Mote itself; plain: without research steps; test run); providers: how each stands"),
-    "ui": ("key value", "settings/passwords/welcome/history/downloads/bookmarks/hidden, chats, sidebar, spaces, hides, bar, folded, peek, device NAME|off, essential|unessential|newwindow TAB, "
+    "ui": ("key value", "settings/passwords/welcome/history/downloads/bookmarks/hidden, chats, sidebar, spaces, hides, bar, folded, peek, device NAME|off, essential|unessential|newwindow|source TAB, "
            "pages120 on|off; sitecard on|off|security; notice update|ready|manual|TEXT (test run); look light|dark|system; peeklink keep|close; edittab TEXT; finishedit on"),
     "press": ("code:int chars [mods…]", "a key on the whole app (cmd shift ctrl opt, repeat) — test runs only"),
     "key": ("id text", "keys on a tab as real key events — test runs only"),
@@ -60,7 +60,7 @@ COMMANDS = {
     "window": ("", "test run: open the browser's window if a hidden run came up without it"),
     "quit": ("", "test run: quit as the menu would, saving every window"),
     "link": ("url where", "test run: open a link as the page menu would — tab, background, window, private, space, preview or bookmark"),
-    "windows": ("[new | close N | front N]", "the browser windows, the front one marked; test run: open, close or bring one forward"),
+    "windows": ("[new | reopen | close N | front N]", "the browser windows, the front one marked; test run: open, close or bring one forward"),
     "pages": ("on|off", "test run: let a hidden run's pages paint, off every screen (for picture)"),
     "picture": ("path:path", "test run: the whole window, pages included, drawn to a PNG"),
     "frames": ("[fold|peek|unpeek|scroll|chat|chatdown|tab|space] [seconds:float]", "test run: run that animation and time the frames drawn — missed ones"),
@@ -158,8 +158,8 @@ def read_site(args):
 def read_windows(args):
     if not args:
         return {}
-    if args[0] == "new" and len(args) == 1:
-        return {"action": "new"}
+    if args[0] in ("new", "reopen") and len(args) == 1:
+        return {"action": args[0]}
     if args[0] in ("close", "front") and len(args) == 2:
         return {"action": args[0], "index": int(args[1])}
     sys.exit(usage("windows"))
@@ -185,7 +185,7 @@ def read_ui(args):
     if len(args) != 2:
         sys.exit(usage("ui"))
     key, value = args
-    return {key: value if key in ("look", "edittab", "peeklink", "sitecard", "notice", "device", "essential", "unessential", "newwindow") else value in ON}
+    return {key: value if key in ("look", "edittab", "peeklink", "sitecard", "notice", "device", "essential", "unessential", "newwindow", "source") else value in ON}
 
 
 def read_hit(args):

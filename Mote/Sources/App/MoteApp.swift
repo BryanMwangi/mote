@@ -51,6 +51,7 @@ private struct MenuBar: Commands {
             Button("New Private Tab", action: browser.newShyTab).keyboardShortcut("n", modifiers: [.command, .option, .shift])
             Button("Reopen Closed Tab") { browser.reopen() }.keyboardShortcut("t", modifiers: [.command, .shift]).disabled(
                 browser.ghosts.isEmpty)
+            Button("Reopen Closed Window") { Windows.shared.reopenClosed() }.disabled(!Windows.shared.canReopen)
             Divider()
             Button("Open Address…", action: browser.edit).keyboardShortcut("l")
             Divider()

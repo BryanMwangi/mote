@@ -135,7 +135,8 @@ struct TabBar: View {
                     Reorderable(
                         id: tab.id, index: index, places: browser.places(of: tab.section),
                         lattice: .row(step: (tab.pin == nil ? layout.each : Metrics.pinWidth) + Metrics.tabGap), space: "strip",
-                        drag: $drag, leadingLimit: Metrics.lights + layout.dot + TabShape.foot
+                        drag: $drag, leadingLimit: Metrics.lights + layout.dot + TabShape.foot,
+                        dropOutside: tab.held ? nil : { browser.drop(tab) }
                     ) { browser.move(tab, to: $0) }
                 )
                 .mask {

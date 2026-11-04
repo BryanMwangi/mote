@@ -160,3 +160,41 @@ struct TabRowTests {
         #expect(closed.last?.id == 5)
     }
 }
+
+@Suite("TabRow menu helpers")
+struct TabRowMenuTests {
+    struct Tab: Identifiable {
+        let id: String
+        var section: TabTier = .loose
+        var address: String?
+    }
+
+    /// "E!" an essential, "P*" pinned, the rest open; "=x" gives the address x.
+    private func row(_ spec: String) -> TabRow<Tab> {
+        let tabs = spec.split(separator: " ").map { word -> Tab in
+            let parts = word.split(separator: "=")
+            let name = String(parts[0])
+            let section: TabTier = name.hasSuffix("!") ? .essential : name.hasSuffix("*") ? .pinned : .loose
+            return Tab(id: name.filter { $0 != "!" && $0 != "*" }, section: section, address: parts.count > 1 ? String(parts[1]) : nil)
+        }
+        return TabRow(tabs, section: \.section)
+    }
+
+    @Test("Close Duplicate Tabs: the other open tabs at the address, not essentials or pinned ones")
+    func duplicates() {
+        let tabs = row("E!=x P*=x a=x b=y c=x d")
+        #expect(tabs.duplicates(of: "a", address: \.address) == ["c"])
+        #expect(tabs.duplicates(of: "E", address: \.address) == ["a", "c"])
+        #expect(tabs.duplicates(of: "b", address: \.address).isEmpty)
+        #expect(tabs.duplicates(of: "d", address: \.address).isEmpty)
+    }
+
+    @Test("Close Tabs Below: the open tabs after it")
+    func below() {
+        let tabs = row("E! P* a b c")
+        #expect(tabs.below("a") == ["b", "c"])
+        #expect(tabs.below("c").isEmpty)
+        #expect(tabs.below("E") == ["a", "b", "c"])
+        #expect(tabs.below("nope").isEmpty)
+    }
+}

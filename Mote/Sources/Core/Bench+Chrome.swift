@@ -114,6 +114,7 @@ extension Bench {
         if Storage.testing, let id = request.string("essential"), let found = tab(id) { browser.pin(found) }
         if Storage.testing, let id = request.string("unessential"), let found = tab(id) { browser.unpin(found) }
         if Storage.testing, let id = request.string("newwindow"), let found = tab(id) { browser.moveToNewWindow(found) }
+        if Storage.testing, let id = request.string("source"), let found = tab(id) { browser.viewSource(of: found) }
         // Responsive Design Mode for the tab in front: a preset's name, or off.
         if let name = request.string("device") { browser.active?.device = DeviceList.shared.device(named: name) }
         if #available(macOS 15.4, *), let on = request.bool("extensions") { Extensions.shared.menuOpen = on }
@@ -232,6 +233,7 @@ extension Bench {
             let index = (request.int("index") ?? 1) - 1
             switch action {
             case "new": Windows.shared.open()
+            case "reopen": Windows.shared.reopenClosed()
             case "close": if all().indices.contains(index) { all()[index].window?.performClose(nil) }
             case "front": if all().indices.contains(index) { all()[index].window?.makeKeyAndOrderFront(nil) }
             default: break

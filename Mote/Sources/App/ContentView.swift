@@ -53,6 +53,7 @@ struct ContentView: View {
                 guard let window, note.object as? NSWindow === window else { return }
                 Browser.front = browser
                 Spaces.current = browser.spaceID
+                if #available(macOS 15.4, *) { Extensions.shared.focused(browser) }
                 // The bench's keys go to the window in front.
                 Self.keyHook = { [keys] in keys.route($0) }
             }

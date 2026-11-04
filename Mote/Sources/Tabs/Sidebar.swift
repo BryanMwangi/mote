@@ -331,7 +331,7 @@ private struct SpacePage: View {
                         .modifier(
                             Reorderable(
                                 id: tab.id, index: index, places: 0..<loose.count, lattice: .column(step: Self.row + Self.gap),
-                                space: "rows", drag: $drag
+                                space: "rows", drag: $drag, dropOutside: { browser.drop(tab) }
                             ) { browser.move(tab, to: $0 + browser.pinnedCount) })
                 }
             }
