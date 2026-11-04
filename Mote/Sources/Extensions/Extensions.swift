@@ -197,22 +197,31 @@ final class Extensions: NSObject, ObservableObject {
         errorWatches[id] = NotificationCenter.default.addObserver(
             forName: WKWebExtensionContext.errorsDidUpdateNotification, object: context, queue: .main
         ) { [weak self, weak context] _ in
-            MainActor.assumeIsolated {
-                guard let self, let context, self.contexts[id] === context, Self.workerFailed(context) else { return }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
-                    guard let self, self.contexts[id] === context else { return }
-                    self.revive(id, because: "its worker failed to start")
+            // Read once WebKit is done: during the notification it can still be
+            // changing the list, and an error read then may already be gone.
+            DispatchQueue.main.async { [weak self, weak context] in
+                MainActor.assumeIsolated {
+                    guard let self, let context, self.contexts[id] === context, Self.workerFailed(context) else { return }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
+                        guard let self, self.contexts[id] === context else { return }
+                        self.revive(id, because: "its worker failed to start")
+                    }
                 }
             }
         }
     }
 
+    /// Read through Objective-C, each entry checked: Swift's bridging of
+    /// `errors` crashed on this WebKit when an extension's page opened.
     private static func workerFailed(_ context: WKWebExtensionContext) -> Bool {
-        context.errors.contains {
-            let error = $0 as NSError
-            return error.domain == WKWebExtensionContext.errorDomain
-                && error.code == WKWebExtensionContext.Error.backgroundContentFailedToLoad.rawValue
+        guard let errors = context.value(forKey: "errors") as? NSArray else { return false }
+        for case let error as NSError in errors
+        where error.domain == WKWebExtensionContext.errorDomain
+            && error.code == WKWebExtensionContext.Error.backgroundContentFailedToLoad.rawValue
+        {
+            return true
         }
+        return false
     }
 
     // MARK: - What extensions changed
