@@ -1,4 +1,4 @@
-import Foundation
+import AppKit
 import MoteCore
 import WebKit
 
@@ -15,6 +15,8 @@ enum LinkOpening: Equatable {
     /// The preview over the page (shift-click's).
     case preview
     case bookmark
+    /// macOS's share picker, from where the link was clicked.
+    case share(at: NSRect, in: NSView)
 }
 
 extension Browser {
@@ -51,6 +53,8 @@ extension Browser {
         case .bookmark:
             bookmarks.add(url, title: url.host() ?? url.absoluteString)
             announce("Bookmarked")
+        case .share(let spot, let view):
+            NSSharingServicePicker(items: [url]).show(relativeTo: spot, of: view, preferredEdge: .maxY)
         }
     }
 }

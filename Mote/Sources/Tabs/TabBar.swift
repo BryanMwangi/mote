@@ -136,7 +136,7 @@ struct TabBar: View {
                         id: tab.id, index: index, places: browser.places(of: tab.section),
                         lattice: .row(step: (tab.pin == nil ? layout.each : Metrics.pinWidth) + Metrics.tabGap), space: "strip",
                         drag: $drag, leadingLimit: Metrics.lights + layout.dot + TabShape.foot,
-                        dropOutside: tab.held ? nil : { browser.drop(tab) }
+                        dropOutside: tab.held ? nil : { browser.drop(tab) }, title: tab.label
                     ) { browser.move(tab, to: $0) }
                 )
                 .mask {

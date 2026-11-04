@@ -284,11 +284,8 @@ extension Bench {
         if AppDelegate.window?.contentView != nil, NSApp.windows.contains(where: { $0 === AppDelegate.window }) {
             return call.answer(["window": "there"])
         }
-        let items = NSApp.mainMenu?.items.first { $0.submenu?.title == "Window" }?.submenu?.items ?? []
-        guard let item = items.first(where: { $0.title == "Mote" }), let action = item.action else {
-            return call.answer(["error": "no Mote item in the Window menu", "items": items.map(\.title)])
-        }
-        NSApp.sendAction(action, to: item.target, from: item)
+        // As a link from another app brings it back (LinkInbox).
+        _ = NSApp.delegate?.applicationOpenUntitledFile?(NSApp)
         DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
             call.answer(["window": NSApp.windows.map { "\(type(of: $0))" }, "hidden": NSApp.isHidden])
         }

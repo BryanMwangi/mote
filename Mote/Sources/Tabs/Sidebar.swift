@@ -286,7 +286,8 @@ private struct SpacePage: View {
         return SideRow(
             browser: browser, tab: tab, live: tab.id == active, renaming: renaming,
             draft: renaming ? browser.tabDraft : "", refusals: renaming ? browser.field.refusals : 0,
-            icons: prefs.glyph == .icons, showsReading: prefs.showsReading)
+            icons: prefs.glyph == .icons, showsReading: prefs.showsReading,
+            preview: live && tab.id == active ? browser.peekTab : nil)
     }
 
     /// The line between the pinned tabs and the others.
@@ -331,7 +332,7 @@ private struct SpacePage: View {
                         .modifier(
                             Reorderable(
                                 id: tab.id, index: index, places: 0..<loose.count, lattice: .column(step: Self.row + Self.gap),
-                                space: "rows", drag: $drag, dropOutside: { browser.drop(tab) }
+                                space: "rows", drag: $drag, dropOutside: { browser.drop(tab) }, title: tab.label
                             ) { browser.move(tab, to: $0 + browser.pinnedCount) })
                 }
             }
@@ -466,6 +467,9 @@ private struct SideRow: View {
     let refusals: Int
     let icons: Bool
     let showsReading: Bool
+    /// The link preview open over this tab, if any: its icon ends the row, as
+    /// Zen's Glance does, and a click on it keeps the preview as a tab.
+    let preview: Tab?
 
     @State private var hovering = false
     @State private var shake: CGFloat = 0
@@ -477,7 +481,7 @@ private struct SideRow: View {
     private var speaker: Bool { !tab.loading && (tab.noisy || tab.muted) }
     /// The loading ring or speaker holds the end of the row. The close button
     /// only comes on hover and holds no room of its own.
-    private var status: Bool { !renaming && (tab.loading || speaker) }
+    private var status: Bool { !renaming && (tab.loading || speaker || preview != nil) }
     private var colour: Color { live ? Palette.ink : Palette.ink.opacity(hovering ? 0.8 : 0.62) }
     private let shape = RoundedRectangle(cornerRadius: 10, style: .continuous)
 
@@ -495,7 +499,13 @@ private struct SideRow: View {
             if status {
                 Spacer(minLength: 2)
                 ZStack {
-                    if tab.loading { Ring().transition(.opacity) } else { Speaker(tab: tab).transition(.opacity) }
+                    if let preview {
+                        PreviewMark(tab: preview) { browser.keepPeek() }.transition(.opacity)
+                    } else if tab.loading {
+                        Ring().transition(.opacity)
+                    } else {
+                        Speaker(tab: tab).transition(.opacity)
+                    }
                 }
                 .frame(width: 16, height: 16)
                 // On hover the close button takes this place and the speaker moves left.
@@ -519,7 +529,7 @@ private struct SideRow: View {
         // Over the row, not inside it: inside, its click would wait out the
         // double-click interval of the tab you're on before closing it.
         .overlay(alignment: .trailing) {
-            if !renaming { Shut(shown: hovering, act: close).padding(.trailing, 7) }
+            if !renaming { Shut(shown: hovering, act: close).padding(.trailing, preview == nil ? 7 : 30) }
         }
         .onHover { over in
             hovering = over
@@ -579,5 +589,21 @@ private struct TitleFade: ViewModifier {
         } else {
             content
         }
+    }
+}
+
+/// The site a link preview shows, at the end of the row of the tab it's open
+/// over; a click keeps it as a tab.
+private struct PreviewMark: View {
+    @ObservedObject var tab: Tab
+    let keep: () -> Void
+
+    var body: some View {
+        Mark(icon: tab.icon, letter: tab.monogram, size: 14)
+            .padding(1)
+            .background(Palette.veil, in: RoundedRectangle(cornerRadius: 4, style: .continuous))
+            .contentShape(Rectangle())
+            .onTapGesture(perform: keep)
+            .help("Previewing “\(tab.label)” — click to keep it as a tab")
     }
 }

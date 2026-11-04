@@ -14,6 +14,10 @@ struct MoteApp: App {
         }
         .windowStyle(.hiddenTitleBar)
         .defaultSize(width: 1180, height: 780)
+        // No "Mote" item of its own in the Window menu: every window is listed
+        // there by its tab in front (Browser.followTitle), and the Dock brings
+        // the main one back.
+        .commandsRemoved()
         .commands { MenuBar(main: browser, visits: browser.history) }
 
         // Windows opened since the main one (⌘N, a link), each with its own

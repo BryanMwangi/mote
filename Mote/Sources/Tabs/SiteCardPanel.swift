@@ -26,20 +26,28 @@ enum SiteCardPanel {
     /// frames after switching to it).
     static func open(for tab: Tab, in browser: Browser, security: Bool = false) {
         guard !tab.isBlank else { return }
+        // Where it was asked for, when there's no padlock in this window to
+        // hang from (the toolbar hidden, the address in the sidebar).
+        let pointer = NSEvent.mouseLocation
         Task {
             for _ in 0..<16 {
-                if let anchor, anchor.window != nil, browser.activeID == tab.id {
-                    show(for: tab, in: browser, under: anchor, security: security)
+                if let anchor, let window = anchor.window, window === browser.window, browser.activeID == tab.id {
+                    show(
+                        for: tab, in: browser, at: window.convertToScreen(anchor.convert(anchor.bounds, to: nil)), in: window,
+                        security: security)
                     tabWatch = browser.$activeID.dropFirst().sink { _ in MainActor.assumeIsolated { hide() } }
                     return
                 }
                 try? await Task.sleep(for: .milliseconds(30))
             }
+            guard let window = browser.window, browser.activeID == tab.id else { return }
+            show(for: tab, in: browser, at: NSRect(x: pointer.x + 6, y: pointer.y, width: 0, height: 0), in: window, security: security)
+            tabWatch = browser.$activeID.dropFirst().sink { _ in MainActor.assumeIsolated { hide() } }
         }
     }
 
-    private static func show(for tab: Tab, in browser: Browser, under padlock: NSView, security: Bool) {
-        guard let window = padlock.window else { return }
+    /// `spot`: on screen, what it hangs below.
+    private static func show(for tab: Tab, in browser: Browser, at spot: NSRect, in window: NSWindow, security: Bool) {
         hide()
         let host = Host(rootView: AnyView(SiteCard(browser: browser, tab: tab, deeper: security) { hide() }.fixedSize()))
         let size = host.fittingSize
@@ -69,7 +77,6 @@ enum SiteCardPanel {
         panel.becomesKeyOnlyIfNeeded = true
         panel.hidesOnDeactivate = true
         // Under the padlock, the menu's text in line with the address.
-        let spot = window.convertToScreen(padlock.convert(padlock.bounds, to: nil))
         var origin = NSPoint(x: spot.minX - 6, y: spot.minY - 8 - size.height)
         if let screen = window.screen?.visibleFrame {
             origin.x = min(max(origin.x, screen.minX + 8), screen.maxX - size.width - 8)

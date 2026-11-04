@@ -23,6 +23,8 @@ struct Reorderable: ViewModifier {
     /// Let go outside the window: the tab leaves for another window, or a new
     /// one (Browser.drop). Open tabs only: essentials and pinned tabs are the space's.
     var dropOutside: (() -> Void)? = nil
+    /// What the tab shows while it's dragged outside its window (TabGhost).
+    var title = ""
     let move: (Int) -> Void
     @State private var originX: CGFloat?
 
@@ -55,6 +57,12 @@ struct Reorderable: ViewModifier {
     }
 
     private func changed(_ travel: CGSize) {
+        // Outside the window the row can't follow: a card of it does, so where
+        // it's going shows.
+        if dropOutside != nil, let window = NSApp.keyWindow {
+            let pointer = NSEvent.mouseLocation
+            if window.frame.contains(pointer) { TabGhost.hide() } else { TabGhost.show(title, at: pointer) }
+        }
         // A tab still easing home is done; one held elsewhere keeps the drag.
         if drag?.landed == true { drag = nil }
         if let drag, drag.id != id { return }
@@ -71,6 +79,7 @@ struct Reorderable: ViewModifier {
     }
 
     private func ended() {
+        TabGhost.hide()
         guard var landing = drag, landing.id == id, !landing.landed else { return }
         if let dropOutside, let window = NSApp.keyWindow, !window.frame.contains(NSEvent.mouseLocation) {
             drag = nil
@@ -169,6 +178,49 @@ struct MiddleClick: NSViewRepresentable {
             defer { down = false }
             let point = convert(event.locationInWindow, from: nil)
             if down, bounds.contains(point) { act(CGPoint(x: point.x, y: isFlipped ? point.y : bounds.height - point.y)) }
+        }
+    }
+}
+
+/// A tab dragged outside its window: a card of it under the pointer, over
+/// every window, till it's let go.
+@MainActor
+enum TabGhost {
+    private static var panel: NSPanel?
+
+    static func show(_ title: String, at point: NSPoint) {
+        let panel = panel ?? made()
+        (panel.contentView as? NSHostingView<Card>)?.rootView = Card(title: title)
+        let size = panel.contentView?.fittingSize ?? .zero
+        panel.setFrame(NSRect(x: point.x - 16, y: point.y - size.height + 8, width: size.width, height: size.height), display: true)
+        panel.orderFrontRegardless()
+    }
+
+    static func hide() { panel?.orderOut(nil) }
+
+    private static func made() -> NSPanel {
+        let made = NSPanel(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+        made.isOpaque = false
+        made.backgroundColor = .clear
+        made.hasShadow = true
+        made.level = .floating
+        made.ignoresMouseEvents = true
+        made.contentView = NSHostingView(rootView: Card(title: ""))
+        panel = made
+        return made
+    }
+
+    struct Card: View {
+        let title: String
+        var body: some View {
+            Text(title)
+                .font(TextStyle.body.font)
+                .lineLimit(1)
+                .frame(maxWidth: 240, alignment: .leading)
+                .padding(.horizontal, 12)
+                .frame(height: Metrics.row)
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .fixedSize()
         }
     }
 }

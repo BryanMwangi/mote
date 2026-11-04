@@ -3,6 +3,28 @@ import MoteCore
 
 @MainActor
 enum WindowDressing {
+    /// Mote's windows can't be moved by macOS (DragStrip moves them), and
+    /// macOS greys out Move to a display, Fill, Center and Remove Window from
+    /// Set for such windows. While a menu of the menu bar is open, and a
+    /// moment after for its action, they can.
+    static func movableWhileMenusOpen() {
+        let windows = { Windows.shared.all.compactMap(\.window) }
+        NotificationCenter.default.addObserver(forName: NSMenu.didBeginTrackingNotification, object: nil, queue: .main) { note in
+            let menu = (note.object as AnyObject?).map(ObjectIdentifier.init)
+            MainActor.assumeIsolated {
+                guard menu != nil, menu == NSApp.mainMenu.map(ObjectIdentifier.init) else { return }
+                windows().forEach { $0.isMovable = true }
+            }
+        }
+        NotificationCenter.default.addObserver(forName: NSMenu.didEndTrackingNotification, object: nil, queue: .main) { note in
+            let menu = (note.object as AnyObject?).map(ObjectIdentifier.init)
+            MainActor.assumeIsolated {
+                guard menu != nil, menu == NSApp.mainMenu.map(ObjectIdentifier.init) else { return }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { windows().forEach { $0.isMovable = false } }
+            }
+        }
+    }
+
     /// `main`: the main window, the one the Dock and links bring back.
     /// `id`: a window opened since, which keeps its own place by it.
     static func dress(_ window: NSWindow, main: Bool = true, id: UUID? = nil) {

@@ -146,6 +146,11 @@ final class PageView: WKWebView {
 
     override func willOpenMenu(_ menu: NSMenu, with event: NSEvent) {
         super.willOpenMenu(menu, with: event)
+        // Where it was opened, for what hangs from the link (Share).
+        menuSpot = NSRect(origin: convert(event.locationInWindow, from: nil), size: .zero).insetBy(dx: -2, dy: -2)
+        // No Services: macOS's list does nothing useful for what's under the pointer.
+        menu.allowsContextMenuPlugIns = false
+        for item in menu.items where item.submenu != nil && item.submenu === NSApp.servicesMenu { menu.removeItem(item) }
         if let search = menu.items.first(where: { $0.identifier?.rawValue == "WKMenuItemIdentifierSearchWeb" }) {
             // Read the selection once, for both items: the search, and the
             // chat about the page the selection sits on. WebKit offers its own
@@ -240,7 +245,10 @@ final class PageView: WKWebView {
             item("Open Link in Preview", .preview),
             .separator(),
             item("Bookmark Link…", .bookmark),
+            item("Share Link…", .share(at: menuSpot, in: self)),
         ]
+        // WebKit's own Share hangs its picker from the middle of the page.
+        for share in menu.items where share.identifier?.rawValue == "WKMenuItemIdentifierShareMenu" { menu.removeItem(share) }
         menu.removeItem(open)
         for (offset, made) in items.enumerated() { menu.insertItem(made, at: at + offset) }
         menu.items.first { $0.identifier?.rawValue == "WKMenuItemIdentifierDownloadLinkedFile" }?.title = "Save Link As…"
@@ -283,6 +291,9 @@ final class PageView: WKWebView {
         }
         super.mouseDown(with: event)
     }
+
+    /// Where the page's menu was last opened, in this view.
+    private var menuSpot = NSRect.zero
 
     // MARK: - Touch (Responsive Design Mode)
 

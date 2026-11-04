@@ -14,6 +14,16 @@ extension Browser {
         for tab in row where !tab.asleep { sleep(tab) }
     }
 
+    /// A tab's page let go. The tab in front can't sleep, so another comes
+    /// forward first, as Zen does.
+    func unload(_ tab: Tab) {
+        if activeID == tab.id, let next = row.neighbour(of: tab.id, by: 1) ?? row.neighbour(of: tab.id, by: -1), let other = self.tab(next)
+        {
+            select(other)
+        }
+        sleep(tab)
+    }
+
     /// Every other space's.
     func unloadOtherSpaces() {
         for space in spaces where space.id != spaceID { unload(space: space.id) }

@@ -169,7 +169,9 @@ final class Browser: NSObject, ObservableObject {
     /// once the app is in the background.
     static weak var front: Browser?
     /// This browser's window, once it has one.
-    weak var window: NSWindow?
+    weak var window: NSWindow? {
+        didSet { titleWindow() }
+    }
     /// A window opened after the main one (⌘N, a link), with its own open
     /// tabs, saved under its id (see Windows.swift).
     let extra: Bool
@@ -305,6 +307,7 @@ final class Browser: NSObject, ObservableObject {
         }
         wireFloater()
         $activeID.dropFirst().sink { [weak self] _ in self?.notePlayingSoon() }.store(in: &bag)
+        followTitle()
 
         if extra {
             if let space, spaces.contains(where: { $0.id == space }) { spaceID = space }
@@ -321,6 +324,27 @@ final class Browser: NSObject, ObservableObject {
         if usesSpaces { preloadSpaces() }
         follow()
         watchForSleep()
+    }
+
+    /// The window's title is its tab in front's, as in Zen and Safari: what the
+    /// Window menu and Mission Control list it by. The title bar is hidden, so
+    /// it shows nowhere else.
+    private func followTitle() {
+        $activeID
+            .map { [weak self] id -> AnyPublisher<Void, Never> in
+                guard let tab = id.flatMap({ self?.tab($0) }) else { return Just(()).eraseToAnyPublisher() }
+                return tab.$title.map { _ in () }.merge(with: tab.$name.map { _ in () }).eraseToAnyPublisher()
+            }
+            .switchToLatest()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] in self?.titleWindow() }
+            .store(in: &bag)
+    }
+
+    private func titleWindow() {
+        guard let window else { return }
+        let title = active.map { $0.isBlank ? "Mote" : $0.label } ?? "Mote"
+        if window.title != title { window.title = title }
     }
 
     /// What the app starts once, with its first window.

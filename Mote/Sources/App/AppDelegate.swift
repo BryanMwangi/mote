@@ -8,6 +8,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillFinishLaunching(_ notification: Notification) {
         CrashLog.start()
+        // Mote's tabs are its own: macOS's window tabs would only repeat them
+        // in the Window menu (Show Next Tab, Merge All Windows…).
+        NSWindow.allowsAutomaticWindowTabbing = false
+        MainActor.assumeIsolated { WindowDressing.movableWhileMenusOpen() }
         // Links are taken straight from the Apple Event: through SwiftUI, every
         // link at launch would present the window again.
         NSAppleEventManager.shared().setEventHandler(

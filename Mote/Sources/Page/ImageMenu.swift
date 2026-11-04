@@ -31,6 +31,7 @@ extension Browser {
         guard let web = tab.built, let window = web.window else { return }
         let menu = NSMenu()
         menu.autoenablesItems = false
+        menu.allowsContextMenuPlugIns = false
         // In Zen's order.
         var items: [NSMenuItem] = [
             ActionItem("Open Image in New Tab") { [weak self] in self?.open(image, foreground: true, from: tab) },

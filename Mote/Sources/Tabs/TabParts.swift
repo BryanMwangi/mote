@@ -149,11 +149,11 @@ struct TabMenu: View {
         Button(tab.muted ? "Unmute Tab" : "Mute Tab") { tab.toggleMute() }
         Divider()
         TabHoldItems(browser: browser, tab: tab)
-        Button("Unload Tab") { browser.sleep(tab) }.disabled(tab.isBlank || tab.asleep)
+        Button("Unload Tab") { browser.unload(tab) }.disabled(tab.isBlank || tab.asleep)
         if browser.usesSpaces, browser.spaces.count > 1 {
             Menu("Move to Space") {
                 ForEach(browser.spaces.filter { $0.id != browser.spaceID }) { space in
-                    Button(browser.sharesData(with: space.id) ? space.name : "\(space.name) (separate sign-ins)") {
+                    Button(space.name) {
                         browser.move(tab, toSpace: space.id)
                     }
                 }
