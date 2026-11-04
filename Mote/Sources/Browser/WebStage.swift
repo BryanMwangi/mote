@@ -1,3 +1,4 @@
+import MoteCore
 import SwiftUI
 import WebKit
 
@@ -5,15 +6,27 @@ import WebKit
 /// the front and get it back as it was: not reloaded, scroll and forms kept.
 struct WebStage: NSViewRepresentable {
     let page: NSView?
+    /// Responsive Design Mode: the size the page is laid out at, and whether
+    /// it's scaled down to fit.
+    var device: CGSize? = nil
+    var fits = true
 
     func makeNSView(context: Context) -> StageView { StageView() }
-    func updateNSView(_ view: StageView, context: Context) { view.show(page) }
+    func updateNSView(_ view: StageView, context: Context) {
+        view.device = device
+        view.fits = fits
+        view.show(page)
+    }
 }
 
 final class StageView: NSView {
     /// The view to show; the one thing kept. Every layout brings the subviews
     /// in line with it, so they can't drift apart.
     private weak var wanted: NSView?
+    var device: CGSize?
+    var fits = true
+    /// Around a device, so its edges and handles show.
+    static let margin: CGFloat = 24
 
     override func layout() {
         super.layout()
@@ -50,7 +63,28 @@ final class StageView: NSView {
             wanted.layer?.setNeedsDisplay()
         }
         // With the inspector docked, WebKit lays both out; a frame here would cover the inspector.
-        if !(inspecting && subviews.contains(where: Self.isInspector)) { wanted.frame = bounds }
+        if !(inspecting && subviews.contains(where: Self.isInspector)) { place(wanted) }
+    }
+
+    /// The whole stage; with a device, its size centred, and laid out at that
+    /// size even when drawn smaller (WebKit's view scale, as Safari's own
+    /// responsive mode uses; a WebKit without it shows the page at its frame).
+    private func place(_ page: NSView) {
+        guard let device else {
+            page.frame = bounds
+            return scale(page, 1)
+        }
+        let placed = Devices.place(device, in: bounds.insetBy(dx: Self.margin, dy: Self.margin), fits: fits)
+        // `place` measures from the top; this view, as AppKit's do, from the bottom.
+        var frame = placed.frame
+        frame.origin.y = bounds.height - frame.maxY
+        page.frame = frame
+        scale(page, placed.scale)
+    }
+
+    private func scale(_ page: NSView, _ scale: CGFloat) {
+        guard let web = page as? WKWebView, web.unpublishedNumber("_viewScale") != scale else { return }
+        web.unpublished("_setViewScale:", scale)
     }
 
     /// Whether the page's Web Inspector is open, through private WebKit

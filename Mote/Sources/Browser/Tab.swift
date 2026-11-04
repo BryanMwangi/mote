@@ -66,6 +66,12 @@ final class Tab: ObservableObject, Identifiable {
     @Published var noisy = false {
         didSet { if noisy || oldValue { lastAudible = Date() } }
     }
+    /// Responsive Design Mode: the screen the page is shown at, and whether
+    /// it's scaled to fit the window (see Responsive.swift). Not saved.
+    @Published var device: Device? {
+        didSet { if device != oldValue { emulate() } }
+    }
+    @Published var deviceFits = true
     /// The site the page is loading from just now, for the status at its foot.
     /// Its own object: it changes many times a second while a page loads, and
     /// only the status watches it.
@@ -210,6 +216,7 @@ final class Tab: ObservableObject, Identifiable {
         AdBlocker.shared.protect(controller)
 
         built = web
+        if device != nil { emulate() }
         // After `built`: the form relay starts watching full screen on the view
         // it finds there.
         for relay in [scroll, hider, forms, images, store_, middle, hovered, mediaRelay, loadRelay] as [TabRelay] { relay.tab = self }

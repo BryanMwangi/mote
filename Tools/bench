@@ -38,7 +38,7 @@ COMMANDS = {
     "probe": ("", "the window's own state: panels, modal, windows"),
     "chat": ("[show|ask|follow|wait|use|mode|lead|search|providers] [args…]", "the chat in front; ask TEXT as the new tab's Ask does, follow TEXT in the chat "
              "(test run); wait [SECONDS] for its reply; use PROVIDER [MODEL] [ADDRESS], mode chat|search|research, search on|off, demo [SOURCES] [MS] [plain] (a long researched reply, streamed from Mote itself; plain: without research steps; test run); providers: how each stands"),
-    "ui": ("key value", "settings/passwords/welcome/history/downloads/bookmarks/hidden, chats, sidebar, spaces, hides, bar, folded, peek, "
+    "ui": ("key value", "settings/passwords/welcome/history/downloads/bookmarks/hidden, chats, sidebar, spaces, hides, bar, folded, peek, device NAME|off, "
            "pages120 on|off; sitecard on|off|security; notice update|ready|manual|TEXT (test run); look light|dark|system; peeklink keep|close; edittab TEXT; finishedit on"),
     "press": ("code:int chars [mods…]", "a key on the whole app (cmd shift ctrl opt, repeat) — test runs only"),
     "key": ("id text", "keys on a tab as real key events — test runs only"),
@@ -172,7 +172,7 @@ def read_ui(args):
     if len(args) != 2:
         sys.exit(usage("ui"))
     key, value = args
-    return {key: value if key in ("look", "edittab", "peeklink", "sitecard", "notice") else value in ON}
+    return {key: value if key in ("look", "edittab", "peeklink", "sitecard", "notice", "device") else value in ON}
 
 
 def read_hit(args):

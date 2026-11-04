@@ -109,6 +109,8 @@ extension Bench {
             browser.tabDraft = text
         }
         if request.flag("finishedit") { browser.finishTabEdit() }
+        // Responsive Design Mode for the tab in front: a preset's name, or off.
+        if let name = request.string("device") { browser.active?.device = DeviceList.shared.device(named: name) }
         if #available(macOS 15.4, *), let on = request.bool("extensions") { Extensions.shared.menuOpen = on }
         call.answer(["ok": true])
     }

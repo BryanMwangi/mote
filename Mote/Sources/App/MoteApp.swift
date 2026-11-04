@@ -102,6 +102,8 @@ private struct MenuBar: Commands {
         Button("Web Inspector", action: browser.toggleInspector).keyboardShortcut("i", modifiers: [.command, .option])
         Button("JavaScript Console", action: browser.showConsole).keyboardShortcut("j", modifiers: [.command, .option])
         Button("Inspect Element", action: browser.inspectElement).keyboardShortcut("c", modifiers: [.command, .option])
+        Button("Responsive Design Mode", action: browser.toggleResponsive).keyboardShortcut("r", modifiers: [.command, .control])
+            .disabled(blank)
     }
 
     @ViewBuilder

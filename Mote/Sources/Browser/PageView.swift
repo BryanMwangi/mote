@@ -202,7 +202,46 @@ final class PageView: WKWebView {
 
     override func mouseDown(with event: NSEvent) {
         onTouch?()
+        // A touch device: held until it's known whether it's a tap or a drag.
+        if touchScrolls, event.clickCount == 1 {
+            pressed = (event, false)
+            return
+        }
         super.mouseDown(with: event)
+    }
+
+    // MARK: - Touch (Responsive Design Mode)
+
+    /// A touch device's page (see Responsive.swift): dragging scrolls it, as
+    /// a finger does, and a press that doesn't move is a click.
+    var touchScrolls = false {
+        didSet { pressed = nil }
+    }
+    /// The press held back, and whether it has turned into a drag.
+    private var pressed: (event: NSEvent, dragging: Bool)?
+
+    override func mouseDragged(with event: NSEvent) {
+        guard touchScrolls, let held = pressed else { return super.mouseDragged(with: event) }
+        let start = held.event.locationInWindow, now = event.locationInWindow
+        if !held.dragging, hypot(now.x - start.x, now.y - start.y) < 4 { return }
+        pressed?.dragging = true
+        // The page follows the pointer: a wheel turned the other way.
+        guard
+            let wheel = CGEvent(
+                scrollWheelEvent2Source: nil, units: .pixel, wheelCount: 2, wheel1: Int32(event.deltaY.rounded()),
+                wheel2: Int32(event.deltaX.rounded()), wheel3: 0),
+            let scroll = NSEvent(cgEvent: wheel)
+        else { return }
+        // Past Mote's own swipes: the page alone scrolls.
+        super.scrollWheel(with: scroll)
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        guard touchScrolls, let held = pressed else { return super.mouseUp(with: event) }
+        pressed = nil
+        guard !held.dragging else { return }
+        super.mouseDown(with: held.event)
+        super.mouseUp(with: event)
     }
 
     /// Tracking areas ignore what lies on top: under the peeking tabs the

@@ -12,11 +12,20 @@ struct Page: View {
     @ObservedObject var tab: Tab
 
     var body: some View {
+        VStack(spacing: 0) {
+            if let device = tab.device { DeviceBar(tab: tab, device: device) }
+            // The device sits on the window's frame colour, as Firefox's on its dark ground.
+            content.background(tab.device == nil ? Color.clear : Palette.frame)
+        }
+    }
+
+    private var content: some View {
         ZStack {
             // Blank and sleeping tabs have no page, and asking would make an empty
             // one. A floating page is left out so its return is a change and the
             // stage takes it back.
-            WebStage(page: tab.isBlank || tab.asleep || tab.floating ? nil : tab.web)
+            WebStage(page: tab.isBlank || tab.asleep || tab.floating ? nil : tab.web, device: tab.device?.size, fits: tab.deviceFits)
+            if let device = tab.device { DeviceFrame(tab: tab, device: device) }
 
             if let cover = tab.cover {
                 // The snapshot while a sleeping page comes back; it never takes clicks.

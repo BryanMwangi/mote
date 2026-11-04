@@ -43,6 +43,22 @@ extension NSObject {
         unsafeBitCast(method(for: selector), to: Call.self)(self, selector, flag, argument)
     }
 
+    /// A number a method gives back.
+    func unpublishedNumber(_ name: String) -> CGFloat? {
+        let selector = NSSelectorFromString(name)
+        guard responds(to: selector) else { return nil }
+        typealias Call = @convention(c) (AnyObject, Selector) -> CGFloat
+        return unsafeBitCast(method(for: selector), to: Call.self)(self, selector)
+    }
+
+    /// A method taking a number.
+    func unpublished(_ name: String, _ value: CGFloat) {
+        let selector = NSSelectorFromString(name)
+        guard responds(to: selector) else { return }
+        typealias Call = @convention(c) (AnyObject, Selector, CGFloat) -> Void
+        unsafeBitCast(method(for: selector), to: Call.self)(self, selector, value)
+    }
+
     /// A method taking a Bool.
     func unpublished(_ name: String, _ flag: Bool) {
         let selector = NSSelectorFromString(name)
