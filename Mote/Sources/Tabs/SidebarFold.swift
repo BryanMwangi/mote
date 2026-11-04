@@ -15,7 +15,6 @@ struct SidebarFold: View {
     /// The pointer is over the peeking tabs.
     @State private var inside = false
 
-
     /// Folded, with the page not full screen.
     private var folding: Bool { browser.folded && browser.active?.immersed != true }
 

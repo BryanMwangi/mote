@@ -225,7 +225,10 @@ private struct DeviceSettings: View {
                         let devices = list.all.filter { $0.type == kind }
                         if !devices.isEmpty {
                             Text(title).font(TextStyle.body.font.weight(.semibold))
-                            LazyVGrid(columns: [GridItem(.flexible(), alignment: .leading), GridItem(.flexible(), alignment: .leading)], spacing: 6) {
+                            LazyVGrid(
+                                columns: [GridItem(.flexible(), alignment: .leading), GridItem(.flexible(), alignment: .leading)],
+                                spacing: 6
+                            ) {
                                 ForEach(devices, id: \.name) { row($0) }
                             }
                         }
@@ -253,7 +256,11 @@ private struct DeviceSettings: View {
             .toggleStyle(.checkbox)
             Text("\(Int(device.width))×\(Int(device.height))").foregroundStyle(Palette.muted).monospacedDigit()
             if device.type == Devices.customType {
-                Button { list.remove(device) } label: { Image(systemName: "minus.circle") }.buttonStyle(.borderless).help("Remove")
+                Button {
+                    list.remove(device)
+                } label: {
+                    Image(systemName: "minus.circle")
+                }.buttonStyle(.borderless).help("Remove")
             }
         }
         .font(TextStyle.secondary.font)

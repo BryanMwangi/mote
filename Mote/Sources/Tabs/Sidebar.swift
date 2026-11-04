@@ -177,11 +177,13 @@ private struct SpacePages: View {
         let swipe = swipe.value
         let swiping = swipe != 0
         let here = spaceIndex
-        GeometryReader { room in ZStack(alignment: .topLeading) {
-            ForEach(Array(browser.spaces.enumerated()), id: \.element.id) { index, space in
-                let live = index == here && !browser.makingSpace
-                SpacePage(
-                    browser: browser, prefs: prefs, space: space, live: live, room: room.size.height, drag: $drag, keptDrag: $keptDrag)
+        GeometryReader { room in
+            ZStack(alignment: .topLeading) {
+                ForEach(Array(browser.spaces.enumerated()), id: \.element.id) { index, space in
+                    let live = index == here && !browser.makingSpace
+                    SpacePage(
+                        browser: browser, prefs: prefs, space: space, live: live, room: room.size.height, drag: $drag, keptDrag: $keptDrag
+                    )
                     .padding(.horizontal, 10)
                     .frame(width: width, alignment: .topLeading)
                     .offset(x: CGFloat(index - here) * width + swipe)
@@ -189,21 +191,22 @@ private struct SpacePages: View {
                     .opacity(live || (swiping && abs(index - here) == 1) ? 1 : 0)
                     .allowsHitTesting(live)
                     .accessibilityHidden(!live)
-            }
-            if browser.makingSpace || (swipe < 0 && here == browser.spaces.count - 1) {
-                VStack(spacing: 0) {
-                    Spacer(minLength: 0)
-                    NewSpaceCard(browser: browser)
-                    Spacer(minLength: 0)
-                    Spacer(minLength: 0)
                 }
-                .frame(maxHeight: .infinity)
-                .padding(.horizontal, 10)
-                .frame(width: width, alignment: .topLeading)
-                .offset(x: CGFloat(browser.spaces.count - here) * width + swipe)
-                .allowsHitTesting(browser.makingSpace)
+                if browser.makingSpace || (swipe < 0 && here == browser.spaces.count - 1) {
+                    VStack(spacing: 0) {
+                        Spacer(minLength: 0)
+                        NewSpaceCard(browser: browser)
+                        Spacer(minLength: 0)
+                        Spacer(minLength: 0)
+                    }
+                    .frame(maxHeight: .infinity)
+                    .padding(.horizontal, 10)
+                    .frame(width: width, alignment: .topLeading)
+                    .offset(x: CGFloat(browser.spaces.count - here) * width + swipe)
+                    .allowsHitTesting(browser.makingSpace)
+                }
             }
-        } }
+        }
         // Pages span the whole sidebar and keep their own margins.
         .padding(.horizontal, -10)
         .frame(maxHeight: .infinity, alignment: .top)
@@ -289,12 +292,12 @@ private struct SpacePage: View {
             VStack(spacing: Self.gap) {
                 ForEach(Array(kept.enumerated()), id: \.element.id) { index, tab in
                     row(tab)
-                    // Places count among the pinned tabs, after the essentials.
-                    .modifier(
-                        Reorderable(
-                            id: tab.id, index: index, places: 0..<kept.count, lattice: .column(step: Self.row + Self.gap),
-                            space: "kept", drag: $keptDrag
-                        ) { browser.move(tab, to: $0 + browser.essentialCount) })
+                        // Places count among the pinned tabs, after the essentials.
+                        .modifier(
+                            Reorderable(
+                                id: tab.id, index: index, places: 0..<kept.count, lattice: .column(step: Self.row + Self.gap),
+                                space: "kept", drag: $keptDrag
+                            ) { browser.move(tab, to: $0 + browser.essentialCount) })
                 }
             }
             .overlay { closing(kept) }
@@ -316,12 +319,12 @@ private struct SpacePage: View {
             VStack(spacing: Self.gap) {
                 ForEach(Array(loose.enumerated()), id: \.element.id) { index, tab in
                     row(tab)
-                    // Places count among the loose tabs, after the essentials and pinned ones.
-                    .modifier(
-                        Reorderable(
-                            id: tab.id, index: index, places: 0..<loose.count, lattice: .column(step: Self.row + Self.gap),
-                            space: "rows", drag: $drag
-                        ) { browser.move(tab, to: $0 + browser.pinnedCount) })
+                        // Places count among the loose tabs, after the essentials and pinned ones.
+                        .modifier(
+                            Reorderable(
+                                id: tab.id, index: index, places: 0..<loose.count, lattice: .column(step: Self.row + Self.gap),
+                                space: "rows", drag: $drag
+                            ) { browser.move(tab, to: $0 + browser.pinnedCount) })
                 }
             }
             .overlay { closing(loose) }
@@ -351,12 +354,13 @@ private struct PinnedTabs: View {
             ForEach(Array(tabs.enumerated()), id: \.element.id) { index, tab in
                 PinSquare(
                     browser: browser, tab: tab, live: tab.id == active, lettering: live && browser.editingPin == tab.id,
-                    icons: prefs.glyph == .icons, size: grid.cell)
-                    .modifier(
-                        Reorderable(
-                            id: tab.id, index: index, places: 0..<tabs.count, lattice: Lattice(columns: grid.columns, step: grid.step),
-                            space: "pins", drag: $drag
-                        ) { browser.move(tab, to: $0) })
+                    icons: prefs.glyph == .icons, size: grid.cell
+                )
+                .modifier(
+                    Reorderable(
+                        id: tab.id, index: index, places: 0..<tabs.count, lattice: Lattice(columns: grid.columns, step: grid.step),
+                        space: "pins", drag: $drag
+                    ) { browser.move(tab, to: $0) })
             }
         }
         // As ⌘W: a pinned tab lets its page go and stays pinned.

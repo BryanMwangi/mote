@@ -67,7 +67,8 @@ struct Toast: NSViewRepresentable {
 
         /// Only the card takes clicks.
         override func hitTest(_ point: NSPoint) -> NSView? {
-            guard let card, card.alphaValue > 0, card.frame.insetBy(dx: Self.margin, dy: Self.margin).contains(convert(point, from: superview))
+            guard let card, card.alphaValue > 0,
+                card.frame.insetBy(dx: Self.margin, dy: Self.margin).contains(convert(point, from: superview))
             else { return nil }
             return super.hitTest(point)
         }
