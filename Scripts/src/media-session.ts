@@ -36,6 +36,21 @@ if (handler && !window.__moteMedia) {
       set(action, act);
       soon();
     };
+    // A new track without a media event (one element, the source swapped
+    // under it) still sets new metadata: hear that, as Firefox does, rather
+    // than looking again every few seconds.
+    const metadata = Object.getOwnPropertyDescriptor(MediaSession.prototype, 'metadata');
+    if (metadata?.set && metadata.get) {
+      const { get, set: put } = metadata;
+      Object.defineProperty(session, 'metadata', {
+        configurable: true,
+        get: () => get.call(session),
+        set: (value: MediaMetadata | null) => {
+          put.call(session, value);
+          soon();
+        },
+      });
+    }
   }
 
   let sent = '';
@@ -60,10 +75,6 @@ if (handler && !window.__moteMedia) {
   for (const kind of ['play', 'pause', 'ended', 'emptied', 'loadedmetadata', 'volumechange']) {
     document.addEventListener(kind, soon, true);
   }
-  // Tracks change without an event the page has to send: look again while playing.
-  window.setInterval(() => {
-    if (sent.includes('"playing":true')) report();
-  }, 2000);
 
   /** Runs the site's own handler for `action`, if it gave one. */
   const call = (action: MediaSessionAction): boolean => {

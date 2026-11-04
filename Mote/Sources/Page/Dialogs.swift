@@ -77,8 +77,12 @@ extension Browser {
         _ challenge: URLAuthenticationChallenge, from webView: WKWebView,
         _ done: @escaping @MainActor @Sendable (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
     ) {
-        guard let trust = challenge.protectionSpace.serverTrust else { return done(.performDefaultHandling, nil) }
         let host = challenge.protectionSpace.host
+        // Only a host that may be let past a bad certificate needs looking at
+        // here; WebKit judges the rest itself, off the main thread.
+        guard Challenge.isLoopback(host.lowercased()) || Dialogs.excused.contains(host.lowercased()),
+            let trust = challenge.protectionSpace.serverTrust
+        else { return done(.performDefaultHandling, nil) }
         switch Challenge.trust(valid: SecTrustEvaluateWithError(trust, nil), host: host, excused: Dialogs.excused) {
         case .usual:
             done(.performDefaultHandling, nil)

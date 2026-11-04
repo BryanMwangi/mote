@@ -13,8 +13,14 @@ public struct ChromeLayout: Equatable, Sendable {
 
     /// Space between the card and the window's edges.
     public static let gap: CGFloat = 5
-    /// Corner radius of the card.
-    public static let corner: CGFloat = 10
+    /// Corner radius of the card, and of the sidebar floating over it: the
+    /// window's own less the gap, so their curves run alongside the window's
+    /// and no page shows past them. Set from the window (WindowDressing), as
+    /// macOS rounds its windows differently from one version to the next.
+    nonisolated(unsafe) public static var corner: CGFloat = 7
+
+    /// The radius for what sits `gap` inside a window whose corners have `radius`.
+    public static func corner(inside radius: CGFloat) -> CGFloat { max(4, radius - gap) }
     /// Height of the toolbar at the top of the card. With the card `gap` below
     /// the window's top, its middle lines up with the traffic lights (see
     /// `lights`).

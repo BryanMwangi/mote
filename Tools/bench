@@ -60,7 +60,7 @@ COMMANDS = {
     "window": ("", "test run: open the browser's window if a hidden run came up without it"),
     "pages": ("on|off", "test run: let a hidden run's pages paint, off every screen (for picture)"),
     "picture": ("path:path", "test run: the whole window, pages included, drawn to a PNG"),
-    "frames": ("[fold|peek|unpeek|scroll|chat|chatdown] [seconds:float]", "test run: run that animation and time the frames drawn — missed ones"),
+    "frames": ("[fold|peek|unpeek|scroll|chat|chatdown|tab|space] [seconds:float]", "test run: run that animation and time the frames drawn — missed ones"),
     "film": ("peek|unpeek|fold|none path:path [frames:int] [every:float]", "test run: the window drawn again and again while it animates → PATH-00.png…"),
     "strip": ("path:path [width:float]", "the row of tabs, drawn off screen to a PNG"),
     "column": ("path:path [height:float]", "the column of tabs, drawn off screen to a PNG"),
@@ -209,7 +209,7 @@ def read_switch(verb, needed):
 
 
 def read_frames(args):
-    if len(args) > 2 or (args and args[0] not in ("fold", "peek", "unpeek", "scroll", "chat", "chatdown")):
+    if len(args) > 2 or (args and args[0] not in ("fold", "peek", "unpeek", "scroll", "chat", "chatdown", "tab", "space")):
         sys.exit(usage("frames"))
     request = {"action": args[0] if args else "fold"}
     if len(args) > 1:

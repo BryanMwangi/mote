@@ -1,4 +1,5 @@
 import AppKit
+import MoteCore
 
 @MainActor
 enum WindowDressing {
@@ -12,6 +13,10 @@ enum WindowDressing {
         window.isMovableByWindowBackground = false
         window.isMovable = false
         window.setFrameAutosaveName(Storage.world.map { "mote (\($0))" } ?? "mote")
+        // macOS doesn't say how round it draws windows; AppKit knows.
+        if window.responds(to: NSSelectorFromString("_cornerRadius")), let radius = window.value(forKey: "_cornerRadius") as? CGFloat {
+            ChromeLayout.corner = ChromeLayout.corner(inside: radius)
+        }
         TrafficLights.refresh(in: window)
     }
 

@@ -46,12 +46,10 @@ struct ChromeLayoutTests {
     @Test("Without the toolbar on the card, the page takes its room, under the bookmarks bar if any")
     func noToolbar() {
         for tabs in [ChromeLayout.Tabs.sidebar, .strip] {
-            let bare = ChromeLayout(
-                window: window, tabs: tabs, sideWidth: 240, folded: false, immersed: false, bookmarked: false, toolbar: false)
+            let bare = ChromeLayout(window: window, tabs: tabs, sideWidth: 240, folded: false, immersed: false, bookmarked: false, toolbar: false)
             #expect(bare.toolbar == 0)
             #expect(bare.page == bare.card)
-            let marked = ChromeLayout(
-                window: window, tabs: tabs, sideWidth: 240, folded: false, immersed: false, bookmarked: true, toolbar: false)
+            let marked = ChromeLayout(window: window, tabs: tabs, sideWidth: 240, folded: false, immersed: false, bookmarked: true, toolbar: false)
             #expect(marked.page.minY == marked.card.minY + ChromeLayout.bookmarks)
         }
     }

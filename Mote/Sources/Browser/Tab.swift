@@ -67,7 +67,9 @@ final class Tab: ObservableObject, Identifiable {
         didSet { if noisy || oldValue { lastAudible = Date() } }
     }
     /// The site the page is loading from just now, for the status at its foot.
-    @Published var loadingFrom: String?
+    /// Its own object: it changes many times a second while a page loads, and
+    /// only the status watches it.
+    let loadingFrom = LoadingFrom()
     /// What the page says it plays, for the media strip (MediaSession.swift).
     @Published var media: MediaState?
     /// When the page was last heard, from WebKit rather than the page.
@@ -249,7 +251,7 @@ final class Tab: ObservableObject, Identifiable {
         if progress != web.estimatedProgress { progress = web.estimatedProgress }
         if loading != web.isLoading {
             loading = web.isLoading
-            loadingFrom = nil
+            if loadingFrom.host != nil { loadingFrom.host = nil }
         }
         if canGoBack != web.canGoBack { canGoBack = web.canGoBack }
         if canGoForward != web.canGoForward { canGoForward = web.canGoForward }
@@ -775,6 +777,12 @@ final class Tab: ObservableObject, Identifiable {
         web.uiDelegate = nil
         web.removeFromSuperview()
     }
+}
+
+/// The site a tab's page is loading from just now.
+@MainActor
+final class LoadingFrom: ObservableObject {
+    @Published var host: String?
 }
 
 /// How far down a tab's page is scrolled, 0 to 1.

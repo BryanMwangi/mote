@@ -55,7 +55,6 @@ extension Extensions {
     /// From a Chrome Web Store link or id. `confirm: false` skips the question
     /// in test runs only.
     func install(from text: String, confirm: Bool = true) {
-        guard space == nil else { return Self.shared.install(from: text, confirm: confirm) }
         guard let id = CRX.extensionID(in: text) else { return say(CRX.Failure.notAnExtensionID.localizedDescription) }
         guard index(of: id) == nil else { return say("Already installed") }
         busy = id
@@ -71,7 +70,6 @@ extension Extensions {
 
     /// Asks for an unpacked extension's folder.
     func installFolder() {
-        guard space == nil else { return Self.shared.installFolder() }
         let panel = NSOpenPanel()
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
@@ -83,7 +81,6 @@ extension Extensions {
 
     /// Copied in, so the folder can move; Reload copies it again.
     func installFolder(at source: URL, confirm: Bool = true) {
-        guard space == nil else { return Self.shared.installFolder(at: source, confirm: confirm) }
         guard Self.hasManifest(source) else { return say("That folder has no manifest.json") }
         let id = Installed.localID()
         guard let staged = try? Self.stage(copying: source, as: id) else { return say("Couldn't copy the extension") }
@@ -121,7 +118,6 @@ extension Extensions {
     /// As Chrome's developer mode does; an unpacked one is copied from its
     /// folder again first.
     func reload(_ id: String) {
-        guard space == nil else { return Self.shared.reload(id) }
         guard let item = installed.first(where: { $0.id == id }), reloading.insert(id).inserted else { return }
         var staged: URL?
         if let path = item.source {
@@ -224,7 +220,6 @@ extension Extensions {
     // MARK: - Switches
 
     func setEnabled(_ id: String, _ on: Bool) {
-        guard space == nil else { return Self.shared.setEnabled(id, on) }
         guard let at = index(of: id) else { return }
         installed[at].enabled = on
         save()
@@ -237,7 +232,6 @@ extension Extensions {
     }
 
     func setPinned(_ id: String, _ on: Bool) {
-        guard space == nil else { return Self.shared.setPinned(id, on) }
         guard let at = index(of: id) else { return }
         installed[at].pinned = on
         save()
@@ -251,7 +245,6 @@ extension Extensions {
 
     /// With its settings, its answers and its files.
     func remove(_ id: String) {
-        guard space == nil else { return Self.shared.remove(id) }
         unload(id)
         forgetErrors(of: id)
         forgetLoads(of: id)

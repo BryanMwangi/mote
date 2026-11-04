@@ -3,6 +3,7 @@ import MoteAI
 import MoteCore
 import SwiftUI
 import WebKit
+import os
 
 /// One window's browser: its row of tabs and which one is showing, plus the
 /// models for everything drawn around and over the page.
@@ -110,7 +111,9 @@ final class Browser: NSObject, ObservableObject {
     @Published var tabDraft = ""
 
     /// A short message at the bottom of the window.
-    @Published private(set) var announcement: Announcement?
+    /// The short message showing (see `Toast`).
+    let announcer = Announcer()
+    var announcement: Announcement? { announcer.showing }
 
     /// Recently closed tabs, for ⌘⇧T and the History menu.
     @Published private var closed = RecentlyClosed<Ghost>()
@@ -133,8 +136,14 @@ final class Browser: NSObject, ObservableObject {
     @Published var spaceID = Space.firstID
     /// The other spaces' tabs. Published so extensions keep up with them.
     @Published var parked: [UUID: Parked] = [:]
-    /// The space swipe's offset, and whether the new-space card is shown.
-    @Published var spaceSwipe: CGFloat = 0
+    /// The space swipe's offset. Kept apart, as it changes on every frame of
+    /// a swipe and only the sliding pages follow it.
+    let swipeOffset = SwipeOffset()
+    var spaceSwipe: CGFloat {
+        get { swipeOffset.value }
+        set { swipeOffset.value = newValue }
+    }
+    /// Whether the new-space card is shown.
     @Published var makingSpace = false
     /// Direction of the last space change: 1 forward, -1 back.
     @Published var spaceStep = 1
@@ -276,9 +285,10 @@ final class Browser: NSObject, ObservableObject {
         field.suggest = { [weak self] typed, switching in self?.suggestions(for: typed, switching: switching) ?? ([], nil) }
         finder.page = { [weak self] in self?.active?.web }
 
-        // Menus are rebuilt from this object's changes, so pass on those of
-        // history, bookmarks and preferences.
-        for source in [history.objectWillChange, bookmarks.objectWillChange, prefs.objectWillChange] {
+        // Views read bookmarks and preferences through this object, so pass on
+        // their changes. Not history's: it changes on every page loaded and
+        // titled, and only the menu bar shows it, which watches it itself.
+        for source in [bookmarks.objectWillChange, prefs.objectWillChange] {
             source.sink { [weak self] in self?.objectWillChange.send() }.store(in: &bag)
         }
         Favicons.shared.arrived = { [weak self] host, image in
@@ -678,6 +688,8 @@ final class Browser: NSObject, ObservableObject {
         field.switching = false
         logins.dropChoices()
         guard tab.id != activeID else { return }
+        let interval = switching.beginInterval("Select tab")
+        defer { switching.endInterval("Select tab", interval) }
         if floating == tab.id { land() }
         floatActiveVideo()
         activeID = tab.id
@@ -960,7 +972,7 @@ final class Browser: NSObject, ObservableObject {
         guard #available(macOS 15.4, *) else { return nil }
         let url = Extensions.current(url)
         guard url.scheme == Extensions.scheme else { return nil }
-        return Extensions.current.controller.extensionContext(for: url)?.webViewConfiguration
+        return Extensions.shared.controller.extensionContext(for: url)?.webViewConfiguration
     }
 
     // MARK: - Wiring a tab
@@ -997,7 +1009,7 @@ final class Browser: NSObject, ObservableObject {
     /// Shows a message for a moment: longer when it has something to do or
     /// more to say, and for as long as the pointer rests on it.
     func announce(_ message: Announcement) {
-        announcement = message
+        announcer.showing = message
         hushLater()
     }
 
@@ -1039,7 +1051,7 @@ final class Browser: NSObject, ObservableObject {
 
     func dismissAnnouncement() {
         hush?.cancel()
-        announcement = nil
+        announcer.showing = nil
     }
 
     private func hushLater() {
@@ -1047,7 +1059,7 @@ final class Browser: NSObject, ObservableObject {
         hush?.cancel()
         hush = Task { [weak self] in
             try? await Task.sleep(for: .seconds(showing.lasts))
-            if !Task.isCancelled, self?.announcement == showing { self?.announcement = nil }
+            if !Task.isCancelled, self?.announcement == showing { self?.announcer.showing = nil }
         }
     }
 

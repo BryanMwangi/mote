@@ -135,15 +135,18 @@ struct OneClick: ViewModifier {
 
 /// A middle click. SwiftUI has no gesture for it, so this AppKit overlay
 /// only takes part in hit-testing for middle-button events and lets
-/// everything else through (see DragStrip).
+/// everything else through (see DragStrip). One covers a whole list, as
+/// Firefox listens on the tab strip rather than on each tab: an AppKit view
+/// per row makes every move of the rows cost AppKit a walk through them all.
+/// It's told where, from the top left.
 struct MiddleClick: NSViewRepresentable {
-    let act: () -> Void
+    let act: (CGPoint) -> Void
 
     func makeNSView(context: Context) -> NSView { Catcher() }
     func updateNSView(_ view: NSView, context: Context) { (view as? Catcher)?.act = act }
 
     private final class Catcher: NSView {
-        var act: () -> Void = {}
+        var act: (CGPoint) -> Void = { _ in }
         private var down = false
 
         override func hitTest(_ point: NSPoint) -> NSView? {
@@ -157,7 +160,8 @@ struct MiddleClick: NSViewRepresentable {
         /// On release inside, so sliding off first cancels.
         override func otherMouseUp(with event: NSEvent) {
             defer { down = false }
-            if down, bounds.contains(convert(event.locationInWindow, from: nil)) { act() }
+            let point = convert(event.locationInWindow, from: nil)
+            if down, bounds.contains(point) { act(CGPoint(x: point.x, y: isFlipped ? point.y : bounds.height - point.y)) }
         }
     }
 }

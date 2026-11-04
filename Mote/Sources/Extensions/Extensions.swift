@@ -16,57 +16,12 @@ typealias Installed = InstalledExtension
 @available(macOS 15.4, *)
 @MainActor
 final class Extensions: NSObject, ObservableObject {
-    /// The first space's, and every space sharing its website data. It keeps
-    /// the list of what's installed, and installs, updates and removes.
     static let shared = Extensions()
 
-    /// The extensions running for each space with website data of its own:
-    /// the same ones as `shared`, with their own storage, cookies and tabs.
-    private static var runners: [UUID: Extensions] = [:]
-
-    /// The extensions for a space's tabs, started the first time they're asked for.
-    static func runner(for space: UUID) -> Extensions {
-        guard space != Space.firstID, !Spaces.sharing.contains(space) else { return shared }
-        if let known = runners[space] { return known }
-        let made = Extensions(space: space)
-        runners[space] = made
-        if let browser = shared.browser { made.start(for: browser) }
-        return made
-    }
-
-    /// The set a space's tabs belong to, without starting one.
-    static func existingRunner(for space: UUID) -> Extensions? {
-        space == Space.firstID || Spaces.sharing.contains(space) ? shared : runners[space]
-    }
-
-    /// The showing space's extensions: the toolbar's, the popups', the keys'.
-    static var current: Extensions { runner(for: Spaces.current) }
-
-    /// Every set running.
-    static var running: [Extensions] { [shared] + runners.values }
-
-    /// The set an extension's context belongs to.
-    static func owner(of context: WKWebExtensionContext) -> Extensions {
-        running.first { $0.contexts[context.uniqueIdentifier] === context } ?? current
-    }
-
-    /// Stops a deleted space's extensions. WebKit keeps what they stored
-    /// under the space's id; nothing will open it again.
-    static func stop(space: UUID) {
-        guard let runner = runners.removeValue(forKey: space) else { return }
-        for id in Array(runner.contexts.keys) { runner.unload(id, everywhere: false) }
-        runner.subscriptions = []
-    }
-
     /// Before the web view is made: its controller can't be set later.
-    static func attach(_ configuration: WKWebViewConfiguration, space: UUID = Spaces.current) {
-        configuration.webExtensionController = runner(for: space).controller
+    static func attach(_ configuration: WKWebViewConfiguration) {
+        configuration.webExtensionController = shared.controller
     }
-
-    /// The space whose own data these run in; nil for `shared`.
-    let space: UUID?
-    /// The website data its pages and tabs use.
-    var websites: WKWebsiteDataStore { space.map(Spaces.store(for:)) ?? Storage.websites }
 
     let controller: WKWebExtensionController
     @Published var installed: [Installed] = []
@@ -87,13 +42,8 @@ final class Extensions: NSObject, ObservableObject {
     var order: [Tab.ID] = []
     var tabWatches: [Tab.ID: [AnyCancellable]] = [:]
     private(set) lazy var window = ExtensionWindow(owner: self)
-    /// The toolbar views popups hang from, by extension id or `menuAnchor`:
-    /// one toolbar, whichever space's extensions it shows.
-    private static var anchorViews: [String: WeakView] = [:]
-    var anchors: [String: WeakView] {
-        get { Self.anchorViews }
-        set { Self.anchorViews = newValue }
-    }
+    /// The toolbar views popups hang from, by extension id or `menuAnchor`.
+    var anchors: [String: WeakView] = [:]
     /// The puzzle button's menu is open.
     @Published var menuOpen = false
 
@@ -121,20 +71,15 @@ final class Extensions: NSObject, ObservableObject {
     static let scheme = ExtensionRules.scheme
     static func current(_ url: URL) -> URL { ExtensionRules.current(url) }
 
-    private init(space: UUID? = nil) {
-        self.space = space
-        if space == nil { WKWebExtension.MatchPattern.registerCustomURLScheme(Self.scheme) }
-        // Test runs keep extension data apart; a space with its own data
-        // keeps its extensions' storage under its own id.
+    private override init() {
+        WKWebExtension.MatchPattern.registerCustomURLScheme(Self.scheme)
+        // Test runs keep extension data apart.
         let setup: WKWebExtensionController.Configuration =
-            if let space { .init(identifier: space) } else if Storage.testing && !Storage.ownContainer {
-                .init(identifier: Storage.probeStore(2))
-            } else { .default() }
-        let store = space.map(Spaces.store(for:)) ?? Storage.websites
-        setup.defaultWebsiteDataStore = store
+            Storage.testing && !Storage.ownContainer ? .init(identifier: Storage.probeStore(2)) : .default()
+        setup.defaultWebsiteDataStore = Storage.websites
         let pages = setup.webViewConfiguration ?? WKWebViewConfiguration()
         // Otherwise WebKit's default store, not the browser's.
-        pages.websiteDataStore = store
+        pages.websiteDataStore = Storage.websites
         // The same as tabs, exactly: a page loading with another user agent
         // makes WebKit restart running workers, and it never restarts an
         // extension's. The shim tells extensions they're in Chrome.
@@ -146,32 +91,12 @@ final class Extensions: NSObject, ObservableObject {
         controller = WKWebExtensionController(configuration: setup)
         super.init()
         controller.delegate = self
-        if space == nil {
-            installed = (try? JSONDecoder().decode([Installed].self, from: Data(contentsOf: Self.list))) ?? []
-        } else {
-            // The same list as the first space's, kept in step with it.
-            Self.shared.$installed.sink { [weak self] in self?.installed = $0 }.store(in: &subscriptions)
-            Self.shared.$actionsChanged.dropFirst().sink { [weak self] _ in self?.actionsChanged += 1 }.store(in: &subscriptions)
-        }
-    }
-
-    /// Whether these extensions belong to the space showing.
-    var ownsShowingSpace: Bool { Self.current === self }
-
-    /// Another space's extensions start the first time it shows, not when its
-    /// tabs are made ahead for the swipe.
-    private var started = false
-
-    func startIfShowing() {
-        guard space != nil, !started, ownsShowingSpace else { return }
-        started = true
-        Task { [weak self] in await self?.loadAll() }
+        installed = (try? JSONDecoder().decode([Installed].self, from: Data(contentsOf: Self.list))) ?? []
     }
 
     func start(for browser: Browser) {
         self.browser = browser
         followTabs(of: browser)
-        guard space == nil else { return startIfShowing() }
         // After the window shows: each load holds the main thread for tens of
         // milliseconds.
         AppDelegate.onceShown { [weak self] in
@@ -183,10 +108,10 @@ final class Extensions: NSObject, ObservableObject {
     /// tries them again.
     private func loadAll() async {
         for item in installed where item.enabled {
-            await load(item, everywhere: false)
+            await load(item)
             if contexts[item.id]?.webExtension.hasBackgroundContent == true { try? await Task.sleep(for: .milliseconds(400)) }
         }
-        if space == nil { checkForUpdates() }
+        checkForUpdates()
     }
 
     func noteError(_ text: String, for id: String) {
@@ -196,7 +121,6 @@ final class Extensions: NSObject, ObservableObject {
     func forgetErrors(of id: String) { errors[id] = nil }
 
     func save() {
-        guard space == nil else { return Self.shared.save() }
         try? FileManager.default.createDirectory(at: Self.folder, withIntermediateDirectories: true)
         try? JSONEncoder().encode(installed).write(to: Self.list, options: .atomic)
     }
@@ -205,13 +129,8 @@ final class Extensions: NSObject, ObservableObject {
 
     // MARK: - Running
 
-    /// `everywhere`: in every space's set too, as installing, enabling,
-    /// reloading and updating do from `shared`.
     @discardableResult
-    func load(_ item: Installed, everywhere: Bool = true) async -> Bool {
-        if everywhere, space == nil {
-            for runner in Self.runners.values where runner.started { Task { await runner.load(item, everywhere: false) } }
-        }
+    func load(_ item: Installed) async -> Bool {
         // This build's shim, off the main thread: after an app update it
         // rewrites every script and page the extension ships.
         let folder = Self.folder(for: item.id)
@@ -242,8 +161,7 @@ final class Extensions: NSObject, ObservableObject {
         }
     }
 
-    func unload(_ id: String, everywhere: Bool = true) {
-        if everywhere, space == nil { Self.runners.values.forEach { $0.unload(id, everywhere: false) } }
+    func unload(_ id: String) {
         guard let context = contexts[id] else { return }
         try? controller.unload(context)
         // WebKit says its ports closed only on the next turn of the run loop.
@@ -264,9 +182,9 @@ final class Extensions: NSObject, ObservableObject {
         noteError("restarted the extension: \(reason)", for: id)
         let popup = ExtensionPopup.shared.extensionID == id ? ExtensionPopup.shared.view?.url : nil
         let anchor = anchor(for: id)
-        unload(id, everywhere: false)
+        unload(id)
         Task {
-            guard await load(item, everywhere: false), let popup, let context = contexts[id] else { return }
+            guard await load(item), let popup, let context = contexts[id] else { return }
             ExtensionPopup.shared.show(popup, for: context, from: anchor)
         }
     }

@@ -15,7 +15,6 @@ struct SidebarFold: View {
     /// The pointer is over the peeking tabs.
     @State private var inside = false
 
-    private static let corner: CGFloat = 12
 
     /// Folded, with the page not full screen.
     private var folding: Bool { browser.folded && browser.active?.immersed != true }
@@ -34,13 +33,13 @@ struct SidebarFold: View {
                     .background { Palette.frame.shadow(color: .black.opacity(0.16), radius: 20, y: 6) }
                     .transition(.move(edge: .top))
             }
-            ZStack(alignment: .topLeading) {
-                Color.clear.frame(width: 0)
-                if folding, prefs.sidebar, browser.peeking {
-                    floatingSidebar.padding(ChromeLayout.gap).transition(.move(edge: .leading))
+            // Kept built while folded, out past the window's edge: a peek only
+            // slides it in, rather than building every row each time.
+            if folding, prefs.sidebar {
+                SlidingPanel(out: browser.peeking, width: prefs.sideWidth + ChromeLayout.gap * 2) {
+                    floatingSidebar.padding(ChromeLayout.gap).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                 }
             }
-            .frame(maxHeight: .infinity, alignment: .topLeading)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .ignoresSafeArea()
@@ -81,8 +80,8 @@ struct SidebarFold: View {
     /// The sidebar as a floating panel: the frame's colour, rounded, outlined,
     /// and lifted off the card by a deep, soft shadow.
     private var floatingSidebar: some View {
-        let shape = RoundedRectangle(cornerRadius: Self.corner, style: .continuous)
-        return Sidebar(browser: browser, prefs: prefs)
+        let shape = RoundedRectangle(cornerRadius: ChromeLayout.corner, style: .continuous)
+        return Sidebar(browser: browser, prefs: prefs, showing: browser.peeking)
             .frame(maxHeight: .infinity)
             .background(Palette.frame)
             .clipShape(shape)
@@ -126,9 +125,11 @@ struct SidebarFold: View {
         let near = browser.peeking || (inWindow && distance < EdgeReveal.edge)
         let top = near ? NSWindow.windowNumber(at: screen, belowWindowWithWindowNumber: 0) : 0
         let onWindow = top == window.windowNumber
+        let along = prefs.sidebar ? point.y : point.x
+        let span = prefs.sidebar ? size.height : size.width
         let pointer = EdgeReveal.Pointer(
             inWindow: inWindow, onWindow: onWindow, onOwnPanel: near && !onWindow && NSApp.windows.contains { $0.windowNumber == top },
-            distance: distance)
+            distance: distance, beside: along > -EdgeReveal.slop && along < span + EdgeReveal.slop)
         // The floating sidebar sits in by the card's gap, its resize grip just
         // past its edge; the strip has neither.
         let reach = prefs.sidebar ? prefs.sideWidth + ChromeLayout.gap + ResizeGrip.width : ChromeLayout.strip
@@ -161,6 +162,92 @@ struct SidebarFold: View {
     private func hide() {
         timers.hideAfter(EdgeReveal.grace) {
             if folding, browser.editingTab == nil { browser.peek(false) }
+        }
+    }
+}
+
+/// The floating sidebar, slid in and out by Core Animation, as Zen slides its
+/// compact sidebar with a transform. SwiftUI animating an offset would lay
+/// out the whole window on every frame of the slide.
+private struct SlidingPanel: NSViewRepresentable {
+    let out: Bool
+    /// The panel's own; past it there's room for its shadow.
+    let width: CGFloat
+    let content: AnyView
+
+    init(out: Bool, width: CGFloat, @ViewBuilder content: () -> some View) {
+        self.out = out
+        self.width = width
+        self.content = AnyView(content())
+    }
+
+    func makeNSView(context: Context) -> Holder { Holder(NSHostingView(rootView: content), out: out, width: width) }
+
+    func updateNSView(_ holder: Holder, context: Context) {
+        holder.panel.rootView = content
+        holder.slide(out: out, width: width)
+    }
+
+    final class Holder: NSView {
+        let panel: NSHostingView<AnyView>
+        private var out: Bool
+        private var width: CGFloat
+        /// Room for the shadow and the resize grip beside the panel.
+        private static var margin: CGFloat { 60 }
+
+        init(_ panel: NSHostingView<AnyView>, out: Bool, width: CGFloat) {
+            self.panel = panel
+            self.out = out
+            self.width = width
+            super.init(frame: .zero)
+            wantsLayer = true
+            panel.sizingOptions = []
+            panel.safeAreaRegions = []
+            panel.isHidden = !out
+            addSubview(panel)
+        }
+
+        @available(*, unavailable)
+        required init?(coder: NSCoder) { fatalError() }
+
+        override var isFlipped: Bool { true }
+
+        /// Only the panel takes clicks, and only while out; past its edge,
+        /// in the room for its shadow, they go through to the page.
+        override func hitTest(_ point: NSPoint) -> NSView? {
+            guard out, convert(point, from: superview).x < width + ResizeGrip.width / 2 else { return nil }
+            let hit = super.hitTest(point)
+            return hit === self ? nil : hit
+        }
+
+        override func layout() {
+            super.layout()
+            panel.frame = place(out)
+        }
+
+        private func place(_ out: Bool) -> NSRect {
+            let span = width + Self.margin
+            return NSRect(x: out ? 0 : -span, y: 0, width: span, height: bounds.height)
+        }
+
+        func slide(out now: Bool, width: CGFloat) {
+            self.width = width
+            guard now != out else { return panel.frame = place(out) }
+            out = now
+            if now { panel.isHidden = false }
+            guard window != nil else {
+                panel.frame = place(now)
+                panel.isHidden = !now
+                return
+            }
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = Motion.foldResponse
+                context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                panel.animator().frame = place(now)
+            } completionHandler: { [weak self] in
+                // Gone: nothing of it is drawn or tracked until it comes back.
+                if let self, !self.out { self.panel.isHidden = true }
+            }
         }
     }
 }

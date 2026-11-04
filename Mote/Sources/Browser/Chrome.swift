@@ -312,7 +312,7 @@ private struct PageCard: View {
                 } else {
                     Page(tab: tab)
                         .overlay {
-                            LinkBubble(status: browser.linkStatus, tab: tab, showsLinks: prefs.showsLinks)
+                            LinkBubble(status: browser.linkStatus, tab: tab, loadingFrom: tab.loadingFrom, showsLinks: prefs.showsLinks)
                         }
                         .overlay(alignment: .topTrailing) {
                             if browser.finder.showing {

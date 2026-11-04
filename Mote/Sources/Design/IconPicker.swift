@@ -64,7 +64,6 @@ struct IconPicker: View {
                             .help(item.name.capitalized)
                     }
                 }
-                .floatingScroller()
             }
             .frame(height: 230)
             .overlay {

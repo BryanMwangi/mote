@@ -7,10 +7,19 @@ import SwiftUI
 struct GeneralSettings: View {
     let browser: Browser
     @ObservedObject var prefs: Preferences
-    @State private var isDefault = AppDelegate.isDefault
-    @State private var hasZen = !ZenImporter.profiles().isEmpty
+    // Asked when the page shows, not each time it's made: one asks Launch
+    // Services, the other looks on disk.
+    @State private var isDefault = false
+    @State private var hasZen = false
 
     var body: some View {
+        content.onAppear {
+            isDefault = AppDelegate.isDefault
+            hasZen = !ZenImporter.profiles().isEmpty
+        }
+    }
+
+    @ViewBuilder private var content: some View {
         SettingsSection("Mote and your Mac") {
             SettingRow(
                 "Default browser",

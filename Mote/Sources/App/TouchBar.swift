@@ -126,22 +126,20 @@ final class BrowserTouchBar: NSObject, NSTouchBarDelegate {
         showWhereToGo()
         guard let tab = browser?.active else { return }
         watches.append(tab.$canGoBack.merge(with: tab.$canGoForward).sink { [weak self] _ in Task { @MainActor in self?.showWhereToGo() } })
-        // Video starting or stopping, or full screen: the page checks whether
-        // its bar should change, and asks for it again only if so.
-        // WebKit decides about its playback controls a moment after full
-        // screen ends, without telling anyone, so while the tab has media
-        // it's asked again each second too. Asking is cheap; the bar is only
-        // made again when the answer changes.
-        let media = Publishers.Merge3(
-            tab.$media.map { _ in () }, tab.$noisy.map { _ in () }, tab.$immersed.map { _ in () })
-        let ticks = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
-            .filter { [weak tab] _ in tab?.media != nil || tab?.noisy == true || tab?.immersed == true }
-            .map { _ in () }
+        // As Firefox's Touch Bar: no polling, only events. Video starting or
+        // stopping, or full screen: the page checks whether its bar should
+        // change, and asks for it again only if so.
+        let refresh = { [weak tab] in
+            guard let tab, let page = tab.built as? PageView else { return }
+            page.refreshTouchBar(immersed: tab.immersed)
+        }
+        let media = Publishers.Merge3(tab.$media.map { _ in () }, tab.$noisy.map { _ in () }, tab.$immersed.map { _ in () })
+        watches.append(media.debounce(for: .milliseconds(200), scheduler: DispatchQueue.main).sink(receiveValue: refresh))
+        // WebKit brings its playback controls back a moment after full screen
+        // ends, without telling anyone: look once more then.
         watches.append(
-            media.debounce(for: .milliseconds(200), scheduler: DispatchQueue.main).merge(with: ticks).sink { [weak tab] in
-                guard let tab, let page = tab.built as? PageView else { return }
-                page.refreshTouchBar(immersed: tab.immersed)
-            })
+            tab.$immersed.dropFirst().filter { !$0 }.delay(for: .seconds(1), scheduler: DispatchQueue.main)
+                .sink { _ in refresh() })
     }
 
     private static func symbol(_ name: String, _ label: String) -> NSImage {

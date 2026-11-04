@@ -13,6 +13,10 @@ public enum EdgeReveal {
     /// felt, but enough that grazing their edge on the way past doesn't flicker
     /// them shut and open again.
     public static let grace: Double = 0.1
+    /// How far past the window's edge the pointer can stray, level with the
+    /// window, before peeking tabs go: a pointer that overshoots the edge
+    /// can come back, as in Zen. Into the window, away from them, they go.
+    public static let slop: CGFloat = 24
 
     /// Where the pointer is.
     public struct Pointer: Equatable, Sendable {
@@ -23,14 +27,17 @@ public enum EdgeReveal {
         public var onWindow: Bool
         /// Over another of the app's own windows, such as a menu opened from the tabs.
         public var onOwnPanel: Bool
-        /// Distance from the edge the tabs come out of.
+        /// Distance from the edge the tabs come out of; below zero past it.
         public var distance: CGFloat
+        /// Level with the window along that edge, give or take `slop`.
+        public var beside: Bool
 
-        public init(inWindow: Bool, onWindow: Bool, onOwnPanel: Bool, distance: CGFloat) {
+        public init(inWindow: Bool, onWindow: Bool, onOwnPanel: Bool, distance: CGFloat, beside: Bool = false) {
             self.inWindow = inWindow
             self.onWindow = onWindow
             self.onOwnPanel = onOwnPanel
             self.distance = distance
+            self.beside = beside
         }
     }
 
@@ -52,7 +59,8 @@ public enum EdgeReveal {
     ///     always waits, since it is crossed on the way to the menu bar.
     public static func step(_ pointer: Pointer, peeking: Bool, reach: CGFloat, waits: Bool) -> Step {
         if peeking {
-            let over = pointer.onOwnPanel || (pointer.onWindow && pointer.inWindow && pointer.distance < reach)
+            let strayed = pointer.beside && pointer.distance < 0 && pointer.distance > -slop
+            let over = pointer.onOwnPanel || strayed || (pointer.onWindow && pointer.inWindow && pointer.distance < reach)
             return over ? .show : .hideSoon
         }
         guard pointer.inWindow, pointer.onWindow, pointer.distance < edge else { return .pass }

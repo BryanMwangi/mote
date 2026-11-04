@@ -14,13 +14,15 @@ struct MoteApp: App {
         }
         .windowStyle(.hiddenTitleBar)
         .defaultSize(width: 1180, height: 780)
-        .commands { MenuBar(browser: browser) }
+        .commands { MenuBar(browser: browser, visits: browser.history) }
     }
 }
 
 /// The menu bar. One window, so "New" makes tabs.
 private struct MenuBar: Commands {
     @ObservedObject var browser: Browser
+    /// For Recently Visited; the browser doesn't pass on its changes.
+    @ObservedObject var visits: History
 
     private var blank: Bool { browser.active?.isBlank ?? true }
 

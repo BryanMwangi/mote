@@ -45,6 +45,20 @@ struct EdgeRevealTests {
         #expect(EdgeReveal.step(pointer(at: 100, onWindow: false), peeking: true, reach: 248, waits: false) == .hideSoon)
     }
 
+    @Test("Straying a little past the edge keeps the tabs out; further, or not level with the window, puts them away")
+    func strayPastEdge() {
+        let past = EdgeReveal.Pointer(inWindow: false, onWindow: false, onOwnPanel: false, distance: -10, beside: true)
+        #expect(EdgeReveal.step(past, peeking: true, reach: 248, waits: false) == .show)
+        var far = past
+        far.distance = -EdgeReveal.slop - 1
+        #expect(EdgeReveal.step(far, peeking: true, reach: 248, waits: false) == .hideSoon)
+        var below = past
+        below.beside = false
+        #expect(EdgeReveal.step(below, peeking: true, reach: 248, waits: false) == .hideSoon)
+        // Folded away, straying past the edge doesn't bring them out.
+        #expect(EdgeReveal.step(past, peeking: false, reach: 248, waits: false) == .pass)
+    }
+
     @Test("A menu opened from the peeking tabs keeps them out")
     func ownPanelKeepsThem() {
         #expect(

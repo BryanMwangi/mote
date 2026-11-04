@@ -1,6 +1,7 @@
 import AppKit
 import SwiftUI
 import WebKit
+import os
 
 // Folding the tabs away (⌘S), and changes that give the page a new size.
 extension Browser {
@@ -14,6 +15,8 @@ extension Browser {
 
     /// Shows or hides the folded tabs over the page.
     func peek(_ out: Bool) {
+        let interval = switching.beginInterval("Peek")
+        defer { switching.endInterval("Peek", interval) }
         slidingFold { peeking = out }
     }
 

@@ -28,12 +28,17 @@ struct WelcomePanel: View {
     @State private var bringing = false
     @State private var brought: Brought?
 
-    @State private var isDefault = AppDelegate.isDefault
+    /// Asked when it shows, not each time it's made: it asks Launch Services.
+    @State private var isDefault = false
     @State private var asked = false
 
     private var step: Step? { steps.indices.contains(index) ? steps[index] : nil }
 
     var body: some View {
+        content.onAppear { isDefault = AppDelegate.isDefault }
+    }
+
+    private var content: some View {
         ZStack {
             Color.black.opacity(shown && !leaving ? 0.16 : 0)
                 .ignoresSafeArea()

@@ -8,6 +8,14 @@ import UniformTypeIdentifiers
 struct TabBar: View {
     @ObservedObject var browser: Browser
     var sharedGround = false
+    /// The space swipe, which the browser doesn't pass on.
+    @ObservedObject private var swipe: SwipeOffset
+
+    init(browser: Browser, sharedGround: Bool = false) {
+        self.browser = browser
+        self.sharedGround = sharedGround
+        swipe = browser.swipeOffset
+    }
 
     /// The active tab's ground, which glides from tab to tab.
     @Namespace private var ground
@@ -65,7 +73,7 @@ struct TabBar: View {
     /// This space's row, and during a swipe the neighbouring space's sliding in
     /// from above or below.
     private func rows(_ layout: Layout) -> some View {
-        let swipe = browser.spaceSwipe
+        let swipe = swipe.value
         let here = layout.spaceIndex
         return ZStack(alignment: .bottomLeading) {
             Group {
@@ -341,7 +349,7 @@ private struct StripTab: View {
             .overlay(alignment: .trailing) {
                 if !renaming, !pinned, !iconOnly { Shut(shown: hovering || live, act: close).padding(.trailing, 6) }
             }
-            .overlay { MiddleClick(act: close) }
+            .overlay { MiddleClick { _ in close() } }
             .onHover { hovering = $0 }
             .contextMenu { TabMenu(browser: browser, tab: tab, close: close) }
             .help(pinned || iconOnly ? tab.label : "")

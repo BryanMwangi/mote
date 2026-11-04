@@ -45,7 +45,8 @@ final class LoadRelay: NSObject, WKScriptMessageHandler, TabRelay {
         guard let host = message.body as? String, host.count < 256 else { return }
         MainActor.assumeIsolated {
             guard let tab, message.webView === tab.built, tab.loading else { return }
-            tab.loadingFrom = host.isEmpty ? nil : host
+            let now = host.isEmpty ? nil : host
+            if tab.loadingFrom.host != now { tab.loadingFrom.host = now }
         }
     }
 }
@@ -96,6 +97,7 @@ final class LinkStatus: ObservableObject {
 struct LinkBubble: View {
     @ObservedObject var status: LinkStatus
     @ObservedObject var tab: Tab
+    @ObservedObject var loadingFrom: LoadingFrom
     /// Settings › General: the address of the link under the pointer.
     let showsLinks: Bool
 
@@ -103,7 +105,7 @@ struct LinkBubble: View {
     private var text: String? {
         if showsLinks, let address = status.destination { return address }
         guard tab.loading else { return nil }
-        if let host = tab.loadingFrom { return "Loading from \(host)…" }
+        if let host = loadingFrom.host { return "Loading from \(host)…" }
         return tab.address?.host().map { "Loading \($0)…" } ?? "Loading…"
     }
 

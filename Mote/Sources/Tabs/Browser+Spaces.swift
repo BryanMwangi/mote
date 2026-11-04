@@ -2,8 +2,9 @@ import MoteCore
 import SwiftUI
 import os
 
-/// Space switches, for Instruments (Points of Interest).
-private let switching = OSSignposter(subsystem: "io.github.mote-browser.mote", category: .pointsOfInterest)
+/// Switching spaces and tabs, and peeking the folded tabs, for Instruments
+/// (Points of Interest).
+let switching = OSSignposter(subsystem: "io.github.mote-browser.mote", category: .pointsOfInterest)
 
 // Switching between spaces and changing them.
 extension Browser {
@@ -32,21 +33,23 @@ extension Browser {
         guard id != spaceID, let to = spaces.firstIndex(where: { $0.id == id }) else { return }
         let interval = switching.beginInterval("Switch space")
         defer { switching.endInterval("Switch space", interval) }
-        // Which way the space's icon slides.
-        if !makingSpace { spaceStep = to > (spaces.firstIndex { $0.id == spaceID } ?? 0) ? 1 : -1 }
-        cancelTabEdit()
-        if floater.showing { land() }
-        // Saved in the background: nothing about the switch waits for the disk.
-        writeSession(now: false, space: spaceID, tabs: tabs, active: activeID)
-        parked[spaceID] = Parked(tabs: tabs, active: activeID)
-
-        spaceID = id
-        Spaces.current = id
-        Storage.settings.set(id.uuidString, forKey: "space.current")
-        // One row for another, not each row coming and going.
+        // Every change in one transaction, so SwiftUI updates once: a change
+        // before it would be drawn first, in an update of its own. One row
+        // for another, not each row coming and going.
         var still = Transaction()
         still.disablesAnimations = true
         withTransaction(still) {
+            // Which way the space's icon slides.
+            if !makingSpace { spaceStep = to > (spaces.firstIndex { $0.id == spaceID } ?? 0) ? 1 : -1 }
+            cancelTabEdit()
+            if floater.showing { land() }
+            // Saved in the background: nothing about the switch waits for the disk.
+            writeSession(now: false, space: spaceID, tabs: tabs, active: activeID)
+            parked[spaceID] = Parked(tabs: tabs, active: activeID)
+
+            spaceID = id
+            Spaces.current = id
+            Storage.settings.set(id.uuidString, forKey: "space.current")
             if let back = parked.removeValue(forKey: id), !back.tabs.isEmpty {
                 showRow(back.tabs, active: back.active)
                 if let active, !active.wake() { active.revive() }
@@ -54,10 +57,11 @@ extension Browser {
                 showRow([], active: nil)
                 restoreSession()
             }
+            editing = active?.isStart ?? true
+            field.clear()
+            // The address only for a tab with no page, as Zen focuses the page otherwise.
+            if editing { field.askFocus() }
         }
-        editing = active?.isStart ?? true
-        field.clear()
-        field.askFocus()
         // After the new space's first frame.
         let name = space.name
         DispatchQueue.main.async { [weak self] in self?.announce(name) }
@@ -184,9 +188,6 @@ extension Browser {
         parked.removeValue(forKey: id)?.tabs.forEach { $0.close() }
         editSpaces { $0.remove(id) }
         Session.erase(space: id)
-        if doomed.ownData {
-            if #available(macOS 15.4, *) { Extensions.stop(space: id) }
-            Spaces.erase(id)
-        }
+        if doomed.ownData { Spaces.erase(id) }
     }
 }

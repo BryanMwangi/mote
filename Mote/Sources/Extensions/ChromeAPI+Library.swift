@@ -229,15 +229,16 @@ extension ChromeAPI {
         } else {
             throw unavailable(call)
         }
-        try await clear(what, options: call.options, browser: call.browser, store: call.owner.websites)
+        try await clear(what, options: call.options, browser: call.browser)
         return nil
     }
 
     /// WebKit's website data, and history when asked and no origins are named.
-    private static func clear(_ what: [String: Bool], options: [String: Any], browser: Browser, store: WKWebsiteDataStore) async throws {
+    private static func clear(_ what: [String: Bool], options: [String: Any], browser: Browser) async throws {
         let since = date(options["since"] as? Double ?? 0)
         let origins = (options["origins"] as? [String])?.compactMap { URL(string: $0)?.host() }
         let types = Set(what.filter(\.value).flatMap { websiteData[$0.key] ?? [] })
+        let store = Storage.websites
         if !types.isEmpty {
             if let origins {
                 let records = await store.dataRecords(ofTypes: types).filter { record in

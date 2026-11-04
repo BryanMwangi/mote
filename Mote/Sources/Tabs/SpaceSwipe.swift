@@ -1,3 +1,4 @@
+import Combine
 import MoteCore
 import SwiftUI
 
@@ -267,4 +268,10 @@ struct NewSpaceCard: View {
     private func cancel() {
         SpaceSwipe.shared.slide(browser, to: browser.spaces.firstIndex { $0.id == browser.spaceID } ?? 0, from: browser.spaces.count)
     }
+}
+
+/// How far a swipe has moved the spaces' pages (see `Browser.spaceSwipe`).
+@MainActor
+final class SwipeOffset: ObservableObject {
+    @Published var value: CGFloat = 0
 }

@@ -17,21 +17,19 @@ extension Extensions {
 
     func shows(_ tab: Tab) -> Bool { !tab.shy || tab.carriesExtensions }
 
-    /// Every tab of the spaces whose website data these extensions run in,
-    /// in the spaces' order: the showing space's, and the others' parked.
-    /// Extensions see them all, as Firefox shows a workspace's hidden tabs,
-    /// so switching spaces is just another tab in front, not every tab
-    /// closing and opening.
+    /// Every tab of every space, in the spaces' order: the showing space's,
+    /// and the others' parked. Extensions see them all, as Firefox shows a
+    /// workspace's hidden tabs, so switching spaces is just another tab in
+    /// front, not every tab closing and opening.
     var visibleTabs: [Tab] {
         guard let browser else { return [] }
         guard browser.prefs.usesSpaces else { return browser.tabs.filter(shows) }
-        return browser.spaces.filter { Extensions.existingRunner(for: $0.id) === self }
-            .flatMap { space in space.id == browser.spaceID ? browser.tabs : browser.parked[space.id]?.tabs ?? [] }
+        return browser.spaces.flatMap { space in space.id == browser.spaceID ? browser.tabs : browser.parked[space.id]?.tabs ?? [] }
             .filter(shows)
     }
 
     var activeAdapter: ExtensionTab? {
-        guard ownsShowingSpace, let tab = browser?.active, shows(tab) else { return nil }
+        guard let tab = browser?.active, shows(tab) else { return nil }
         return adapter(for: tab)
     }
 
@@ -51,7 +49,6 @@ extension Extensions {
     }
 
     private func tabsChanged() {
-        startIfShowing()
         let shown = visibleTabs
         let changes = ExtensionRules.tabChanges(from: order, to: shown.map(\.id))
         for id in changes.closed {
@@ -84,7 +81,7 @@ extension Extensions {
     }
 
     private func selected(_ id: Tab.ID?, after previous: Tab.ID?) {
-        guard ownsShowingSpace, let browser, let tab = id.flatMap(browser.tab), shows(tab) else { return }
+        guard let browser, let tab = id.flatMap(browser.tab), shows(tab) else { return }
         controller.didActivateTab(adapter(for: tab), previousActiveTab: previous.flatMap(browser.tab).map(adapter(for:)))
         actionsChanged += 1
     }

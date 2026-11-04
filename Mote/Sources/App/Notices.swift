@@ -1,3 +1,4 @@
+import Combine
 import MoteCore
 import SwiftUI
 
@@ -9,11 +10,6 @@ struct Notices: View {
 
     var body: some View {
         VStack(spacing: 8) {
-            if let message = browser.announcement {
-                AnnouncementCard(message: message, browser: browser)
-                    .id(message.text + (message.detail ?? ""))
-                    .transition(.move(edge: .bottom).combined(with: .opacity).combined(with: .scale(scale: 0.96, anchor: .bottom)))
-            }
             if let ask = browser.capture.asking {
                 CaptureQuestion(ask: ask, capture: browser.capture).transition(.move(edge: .bottom).combined(with: .opacity))
             }
@@ -33,10 +29,98 @@ struct Notices: View {
             }
         }
         .padding(.bottom, 30)
-        .animation(Motion.settle, value: browser.announcement)
         .animation(Motion.settle, value: browser.pickingElement)
         .animation(Motion.settle, value: browser.capture.asking)
         .animation(Motion.settle, value: browser.logins.offer)
+    }
+}
+
+/// The short messages, apart from the window's other views: the browser
+/// doesn't pass on their changes, and Core Animation fades and lifts the
+/// card, so one coming neither redraws the window nor lays it out again on
+/// every frame of its arrival.
+@MainActor
+final class Announcer: ObservableObject {
+    @Published var showing: Announcement?
+}
+
+/// The message showing, in a view of its own over the window's foot.
+struct Toast: NSViewRepresentable {
+    @ObservedObject var announcer: Announcer
+    let browser: Browser
+
+    func makeNSView(context: Context) -> Holder { Holder() }
+
+    func updateNSView(_ holder: Holder, context: Context) {
+        holder.show(announcer.showing.map { AnyView(AnnouncementCard(message: $0, browser: browser)) })
+    }
+
+    final class Holder: NSView {
+        private var host: NSHostingController<AnyView>?
+        private var card: NSView? { host?.view }
+        /// Room for the card's shadow, and its place above the window's foot.
+        private static let margin: CGFloat = 40
+        private static let foot: CGFloat = 30
+        private static let rise: CGFloat = 14
+
+        override var isFlipped: Bool { true }
+
+        /// Only the card takes clicks.
+        override func hitTest(_ point: NSPoint) -> NSView? {
+            guard let card, card.alphaValue > 0, card.frame.insetBy(dx: Self.margin, dy: Self.margin).contains(convert(point, from: superview))
+            else { return nil }
+            return super.hitTest(point)
+        }
+
+        override func layout() {
+            super.layout()
+            if let host { host.view.frame = place(host) }
+        }
+
+        private func place(_ host: NSHostingController<AnyView>) -> NSRect {
+            let size = host.sizeThatFits(in: CGSize(width: min(bounds.width, 460) + Self.margin * 2, height: 10_000))
+            return NSRect(
+                x: (bounds.width - size.width) / 2, y: bounds.height - Self.foot - size.height + Self.margin, width: size.width,
+                height: size.height)
+        }
+
+        func show(_ content: AnyView?) {
+            guard let content else { return hide() }
+            let fresh = card == nil || card?.alphaValue == 0
+            let host = host ?? made()
+            host.rootView = AnyView(content.padding(Self.margin))
+            let card = host.view
+            let target = place(host)
+            guard fresh, window != nil else { return card.frame = target }
+            card.alphaValue = 0
+            card.frame = target.offsetBy(dx: 0, dy: Self.rise)
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = 0.3
+                context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                card.animator().alphaValue = 1
+                card.animator().frame = target
+            }
+        }
+
+        private func made() -> NSHostingController<AnyView> {
+            let made = NSHostingController(rootView: AnyView(EmptyView()))
+            made.sizingOptions = []
+            made.safeAreaRegions = []
+            made.view.alphaValue = 0
+            addSubview(made.view)
+            host = made
+            return made
+        }
+
+        private func hide() {
+            guard let card, card.alphaValue > 0 else { return }
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = 0.2
+                context.timingFunction = CAMediaTimingFunction(name: .easeIn)
+                card.animator().alphaValue = 0
+                card.animator().frame = card.frame.offsetBy(dx: 0, dy: Self.rise)
+            }
+        }
     }
 }
 

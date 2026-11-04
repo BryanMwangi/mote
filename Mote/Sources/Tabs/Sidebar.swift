@@ -90,7 +90,6 @@ struct Sidebar: View {
         .background(Palette.veil.opacity(dropping ? 1 : 0))
         .onDrop(of: [.url, .text], isTargeted: $dropping) { browser.take($0) }
         .animation(Motion.quick, value: dropping)
-        .animation(Motion.glide, value: browser.activeID)
         .animation(Motion.glide, value: browser.editingTab)
         .animation(Motion.settle, value: browser.tabs.map(\.id))
         .animation(Motion.settle, value: browser.pinnedCount)
@@ -100,63 +99,29 @@ struct Sidebar: View {
 
     // MARK: - Spaces, side by side
 
-    /// This space's place; the spaces' count while the new-space card shows.
-    private var spaceIndex: Int {
-        browser.makingSpace ? browser.spaces.count : browser.spaces.firstIndex { $0.id == browser.spaceID } ?? 0
-    }
-
-    /// The showing space's page, and while swiping the one coming in beside
-    /// it. Other spaces' pages aren't kept built: every row watches the
-    /// browser, so each page kept would redraw on every change, which costs
-    /// far more than building the one shown.
     private var spaces: some View {
-        let width = prefs.sideWidth
-        let swipe = browser.spaceSwipe
-        let here = spaceIndex
-        let shown = browser.spaces.indices.filter { $0 == here || (swipe > 0 && $0 == here - 1) || (swipe < 0 && $0 == here + 1) }
-        return ZStack(alignment: .topLeading) {
-            ForEach(shown, id: \.self) { index in
-                let space = browser.spaces[index]
-                let live = index == here && !browser.makingSpace
-                SpacePage(browser: browser, prefs: prefs, space: space, live: live, drag: $drag, keptDrag: $keptDrag)
-                    .id(space.id)
-                    .padding(.horizontal, 10)
-                    .frame(width: width, alignment: .topLeading)
-                    .offset(x: CGFloat(index - here) * width + swipe)
-                    .allowsHitTesting(live)
-                    .accessibilityHidden(!live)
-            }
-            if browser.makingSpace || (swipe < 0 && here == browser.spaces.count - 1) {
-                VStack(spacing: 0) {
-                    Spacer(minLength: 0)
-                    NewSpaceCard(browser: browser)
-                    Spacer(minLength: 0)
-                    Spacer(minLength: 0)
-                }
-                .frame(maxHeight: .infinity)
-                .padding(.horizontal, 10)
-                .frame(width: width, alignment: .topLeading)
-                .offset(x: CGFloat(browser.spaces.count - here) * width + swipe)
-                .allowsHitTesting(browser.makingSpace)
-            }
-        }
-        // Pages span the whole sidebar and keep their own margins.
-        .padding(.horizontal, -10)
-        .frame(maxHeight: .infinity, alignment: .top)
+        SpacePages(browser: browser, prefs: prefs, swipe: browser.swipeOffset, drag: $drag, keptDrag: $keptDrag)
     }
 
     /// Where the rows end and the window-dragging room starts. Worked out, not
     /// measured: a measurement is a frame late, and for that frame the whole
     /// sidebar would drag the window.
     private var rowsEnd: CGFloat {
-        let pins = browser.essentialCount
-        let grid = PinGrid(count: pins, width: prefs.sideWidth - 20, gap: Self.pinGap)
-        let essentials = pins == 0 ? 0 : grid.height(pins) + 10
-        let kept = browser.keptCount == 0 ? 0 : CGFloat(browser.keptCount) * (Self.row + Self.gap) - Self.gap + Self.divider
-        let loose = CGFloat(browser.tabs.count - browser.pinnedCount) * (Self.row + Self.gap)
-        let header = prefs.usesSpaces ? SpaceHeader.height + Self.gap : 0
         let pill = browser.navInSidebar ? AddressPill.height + Self.pillGap : 0
-        return Self.top + pill + essentials + header + kept + loose + Self.row + 8
+        let rows = Self.rowsHeight(
+            essentials: browser.essentialCount, kept: browser.keptCount, loose: browser.tabs.count - browser.pinnedCount,
+            width: prefs.sideWidth, named: prefs.usesSpaces)
+        return Self.top + pill + rows + 8
+    }
+
+    /// How tall a space's page stands: its essentials, name, pinned tabs,
+    /// the rest and "New tab".
+    static func rowsHeight(essentials pins: Int, kept: Int, loose: Int, width: CGFloat, named: Bool) -> CGFloat {
+        let grid = PinGrid(count: pins, width: width - 20, gap: pinGap)
+        let essentials = pins == 0 ? 0 : grid.height(pins) + 10
+        let keptRows = kept == 0 ? 0 : CGFloat(kept) * (row + gap) - gap + divider
+        let header = named ? SpaceHeader.height + gap : 0
+        return essentials + header + keptRows + CGFloat(loose) * (row + gap) + row
     }
 
     /// The chat archive, in a panel beside the sidebar.
@@ -191,6 +156,60 @@ struct Sidebar: View {
     }
 }
 
+/// Every space's page side by side, kept built, as Zen keeps a strip per
+/// workspace: switching only moves another into view and makes it the live
+/// one, rather than taking one list down and building another. Its own view,
+/// so a swipe's every frame moves the pages and redraws nothing else.
+private struct SpacePages: View {
+    @ObservedObject var browser: Browser
+    @ObservedObject var prefs: Preferences
+    @ObservedObject var swipe: SwipeOffset
+    @Binding var drag: ReorderDrag<Tab.ID>?
+    @Binding var keptDrag: ReorderDrag<Tab.ID>?
+
+    /// This space's place; the spaces' count while the new-space card shows.
+    private var spaceIndex: Int {
+        browser.makingSpace ? browser.spaces.count : browser.spaces.firstIndex { $0.id == browser.spaceID } ?? 0
+    }
+
+    var body: some View {
+        let width = prefs.sideWidth
+        let swipe = swipe.value
+        let swiping = swipe != 0
+        let here = spaceIndex
+        GeometryReader { room in ZStack(alignment: .topLeading) {
+            ForEach(Array(browser.spaces.enumerated()), id: \.element.id) { index, space in
+                let live = index == here && !browser.makingSpace
+                SpacePage(
+                    browser: browser, prefs: prefs, space: space, live: live, room: room.size.height, drag: $drag, keptDrag: $keptDrag)
+                    .padding(.horizontal, 10)
+                    .frame(width: width, alignment: .topLeading)
+                    .offset(x: CGFloat(index - here) * width + swipe)
+                    // Built and laid out, but only drawn when it can be seen.
+                    .opacity(live || (swiping && abs(index - here) == 1) ? 1 : 0)
+                    .allowsHitTesting(live)
+                    .accessibilityHidden(!live)
+            }
+            if browser.makingSpace || (swipe < 0 && here == browser.spaces.count - 1) {
+                VStack(spacing: 0) {
+                    Spacer(minLength: 0)
+                    NewSpaceCard(browser: browser)
+                    Spacer(minLength: 0)
+                    Spacer(minLength: 0)
+                }
+                .frame(maxHeight: .infinity)
+                .padding(.horizontal, 10)
+                .frame(width: width, alignment: .topLeading)
+                .offset(x: CGFloat(browser.spaces.count - here) * width + swipe)
+                .allowsHitTesting(browser.makingSpace)
+            }
+        } }
+        // Pages span the whole sidebar and keep their own margins.
+        .padding(.horizontal, -10)
+        .frame(maxHeight: .infinity, alignment: .top)
+    }
+}
+
 /// One space's tabs: its essentials, name, pinned tabs and the rest. The
 /// showing space's are live; another's, sliding in during a swipe, are its
 /// parked row, drawn the same way but not to be touched.
@@ -199,12 +218,10 @@ private struct SpacePage: View {
     @ObservedObject var prefs: Preferences
     let space: Space
     let live: Bool
+    /// The height the page has.
+    let room: CGFloat
     @Binding var drag: ReorderDrag<Tab.ID>?
     @Binding var keptDrag: ReorderDrag<Tab.ID>?
-
-    /// Each page has its own, so the highlight under the tab in front never
-    /// jumps between pages.
-    @Namespace private var ground
 
     private static let row = Metrics.row
     private static let gap: CGFloat = 2
@@ -220,19 +237,25 @@ private struct SpacePage: View {
         let loose = tabs.filter { $0.section == .loose }
         VStack(alignment: .leading, spacing: 0) {
             if !essentials.isEmpty {
-                PinnedTabs(browser: browser, prefs: prefs, tabs: essentials, active: active, live: live, ground: ground)
+                PinnedTabs(browser: browser, prefs: prefs, tabs: essentials, active: active, live: live)
                     .padding(.bottom, 10)
             }
             if prefs.usesSpaces { SpaceHeader(browser: browser, space: space).padding(.bottom, Self.gap) }
             if !kept.isEmpty { keptRows(kept) }
-            // A plain stack until the tabs overflow, so the room below them still drags the window.
-            ViewThatFits(in: .vertical) {
+            // A plain stack until the tabs overflow, so the room below them
+            // still drags the window. Worked out, not measured: ViewThatFits
+            // lays the rows out twice, on every page, on every change.
+            let overflows =
+                Sidebar.rowsHeight(
+                    essentials: essentials.count, kept: kept.count, loose: loose.count, width: prefs.sideWidth, named: prefs.usesSpaces)
+                > room
+            if !overflows {
                 listed(loose)
+            } else {
                 ScrollViewReader { scroller in
-                    // Into the trailing margin, so the scroller sits beside the
-                    // close buttons rather than on them; the resize handle covers it.
-                    ScrollView(.vertical) { listed(loose).padding(.trailing, 10).floatingScroller() }
-                        .padding(.trailing, -10)
+                    // No scroll bar, as in Zen: one over the rows would cover their close buttons.
+                    ScrollView(.vertical) { listed(loose) }
+                        .scrollIndicators(.never)
                         .onChange(of: browser.activeID) { _, id in
                             if live, let id { withAnimation(Motion.glide) { scroller.scrollTo(id) } }
                         }
@@ -245,6 +268,16 @@ private struct SpacePage: View {
         }
     }
 
+    /// A row, told only what it draws, so it redraws when that or its tab
+    /// changes, not on every change to the browser.
+    private func row(_ tab: Tab) -> SideRow {
+        let renaming = live && browser.editingTab == tab.id
+        return SideRow(
+            browser: browser, tab: tab, live: tab.id == active, renaming: renaming,
+            draft: renaming ? browser.tabDraft : "", refusals: renaming ? browser.field.refusals : 0,
+            icons: prefs.glyph == .icons, showsReading: prefs.showsReading)
+    }
+
     /// The line between the pinned tabs and the others.
     private static var rule: some View {
         Rectangle().fill(Palette.hairline).frame(height: 1).padding(.horizontal, 6).padding(.vertical, (divider - 1) / 2)
@@ -255,9 +288,7 @@ private struct SpacePage: View {
         VStack(alignment: .leading, spacing: 0) {
             VStack(spacing: Self.gap) {
                 ForEach(Array(kept.enumerated()), id: \.element.id) { index, tab in
-                    SideRow(browser: browser, prefs: prefs, tab: tab, live: tab.id == active, ground: ground) {
-                        browser.close(tab)
-                    }
+                    row(tab)
                     // Places count among the pinned tabs, after the essentials.
                     .modifier(
                         Reorderable(
@@ -266,8 +297,17 @@ private struct SpacePage: View {
                         ) { browser.move(tab, to: $0 + browser.essentialCount) })
                 }
             }
+            .overlay { closing(kept) }
             .coordinateSpace(name: "kept")
             Self.rule
+        }
+    }
+
+    /// A middle click on a row closes its tab, as ⌘W does.
+    private func closing(_ tabs: [Tab]) -> some View {
+        MiddleClick { at in
+            let index = Int(at.y / (Self.row + Self.gap))
+            if tabs.indices.contains(index) { browser.close(tabs[index]) }
         }
     }
 
@@ -275,9 +315,7 @@ private struct SpacePage: View {
         VStack(alignment: .leading, spacing: 0) {
             VStack(spacing: Self.gap) {
                 ForEach(Array(loose.enumerated()), id: \.element.id) { index, tab in
-                    SideRow(browser: browser, prefs: prefs, tab: tab, live: tab.id == active, ground: ground) {
-                        browser.close(tab)
-                    }
+                    row(tab)
                     // Places count among the loose tabs, after the essentials and pinned ones.
                     .modifier(
                         Reorderable(
@@ -286,6 +324,7 @@ private struct SpacePage: View {
                         ) { browser.move(tab, to: $0 + browser.pinnedCount) })
                 }
             }
+            .overlay { closing(loose) }
             // Drags are measured in the list's space (see Reorderable).
             .coordinateSpace(name: "rows")
             Quiet(icon: "plus", title: "New tab", height: Self.row) { browser.newTab() }.padding(.top, Self.gap)
@@ -300,7 +339,6 @@ private struct PinnedTabs: View {
     let tabs: [Tab]
     let active: Tab.ID?
     let live: Bool
-    let ground: Namespace.ID
 
     @State private var drag: ReorderDrag<Tab.ID>?
 
@@ -311,12 +349,21 @@ private struct PinnedTabs: View {
         // Drags are measured in the grid's space (see Reorderable).
         PinCells(grid: grid) {
             ForEach(Array(tabs.enumerated()), id: \.element.id) { index, tab in
-                PinSquare(browser: browser, prefs: prefs, tab: tab, live: tab.id == active, ground: ground, size: grid.cell)
+                PinSquare(
+                    browser: browser, tab: tab, live: tab.id == active, lettering: live && browser.editingPin == tab.id,
+                    icons: prefs.glyph == .icons, size: grid.cell)
                     .modifier(
                         Reorderable(
                             id: tab.id, index: index, places: 0..<tabs.count, lattice: Lattice(columns: grid.columns, step: grid.step),
                             space: "pins", drag: $drag
                         ) { browser.move(tab, to: $0) })
+            }
+        }
+        // As ⌘W: a pinned tab lets its page go and stays pinned.
+        .overlay {
+            MiddleClick { at in
+                let index = Int(at.y / grid.step.height) * grid.columns + Int(at.x / grid.step.width)
+                if tabs.indices.contains(index) { browser.close(tabs[index]) }
             }
         }
         .coordinateSpace(name: "pins")
@@ -345,11 +392,13 @@ private struct PinCells: Layout {
 
 /// A pinned tab in the sidebar's grid.
 private struct PinSquare: View {
-    @ObservedObject var browser: Browser
-    @ObservedObject var prefs: Preferences
+    /// For what it does; it watches only its tab (see `SpacePage.row`).
+    let browser: Browser
     @ObservedObject var tab: Tab
     let live: Bool
-    let ground: Namespace.ID
+    /// Its letter is being changed.
+    let lettering: Bool
+    let icons: Bool
     let size: CGSize
 
     @State private var hovering = false
@@ -365,15 +414,13 @@ private struct PinSquare: View {
             .frame(width: size.width, height: size.height)
             .background {
                 if live {
-                    Lifted(corner: corner).matchedGeometryEffect(id: "live", in: ground)
+                    Lifted(corner: corner)
                 } else {
                     shape.fill(Palette.veil.opacity(hovering ? 1.8 : 1))
                 }
             }
             .contentShape(shape)
             .modifier(OneClick(double: live) { live ? browser.editLetter(tab) : browser.select(tab) })
-            // As ⌘W: a pinned tab lets its page go and stays pinned.
-            .overlay { MiddleClick { browser.close(tab) } }
             .onHover { hovering = $0 }
             .contextMenu { TabMenu(browser: browser, tab: tab) { browser.close(tab) } }
             .help(tab.label)
@@ -383,9 +430,9 @@ private struct PinSquare: View {
 
     @ViewBuilder
     private var mark: some View {
-        if browser.editingPin == tab.id {
+        if lettering {
             InlineField.letter(of: tab, in: browser)
-        } else if prefs.glyph == .icons, let icon = tab.icon {
+        } else if icons, let icon = tab.icon {
             Mark(icon: icon, letter: tab.pin ?? "", size: side * 16 / 34, dim: tab.asleep)
         } else {
             Text(tab.pin ?? "")
@@ -397,17 +444,23 @@ private struct PinSquare: View {
 
 /// A tab in the sidebar's list.
 private struct SideRow: View {
-    @ObservedObject var browser: Browser
-    @ObservedObject var prefs: Preferences
+    /// For what it does; it watches only its tab (see `SpacePage.row`).
+    let browser: Browser
     @ObservedObject var tab: Tab
     let live: Bool
-    let ground: Namespace.ID
-    let close: () -> Void
+    let renaming: Bool
+    /// The new name so far, while renaming: the field redraws as it changes.
+    let draft: String
+    let refusals: Int
+    let icons: Bool
+    let showsReading: Bool
 
     @State private var hovering = false
     @State private var shake: CGFloat = 0
+    /// The title's end is faded, or fading back: masked only then, as a mask
+    /// costs every row a drawing pass of its own.
+    @State private var fading = false
 
-    private var renaming: Bool { browser.editingTab == tab.id }
     /// The speaker; clickable, so on hover it moves aside for the close button.
     private var speaker: Bool { !tab.loading && (tab.noisy || tab.muted) }
     /// The loading ring or speaker holds the end of the row. The close button
@@ -421,7 +474,7 @@ private struct SideRow: View {
             if renaming {
                 InlineField.rename(browser).frame(height: 16)
             } else {
-                if prefs.glyph == .icons, !tab.isBlank || tab.isStart {
+                if icons, !tab.isBlank || tab.isStart {
                     Mark(icon: tab.icon, letter: tab.monogram, size: 16, mote: tab.isStart)
                 }
                 TabMarks(tab: tab, colour: colour)
@@ -443,20 +496,11 @@ private struct SideRow: View {
         .frame(maxWidth: .infinity, minHeight: Metrics.row, maxHeight: Metrics.row, alignment: .leading)
         // The title fades out under the close button rather than being cut
         // short, so it doesn't move on hover.
-        .mask {
-            ZStack {
-                Rectangle().opacity(hovering && !renaming && !status ? 0 : 1)
-                HStack(spacing: 0) {
-                    Rectangle()
-                    LinearGradient(colors: [.black, .clear], startPoint: .leading, endPoint: .trailing).frame(width: 16)
-                    Color.clear.frame(width: 30)
-                }
-            }
-        }
+        .modifier(TitleFade(on: fading && !renaming && !status, faded: hovering))
         .animation(Motion.quick, value: tab.loading)
         .animation(Motion.quick, value: speaker)
         .background { backdrop }
-        .shakesOnRefusal(browser.field.refusals, while: renaming, travel: $shake)
+        .shakesOnRefusal(refusals, while: renaming, travel: $shake)
         .contentShape(shape)
         // A double click renames the tab you're on; a click goes to any other.
         .modifier(OneClick(double: live) { live ? browser.beginTabRename(tab) : browser.select(tab) })
@@ -465,26 +509,63 @@ private struct SideRow: View {
         .overlay(alignment: .trailing) {
             if !renaming { Shut(shown: hovering, act: close).padding(.trailing, 7) }
         }
-        .overlay { MiddleClick(act: close) }
-        .onHover { hovering = $0 }
+        .onHover { over in
+            hovering = over
+            if over { fading = true }
+        }
+        .task(id: hovering) {
+            guard !hovering, fading else { return }
+            try? await Task.sleep(for: .seconds(0.15))
+            if !Task.isCancelled { fading = false }
+        }
         .contextMenu { TabMenu(browser: browser, tab: tab, close: close) }
         .animation(Motion.hover, value: hovering)
         .animation(Motion.glide, value: renaming)
         .transition(.scale(scale: 0.94, anchor: .leading).combined(with: .opacity))
     }
 
+    private func close() { browser.close(tab) }
+
     @ViewBuilder
     private var backdrop: some View {
         if live {
             Lifted(corner: 10) {
-                if prefs.showsReading {
+                if showsReading {
                     // How far the page is read, as a faint fill across the row.
                     ReadFill(reading: tab.reading)
                 }
             }
-            .matchedGeometryEffect(id: "live", in: ground)
         } else if hovering {
             shape.fill(Palette.veil)
+        }
+    }
+}
+
+/// A row's title fading out under its close button.
+private struct TitleFade: ViewModifier {
+    let on: Bool
+    /// Faded, rather than fading back.
+    let faded: Bool
+
+    /// Put on, so a mask that has just come fades from the full title.
+    @State private var settled = false
+
+    func body(content: Content) -> some View {
+        if on {
+            content.mask {
+                ZStack {
+                    Rectangle().opacity(faded && settled ? 0 : 1)
+                    HStack(spacing: 0) {
+                        Rectangle()
+                        LinearGradient(colors: [.black, .clear], startPoint: .leading, endPoint: .trailing).frame(width: 16)
+                        Color.clear.frame(width: 30)
+                    }
+                }
+                .onAppear { withAnimation(Motion.hover) { settled = true } }
+                .onDisappear { settled = false }
+            }
+        } else {
+            content
         }
     }
 }

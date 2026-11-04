@@ -86,6 +86,11 @@ extension Bench {
         case "peek": browser.peek(true)
         case "unpeek": browser.peek(false)
         case "fold": browser.toggleFold()
+        // The next tab, as ⌃Tab; the next space, round again after the last.
+        case "tab": browser.step(1)
+        case "space":
+            let here = browser.spaces.firstIndex { $0.id == browser.spaceID } ?? 0
+            browser.switchSpace(index: (here + 1) % max(1, browser.spaces.count))
         case "scroll": browser.active?.built.map { BenchInput.flick($0) }
         // The chat in front: its conversation, the largest scroll view in the window.
         case "chat", "chatdown":

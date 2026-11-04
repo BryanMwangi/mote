@@ -53,6 +53,18 @@
 				set(action, act);
 				soon();
 			};
+			const metadata = Object.getOwnPropertyDescriptor(MediaSession.prototype, "metadata");
+			if (metadata?.set && metadata.get) {
+				const { get, set: put } = metadata;
+				Object.defineProperty(session, "metadata", {
+					configurable: true,
+					get: () => get.call(session),
+					set: (value) => {
+						put.call(session, value);
+						soon();
+					}
+				});
+			}
 		}
 		let sent = "";
 		const report = () => {
@@ -76,9 +88,6 @@
 			"loadedmetadata",
 			"volumechange"
 		]) document.addEventListener(kind, soon, true);
-		window.setInterval(() => {
-			if (sent.includes("\"playing\":true")) report();
-		}, 2e3);
 		/** Runs the site's own handler for `action`, if it gave one. */
 		const call = (action) => {
 			const act = handlers.get(action);
