@@ -167,15 +167,23 @@ extension Browser {
     /// the tab would split in (`splitHover`).
     func zone(dragging tab: Tab, at pointer: NSPoint) -> DragZone {
         guard let window, window.frame.contains(pointer) else {
-            splitHover = nil
+            if splitHover != nil { splitHover = nil }
             return .outside
         }
-        guard let stage = stageView, let active else { return .list }
-        let point = stage.convert(window.convertPoint(fromScreen: pointer), from: nil)
-        // Past the list's own edge, by a little: the sidebar's beside the page, the strip's above.
+        guard let stage = stageView, let active, let content = window.contentView else { return .list }
+        let inWindow = window.convertPoint(fromScreen: pointer)
+        let point = stage.convert(inWindow, from: nil)
+        // The list reaches this far from the window's edge, and a little past
+        // it still counts as the list: a hidden sidebar or strip that's out
+        // floats over the page, so the page's own edge isn't the list's.
         let slop: CGFloat = 24
-        guard stage.bounds.contains(point), prefs.sidebar ? point.x >= slop : point.y >= slop else {
-            splitHover = nil
+        let reach =
+            prefs.sidebar
+            ? (folded ? (peeking ? prefs.sideWidth + ChromeLayout.gap * 2 : 0) : prefs.sideWidth)
+            : (folded && !peeking ? 0 : ChromeLayout.strip)
+        let along = prefs.sidebar ? inWindow.x : content.bounds.height - inWindow.y
+        guard stage.bounds.contains(point), along >= reach + slop else {
+            if splitHover != nil { splitHover = nil }
             return .list
         }
         let frames = (shownSplit ?? SplitLayout(active.id)).frames(in: stage.bounds, gap: Browser.splitGap)
@@ -192,7 +200,7 @@ extension Browser {
 
     /// Let go over the page: in beside the page under it, if it said where.
     func dropOnPage(_ tab: Tab) {
-        defer { splitHover = nil }
+        defer { if splitHover != nil { splitHover = nil } }
         guard let hover = splitHover, let target = self.tab(hover.target) else { return }
         split(tab, beside: target, side: hover.side)
     }

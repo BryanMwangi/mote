@@ -6,7 +6,7 @@ import CoreGraphics
 /// without moving a real pointer.
 public enum EdgeReveal {
     /// Distance from the edge, in points, that brings the tabs out.
-    public static let edge: CGFloat = 6
+    public static let edge: CGFloat = 12
     /// How long the pointer must rest on the edge first, when it does (see `step`).
     public static let dwell: Double = 0.15
     /// Delay before the tabs go away once the pointer has left them: barely
