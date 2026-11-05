@@ -51,4 +51,13 @@ struct FoldersTests {
         folder.collapsed = true
         #expect(try JSONDecoder().decode(Folder.self, from: JSONEncoder().encode(folder)) == folder)
     }
+
+    @Test("A dragged tab drops into the folder under the pointer, not its own")
+    func dropTarget() {
+        let (work, docs) = (UUID(), UUID())
+        let rows = [work: CGRect(x: 0, y: 100, width: 200, height: 30), docs: CGRect(x: 0, y: 140, width: 200, height: 30)]
+        #expect(Folder.dropTarget(at: CGPoint(x: 50, y: 150), in: rows, from: nil) == docs)
+        #expect(Folder.dropTarget(at: CGPoint(x: 50, y: 150), in: rows, from: docs) == nil)
+        #expect(Folder.dropTarget(at: CGPoint(x: 50, y: 135), in: rows, from: nil) == nil)
+    }
 }

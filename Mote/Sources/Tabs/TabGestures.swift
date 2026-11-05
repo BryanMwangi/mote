@@ -27,6 +27,8 @@ struct Reorderable: ViewModifier {
     /// The open tab, which may leave its list for the page or another window
     /// (see DragZone). Essentials and pinned tabs are the space's, and stay.
     var away: (browser: Browser, tab: Tab)? = nil
+    /// A sidebar tab, which may be dropped into a folder.
+    var filing: (browser: Browser, tab: Tab)? = nil
     let move: (Int) -> Void
     @State private var originX: CGFloat?
 
@@ -70,6 +72,11 @@ struct Reorderable: ViewModifier {
         if drag?.landed == true { drag = nil }
         if let drag, drag.id != id { return }
         var next = drag ?? ReorderDrag(id: id, start: index)
+        // Over a folder's row, it would go in; the list makes room as ever.
+        if let filing {
+            filing.browser.hoverFolder(
+                at: ScriptedDrag.shared.tab == nil ? NSEvent.mouseLocation : ScriptedDrag.shared.pointer, dragging: filing.tab)
+        }
         // Away from the list the row can't follow: it holds still, and a card
         // of it does, so where it's going shows.
         if let away, zone != .list {
@@ -92,6 +99,10 @@ struct Reorderable: ViewModifier {
     private func ended() {
         TabGhost.hide()
         guard var landing = drag, landing.id == id, !landing.landed else { return }
+        if let filing, filing.browser.folderHover != nil {
+            withAnimation(Motion.settle) { drag = nil }
+            return filing.browser.dropInFolder(filing.tab)
+        }
         if let away, case let zone = zone, zone != .list {
             withAnimation(Motion.settle) { drag = nil }
             return zone == .page ? away.browser.dropOnPage(away.tab) : away.browser.drop(away.tab)
@@ -127,6 +138,8 @@ struct Reorderable: ViewModifier {
 final class ScriptedDrag: ObservableObject {
     static let shared = ScriptedDrag()
     private(set) var tab: Tab.ID?
+    /// Where the pointer is said to be, on screen, for a drag onto a folder.
+    var pointer: NSPoint?
     /// How far the drag has gone; nil once let go.
     @Published private(set) var travel: CGSize?
 

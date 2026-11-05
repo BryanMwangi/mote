@@ -92,6 +92,10 @@ final class Browser: NSObject, ObservableObject {
     @Published var toolbarRevealed = false
     /// The space icon picker open now, and the view it hangs from.
     @Published var pickingIcon: IconPick?
+    /// The folder a dragged tab would drop into, and where each folder's row
+    /// is (see Browser+Folders.swift).
+    @Published var folderHover: UUID?
+    var folderSpots: [UUID: WeakView] = [:]
     /// The tab the media strip shows (see Browser+Media.swift).
     @Published var playing: Tab?
     /// A picture of the page laid over it while the chrome around it changes

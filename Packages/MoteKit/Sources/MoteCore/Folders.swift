@@ -84,4 +84,10 @@ public struct Folder: Codable, Identifiable, Equatable, Sendable {
         }
         return found
     }
+
+    /// The folder a dragged tab is over: the one whose row (on screen,
+    /// from `frames`) holds `point`, but not the one it's already in.
+    public static func dropTarget(at point: CGPoint, in frames: [UUID: CGRect], from current: UUID?) -> UUID? {
+        frames.first { $0.key != current && $0.value.contains(point) }?.key
+    }
 }

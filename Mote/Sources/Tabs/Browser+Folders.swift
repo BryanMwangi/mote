@@ -48,6 +48,30 @@ extension Browser {
         writeSession(now: true)
     }
 
+    /// The folder a tab dragged to `pointer` (on screen) would drop into,
+    /// noted for its row to light up. Live folders keep to their feeds.
+    @discardableResult
+    func hoverFolder(at pointer: NSPoint?, dragging tab: Tab) -> UUID? {
+        var frames: [UUID: CGRect] = [:]
+        if pointer != nil {
+            for folder in folders where folder.live == nil {
+                guard let view = folderSpots[folder.id]?.view, let window = view.window, window.isVisible, !view.isHiddenOrHasHiddenAncestor
+                else { continue }
+                frames[folder.id] = window.convertToScreen(view.convert(view.bounds, to: nil))
+            }
+        }
+        let over = pointer.flatMap { Folder.dropTarget(at: $0, in: frames, from: tab.folder) }
+        if folderHover != over { folderHover = over }
+        return over
+    }
+
+    /// Let go over a folder: in it goes.
+    func dropInFolder(_ tab: Tab) {
+        guard let folder = folderHover else { return }
+        folderHover = nil
+        move(tab, toFolder: folder)
+    }
+
     func renameFolder(_ id: UUID) {
         guard let folder = folders.first(where: { $0.id == id }) else { return }
         Prompt.name("Rename Folder", placeholder: folder.name, initial: folder.name, confirm: "Rename") { [weak self] name in

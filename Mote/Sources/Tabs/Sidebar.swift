@@ -338,7 +338,8 @@ private struct SpacePage: View {
                         switch line {
                         case .folder(let id, let depth):
                             if let folder = folders.first(where: { $0.id == id }) {
-                                FolderRow(browser: browser, folder: folder, live: live).padding(.leading, CGFloat(depth) * Self.indent)
+                                FolderRow(browser: browser, folder: folder, live: live, dropping: browser.folderHover == folder.id)
+                                    .padding(.leading, CGFloat(depth) * Self.indent)
                             }
                         case .tab(let id, let depth):
                             if let tab = kept.first(where: { $0.id == id }) {
@@ -349,7 +350,7 @@ private struct SpacePage: View {
                                             Reorderable(
                                                 id: tab.id, index: index, places: 0..<unfiled.count,
                                                 lattice: .column(step: Self.row + Self.gap),
-                                                space: "kept", drag: $keptDrag
+                                                space: "kept", drag: $keptDrag, filing: (browser, tab)
                                             ) { target in
                                                 // To where the tab now in that place sits among all the pinned ones.
                                                 let place = kept.firstIndex { $0.id == unfiled[target].id } ?? target
@@ -395,7 +396,7 @@ private struct SpacePage: View {
                         .modifier(
                             Reorderable(
                                 id: tab.id, index: index, places: 0..<loose.count, lattice: .column(step: Self.row + Self.gap),
-                                space: "rows", drag: $drag, away: (browser, tab)
+                                space: "rows", drag: $drag, away: (browser, tab), filing: (browser, tab)
                             ) { browser.move(tab, to: $0 + browser.pinnedCount) })
                 }
             }
@@ -713,6 +714,8 @@ private struct FolderRow: View {
     let folder: Folder
     /// The showing space's; another's, during a swipe, is only drawn.
     let live: Bool
+    /// A dragged tab is over it, and would drop in.
+    let dropping: Bool
 
     @State private var hovering = false
 
@@ -739,7 +742,13 @@ private struct FolderRow: View {
         .padding(.leading, 6)
         .padding(.trailing, 10)
         .frame(maxWidth: .infinity, minHeight: Metrics.row, maxHeight: Metrics.row, alignment: .leading)
-        .background { if hovering { RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Palette.veil) } }
+        .background { if hovering || dropping { RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Palette.veil) } }
+        .overlay {
+            if dropping { RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Palette.ink.opacity(0.35), lineWidth: 1.5) }
+        }
+        .animation(Motion.quick, value: dropping)
+        // Where it is, for a tab dragged onto it; only in the space showing.
+        .background { if live && folder.live == nil { FolderSpot(browser: browser, id: folder.id) } }
         .contentShape(Rectangle())
         .onTapGesture { if live { withAnimation(Motion.settle) { browser.toggleFolder(folder.id) } } }
         .onHover { hovering = $0 }
@@ -786,5 +795,24 @@ private struct LiveItemRow: View {
         }
         .help(item.url.absoluteString)
         .animation(Motion.hover, value: hovering)
+    }
+}
+
+/// Marks a folder's row for a dragged tab to find (Browser.hoverFolder): an
+/// AppKit view, as the sidebar's rows are hosted apart from the window's.
+private struct FolderSpot: FillsRoom {
+    let browser: Browser
+    let id: UUID
+
+    func makeNSView(context: Context) -> NSView {
+        let spot = Spot()
+        browser.folderSpots[id] = WeakView(spot)
+        return spot
+    }
+
+    func updateNSView(_ view: NSView, context: Context) { browser.folderSpots[id] = WeakView(view) }
+
+    private final class Spot: NSView {
+        override func hitTest(_ point: NSPoint) -> NSView? { nil }
     }
 }
