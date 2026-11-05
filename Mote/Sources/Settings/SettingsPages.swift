@@ -241,6 +241,27 @@ struct TabSettings: View {
                 on: $prefs.bookmarksBar)
         }
 
+        SettingsSection("Moving between tabs") {
+            SettingRow(
+                "After closing a tab", "Go to the tab you used before it, as Zen does, or to the one beside it",
+                symbol: "xmark.square", tint: Tint.blue, keywords: ["close", "recently used"]
+            ) {
+                Segmented(options: [(true, "Last used"), (false, "Beside it")], selection: $prefs.closeGoesBack)
+            }
+            RowRule()
+            SettingRow(
+                "Back closes a new tab", "On a tab opened from another, with no page to go back to, Back returns to where it came from",
+                symbol: "chevron.left", tint: Tint.teal, on: $prefs.backCloses)
+            RowRule()
+            SettingRow(
+                "⌃⇥ passes over essentials", "Next and previous tab stay among the tabs below them", symbol: "arrow.right.to.line",
+                tint: Tint.orange, keywords: ["control tab", "ctrl-tab"], on: $prefs.stepSkipsEssentials)
+            RowRule()
+            SettingRow(
+                "⌃⇥ passes over resting tabs", "Next and previous tab skip tabs that have let their page go", symbol: "moon",
+                tint: Tint.indigo, keywords: ["control tab", "ctrl-tab", "sleeping"], on: $prefs.stepSkipsSleeping)
+        }
+
         SettingsSection("Saving energy") {
             SettingRow(
                 "Let quiet tabs rest",

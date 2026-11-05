@@ -37,7 +37,23 @@ extension Browser {
     func toggleToolbar() {
         prefs.toolbarMode = prefs.toolbarMode == .shown ? .hover : .shown
     }
-    func back() { active?.back() }
+    func back() {
+        guard let tab = active else { return }
+        if tab.canGoBack { return tab.back() }
+        // As Zen: a tab with nowhere to go back to, opened from another, closes for it.
+        guard let opener = backCloses(tab) else { return }
+        select(opener)
+        close(tab)
+    }
+
+    /// The tab Back returns to by closing `tab`, when it would.
+    func backCloses(_ tab: Tab) -> Tab? {
+        guard prefs.backCloses, !tab.canGoBack, !tab.held, let opener = tab.opener.flatMap(self.tab), opener !== tab else { return nil }
+        return opener
+    }
+
+    /// Back has somewhere to go: the page before, or the tab that opened this one.
+    var canGoBack: Bool { active.map { $0.canGoBack || backCloses($0) != nil } ?? false }
     func forward() { active?.forward() }
 
     /// ⌘F. There is nothing to find on a blank tab.

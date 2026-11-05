@@ -110,7 +110,9 @@ struct Helm: View {
         private var buttons: [Action] {
             let page = !tab.isBlank
             return [
-                Action(symbol: "chevron.left", help: "Back   ⌘[", usable: page && tab.canGoBack, act: browser.back),
+                Action(
+                    symbol: "chevron.left", help: "Back   ⌘[", usable: page && (tab.canGoBack || browser.backCloses(tab) != nil),
+                    act: browser.back),
                 Action(symbol: "chevron.right", help: "Forward   ⌘]", usable: page && tab.canGoForward, act: browser.forward),
                 tab.loading
                     ? Action(symbol: "xmark", help: "Stop   ⌘.", usable: page, act: tab.stop)

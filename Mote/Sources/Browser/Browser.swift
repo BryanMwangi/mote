@@ -701,6 +701,8 @@ final class Browser: NSObject, ObservableObject {
                 Tab(configuration: page)
             }
         prepare(tab)
+        // Back on it, with nowhere to go, returns here (see `Browser.back`).
+        tab.opener = source?.id
         reorder { $0.insert(tab, at: atEnd ? $0.tabs.count : $0.slotForNew(after: activeID)) }
         tab.go(to: url)
         if foreground { bringForward(tab) }
@@ -842,7 +844,8 @@ final class Browser: NSObject, ObservableObject {
 
     /// ⌃Tab and ⌃⇧Tab.
     func step(_ direction: Int) {
-        guard let id = activeID, let next = row.neighbour(of: id, by: direction).flatMap(tab) else { return }
+        let skips = { (tab: Tab) in (self.prefs.stepSkipsEssentials && tab.pin != nil) || (self.prefs.stepSkipsSleeping && tab.asleep) }
+        guard let id = activeID, let next = row.neighbour(of: id, by: direction, skipping: skips).flatMap(tab) else { return }
         select(next)
     }
 
@@ -929,7 +932,9 @@ final class Browser: NSObject, ObservableObject {
         tab.close()
         unsplit(tab: tab.id)
         reorder { $0.remove(tab.id) }
-        if activeID == tab.id, let next = row.successor(ofRemovedAt: index).flatMap(self.tab) {
+        if activeID == tab.id,
+            let next = (prefs.closeGoesBack ? recentlyUsed() : nil) ?? row.successor(ofRemovedAt: index).flatMap(self.tab)
+        {
             // Through select(), so a waiting tab wakes.
             select(next)
         }
@@ -978,6 +983,13 @@ final class Browser: NSObject, ObservableObject {
         reorder { $0.insert(tab, at: ghost.index) }
         bringForward(tab)
         tab.go(to: ghost.url)
+    }
+
+    /// The tab used last, as Zen goes to on closing one: awake ones first,
+    /// so closing doesn't wake a page that was resting.
+    private func recentlyUsed() -> Tab? {
+        let awake = tabs.filter { !$0.asleep }
+        return (awake.isEmpty ? tabs : awake).max { $0.touched < $1.touched }
     }
 
     private func remember(_ tab: Tab, at index: Int) {

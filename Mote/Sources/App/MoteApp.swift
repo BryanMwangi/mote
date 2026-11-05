@@ -153,7 +153,7 @@ private struct MenuBar: Commands {
 
     @ViewBuilder
     private var tabs: some View {
-        Button("Back", action: browser.back).keyboardShortcut(keys(.back)).disabled(browser.active?.canGoBack != true)
+        Button("Back", action: browser.back).keyboardShortcut(keys(.back)).disabled(!browser.canGoBack)
         Button("Forward", action: browser.forward).keyboardShortcut(keys(.forward)).disabled(browser.active?.canGoForward != true)
         Divider()
         Button("Next Tab") { browser.step(1) }.keyboardShortcut(keys(.nextTab))

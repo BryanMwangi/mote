@@ -35,6 +35,20 @@ struct TabRowTests {
         tabs.move(id, to: index)
     }
 
+    @Test("Stepping wraps round, and can pass over tabs, as Zen's ⌃⇥ without essentials")
+    func steppingSkips() {
+        let tabs = tiered("E! F! a b c")
+        #expect(tabs.neighbour(of: "c", by: 1) == "E")
+        #expect(tabs.neighbour(of: "a", by: -1) == "F")
+        let loose = { (tab: Tab) in tab.section == .essential }
+        #expect(tabs.neighbour(of: "c", by: 1, skipping: loose) == "a")
+        #expect(tabs.neighbour(of: "a", by: -1, skipping: loose) == "c")
+        #expect(tabs.neighbour(of: "a", by: 2, skipping: loose) == "c")
+        // Nothing else to go to.
+        #expect(tiered("E! a").neighbour(of: "a", by: 1, skipping: loose) == nil)
+        #expect(row("a").neighbour(of: "a", by: 1) == nil)
+    }
+
     @Test("New tabs open next to the active one")
     func nextToActive() {
         #expect(row("a b c").slotForNew(after: "a") == 1)

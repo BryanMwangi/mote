@@ -54,11 +54,22 @@ public struct TabRow<Tab: Identifiable> {
         return max(here + 1, pinnedCount)
     }
 
-    /// The tab `offset` places away from `id`, wrapping around the row.
-    public func neighbour(of id: Tab.ID, by offset: Int) -> Tab.ID? {
-        guard tabs.count > 1, let here = index(of: id) else { return nil }
-        let next = ((here + offset) % tabs.count + tabs.count) % tabs.count
-        return tabs[next].id
+    /// The tab `offset` places away from `id`, wrapping around the row,
+    /// passing over the tabs `skipping` says to (⌃⇥ without the essentials,
+    /// say). Nil when there's no other tab to go to.
+    public func neighbour(of id: Tab.ID, by offset: Int, skipping: (Tab) -> Bool = { _ in false }) -> Tab.ID? {
+        guard tabs.count > 1, let here = index(of: id), offset != 0 else { return nil }
+        let step = offset > 0 ? 1 : -1
+        var next = here
+        var left = abs(offset)
+        for _ in 0..<tabs.count * abs(offset) {
+            next = ((next + step) % tabs.count + tabs.count) % tabs.count
+            if next == here { return nil }
+            if skipping(tabs[next]) { continue }
+            left -= 1
+            if left == 0 { return tabs[next].id }
+        }
+        return nil
     }
 
     /// The open tabs at the same address as `id`, not it (Close Duplicate

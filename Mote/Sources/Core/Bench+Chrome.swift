@@ -31,7 +31,10 @@ extension Bench {
             "spaceIndex": browser.spaces.firstIndex { $0.id == browser.spaceID } ?? -1,
             "settingsQuery": SettingsSearch.shared.query, "settingsFocusAsked": SettingsSearch.shared.focusAsked,
             "finding": browser.finder.showing, "asking": browser.field.asksAssistant, "launching": browser.field.launching,
-            "chatting": browser.chatting, "settingsMatches": SettingsSearch.shared.found,
+            "chatting": browser.chatting,
+            "tabSettings": [
+                browser.prefs.closeGoesBack, browser.prefs.backCloses, browser.prefs.stepSkipsEssentials, browser.prefs.stepSkipsSleeping,
+            ], "settingsMatches": SettingsSearch.shared.found,
             "shortcutsChanged": browser.prefs.shortcuts.changed.keys.map(\.rawValue).sorted(),
             "sideHides": browser.prefs.sideHides, "lightsHidden": window.map { !TrafficLights.visible(in: $0) } ?? true,
             "siteCard": SiteCardPanel.isShown,
