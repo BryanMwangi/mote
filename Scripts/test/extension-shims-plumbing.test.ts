@@ -25,7 +25,14 @@ function fakeShim(
   });
   const shim: Shim = {
     root: root as Shim['root'],
-    config: { events: [], scripts: [], chromeVersion: '140.0.0.0', verbose: false },
+    config: {
+      events: [],
+      scripts: [],
+      chromeVersion: '140.0.0.0',
+      verbose: false,
+      firefox: false,
+      firefoxVersion: '140.0',
+    },
     chrome,
     runtime,
     inContent: false,

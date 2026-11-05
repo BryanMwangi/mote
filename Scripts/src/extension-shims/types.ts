@@ -8,6 +8,10 @@ export interface ShimConfig {
   chromeVersion: string;
   /** A test run: what the extension logs as errors is reported to the browser too. */
   verbose: boolean;
+  /** A Firefox add-on (from addons.mozilla.org, or a gecko manifest): told it's in Firefox, not Chrome. */
+  firefox: boolean;
+  /** The Firefox version Mote presents itself as to those, e.g. "140.0". */
+  firefoxVersion: string;
 }
 
 /**

@@ -112,8 +112,11 @@ enum ExtensionShims {
             let empty = (text ?? "x").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             scripts.append((String(script.standardizedFileURL.path.dropFirst(root.count)), empty))
         }
+        let manifest = (try? Data(contentsOf: folder.appendingPathComponent("manifest.json")))
+            .flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }
         let values = ShimConfig(
-            events: events.sorted(), scripts: ShimRewrite.scriptList(scripts), chromeVersion: CRX.chromeVersion, verbose: Storage.testing)
+            events: events.sorted(), scripts: ShimRewrite.scriptList(scripts), chromeVersion: CRX.chromeVersion, verbose: Storage.testing,
+            firefox: manifest.map(AMO.isFirefox) ?? false, firefoxVersion: "140.0")
         return InjectedScript.source("extension-shims", config: values)
     }
 
@@ -127,6 +130,9 @@ enum ExtensionShims {
         let chromeVersion: String
         /// A test run: the extension's console errors come to Mote too.
         let verbose: Bool
+        /// A Firefox add-on (its manifest names a gecko id): told it's in Firefox.
+        let firefox: Bool
+        let firefoxVersion: String
     }
 
     // MARK: - Remembered between calls

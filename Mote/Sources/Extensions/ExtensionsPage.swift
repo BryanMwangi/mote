@@ -74,14 +74,27 @@ private struct StoreSection: View {
     @ObservedObject var extensions: Extensions
     @State private var link = ""
 
-    private var valid: Bool { CRX.extensionID(in: link) != nil }
+    private var valid: Bool { CRX.extensionID(in: link) != nil || AMO.slug(in: link) != nil }
 
     var body: some View {
-        SettingsSection("From the Chrome Web Store", note: "Or find one in the store and press Add to Mote on its page.") {
-            SettingRow("Browse the store", "Extensions made for Chrome run here too", symbol: "bag", tint: Tint.purple) {
+        SettingsSection(
+            "From the Chrome Web Store or Firefox Add-ons",
+            note: "Or find one in the Chrome Web Store and press Add to Mote on its page. A Firefox add-on is told it's in Firefox."
+        ) {
+            SettingRow("Browse the Chrome Web Store", "Extensions made for Chrome run here too", symbol: "bag", tint: Tint.purple) {
                 Pill("Open") {
                     browser.tuning = false
                     browser.open(Browser.webStore, foreground: true)
+                }
+            }
+            RowRule()
+            SettingRow(
+                "Browse Firefox Add-ons", "Copy an add-on's page address and paste it below", symbol: "flame", tint: Tint.orange,
+                keywords: ["addons.mozilla.org", "amo", "firefox"]
+            ) {
+                Pill("Open") {
+                    browser.tuning = false
+                    browser.open(URL(string: "https://addons.mozilla.org/firefox/")!, foreground: true)
                 }
             }
             RowRule()
@@ -91,7 +104,9 @@ private struct StoreSection: View {
                     .foregroundStyle(Palette.ink)
                     .onSubmit(add)
                     .background(alignment: .leading) {
-                        if link.isEmpty { Text("Paste a store link or an extension id").foregroundStyle(Palette.muted.opacity(0.8)) }
+                        if link.isEmpty {
+                            Text("Paste a Chrome Web Store or Firefox Add-ons link").foregroundStyle(Palette.muted.opacity(0.8))
+                        }
                     }
                     .font(.system(size: 12.5))
                     .padding(.horizontal, 10)
@@ -129,11 +144,14 @@ private struct ExtensionRow: View {
             icon.frame(width: 24, height: 24)
             VStack(alignment: .leading, spacing: 2) {
                 Text(item.name).font(.system(size: 13)).foregroundStyle(Palette.ink).lineLimit(1)
-                Text(ExtensionRules.detail(item, running: context != nil, showsInNewTabs: inNewTabs, warnings: context?.errors.count ?? 0))
-                    .font(.system(size: 11.5))
-                    .foregroundStyle(Palette.muted)
-                    .lineLimit(1)
-                    .help(item.source ?? "")
+                Text(
+                    ExtensionRules.detail(
+                        item, running: context != nil, showsInNewTabs: inNewTabs, warnings: context?.readErrors.count ?? 0)
+                )
+                .font(.system(size: 11.5))
+                .foregroundStyle(Palette.muted)
+                .lineLimit(1)
+                .help(item.source ?? "")
             }
             Spacer(minLength: 8)
             if hovering { actions }

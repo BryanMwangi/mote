@@ -1289,6 +1289,18 @@
 	}
 
 //#endregion
+//#region src/extension-shims/firefox.ts
+	function presentAsFirefox(shim) {
+		if (!shim.config.firefox) return;
+		fill(shim, "runtime", { getBrowserInfo: () => Promise.resolve({
+			name: "Firefox",
+			vendor: "Mozilla",
+			version: shim.config.firefoxVersion,
+			buildID: "20260101000000"
+		}) });
+	}
+
+//#endregion
 //#region src/extension-shims/globals.ts
 /**
 	* WebKit reverted `requestIdleCallback` after a page-load regression
@@ -3399,7 +3411,7 @@
 		});
 	}
 	function presentAsChrome({ root, inContent, worker, config }) {
-		if (inContent || typeof navigator === "undefined" || / Chrome\//.test(navigator.userAgent)) return;
+		if (config.firefox || inContent || typeof navigator === "undefined" || / Chrome\//.test(navigator.userAgent)) return;
 		const chromeUA = chromeUserAgent(navigator.userAgent, config.chromeVersion);
 		const proto = typeof root.WorkerNavigator !== "undefined" && worker ? root.WorkerNavigator.prototype : typeof Navigator !== "undefined" ? Navigator.prototype : null;
 		try {
@@ -3917,6 +3929,7 @@
 		replaceWorkerWebSocket(shim);
 		holdEarlyNativeMessages(shim);
 		presentAsChrome(shim);
+		presentAsFirefox(shim);
 		checkImportedScripts(shim);
 		const verdicts = createVerdicts(shim);
 		const gather = createGather(shim, verdicts);

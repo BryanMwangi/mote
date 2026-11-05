@@ -216,11 +216,8 @@ final class Extensions: NSObject, ObservableObject {
         }
     }
 
-    /// Read through Objective-C, each entry checked: Swift's bridging of
-    /// `errors` crashed on this WebKit when an extension's page opened.
     private static func workerFailed(_ context: WKWebExtensionContext) -> Bool {
-        guard let errors = context.value(forKey: "errors") as? NSArray else { return false }
-        for case let error as NSError in errors
+        for error in context.readErrors
         where error.domain == WKWebExtensionContext.errorDomain
             && error.code == WKWebExtensionContext.Error.backgroundContentFailedToLoad.rawValue
         {
@@ -251,4 +248,13 @@ final class Extensions: NSObject, ObservableObject {
 final class WeakView {
     weak var view: NSView?
     init(_ view: NSView) { self.view = view }
+}
+
+@available(macOS 15.4, *)
+extension WKWebExtensionContext {
+    /// Its errors, read through Objective-C, each entry checked: Swift's
+    /// bridging of `errors` crashes on this WebKit for some extensions.
+    var readErrors: [NSError] {
+        (value(forKey: "errors") as? NSArray)?.compactMap { $0 as? NSError } ?? []
+    }
 }

@@ -15,6 +15,7 @@ import {
 } from './environment';
 import { reportErrors } from './error-reporting';
 import { rebuildFileSystem } from './file-system';
+import { presentAsFirefox } from './firefox';
 import { fixChromeGlobals, keepCredentials, markInstalled, polyfillIdleCallback } from './globals';
 import { bindRuntimeMethods, createHolder, holdNamespaces, lastErrorReporter } from './holding';
 import { acceptLateListeners, mendInstalledReason } from './lifecycle';
@@ -82,6 +83,7 @@ export function install(root: Root, config: ShimConfig): void {
   replaceWorkerWebSocket(shim);
   holdEarlyNativeMessages(shim);
   presentAsChrome(shim);
+  presentAsFirefox(shim);
   checkImportedScripts(shim);
   const verdicts = createVerdicts(shim);
   const gather = createGather(shim, verdicts);

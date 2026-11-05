@@ -63,7 +63,13 @@ export function userAgentData(chromeUA: string, version: string) {
 }
 
 export function presentAsChrome({ root, inContent, worker, config }: Shim): void {
-  if (inContent || typeof navigator === 'undefined' || / Chrome\//.test(navigator.userAgent)) return;
+  if (
+    config.firefox ||
+    inContent ||
+    typeof navigator === 'undefined' ||
+    / Chrome\//.test(navigator.userAgent)
+  )
+    return;
   const chromeUA = chromeUserAgent(navigator.userAgent, config.chromeVersion);
   const proto =
     typeof root.WorkerNavigator !== 'undefined' && worker

@@ -92,7 +92,7 @@ private enum BenchExtensions {
         let action = context?.action(for: extensions.activeAdapter)
         return [
             "id": item.id, "name": item.name, "version": item.version, "enabled": item.enabled, "loaded": context != nil,
-            "base": context?.baseURL.absoluteString ?? "", "errors": (context?.errors ?? []).map(explain),
+            "base": context?.baseURL.absoluteString ?? "", "errors": (context?.readErrors ?? []).map(explain),
             "reported": extensions.errors[item.id] ?? [],
             "action": action?.label ?? "", "badge": action?.badgeText ?? "", "popup": action?.presentsPopup ?? false,
             "pinned": item.pinned ?? false,
@@ -101,11 +101,10 @@ private enum BenchExtensions {
     }
 
     /// An error with what lies under it and whatever else it carries.
-    private static func explain(_ error: Error) -> String {
-        let error = error as NSError
-        let under = (error.userInfo[NSUnderlyingErrorKey] as? NSError).map { " ← \($0.localizedDescription) \($0.userInfo)" } ?? ""
-        let rest = error.userInfo.filter { $0.key != NSLocalizedDescriptionKey && $0.key != NSUnderlyingErrorKey }
-        return error.localizedDescription + under + (error.userInfo.isEmpty ? "" : " \(rest)")
+    /// By domain and code only: WebKit's extension errors can carry objects
+    /// in their userInfo that crash when read.
+    private static func explain(_ error: NSError) -> String {
+        "\(error.domain) \(error.code)"
     }
 
     /// Answers every question from now on (yes or no), or asks again; and

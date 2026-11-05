@@ -21,6 +21,8 @@ import { unnumber } from '../src/extension-shims/port-numbering';
 import { sentMessage } from '../src/extension-shims/replies';
 import { plainItems } from '../src/extension-shims/storage';
 import { tabsIn } from '../src/extension-shims/tabs';
+import { presentAsFirefox } from '../src/extension-shims/firefox';
+import type { Shim } from '../src/extension-shims/types';
 import { chromeUserAgent, userAgentData } from '../src/extension-shims/user-agent';
 import { withPasskeys } from '../src/extension-shims/user-scripts';
 import { supportedExtraInfo, withoutSocketPatterns } from '../src/extension-shims/web-request';
@@ -337,5 +339,34 @@ describe('FileSystem paths', () => {
     expect(isUnder('1:/shotsother/a.png', PERSISTENT, '/shots')).toBe(false);
     expect(isUnder('0:/shots/a.png', PERSISTENT, '/shots')).toBe(false);
     expect(isUnder('1:/a.png', PERSISTENT, '/')).toBe(true);
+  });
+});
+
+/** A shim with only what presentAsFirefox reads. */
+const firefoxShim = (firefox: boolean) => {
+  const runtime: Record<string, unknown> = {};
+  const shim = {
+    config: { firefox, firefoxVersion: '140.0' },
+    chrome: { runtime },
+    put: (target: Record<string, unknown>, key: string, value: unknown) => {
+      target[key] = value;
+    },
+  } as unknown as Shim;
+  return { runtime, shim };
+};
+
+describe('presentAsFirefox', () => {
+  it("tells a Firefox add-on it's in Firefox", async () => {
+    const { runtime, shim } = firefoxShim(true);
+    presentAsFirefox(shim);
+    const info = await (runtime.getBrowserInfo as () => Promise<{ name: string; version: string }>)();
+    expect(info.name).toBe('Firefox');
+    expect(info.version).toBe('140.0');
+  });
+
+  it('leaves a Chrome extension as it was', () => {
+    const { runtime, shim } = firefoxShim(false);
+    presentAsFirefox(shim);
+    expect(runtime.getBrowserInfo).toBeUndefined();
   });
 });

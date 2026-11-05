@@ -15,10 +15,12 @@ public struct InstalledExtension: Codable, Identifiable, Equatable, Sendable {
     public var pinned: Bool?
     /// The folder an unpacked extension came from, copied again on reload.
     public var source: String?
+    /// Its slug on addons.mozilla.org, for a Firefox add-on from there.
+    public var firefox: String?
 
     public init(
         id: String, name: String, version: String, enabled: Bool = true, fromStore: Bool, permissions: [String], pinned: Bool? = nil,
-        source: String? = nil
+        source: String? = nil, firefox: String? = nil
     ) {
         self.id = id
         self.name = name
@@ -28,6 +30,13 @@ public struct InstalledExtension: Codable, Identifiable, Equatable, Sendable {
         self.permissions = permissions
         self.pinned = pinned
         self.source = source
+        self.firefox = firefox
+    }
+
+    /// A Firefox add-on's id: "amo-" and its slug, kept to what a folder name takes.
+    public static func firefoxID(for slug: String) -> String {
+        "amo-"
+            + String(slug.lowercased().unicodeScalars.filter { CharacterSet.alphanumerics.contains($0) || $0 == "-" }.map(Character.init))
     }
 
     /// A folder extension's id: "local-" and eight lowercase hex digits.

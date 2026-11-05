@@ -33,8 +33,13 @@ extension Extensions {
         let sites = found.allRequestedMatchPatterns.map {
             ExtensionRules.Site(host: $0.host, everywhere: $0.matchesAllHosts || $0.matchesAllURLs)
         }
-        return ExtensionRules.describe(
+        let wants = ExtensionRules.describe(
             requested: Set(found.requestedPermissions.map(\.rawValue)), sites: sites, declared: Set(lists.declared), added: lists.added)
+        // A Firefox add-on's asks that WebKit has nothing for, said before it's added.
+        let manifest = (try? Data(contentsOf: folder.appendingPathComponent("manifest.json")))
+            .flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }
+        guard let manifest, AMO.isFirefox(manifest: manifest) else { return wants }
+        return wants + AMO.unsupported(manifest: manifest).map { "Won't work in Mote: \($0)" }
     }
 
     static func icon(of found: WKWebExtension) -> NSImage? { found.icon(for: CGSize(width: 64, height: 64)) }

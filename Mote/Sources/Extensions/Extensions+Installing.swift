@@ -37,6 +37,25 @@ extension Extensions {
         return staged
     }
 
+    /// An addons.mozilla.org file, checked against the API's hash, unpacked
+    /// (an .xpi is a zip) without Mozilla's signature files, with the shim.
+    private static func stage(fromAMO addon: AMO.Addon, as id: String) async throws -> URL {
+        let (file, _) = try await URLSession.shared.data(from: addon.file)
+        guard AMO.verified(file, as: addon) else { throw CRX.Failure.invalidSignature }
+        let staged = staging(id)
+        try CRX.unpack(file, into: staged)
+        try? FileManager.default.removeItem(at: staged.appendingPathComponent("META-INF"))
+        try ExtensionShims.prepare(staged, fresh: true)
+        return staged
+    }
+
+    /// What Mozilla's API says of an add-on now.
+    private static func latest(onAMO slug: String) async throws -> AMO.Addon {
+        let (reply, _) = try await URLSession.shared.data(from: AMO.apiURL(for: slug))
+        guard let addon = AMO.addon(in: reply) else { throw CRX.Failure.notAnExtensionID }
+        return addon
+    }
+
     private static func putInPlace(_ staged: URL, as id: String) throws {
         let target = folder(for: id)
         try? FileManager.default.removeItem(at: target)
@@ -55,6 +74,7 @@ extension Extensions {
     /// From a Chrome Web Store link or id. `confirm: false` skips the question
     /// in test runs only.
     func install(from text: String, confirm: Bool = true) {
+        if let slug = AMO.slug(in: text) { return installFirefox(slug, confirm: confirm) }
         guard let id = CRX.extensionID(in: text) else { return say(CRX.Failure.notAnExtensionID.localizedDescription) }
         guard index(of: id) == nil else { return say("Already installed") }
         busy = id
@@ -62,6 +82,25 @@ extension Extensions {
             defer { busy = nil }
             do {
                 try await admit(try await Self.stage(fromStore: id), as: id, fromStore: true, confirm: confirm || !Storage.testing)
+            } catch {
+                say(error.localizedDescription)
+            }
+        }
+    }
+
+    /// From addons.mozilla.org, by its page's address or slug: the API's
+    /// latest file, checked against its hash.
+    func installFirefox(_ slug: String, confirm: Bool = true) {
+        let id = InstalledExtension.firefoxID(for: slug)
+        guard index(of: id) == nil else { return say("Already installed") }
+        busy = id
+        Task {
+            defer { busy = nil }
+            do {
+                let addon = try await Self.latest(onAMO: slug)
+                try await admit(
+                    try await Self.stage(fromAMO: addon, as: id), as: id, fromStore: false, confirm: confirm || !Storage.testing,
+                    firefox: addon.slug)
             } catch {
                 say(error.localizedDescription)
             }
@@ -88,7 +127,9 @@ extension Extensions {
     }
 
     /// Asks about a staged extension, then puts it in place and starts it.
-    private func admit(_ staged: URL, as id: String, fromStore: Bool, confirm: Bool, source: URL? = nil) async throws {
+    private func admit(
+        _ staged: URL, as id: String, fromStore: Bool, confirm: Bool, source: URL? = nil, firefox: String? = nil
+    ) async throws {
         let found: WKWebExtension
         do {
             found = try await WKWebExtension(resourceBaseURL: staged)
@@ -97,6 +138,11 @@ extension Extensions {
             throw error
         }
         let name = found.displayName ?? id
+        // The same extension from the other store is the one already here.
+        if installed.contains(where: { $0.id != id && $0.name.caseInsensitiveCompare(name) == .orderedSame }) {
+            try? FileManager.default.removeItem(at: staged)
+            return say("\(name) is already installed")
+        }
         let agreed = confirm ? await ask(install: name, wants: Self.describe(found, in: staged), icon: Self.icon(of: found)) : true
         guard agreed else {
             try? FileManager.default.removeItem(at: staged)
@@ -106,7 +152,7 @@ extension Extensions {
         let item = Installed(
             id: id, name: name, version: found.version ?? "?", fromStore: fromStore,
             permissions: Self.grants(found, in: Self.folder(for: id)),
-            source: source?.path)
+            source: source?.path, firefox: firefox)
         installed.removeAll { $0.id == id }
         installed.append(item)
         save()
@@ -183,18 +229,27 @@ extension Extensions {
         let last = Storage.settings.object(forKey: key) as? Date ?? .distantPast
         guard Date().timeIntervalSince(last) > ExtensionRules.updateInterval else { return }
         Storage.settings.set(Date(), forKey: key)
-        for item in installed where item.fromStore {
+        for item in installed where item.fromStore || item.firefox != nil {
             Task { await update(item) }
         }
     }
 
     private func update(_ item: Installed) async {
-        guard let check = ExtensionRules.updateCheckURL(id: item.id, version: item.version),
-            let (data, _) = try? await URLSession.shared.data(from: check),
-            let offered = ExtensionRules.offeredVersion(in: String(decoding: data, as: UTF8.self), current: item.version)
-        else { return }
+        let offered: String
+        var amo: AMO.Addon?
+        if let slug = item.firefox {
+            guard let addon = try? await Self.latest(onAMO: slug), addon.version != item.version else { return }
+            (offered, amo) = (addon.version, addon)
+        } else {
+            guard let check = ExtensionRules.updateCheckURL(id: item.id, version: item.version),
+                let (data, _) = try? await URLSession.shared.data(from: check),
+                let version = ExtensionRules.offeredVersion(in: String(decoding: data, as: UTF8.self), current: item.version)
+            else { return }
+            offered = version
+        }
         do {
-            let staged = try await Self.stage(fromStore: item.id)
+            let staged =
+                if let amo { try await Self.stage(fromAMO: amo, as: item.id) } else { try await Self.stage(fromStore: item.id) }
             let found = try await WKWebExtension(resourceBaseURL: staged)
             // Sites count too, against what was agreed to.
             let grants = Self.grants(found, in: staged)
