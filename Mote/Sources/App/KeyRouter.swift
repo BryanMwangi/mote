@@ -111,6 +111,7 @@ final class KeyRouter {
             (browser.logins.managing, { browser.logins.managing = false }),
             (browser.recalling, { browser.recalling = false }),
             (browser.showingDownloads, { browser.showingDownloads = false }),
+            (browser.showingProcesses, { browser.showingProcesses = false }),
             (browser.logins.choices != nil, browser.logins.dropChoices),
             (browser.pickingElement, browser.toggleHiding),
             (browser.reviewing, { browser.reviewing = false }),

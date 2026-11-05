@@ -63,6 +63,7 @@ struct ContentView: View {
             .onChange(of: browser.activeID) { keyboardToPage() }
             .animation(Motion.settle, value: browser.recalling)
             .animation(Motion.settle, value: browser.showingDownloads)
+            .animation(Motion.settle, value: browser.showingProcesses)
             .animation(Motion.settle, value: browser.welcoming)
             .animation(Motion.settle, value: browser.bookmarking)
             .animation(Motion.settle, value: browser.logins.managing)
@@ -92,6 +93,9 @@ struct ContentView: View {
         }
         if browser.showingDownloads {
             Sheet(close: { browser.showingDownloads = false }) { DownloadsPanel(browser: browser, downloads: browser.downloads) }
+        }
+        if browser.showingProcesses {
+            Sheet(close: { browser.showingProcesses = false }) { ProcessesPanel(browser: browser) }
         }
         if browser.bookmarking {
             Sheet(close: { browser.bookmarking = false }) { BookmarksPanel(browser: browser, bookmarks: browser.bookmarks) }

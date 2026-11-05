@@ -51,6 +51,14 @@ extension NSObject {
         return unsafeBitCast(method(for: selector), to: Call.self)(self, selector)
     }
 
+    /// A process id a method gives back (`_webProcessIdentifier`).
+    func unpublishedPID(_ name: String) -> pid_t? {
+        let selector = NSSelectorFromString(name)
+        guard responds(to: selector) else { return nil }
+        typealias Call = @convention(c) (AnyObject, Selector) -> pid_t
+        return unsafeBitCast(method(for: selector), to: Call.self)(self, selector)
+    }
+
     /// A method taking a number.
     func unpublished(_ name: String, _ value: CGFloat) {
         let selector = NSSelectorFromString(name)

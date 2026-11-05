@@ -61,6 +61,8 @@ final class Browser: NSObject, ObservableObject {
     @Published var importingZen = false
     @Published var recalling = false
     @Published var showingDownloads = false
+    /// About Processes (see ProcessesPanel).
+    @Published var showingProcesses = false
     /// The chat about the active page is docked on the window's trailing edge,
     /// the mirror of the sidebar (its width lives in `Preferences.chatWidth`).
     /// Whether it is open belongs to the tab, not the window (`Tab.chatOpen`),

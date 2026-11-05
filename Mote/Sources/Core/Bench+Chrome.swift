@@ -99,6 +99,7 @@ extension Bench {
             ("spaces", { prefs.usesSpaces = $0 }), ("hides", { prefs.sideHides = $0 }), ("folded", { browser.folded = $0 }),
             ("peek", { browser.peeking = $0 }), ("bar", { if $0 { browser.edit() } else { browser.dismiss() } }),
             ("chats", { if $0 { browser.showChats() } }), ("peeklinks", { prefs.peeksLinks = $0 }),
+            ("processes", { browser.showingProcesses = $0 }),
 
         ]
         for (key, set) in switches { request.bool(key).map(set) }
@@ -135,6 +136,9 @@ extension Bench {
         if Storage.testing, let id = request.string("source"), let found = tab(id) { browser.viewSource(of: found) }
         // An essential or pinned tab back to its pinned page; the click that previews.
         if Storage.testing, let id = request.string("home"), let found = tab(id) { browser.goHome(found) }
+        // The inspector at a panel: network, sources, storage, timeline.
+        if let panel = request.string("inspect").flatMap({ InspectorPanel(rawValue: $0.capitalized) }) { browser.showInspector(panel) }
+        if request.flag("textdirection") { browser.switchTextDirection() }
         // A screenshot of the tab in front (test runs): visible, whole, or copy.
         if Storage.testing, let shot = request.string("screenshot") {
             browser.active?.screenshot(shot == "whole" ? .wholePage : .visible, copy: shot == "copy")

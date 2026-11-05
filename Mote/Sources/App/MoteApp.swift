@@ -147,6 +147,11 @@ private struct MenuBar: Commands {
         Button("Web Inspector", action: browser.toggleInspector).keyboardShortcut(keys(.inspector))
         Button("JavaScript Console", action: browser.showConsole).keyboardShortcut(keys(.console))
         Button("Inspect Element", action: browser.inspectElement).keyboardShortcut(keys(.inspectElement))
+        Button("Network") { browser.showInspector(.network) }.keyboardShortcut(keys(.inspectNetwork)).disabled(blank)
+        Button("Sources") { browser.showInspector(.sources) }.keyboardShortcut(keys(.inspectSources)).disabled(blank)
+        Button("Storage") { browser.showInspector(.storage) }.keyboardShortcut(keys(.inspectStorage)).disabled(blank)
+        Button("Switch Text Direction", action: browser.switchTextDirection).keyboardShortcut(keys(.textDirection)).disabled(blank)
+        Button("About Processes…") { browser.showingProcesses = true }.keyboardShortcut(keys(.processes))
         Button("View Page Source") { if let tab = browser.active { browser.viewSource(of: tab) } }
             .keyboardShortcut(keys(.viewSource)).disabled(blank)
         Button("Responsive Design Mode", action: browser.toggleResponsive).keyboardShortcut(keys(.responsive))

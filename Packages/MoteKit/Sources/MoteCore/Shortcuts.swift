@@ -77,7 +77,8 @@ public enum ShortcutID: String, CaseIterable, Codable, CodingKeyRepresentable, S
     // Bookmarks, history and the rest
     case bookmark, history, downloads, passwords, settings
     // Developer
-    case inspector, console, inspectElement, viewSource, responsive
+    case inspector, console, inspectElement, viewSource, responsive, inspectNetwork, inspectSources, inspectStorage, textDirection
+    case processes
 
     public enum Group: String, CaseIterable, Sendable {
         case tabs = "Tabs", windows = "Windows", page = "Page", view = "View", spaces = "Spaces", split = "Split View"
@@ -97,7 +98,9 @@ public enum ShortcutID: String, CaseIterable, Codable, CodingKeyRepresentable, S
         case .previousSpace, .nextSpace: .spaces
         case .splitGrid, .splitVertical, .splitHorizontal, .unsplit: .split
         case .bookmark, .history, .downloads, .passwords, .settings: .library
-        case .inspector, .console, .inspectElement, .viewSource, .responsive: .developer
+        case .inspector, .console, .inspectElement, .viewSource, .responsive, .inspectNetwork, .inspectSources, .inspectStorage,
+            .textDirection, .processes:
+            .developer
         }
     }
 
@@ -157,6 +160,11 @@ public enum ShortcutID: String, CaseIterable, Codable, CodingKeyRepresentable, S
         case .inspectElement: "Inspect Element"
         case .viewSource: "View Page Source"
         case .responsive: "Responsive Design Mode"
+        case .inspectNetwork: "Network"
+        case .inspectSources: "Sources"
+        case .inspectStorage: "Storage"
+        case .textDirection: "Switch Text Direction"
+        case .processes: "About Processes"
         }
     }
 
@@ -218,6 +226,11 @@ public enum ShortcutID: String, CaseIterable, Codable, CodingKeyRepresentable, S
         case .inspectElement: [.cmd("c", option: true)]
         case .viewSource: [.cmd("u", option: true)]
         case .responsive: [KeyCombo("r", command: true, control: true)]
+        // Firefox's keys on a Mac.
+        case .inspectNetwork: [.cmd("e", option: true)]
+        case .inspectSources: [.cmd("z", option: true)]
+        case .textDirection: [.cmd("x", shift: true)]
+        case .inspectStorage, .processes: []
         }
     }
 
@@ -267,7 +280,7 @@ public enum ShortcutID: String, CaseIterable, Codable, CodingKeyRepresentable, S
         case .downloads: .downloads
         case .settings: .settings
         case .openFile, .newWindow, .newPrivateTab, .reloadFromOrigin, .savePage, .screenshot, .passwords, .inspector, .console,
-            .inspectElement, .viewSource, .responsive:
+            .inspectElement, .viewSource, .responsive, .inspectNetwork, .inspectSources, .inspectStorage, .textDirection, .processes:
             nil
         }
     }
