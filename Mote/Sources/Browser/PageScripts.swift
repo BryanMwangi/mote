@@ -42,7 +42,7 @@ enum PageScripts {
         scripts.append(WKUserScript(source: MediaRelay.script, injectionTime: .atDocumentStart, forMainFrameOnly: true, in: .page))
         if !hiding.selectors.isEmpty { scripts.append(mote(ElementPicker.hiding(hiding), at: .atDocumentStart)) }
         // The site's boost (see Boosts.swift), from the first paint.
-        if !boost.isEmpty { scripts.append(mote(Boosts.styling(boost), at: .atDocumentStart)) }
+        if !boost.isEmpty { scripts.append(mote(boost, at: .atDocumentStart)) }
         return scripts
     }
 

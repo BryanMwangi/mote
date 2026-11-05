@@ -252,7 +252,7 @@ extension Bench {
             switch what {
             case "editor": browser.boosting = site
             case "close": browser.boosting = nil
-            case "tint": browser.setBoost(Boost(tint: "#3a7bd5", accent: "#e03131", dark: true, size: 1.1), for: site)
+            case "tint": browser.setBoost(Boost(tint: "#2a5bd5", accent: "#ffd23f"), for: site)
             default: browser.setBoost(what == "reset" ? Boost() : Boost(brightness: 0.7, font: "Georgia"), for: site)
             }
         }

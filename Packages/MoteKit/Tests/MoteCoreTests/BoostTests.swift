@@ -31,15 +31,17 @@ struct BoostTests {
         let sheet = Boost(dark: true, size: 1.25, textCase: "uppercase").stylesheet
         #expect(sheet.contains("invert(1) hue-rotate(180deg)") && sheet.contains("img, video"))
         #expect(sheet.contains("zoom: 1.25") && sheet.contains("text-transform: uppercase"))
-        #expect(Boost(accent: "#ff0000").stylesheet.contains("color: #ff0000"))
         #expect(!Boost(textCase: "none; } body { display: none").stylesheet.contains("display"))
         #expect(Boost(dark: true, enabled: false).stylesheet.isEmpty)
     }
 
-    @Test("A tint casts the page toward its hue")
-    func tint() {
-        // Pure blue, 240°: sepia's 38° turned 202°.
-        #expect(Boost(tint: "#0000ff").stylesheet.contains("hue-rotate(202deg)"))
+    @Test("The dots go to the colours script, not the stylesheet; off sends none")
+    func colors() {
+        let boost = Boost(tint: "#0000ff", accent: "#ffcc00")
+        #expect(boost.stylesheet.isEmpty)
+        #expect(boost.colors?.primary == "#0000ff" && boost.colors?.secondary == "#ffcc00")
+        #expect((boost.colors?.strength ?? 0) > 0.25)
+        #expect(Boost(tint: "#0000ff", enabled: false).colors == nil)
     }
 
     @Test("Older boosts still read")

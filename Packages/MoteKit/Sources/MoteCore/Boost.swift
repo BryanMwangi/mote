@@ -12,7 +12,8 @@ public struct Boost: Codable, Equatable, Sendable {
     /// A font family for the page's text; nil for the site's own.
     public var font: String?
     public var css = ""
-    /// "#rrggbb": a colour cast over the whole page, and its links' colour.
+    /// "#rrggbb": the two dots the page's colours move toward, dark ones to
+    /// `tint` and light ones to `accent` (see Scripts/src/boost-colors.ts).
     public var tint: String?
     public var accent: String?
     /// Light pages turned dark, pictures kept as they are.
@@ -51,20 +52,26 @@ public struct Boost: Codable, Equatable, Sendable {
             enabled: try values.decodeIfPresent(Bool.self, forKey: .enabled) ?? true)
     }
 
+    /// What the colours script is told: the dots, and how far colours move,
+    /// as far as the first dot is from the field's centre. Nil for none.
+    public var colors: BoostColors? {
+        guard enabled, let tint else { return nil }
+        let point = ThemeColors.point(for: tint)
+        return BoostColors(primary: tint, secondary: accent, strength: 0.25 + min(hypot(point.x, point.y), 1) * 0.6)
+    }
+
     /// Nothing changed from the site's own look.
     public var isEmpty: Bool { self == Boost() }
 
     /// The stylesheet that does it: the filters on the whole page (pictures
     /// turned back when it's dark), size, the font and case on everything but
-    /// code, the accent on links, then the CSS as written. Empty when there's
+    /// code, then the CSS as written; the colours are the script's (`colors`). Empty when there's
     /// nothing, or when it's switched off.
     public var stylesheet: String {
         guard enabled else { return "" }
         var rules: [String] = []
         var filters: [String] = []
         if dark { filters.append("invert(1) hue-rotate(180deg)") }
-        // The cast: sepia gives a warm tone at about 38°, turned to the tint's hue.
-        if let tint, let hue = Self.hue(tint) { filters.append("sepia(0.45) hue-rotate(\(Int((hue - 38).rounded()))deg) saturate(1.3)") }
         filters += [("brightness", brightness), ("contrast", contrast), ("saturate", saturation)]
             .filter { abs($0.1 - 1) > 0.001 }
             .map { "\($0.0)(\(String(format: "%.2f", $0.1)))" }
@@ -79,20 +86,14 @@ public struct Boost: Codable, Equatable, Sendable {
         if let textCase, ["uppercase", "lowercase", "capitalize"].contains(textCase) {
             rules.append("\(text) { text-transform: \(textCase) !important; }")
         }
-        if var accent, let rgb = SpaceTheme.rgb(accent) {
-            // Dark turns the page over, accent and all; turned first, it comes out as chosen.
-            if dark { accent = SpaceTheme.hex(red: 1 - rgb.red, green: 1 - rgb.green, blue: 1 - rgb.blue) }
-            rules.append("a, a * { color: \(accent) !important; } html { accent-color: \(accent); }")
-        }
         if !css.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { rules.append(css) }
         return rules.joined(separator: "\n")
     }
+}
 
-    /// A colour's hue in degrees.
-    private static func hue(_ hex: String) -> Double? {
-        guard SpaceTheme.rgb(hex) != nil else { return nil }
-        let point = ThemeColors.point(for: hex)
-        let degrees = atan2(point.y, point.x) * 180 / .pi
-        return degrees < 0 ? degrees + 360 : degrees
-    }
+/// The boost colours script's configuration.
+public struct BoostColors: Codable, Equatable, Sendable {
+    public let primary: String
+    public let secondary: String?
+    public let strength: Double
 }

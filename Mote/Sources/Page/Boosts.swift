@@ -19,6 +19,16 @@ final class Boosts: ObservableObject {
         file.save(bySite)
     }
 
+    /// What a page runs for `boost`: its stylesheet, and its colours (see
+    /// Scripts/src/boost-colors.ts), or nothing for a site without one.
+    nonisolated static func script(for boost: Boost) -> String {
+        guard !boost.isEmpty else { return "" }
+        let colors =
+            boost.colors.map { InjectedScript.source("boost-colors", config: $0) }
+            ?? "window.__moteBoostColors && window.__moteBoostColors.set({ strength: 0 })"
+        return styling(boost.stylesheet) + ";\n" + colors
+    }
+
     /// A style element at the top of the document with the boost's rules,
     /// replaced in place when it changes.
     nonisolated static func styling(_ sheet: String) -> String {
@@ -43,11 +53,14 @@ extension Browser {
     /// A boost, kept and shown at once on every tab of its site.
     func setBoost(_ boost: Boost, for site: String) {
         Boosts.shared.set(boost, for: site)
-        let sheet = boost.stylesheet
+        let script = Boosts.script(for: boost)
+        // Taken off a page that had one: its style and colours go too.
+        let now =
+            script.isEmpty ? Boosts.styling("") + ";\nwindow.__moteBoostColors && window.__moteBoostColors.set({ strength: 0 })" : script
         for tab in Windows.shared.all.flatMap(\.tabs) where Address.siteHost(of: tab.address) == site {
-            tab.boostSheet = sheet
+            tab.boostScript = script
             tab.arm(hiding: tab.hiding)
-            tab.built?.evaluateInAppWorld(Boosts.styling(sheet))
+            tab.built?.evaluateInAppWorld(now)
         }
     }
 }
