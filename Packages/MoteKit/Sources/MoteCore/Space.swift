@@ -110,19 +110,43 @@ public struct SpaceList: Equatable, Sendable {
 
 /// A space's colours, as Zen's themes keep them, leaner: one to three
 /// colours in a gradient across the window's frame, how strongly they show,
-/// and a grain over them.
+/// a grain over them, and whether the space is light or dark.
 public struct SpaceTheme: Codable, Equatable, Sendable {
     /// "#rrggbb", one to three.
     public var colors: [String]
     /// 0 to 1.
     public var opacity: Double
-    public var grain: Bool
+    /// How much grain, 0 to 1.
+    public var grain: Double
+    /// Light or dark while the space shows; nil follows Mote's look.
+    public var scheme: Scheme?
 
-    public init(colors: [String], opacity: Double = 0.45, grain: Bool = false) {
+    public enum Scheme: String, Codable, Sendable { case light, dark }
+
+    public init(colors: [String], opacity: Double = 0.45, grain: Double = 0, scheme: Scheme? = nil) {
         self.colors = Array(colors.prefix(3))
         self.opacity = min(max(opacity, 0), 1)
-        self.grain = grain
+        self.grain = min(max(grain, 0), 1)
+        self.scheme = scheme
     }
+
+    private enum CodingKeys: String, CodingKey { case colors, opacity, grain, scheme }
+
+    /// Grain was once on or off.
+    public init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        let grain = (try? values.decode(Double.self, forKey: .grain)) ?? ((try? values.decode(Bool.self, forKey: .grain)) == true ? 1 : 0)
+        self.init(
+            colors: try values.decode([String].self, forKey: .colors), opacity: try values.decode(Double.self, forKey: .opacity),
+            grain: grain,
+            scheme: try values.decodeIfPresent(Scheme.self, forKey: .scheme))
+    }
+
+    /// Single colours to start from, a page of eight at a time, as Zen's swatches.
+    public static let swatches = [
+        "#f3eedd", "#e8bcd0", "#e3c6e6", "#c97a82", "#e38a6f", "#d9cb83", "#86e8b4", "#8f9bb8",
+        "#7c5cff", "#2bb3ff", "#38e0b0", "#ff8a3d", "#ffd23f", "#2f9e44", "#e03131", "#495057",
+    ]
 
     /// A few to start from, as Zen's picker offers.
     public static let presets: [SpaceTheme] = [

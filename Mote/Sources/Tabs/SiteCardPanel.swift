@@ -78,7 +78,7 @@ enum SiteCardPanel {
         material.state = .active
         // The blur behind is shaped by a mask image only: with the window
         // active it ignores the layer's rounded corners and fills them square.
-        material.maskImage = Self.roundedMask(radius: MenuMetrics.corner)
+        material.maskImage = .roundedMask(radius: MenuMetrics.corner)
         material.wantsLayer = true
         if let layer = material.layer {
             layer.cornerRadius = MenuMetrics.corner
@@ -153,19 +153,6 @@ enum SiteCardPanel {
         panel.parent?.removeChildWindow(panel)
         panel.orderOut(nil)
         self.panel = nil
-    }
-
-    /// A rounded rectangle that stretches to any size, keeping its corners.
-    private static func roundedMask(radius: CGFloat) -> NSImage {
-        let side = radius * 2 + 1
-        let image = NSImage(size: NSSize(width: side, height: side), flipped: false) { rect in
-            NSColor.black.setFill()
-            NSBezierPath(roundedRect: rect, xRadius: radius, yRadius: radius).fill()
-            return true
-        }
-        image.capInsets = NSEdgeInsets(top: radius, left: radius, bottom: radius, right: radius)
-        image.resizingMode = .stretch
-        return image
     }
 
     private final class Panel: NSPanel {

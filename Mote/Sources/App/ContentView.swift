@@ -61,6 +61,16 @@ struct ContentView: View {
                 if showing { Task { @MainActor in browser.field.askFocus() } } else { keyboardToPage() }
             }
             .onChange(of: browser.activeID) { keyboardToPage() }
+            // Theme…: a frosted panel beside the sidebar, as Zen's.
+            .onChange(of: browser.themingSpace) { _, space in
+                guard let space, let window else { return FrostedPanel.close("theme") }
+                let prefs = browser.prefs
+                let x =
+                    prefs.sidebar && !prefs.sideRight ? window.frame.minX + prefs.sideWidth + 16 : window.frame.maxX - prefs.sideWidth - 316
+                FrostedPanel.show(
+                    "theme", ThemeEditor(browser: browser, space: space), over: window, at: NSPoint(x: x, y: window.frame.maxY - 56)
+                ) { browser.themingSpace = nil }
+            }
             .animation(Motion.settle, value: browser.recalling)
             .animation(Motion.settle, value: browser.showingDownloads)
             .animation(Motion.settle, value: browser.showingProcesses)
@@ -99,9 +109,6 @@ struct ContentView: View {
         }
         if let site = browser.boosting {
             Sheet(close: { browser.boosting = nil }) { BoostPanel(browser: browser, site: site) }
-        }
-        if let space = browser.themingSpace {
-            Sheet(close: { browser.themingSpace = nil }) { SpaceThemePanel(browser: browser, space: space) }
         }
         if browser.showingProcesses {
             Sheet(close: { browser.showingProcesses = false }) { ProcessesPanel(browser: browser) }

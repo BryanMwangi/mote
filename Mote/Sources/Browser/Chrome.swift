@@ -77,7 +77,8 @@ struct Chrome: View {
             .background(Palette.frame.opacity(0.35))
             // The space's own colours, under the frame's tint (see SpaceGround).
             .background {
-                SpaceGround(theme: browser.spaces.first { $0.id == browser.spaceID }?.theme, space: browser.spaceID).ignoresSafeArea()
+                SpaceGround(theme: browser.spaces.first { $0.id == browser.spaceID }?.theme, space: browser.spaceID, window: browser.window)
+                    .ignoresSafeArea()
             }
             .background { WindowMaterial().ignoresSafeArea() }
     }

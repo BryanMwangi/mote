@@ -221,7 +221,7 @@ extension Bench {
         // The space in front's colours (test runs): a preset's number, or off.
         if Storage.testing, let what = request.string("theme") {
             let preset = Int(what).flatMap { SpaceTheme.presets.indices.contains($0) ? SpaceTheme.presets[$0] : nil }
-            browser.setSpaceTheme(browser.spaceID, to: preset.map { SpaceTheme(colors: $0.colors, opacity: $0.opacity, grain: true) })
+            browser.setSpaceTheme(browser.spaceID, to: preset.map { SpaceTheme(colors: $0.colors, opacity: $0.opacity, grain: 1) })
         }
         if request.flag("translate"), let tab = browser.active { browser.toggleTranslation(tab) }
         // Page Info for the tab in front, at a part (test runs): General, Media, Permissions, Security.
@@ -274,6 +274,7 @@ extension Bench {
         // Responsive Design Mode for the tab in front: a preset's name, or off.
         if let name = request.string("device") { browser.active?.device = DeviceList.shared.device(named: name) }
         if let on = request.bool("extensions") { NotificationCenter.default.post(name: PageButton.ask, object: on) }
+        if let on = request.bool("theming") { browser.themingSpace = on ? browser.spaceID : nil }
         if let on = request.bool("appmenu") { NotificationCenter.default.post(name: AppMenuButton.ask, object: on) }
         call.answer(["ok": true])
     }

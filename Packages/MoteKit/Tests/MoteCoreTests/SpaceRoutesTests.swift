@@ -45,7 +45,7 @@ struct SpaceThemeTests {
     func saved() throws {
         var space = Space(id: UUID(), name: "Work")
         #expect(try JSONDecoder().decode(Space.self, from: JSONEncoder().encode(space)).theme == nil)
-        space.theme = SpaceTheme(colors: ["#7c5cff"], grain: true)
+        space.theme = SpaceTheme(colors: ["#7c5cff"], grain: 0.5, scheme: .dark)
         #expect(try JSONDecoder().decode(Space.self, from: JSONEncoder().encode(space)) == space)
     }
 }

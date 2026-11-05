@@ -99,11 +99,11 @@ extension Browser {
     }
 
     /// Changes the list and saves it.
-    private func editSpaces(_ change: (inout SpaceList) -> Void) {
+    private func editSpaces(saving: Bool = true, _ change: (inout SpaceList) -> Void) {
         var list = SpaceList(saved: spaces)
         change(&list)
         spaces = list.spaces
-        Spaces.write(spaces)
+        if saving { Spaces.write(spaces) }
         // Every window shows the same spaces: names, icons and colours follow.
         for other in Windows.shared.all where other !== self { other.spaces = spaces }
     }
@@ -146,7 +146,10 @@ extension Browser {
     }
 
     func setSpaceIcon(_ id: UUID, to icon: String) { editSpaces { $0.edit(id) { $0.icon = icon } } }
-    func setSpaceTheme(_ id: UUID, to theme: SpaceTheme?) { editSpaces { $0.edit(id) { $0.theme = theme } } }
+    /// Its colours; a drag shows each step and keeps only the last (`saving`).
+    func setSpaceTheme(_ id: UUID, to theme: SpaceTheme?, saving: Bool = true) {
+        editSpaces(saving: saving) { $0.edit(id) { $0.theme = theme } }
+    }
     func setSpaceDownloads(_ id: UUID, to folder: URL?) { editSpaces { $0.edit(id) { $0.downloads = folder?.path } } }
 
     /// The new-space card, or a dialog when the tabs are folded away.

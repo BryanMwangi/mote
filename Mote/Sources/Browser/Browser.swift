@@ -63,7 +63,7 @@ final class Browser: NSObject, ObservableObject {
     @Published var showingDownloads = false
     /// About Processes (see ProcessesPanel).
     @Published var showingProcesses = false
-    /// The space whose colours are being chosen (see SpaceThemePanel).
+    /// The space whose colours are being chosen (see ThemeEditor).
     @Published var themingSpace: UUID?
     /// A page waiting for a translation session (see Translate.swift).
     @Published var translating: TranslationJob?

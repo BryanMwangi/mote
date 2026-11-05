@@ -86,7 +86,12 @@ struct SidebarFold: View {
         // take them from the docked sidebar.
         return Sidebar(browser: browser, prefs: prefs, showing: folding && browser.peeking)
             .frame(maxHeight: .infinity)
-            .background(Palette.frame)
+            // The space's colours, as behind the docked one; the window keeps its look.
+            .background {
+                Palette.frame.overlay {
+                    SpaceGround(theme: browser.spaces.first { $0.id == browser.spaceID }?.theme, space: browser.spaceID, window: nil)
+                }
+            }
             .clipShape(shape)
             .overlay(shape.strokeBorder(Palette.ink.opacity(0.12)))
             // Straddling the edge; the width it sets is the docked sidebar's too.
