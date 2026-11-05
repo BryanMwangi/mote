@@ -158,6 +158,7 @@ struct Sidebar: View {
             } else {
                 chats(titled: true)
             }
+            FootIcon(symbol: "books.vertical", help: "Library   ⌥⇧L") { browser.toggleLibrary() }
             AddMenuButton(browser: browser)
         }
         .padding(EdgeInsets(top: 0, leading: 10, bottom: 10, trailing: 10))

@@ -210,6 +210,7 @@ private struct MenuBar: Commands {
         }
         Divider()
         Button("Show History…") { browser.recalling = true }.keyboardShortcut(keys(.history))
+        Button("Library…", action: browser.toggleLibrary).keyboardShortcut(keys(.library))
         Button("Downloads…") { browser.showingDownloads = true }.keyboardShortcut(keys(.downloads))
         Divider()
         Button("Clear History", action: browser.clearHistory)

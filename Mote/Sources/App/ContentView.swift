@@ -90,10 +90,12 @@ struct ContentView: View {
     @ViewBuilder
     private var panels: some View {
         if browser.recalling {
-            Sheet(close: { browser.recalling = false }) { HistoryPanel(browser: browser) }
+            Sheet(close: { browser.recalling = false }) { LibraryShelf(browser: browser) { HistoryPanel(browser: browser) } }
         }
         if browser.showingDownloads {
-            Sheet(close: { browser.showingDownloads = false }) { DownloadsPanel(browser: browser, downloads: browser.downloads) }
+            Sheet(close: { browser.showingDownloads = false }) {
+                LibraryShelf(browser: browser) { DownloadsPanel(browser: browser, downloads: browser.downloads) }
+            }
         }
         if let site = browser.boosting {
             Sheet(close: { browser.boosting = nil }) { BoostPanel(browser: browser, site: site) }
@@ -105,7 +107,9 @@ struct ContentView: View {
             Sheet(close: { browser.showingProcesses = false }) { ProcessesPanel(browser: browser) }
         }
         if browser.bookmarking {
-            Sheet(close: { browser.bookmarking = false }) { BookmarksPanel(browser: browser, bookmarks: browser.bookmarks) }
+            Sheet(close: { browser.bookmarking = false }) {
+                LibraryShelf(browser: browser) { BookmarksPanel(browser: browser, bookmarks: browser.bookmarks) }
+            }
         }
         if browser.welcoming, !browser.arriving {
             WelcomePanel(browser: browser, prefs: browser.prefs).ignoresSafeArea()

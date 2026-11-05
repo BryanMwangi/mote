@@ -67,6 +67,13 @@ final class KeyRouter {
             browser.field.walk(press.shift ? -1 : 1)
             return true
         }
+        // A menu-only command on a key without ⌘ (⌥⇧L for the Library, or one
+        // recorded in Settings › Keyboard): AppKit only offers keys with ⌘ or ⌃
+        // to the menus, so it's run here.
+        if !press.command, let id = browser.prefs.shortcuts.id(matching: press), id.command == nil {
+            browser.perform(id)
+            return true
+        }
         let inText = browser.active?.typing == true || event.window?.firstResponder is NSTextView
         let command = KeyMap.command(
             for: press, spaces: browser.usesSpaces, picking: browser.pickingElement, inText: inText, shortcuts: browser.prefs.shortcuts)

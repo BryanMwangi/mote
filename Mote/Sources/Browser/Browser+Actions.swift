@@ -79,6 +79,7 @@ extension Browser {
         case .inspectStorage: showInspector(.storage)
         case .textDirection: switchTextDirection()
         case .processes: showingProcesses = true
+        case .library: toggleLibrary()
         default: break
         }
     }

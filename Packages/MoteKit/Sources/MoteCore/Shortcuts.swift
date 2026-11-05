@@ -80,7 +80,7 @@ public enum ShortcutID: String, CaseIterable, Codable, CodingKeyRepresentable, S
     // Split view
     case splitGrid, splitVertical, splitHorizontal, unsplit
     // Bookmarks, history and the rest
-    case bookmark, history, downloads, passwords, settings
+    case bookmark, history, downloads, passwords, settings, library
     // Developer
     case inspector, console, inspectElement, viewSource, responsive, inspectNetwork, inspectSources, inspectStorage, textDirection
     case processes
@@ -102,7 +102,7 @@ public enum ShortcutID: String, CaseIterable, Codable, CodingKeyRepresentable, S
         case .toggleSidebar, .foldTabs, .compactMode, .toggleToolbar: .view
         case .previousSpace, .nextSpace: .spaces
         case .splitGrid, .splitVertical, .splitHorizontal, .unsplit: .split
-        case .bookmark, .history, .downloads, .passwords, .settings: .library
+        case .bookmark, .history, .downloads, .passwords, .settings, .library: .library
         case .inspector, .console, .inspectElement, .viewSource, .responsive, .inspectNetwork, .inspectSources, .inspectStorage,
             .textDirection, .processes:
             .developer
@@ -160,6 +160,7 @@ public enum ShortcutID: String, CaseIterable, Codable, CodingKeyRepresentable, S
         case .downloads: "Downloads"
         case .passwords: "Passwords"
         case .settings: "Settings"
+        case .library: "Library"
         case .inspector: "Web Inspector"
         case .console: "JavaScript Console"
         case .inspectElement: "Inspect Element"
@@ -226,6 +227,8 @@ public enum ShortcutID: String, CaseIterable, Codable, CodingKeyRepresentable, S
         case .downloads: [.cmd("j", shift: true)]
         case .passwords: [.cmd("l", option: true)]
         case .settings: [.cmd(",")]
+        // Zen's key.
+        case .library: [KeyCombo("l", shift: true, option: true)]
         case .inspector: [.cmd("i", option: true)]
         case .console: [.cmd("j", option: true)]
         case .inspectElement: [.cmd("c", option: true)]
@@ -285,7 +288,8 @@ public enum ShortcutID: String, CaseIterable, Codable, CodingKeyRepresentable, S
         case .downloads: .downloads
         case .settings: .settings
         case .openFile, .newWindow, .newPrivateTab, .reloadFromOrigin, .savePage, .screenshot, .passwords, .inspector, .console,
-            .inspectElement, .viewSource, .responsive, .inspectNetwork, .inspectSources, .inspectStorage, .textDirection, .processes:
+            .inspectElement, .viewSource, .responsive, .library, .inspectNetwork, .inspectSources, .inspectStorage, .textDirection,
+            .processes:
             nil
         }
     }
