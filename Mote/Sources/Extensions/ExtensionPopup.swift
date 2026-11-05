@@ -60,7 +60,7 @@ final class ExtensionPopup: NSObject, WKUIDelegate, WKNavigationDelegate, NSPopo
         self.web = web
         self.popover = popover
         extensionID = id
-        button = anchor != nil && anchor === Extensions.shared.anchors[id]?.view ? anchor : nil
+        button = Extensions.shared.anchors[id]?.contains { $0.view != nil && $0.view === anchor } == true ? anchor : nil
         page = PopupPage(web: web)
         page.map(Extensions.shared.controller.didOpenTab)
         shown = false

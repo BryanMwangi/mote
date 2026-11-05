@@ -33,10 +33,26 @@ extension Extensions {
         }
     }
 
-    /// Its own button when it's showing, else the puzzle button.
+    /// Its own button when it's showing, else the puzzle button: of the
+    /// several drawn (the toolbar's, the sidebar's), the one on screen in
+    /// the browser's window.
     func anchor(for id: String) -> NSView? {
-        let own = anchors[id]?.view
-        return own?.window != nil ? own : anchors[Self.menuAnchor]?.view
+        showing(anchors[id]) ?? showing(anchors[Self.menuAnchor])
+    }
+
+    private func showing(_ views: [WeakView]?) -> NSView? {
+        let front = browser?.window
+        return views?.compactMap(\.view).last { view in
+            guard let window = view.window, window.isVisible, front == nil || window === front else { return false }
+            return !view.isHiddenOrHasHiddenAncestor && !view.visibleRect.isEmpty
+        }
+    }
+
+    /// Notes a view a popup may hang from; there may be one for `id` in each place it's drawn.
+    func register(_ view: NSView, for id: String) {
+        var views = (anchors[id] ?? []).filter { $0.view != nil && $0.view !== view }
+        views.append(WeakView(view))
+        anchors[id] = views
     }
 
     func press(_ id: String) {

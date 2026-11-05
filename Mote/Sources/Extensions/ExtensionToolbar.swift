@@ -65,12 +65,12 @@ private struct PopupAnchor: FillsRoom {
 
     func makeNSView(context: Context) -> NSView {
         let view = NSView()
-        Extensions.shared.anchors[id] = WeakView(view)
+        Extensions.shared.register(view, for: id)
         return view
     }
 
     func updateNSView(_ view: NSView, context: Context) {
-        Extensions.shared.anchors[id] = WeakView(view)
+        Extensions.shared.register(view, for: id)
     }
 }
 

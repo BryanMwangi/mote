@@ -68,6 +68,10 @@ final class MenuPanel {
 
     var isShown: Bool { panel?.isVisible == true }
 
+    /// How many menus are open, in every window: a folded sidebar stays out
+    /// while one it opened is.
+    private(set) static var open = 0
+
     /// Where a menu of `size` opens on `edge` of `anchor` (both in screen
     /// coordinates), kept within `screen` and flipped to the other side when
     /// there is no room.
@@ -138,6 +142,7 @@ final class MenuPanel {
 
         self.panel = panel
         self.host = host
+        Self.open += 1
         watch(window)
     }
 
@@ -155,6 +160,7 @@ final class MenuPanel {
         let closed = panel
         panel = nil
         host = nil
+        if closed != nil { Self.open -= 1 }
         closed?.orderOut(nil)
     }
 

@@ -161,10 +161,14 @@ struct SidebarFold: View {
     }
 
     /// After a grace period counted from when the pointer left, not from its
-    /// latest move; not while a tab is being renamed.
+    /// latest move; not while a tab is being renamed, nor while something
+    /// opened from it (a popover, an extension's popup, the site card) is
+    /// open, when it looks again a moment later.
     private func hide() {
         timers.hideAfter(EdgeReveal.grace) {
-            if folding, browser.editingTab == nil { browser.peek(false) }
+            guard folding, browser.editingTab == nil else { return }
+            if MenuPanel.open > 0 || pointer.window?.childWindows?.contains(where: \.isVisible) == true { return hide() }
+            browser.peek(false)
         }
     }
 }
