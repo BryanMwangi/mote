@@ -95,6 +95,8 @@ final class Browser: NSObject, ObservableObject {
     /// The folder a dragged tab would drop into, and where each folder's row
     /// is (see Browser+Folders.swift).
     @Published var folderHover: UUID?
+    /// The tab whose row the site card hangs beside (see SiteCardPanel).
+    @Published var siteCardRow: Tab.ID?
     var folderSpots: [UUID: WeakView] = [:]
     /// The tab the media strip shows (see Browser+Media.swift).
     @Published var playing: Tab?

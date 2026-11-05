@@ -218,7 +218,7 @@ struct TabMenu: View {
             // The site card that hangs from the toolbar's padlock.
             Button("Site Information…") {
                 if browser.activeID != tab.id { browser.select(tab) }
-                SiteCardPanel.open(for: tab, in: browser)
+                SiteCardPanel.open(for: tab, in: browser, beside: true)
             }
             Button("Copy Address") { onThisTab(browser.copyAddress) }
             Button("Copy as Markdown Link") { onThisTab(browser.copyMarkdownLink) }

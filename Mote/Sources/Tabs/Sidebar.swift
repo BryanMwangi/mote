@@ -292,7 +292,7 @@ private struct SpacePage: View {
             browser: browser, tab: tab, live: tab.id == active, renaming: renaming,
             draft: renaming ? browser.tabDraft : "", refusals: renaming ? browser.field.refusals : 0,
             icons: prefs.glyph == .icons, showsReading: prefs.showsReading,
-            preview: live && tab.id == active ? browser.peekTab : nil)
+            preview: live && tab.id == active ? browser.peekTab : nil, carded: live && browser.siteCardRow == tab.id)
     }
 
     /// The line between the pinned tabs and the others.
@@ -565,6 +565,8 @@ private struct SideRow: View {
     /// The link preview open over this tab, if any: its icon ends the row, as
     /// Zen's Glance does, and a click on it keeps the preview as a tab.
     let preview: Tab?
+    /// The site card hangs beside it.
+    let carded: Bool
 
     @State private var hovering = false
     @State private var shake: CGFloat = 0
@@ -640,6 +642,7 @@ private struct SideRow: View {
             if !Task.isCancelled { fading = false }
         }
         .contextMenu { TabMenu(browser: browser, tab: tab, close: close) }
+        .background { if carded { SiteCardAnchor(row: true) } }
         .animation(Motion.hover, value: hovering)
         .animation(Motion.glide, value: renaming)
         .transition(.scale(scale: 0.94, anchor: .leading).combined(with: .opacity))

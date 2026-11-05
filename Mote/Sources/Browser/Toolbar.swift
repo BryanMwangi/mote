@@ -228,10 +228,11 @@ struct AddressBar: View {
 }
 
 /// The connection's padlock at the start of the address, which opens the site
-/// card (security, zoom, print) below it.
-private struct SiteButton: View {
+/// card (security, zoom, print) below it; smaller in the sidebar's address.
+struct SiteButton: View {
     let browser: Browser
     @ObservedObject var tab: Tab
+    var compact = false
 
     @State private var hovering = false
 
@@ -250,9 +251,9 @@ private struct SiteButton: View {
             SiteCardPanel.toggle(for: tab, in: browser)
         } label: {
             Image(systemName: symbol.name)
-                .font(.system(size: 11, weight: .semibold))
+                .font(.system(size: compact ? 9 : 11, weight: .semibold))
                 .foregroundStyle(symbol.tint)
-                .frame(width: 22, height: 22)
+                .frame(width: compact ? 20 : 22, height: compact ? 20 : 22)
                 .background(Circle().fill(Palette.veil.opacity(hovering ? 1.4 : 0)))
                 .contentShape(Circle())
         }

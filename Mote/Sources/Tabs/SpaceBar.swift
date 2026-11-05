@@ -238,11 +238,16 @@ struct AddressPill: View {
     }
 
     private var shown: some View {
+        HStack(spacing: 0) {
+            // The site card hangs from it, as from the toolbar's.
+            if let tab = browser.active, !tab.isBlank { SiteButton(browser: browser, tab: tab, compact: true).padding(.leading, 4) }
+            address
+        }
+    }
+
+    private var address: some View {
         Button(action: browser.edit) {
             HStack(spacing: 6) {
-                if browser.active?.isBlank == false, browser.active?.shownAddress?.scheme == "https" {
-                    Image(systemName: "lock.fill").font(.system(size: 9, weight: .medium)).foregroundStyle(Palette.faint)
-                }
                 Text(host)
                     .font(.system(size: 12))
                     .foregroundStyle(browser.active?.isBlank == false ? Palette.ink : Palette.muted)
@@ -250,7 +255,7 @@ struct AddressPill: View {
                     .truncationMode(.middle)
                 Spacer(minLength: 0)
             }
-            .padding(.leading, 10)
+            .padding(.leading, browser.active?.isBlank == false ? 2 : 10)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
             .contentShape(Rectangle())
         }

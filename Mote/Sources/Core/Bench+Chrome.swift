@@ -129,7 +129,11 @@ extension Bench {
         }
         // The site card: on, off, or open at its security detail.
         if let card = request.string("sitecard"), let tab = browser.active {
-            if card == "off" { SiteCardPanel.hide() } else { SiteCardPanel.open(for: tab, in: browser, security: card == "security") }
+            if card == "off" {
+                SiteCardPanel.hide()
+            } else {
+                SiteCardPanel.open(for: tab, in: browser, security: card == "security", beside: card == "row")
+            }
         }
         // The preview's buttons (LinkPeek).
         if let what = request.string("peeklink") { if what == "keep" { browser.keepPeek() } else { browser.closePeek() } }
@@ -211,6 +215,13 @@ extension Bench {
             browser.setSpaceTheme(browser.spaceID, to: preset.map { SpaceTheme(colors: $0.colors, opacity: $0.opacity, grain: true) })
         }
         if request.flag("translate"), let tab = browser.active { browser.toggleTranslation(tab) }
+        // Page Info for the tab in front, at a part (test runs): General, Media, Permissions, Security.
+        if Storage.testing, let part = request.string("pageinfo"), let tab = browser.active {
+            for window in NSApp.windows where window.title.hasPrefix("Page Info") { window.close() }
+            PageInfo.opening = part
+            if part != "off" { PageInfo.show(for: tab, in: browser) }
+            PageInfo.opening = "General"
+        }
         if Storage.testing, request.flag("translatepanel") { NotificationCenter.default.post(name: TranslateButton.ask, object: nil) }
         // Profiles (test runs only, so their own Motes stay in the test world): new:NAME, delete:ID.
         if Storage.testing, let what = request.string("profile") {

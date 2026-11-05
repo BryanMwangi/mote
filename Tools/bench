@@ -39,7 +39,7 @@ COMMANDS = {
     "chat": ("[show|ask|follow|wait|use|mode|lead|search|providers] [args…]", "the chat in front; ask TEXT as the new tab's Ask does, follow TEXT in the chat "
              "(test run); wait [SECONDS] for its reply; use PROVIDER [MODEL] [ADDRESS], mode chat|search|research, search on|off, demo [SOURCES] [MS] [plain] (a long researched reply, streamed from Mote itself; plain: without research steps; test run); providers: how each stands"),
     "ui": ("key value", "settings/passwords/welcome/history/downloads/bookmarks/hidden, chats, sidebar, spaces, hides, bar, folded, peek, device NAME|off, essential|unessential|newwindow|source TAB, split TAB:left|right|top|bottom / grid|across|down|off, home TAB, peekclick shift|option, settingsquery TEXT|-, shortcut ID=cmd+e|ID=none|reset, screenshot visible|whole|copy, inspect network|sources|storage|timeline, processes on|off, textdirection on, folder new:NAME[/PARENT]|toggle:NAME|unpack:NAME|delete:NAME|TAB:NAME, route HOST:SPACEINDEX|clear, theme N|off, profile new:NAME|delete:ID, boost dim|reset, "
-           "pages120 on|off; sitecard on|off|security; notice update|ready|manual|TEXT (test run); look light|dark|system; peeklink keep|close; edittab TEXT; finishedit on"),
+           "pages120 on|off; sitecard on|off|security|row; pageinfo General|Media|Permissions|Security; notice update|ready|manual|TEXT (test run); look light|dark|system; peeklink keep|close; edittab TEXT; finishedit on"),
     "press": ("code:int chars [mods…]", "a key on the whole app (cmd shift ctrl opt, repeat) — test runs only"),
     "key": ("id text", "keys on a tab as real key events — test runs only"),
     "keyeq": ("chars code:int [shift]", "test run: ⌘CHARS while the page has the keyboard — who took it"),
@@ -185,7 +185,7 @@ def read_ui(args):
     if len(args) != 2:
         sys.exit(usage("ui"))
     key, value = args
-    return {key: value if key in ("look", "edittab", "peeklink", "sitecard", "notice", "device", "essential", "unessential", "newwindow", "source", "split", "home", "peekclick", "settingsquery", "shortcut", "screenshot", "inspect", "folder", "route", "theme", "profile", "boost") else value in ON}
+    return {key: value if key in ("look", "edittab", "peeklink", "sitecard", "notice", "device", "essential", "unessential", "newwindow", "source", "split", "home", "peekclick", "settingsquery", "shortcut", "screenshot", "inspect", "folder", "route", "theme", "profile", "boost", "pageinfo") else value in ON}
 
 
 def read_hit(args):

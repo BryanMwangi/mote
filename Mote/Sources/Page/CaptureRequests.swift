@@ -41,6 +41,16 @@ final class CaptureRequests {
     func allow() { decide(.grant) }
     func deny() { decide(.deny) }
 
+    /// The answer kept for `host`: allowed, blocked, or nil to ask (Page Info).
+    static func remembered(_ host: String, _ type: WKMediaCaptureType) -> Bool? {
+        Storage.settings.object(forKey: prefix + "\(host)|\(type.rawValue)") as? Bool
+    }
+
+    static func remember(_ host: String, _ type: WKMediaCaptureType, _ allowed: Bool?) {
+        let key = prefix + "\(host)|\(type.rawValue)"
+        if let allowed { Storage.settings.set(allowed, forKey: key) } else { Storage.settings.removeObject(forKey: key) }
+    }
+
     /// Forgets every remembered answer.
     func forgetAll() {
         for key in Storage.settings.dictionaryRepresentation().keys where key.hasPrefix(Self.prefix) {

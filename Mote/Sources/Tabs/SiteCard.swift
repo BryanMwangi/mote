@@ -49,6 +49,7 @@ struct SiteCard: View {
             if let url = tab.address { MenuHeading(title: Address.siteName(for: url)) }
             if let connection { MenuRow(connection.headline, submenu: true) { closer = true } }
             MenuRow("Copy Address", keys: "⇧⌘C") { afterClosing(browser.copyAddress) }
+            MenuRow("Page Info…") { afterClosing { PageInfo.show(for: tab, in: browser) } }
             MenuSeparator()
             MenuRow("Print…", keys: "⌘P") { afterClosing(browser.printPage) }
             zoom
