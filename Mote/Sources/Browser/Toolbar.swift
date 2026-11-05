@@ -71,6 +71,8 @@ struct Toolbar: View {
                 }
             }
             .padding(.horizontal, 6)
+            // Room for the traffic lights, which stay at the window's top left.
+            .padding(.leading, prefs.sidebar && prefs.sideRight ? Metrics.lights - ChromeLayout.gap : 0)
             .padding(.vertical, 6)
             .frame(maxHeight: .infinity)
             .controlSize(.large)

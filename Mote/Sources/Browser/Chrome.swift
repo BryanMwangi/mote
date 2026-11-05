@@ -108,6 +108,11 @@ struct ChromeDetail: View {
                         .transition(.move(edge: .trailing))
                 }
 
+                // With the sidebar on the right, the traffic lights stay at the
+                // window's top left, over the page's side.
+                if prefs.sidebar, prefs.sideRight, browser.active?.immersed != true {
+                    TrafficLights(showing: true).frame(width: Metrics.lights, height: ChromeLayout.band(for: .sidebar)).zIndex(2)
+                }
                 // The peeking tabs float over it from another hosting view, so
                 // hovers would reach through them.
                 PageCard(browser: browser, prefs: prefs, layout: layout)
@@ -386,6 +391,8 @@ struct ResizeGrip: FillsRoom {
 
     let prefs: Preferences
     var edge: Edge = .leading
+    /// The sidebar on the right: its handle, on its left, grows it leftward.
+    var mirrored = false
     let fold: () -> Void
 
     func makeNSView(context: Context) -> Grip { Grip() }
@@ -393,12 +400,14 @@ struct ResizeGrip: FillsRoom {
     func updateNSView(_ grip: Grip, context: Context) {
         grip.prefs = prefs
         grip.edge = edge
+        grip.mirrored = mirrored
         grip.fold = fold
     }
 
     final class Grip: NSView {
         var prefs: Preferences?
         var edge: ResizeGrip.Edge = .leading
+        var mirrored = false
         var fold: () -> Void = {}
         private var start: (x: CGFloat, width: CGFloat)?
         private var wanted: CGFloat = 0
@@ -447,7 +456,7 @@ struct ResizeGrip: FillsRoom {
             // The leading handle grows as the pointer moves right; the trailing
             // one, mirrored, grows as it moves left.
             let travel = event.locationInWindow.x - start.x
-            wanted = edge == .leading ? start.width + travel : start.width - travel
+            wanted = (edge == .leading) != mirrored ? start.width + travel : start.width - travel
             let held = min(most, max(least, wanted))
             guard held != width(prefs) else { return }
             var still = Transaction()

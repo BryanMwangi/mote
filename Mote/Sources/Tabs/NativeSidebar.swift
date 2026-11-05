@@ -28,6 +28,9 @@ struct NativeSidebar: NSViewControllerRepresentable {
         private var collapsed: Bool
         private var sidebarMode: Bool
         private var immersed: Bool
+        /// The sidebar's pane is the split's last, on the right.
+        private var right: Bool
+        private let detailItem: NSSplitViewItem
 
         init(browser: Browser, prefs: Preferences) {
             self.browser = browser
@@ -37,6 +40,8 @@ struct NativeSidebar: NSViewControllerRepresentable {
             // A plain split item preserves Mote's shared background; the
             // sidebar factory adds a separate system material behind this pane.
             sidebarItem = NSSplitViewItem(viewController: sidebar)
+            detailItem = NSSplitViewItem(viewController: detail)
+            right = prefs.sideRight
             sidebarMode = prefs.sidebar
             immersed = browser.active?.immersed == true
             collapsed = !prefs.sidebar || browser.folded || immersed
@@ -54,8 +59,7 @@ struct NativeSidebar: NSViewControllerRepresentable {
             sidebarItem.minimumThickness = prefs.sideWidth
             sidebarItem.maximumThickness = prefs.sideWidth
             sidebarItem.isCollapsed = collapsed
-            addSplitViewItem(sidebarItem)
-            addSplitViewItem(NSSplitViewItem(viewController: detail))
+            for item in right ? [detailItem, sidebarItem] : [sidebarItem, detailItem] { addSplitViewItem(item) }
         }
 
         @available(*, unavailable)
@@ -77,6 +81,12 @@ struct NativeSidebar: NSViewControllerRepresentable {
                     sidebarItem.minimumThickness = width
                     sidebarItem.maximumThickness = width
                 }
+            }
+            // The sidebar moved to the other side: its pane goes to that end.
+            if prefs.sideRight != right {
+                right = prefs.sideRight
+                splitViewItems.forEach(removeSplitViewItem)
+                for item in right ? [detailItem, sidebarItem] : [sidebarItem, detailItem] { addSplitViewItem(item) }
             }
             let fullscreenPage = browser.active?.immersed == true
             let target = !prefs.sidebar || browser.folded || fullscreenPage
@@ -109,8 +119,9 @@ struct NativeSidebar: NSViewControllerRepresentable {
 
         var body: some View {
             Sidebar(browser: browser, prefs: prefs, showing: !browser.folded)
-                .overlay(alignment: .trailing) {
-                    ResizeGrip(prefs: prefs, edge: .leading) { browser.toggleFold() }
+                // On the edge the page is beside: the right one, or the left on the right.
+                .overlay(alignment: prefs.sideRight ? .leading : .trailing) {
+                    ResizeGrip(prefs: prefs, edge: .leading, mirrored: prefs.sideRight) { browser.toggleFold() }
                         .frame(width: ResizeGrip.width)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)

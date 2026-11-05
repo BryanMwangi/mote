@@ -201,6 +201,10 @@ struct TabSettings: View {
         SettingsSection {
             if prefs.sidebar {
                 SettingRow(
+                    "Sidebar on the right", "The tabs on the window's right side, as Zen can; the traffic lights stay on the left",
+                    symbol: "sidebar.right", tint: Tint.indigo, keywords: ["right side", "position"], on: $prefs.sideRight)
+                RowRule()
+                SettingRow(
                     "Tuck the sidebar away",
                     "The page takes the whole window; reach the left edge and your tabs slide out. ⌘S does it by hand",
                     symbol: "sidebar.left", tint: Tint.blue, on: $prefs.sideHides)

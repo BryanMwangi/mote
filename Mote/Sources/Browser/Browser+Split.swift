@@ -181,7 +181,8 @@ extension Browser {
             prefs.sidebar
             ? (folded ? (peeking ? prefs.sideWidth + ChromeLayout.gap * 2 : 0) : prefs.sideWidth)
             : (folded && !peeking ? 0 : ChromeLayout.strip)
-        let along = prefs.sidebar ? inWindow.x : content.bounds.height - inWindow.y
+        let along =
+            prefs.sidebar ? (prefs.sideRight ? content.bounds.width - inWindow.x : inWindow.x) : content.bounds.height - inWindow.y
         guard stage.bounds.contains(point), along >= reach + slop else {
             if splitHover != nil { splitHover = nil }
             return .list

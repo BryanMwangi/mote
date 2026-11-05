@@ -35,8 +35,9 @@ struct SidebarFold: View {
             // Kept built while folded, out past the window's edge: a peek only
             // slides it in, rather than building every row each time.
             if folding, prefs.sidebar {
-                SlidingPanel(out: browser.peeking, width: prefs.sideWidth + ChromeLayout.gap * 2) {
-                    floatingSidebar.padding(ChromeLayout.gap).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                SlidingPanel(out: browser.peeking, width: prefs.sideWidth + ChromeLayout.gap * 2, right: prefs.sideRight) {
+                    floatingSidebar.padding(ChromeLayout.gap)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: prefs.sideRight ? .topTrailing : .topLeading)
                 }
             }
         }
@@ -89,10 +90,10 @@ struct SidebarFold: View {
             .clipShape(shape)
             .overlay(shape.strokeBorder(Palette.ink.opacity(0.12)))
             // Straddling the edge; the width it sets is the docked sidebar's too.
-            .overlay(alignment: .trailing) {
-                ResizeGrip(prefs: prefs) {}
+            .overlay(alignment: prefs.sideRight ? .leading : .trailing) {
+                ResizeGrip(prefs: prefs, mirrored: prefs.sideRight) {}
                     .frame(width: ResizeGrip.width)
-                    .offset(x: ResizeGrip.width / 2)
+                    .offset(x: (prefs.sideRight ? -1 : 1) * ResizeGrip.width / 2)
             }
             .background {
                 shape.fill(Palette.frame)
@@ -120,8 +121,8 @@ struct SidebarFold: View {
         let point = window.convertPoint(fromScreen: screen)
         let size = window.frame.size
         let inWindow = point.x >= 0 && point.x < size.width && point.y >= 0 && point.y < size.height
-        // From the left edge for the sidebar, from the top for the strip.
-        let distance = prefs.sidebar ? point.x : size.height - point.y
+        // From the sidebar's edge, left or right, or from the top for the strip.
+        let distance = prefs.sidebar ? (prefs.sideRight ? size.width - point.x : point.x) : size.height - point.y
         // Other apps' windows on top don't count; Mote's own (a menu from the
         // sidebar) do. The hit test is costly, so it runs only while out or at the edge.
         let near = browser.peeking || (inWindow && distance < EdgeReveal.edge)
@@ -175,11 +176,14 @@ private struct SlidingPanel: FillsRoom {
     let out: Bool
     /// The panel's own; past it there's room for its shadow.
     let width: CGFloat
+    /// From the window's right edge, for a sidebar on the right.
+    let right: Bool
     let content: AnyView
 
-    init(out: Bool, width: CGFloat, @ViewBuilder content: () -> some View) {
+    init(out: Bool, width: CGFloat, right: Bool = false, @ViewBuilder content: () -> some View) {
         self.out = out
         self.width = width
+        self.right = right
         self.content = AnyView(content())
     }
 
@@ -187,6 +191,7 @@ private struct SlidingPanel: FillsRoom {
 
     func updateNSView(_ holder: Holder, context: Context) {
         holder.panel.rootView = content
+        holder.right = right
         holder.slide(out: out, width: width)
     }
 
@@ -194,6 +199,7 @@ private struct SlidingPanel: FillsRoom {
         let panel: NSHostingView<AnyView>
         private var out: Bool
         private var width: CGFloat
+        var right = false
         /// Room for the shadow and the resize grip beside the panel.
         private static var margin: CGFloat { 60 }
 
@@ -217,7 +223,9 @@ private struct SlidingPanel: FillsRoom {
         /// Only the panel takes clicks, and only while out; past its edge,
         /// in the room for its shadow, they go through to the page.
         override func hitTest(_ point: NSPoint) -> NSView? {
-            guard out, convert(point, from: superview).x < width + ResizeGrip.width / 2 else { return nil }
+            let x = convert(point, from: superview).x
+            let inPanel = right ? x > bounds.width - width - ResizeGrip.width / 2 : x < width + ResizeGrip.width / 2
+            guard out, inPanel else { return nil }
             let hit = super.hitTest(point)
             return hit === self ? nil : hit
         }
@@ -229,6 +237,7 @@ private struct SlidingPanel: FillsRoom {
 
         private func place(_ out: Bool) -> NSRect {
             let span = width + Self.margin
+            if right { return NSRect(x: out ? bounds.width - span : bounds.width, y: 0, width: span, height: bounds.height) }
             return NSRect(x: out ? 0 : -span, y: 0, width: span, height: bounds.height)
         }
 

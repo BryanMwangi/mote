@@ -61,7 +61,8 @@ struct Sidebar: View {
         .frame(width: prefs.sideWidth)
         .frame(maxHeight: .infinity)
         .overlay(alignment: .topLeading) {
-            TrafficLights(showing: showing, inset: browser.folded ? ChromeLayout.gap : 0)
+            // On the right, the lights stay at the window's top left (see ChromeDetail).
+            TrafficLights(showing: showing && !prefs.sideRight, inset: browser.folded ? ChromeLayout.gap : 0)
                 .frame(width: Metrics.lights, height: Self.top)
         }
         // With the toolbar hidden, its sidebar button and back, forward and

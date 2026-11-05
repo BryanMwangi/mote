@@ -118,6 +118,8 @@ final class Preferences: ObservableObject {
     // Tabs and video
     /// Tabs idle for half an hour let their page go and keep their place.
     @Published var sleepsTabs: Bool
+    /// The sidebar on the window's right, as Zen's option.
+    @Published var sideRight: Bool
     /// Zen's small tab settings: ⌃⇥ passes over essentials and sleeping tabs;
     /// Back on a tab with nowhere to go closes it for the tab that opened it;
     /// closing a tab goes to the one used before it rather than its neighbour.
@@ -197,6 +199,7 @@ final class Preferences: ObservableObject {
         littleLinks = store.value("links.little", or: false)
         showsLinks = store.value("links.show", or: false)
         sleepsTabs = store.value("tabs.sleep", or: true)
+        sideRight = store.value("sidebar.right", or: false)
         stepSkipsEssentials = store.value("tabs.step.skipsEssentials", or: false)
         stepSkipsSleeping = store.value("tabs.step.skipsSleeping", or: false)
         backCloses = store.value("tabs.backCloses", or: true)
@@ -275,6 +278,7 @@ final class Preferences: ObservableObject {
         keep($littleLinks, "links.little")
         keep($showsLinks, "links.show") { HoveredLink.on = $0 }
         keep($sleepsTabs, "tabs.sleep")
+        keep($sideRight, "sidebar.right")
         keep($stepSkipsEssentials, "tabs.step.skipsEssentials")
         keep($stepSkipsSleeping, "tabs.step.skipsSleeping")
         keep($backCloses, "tabs.backCloses")
