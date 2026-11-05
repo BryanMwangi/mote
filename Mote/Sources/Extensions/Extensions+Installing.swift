@@ -286,13 +286,6 @@ extension Extensions {
         }
     }
 
-    func setPinned(_ id: String, _ on: Bool) {
-        guard let at = index(of: id) else { return }
-        installed[at].pinned = on
-        save()
-        actionsChanged += 1
-    }
-
     func openOptions(_ id: String) {
         guard let page = contexts[id]?.optionsPageURL else { return }
         browser?.open(page, foreground: true)

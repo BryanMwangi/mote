@@ -54,7 +54,7 @@ struct Toolbar: View {
                 } else {
                     Spacer(minLength: 0)
                 }
-                ExtensionSlot()
+                PageButton(browser: browser)
                 // Beside a sidebar, bookmarks live at its foot instead (see Sidebar).
                 if !prefs.sidebar {
                     Door(icon: "bookmark", help: "Bookmarks") { browser.bookmarksOpen.toggle() }

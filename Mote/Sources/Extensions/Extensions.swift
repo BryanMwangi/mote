@@ -49,8 +49,6 @@ final class Extensions: NSObject, ObservableObject {
     var tabWatches: [Tab.ID: [AnyCancellable]] = [:]
     /// The toolbar views popups hang from, by extension id or `menuAnchor`.
     var anchors: [String: [WeakView]] = [:]
-    /// The puzzle button's menu is open.
-    @Published var menuOpen = false
 
     // Keeping extensions alive (below) and installs in flight.
     var restarts = Cooldown(60)

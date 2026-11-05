@@ -172,8 +172,6 @@ private struct ExtensionRow: View {
     }
 
     @ViewBuilder private var actions: some View {
-        let pinned = item.pinned ?? false
-        Quick(pinned ? "Unpin" : "Pin") { extensions.setPinned(item.id, !pinned) }
         if hasNewTabPage {
             Quick(inNewTabs ? "Not in New Tabs" : "In New Tabs") { extensions.setShowsInNewTabs(item.id, !inNewTabs) }
         }

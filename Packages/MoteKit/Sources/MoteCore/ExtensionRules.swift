@@ -11,15 +11,13 @@ public struct InstalledExtension: Codable, Identifiable, Equatable, Sendable {
     /// What it was allowed at install (see `ExtensionRules.grants`); an
     /// update wanting more asks again.
     public var permissions: [String]
-    /// Its button shows in the toolbar. Missing in older files.
-    public var pinned: Bool?
     /// The folder an unpacked extension came from, copied again on reload.
     public var source: String?
     /// Its slug on addons.mozilla.org, for a Firefox add-on from there.
     public var firefox: String?
 
     public init(
-        id: String, name: String, version: String, enabled: Bool = true, fromStore: Bool, permissions: [String], pinned: Bool? = nil,
+        id: String, name: String, version: String, enabled: Bool = true, fromStore: Bool, permissions: [String],
         source: String? = nil, firefox: String? = nil
     ) {
         self.id = id
@@ -28,7 +26,6 @@ public struct InstalledExtension: Codable, Identifiable, Equatable, Sendable {
         self.enabled = enabled
         self.fromStore = fromStore
         self.permissions = permissions
-        self.pinned = pinned
         self.source = source
         self.firefox = firefox
     }

@@ -7,15 +7,16 @@ import Testing
 struct ExtensionRulesTests {
     @Test("Records read and write the same JSON as before, old files included")
     func record() throws {
-        let old = #"[{"id":"abc","name":"A","version":"1.0","enabled":true,"fromStore":true,"permissions":["tabs"]}]"#
+        // Files from before pinning went still carry it.
+        let old = #"[{"id":"abc","name":"A","version":"1.0","enabled":true,"fromStore":true,"permissions":["tabs"],"pinned":true}]"#
         let read = try JSONDecoder().decode([InstalledExtension].self, from: Data(old.utf8))
         #expect(read == [InstalledExtension(id: "abc", name: "A", version: "1.0", fromStore: true, permissions: ["tabs"])])
         let keys =
             try JSONSerialization.jsonObject(
                 with: JSONEncoder().encode(
-                    InstalledExtension(id: "x", name: "X", version: "2", fromStore: false, permissions: [], pinned: true, source: "/a"))
+                    InstalledExtension(id: "x", name: "X", version: "2", fromStore: false, permissions: [], source: "/a"))
             ) as? [String: Any]
-        #expect(keys?.keys.sorted() == ["enabled", "fromStore", "id", "name", "permissions", "pinned", "source", "version"])
+        #expect(keys?.keys.sorted() == ["enabled", "fromStore", "id", "name", "permissions", "source", "version"])
         let local = InstalledExtension.localID(from: UUID(uuidString: "ABCDEF12-0000-0000-0000-000000000000")!)
         #expect(local == "local-abcdef12")
     }

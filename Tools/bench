@@ -77,10 +77,9 @@ COMMANDS = {
     "ext-popup": ("id js", "run JavaScript in its popup while it's open"),
     "ext-shot": ("id path:path", "a picture of its popup while it's open"),
     "ext-reload": ("id", "load it again (a folder one is copied in afresh)"),
-    "ext-pin": ("id [on|off]", "keep its button in the toolbar, or not"),
     "ext-enable": ("id on|off", "switch it on or off"),
     "ext-remove": ("id", "remove it"),
-    "ext-menu": ("path:path", "the puzzle button's menu, drawn to a PNG"),
+    "ext-menu": ("path:path", "the page panel, drawn to a PNG"),
     "ext-answer": ("yes|no|ask", "test run: answer extensions' questions without asking; lists what was asked"),
 }
 
@@ -278,7 +277,6 @@ READERS = {
     "field": read_words("field", ("text",), ("type", "go")),
     "bookmark": read_words("bookmark", ("url",), ("new",)),
     "menu": read_words("menu", (), ("open",)),
-    "ext-pin": read_switch("ext-pin", needed=False),
     "ext-enable": read_switch("ext-enable", needed=True),
     "pages": read_switch("pages", needed=True),
     "frames": read_frames,

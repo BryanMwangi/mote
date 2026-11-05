@@ -2,6 +2,11 @@ import AppKit
 import MoteCore
 import WebKit
 
+extension Browser {
+    /// Take Screenshot, from the page panel and the keys.
+    func startScreenshot() { active?.screenshot() }
+}
+
 /// Pictures of the page, as Firefox's screenshots take them: what shows, or
 /// the whole page top to bottom; saved to the downloads folder or copied.
 extension Tab {

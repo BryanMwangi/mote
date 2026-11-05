@@ -8,7 +8,7 @@ import WebKit
 extension Bench {
     var extensionCommands: [String: Command] {
         let verbs = [
-            "extensions", "ext-add", "ext-folder", "ext-press", "ext-remove", "ext-reload", "ext-page", "ext-popup", "ext-menu", "ext-pin",
+            "extensions", "ext-add", "ext-folder", "ext-press", "ext-remove", "ext-reload", "ext-page", "ext-popup", "ext-menu",
             "ext-shot",
             "ext-answer", "ext-enable",
         ]
@@ -48,9 +48,6 @@ private enum BenchExtensions {
         case "ext-enable":
             extensions.setEnabled(id, on)
             call.answer(["enabled": on])
-        case "ext-pin":
-            extensions.setPinned(id, on)
-            call.answer(["pinned": on])
         case "ext-reload":
             extensions.reload(id)
             call.answer(["reloading": true])
@@ -95,7 +92,6 @@ private enum BenchExtensions {
             "base": context?.baseURL.absoluteString ?? "", "errors": (context?.readErrors ?? []).map(explain),
             "reported": extensions.errors[item.id] ?? [],
             "action": action?.label ?? "", "badge": action?.badgeText ?? "", "popup": action?.presentsPopup ?? false,
-            "pinned": item.pinned ?? false,
             "source": item.source ?? "",
         ]
     }
@@ -117,9 +113,9 @@ private enum BenchExtensions {
         call.answer(["answer": said ?? "ask", "asked": extensions.asked])
     }
 
-    /// The puzzle button's menu, drawn to a PNG.
+    /// The page panel, drawn to a PNG.
     private static func menu(_ call: BenchCall) {
-        guard let path = call.request.string("path"), let picture = extensionMenuPicture() else {
+        guard let path = call.request.string("path"), let picture = pagePanelPicture(call.browser) else {
             return call.fail("ext-menu needs a path")
         }
         do {

@@ -14,10 +14,9 @@ extension Extensions {
         let icon: NSImage?
         let badge: String
         let enabled: Bool
-        let pinned: Bool
     }
 
-    /// Where popups of extensions not in the toolbar hang from: the puzzle button.
+    /// Where extensions' popups hang from: the page button (PagePanel.swift).
     static let menuAnchor = "__menu"
 
     /// The running extensions' buttons, in the order they were installed.
@@ -28,8 +27,7 @@ extension Extensions {
             guard let action = contexts[item.id]?.action(for: tab) else { return nil }
             return Button(
                 id: item.id, name: item.name, label: action.label.isEmpty ? item.name : action.label,
-                icon: action.icon(for: CGSize(width: 16, height: 16)), badge: action.badgeText, enabled: action.isEnabled,
-                pinned: item.pinned ?? false)
+                icon: action.icon(for: CGSize(width: 16, height: 16)), badge: action.badgeText, enabled: action.isEnabled)
         }
     }
 
