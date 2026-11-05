@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import MoteCore
 import SwiftUI
 
@@ -8,8 +9,16 @@ import SwiftUI
 struct SpaceGround: View {
     let theme: SpaceTheme?
     let space: UUID
+    /// A drag in the theme editor shows here alone, frame by frame.
+    @ObservedObject private var drafts = ThemeDrafts.shared
+
+    init(theme: SpaceTheme?, space: UUID) {
+        self.theme = theme
+        self.space = space
+    }
 
     var body: some View {
+        let theme = drafts.bySpace[space] ?? theme
         ZStack {
             if let theme, !theme.colors.isEmpty {
                 LinearGradient(colors: theme.colors.compactMap(Color.init(hex:)), startPoint: .topLeading, endPoint: .bottomTrailing)
@@ -57,10 +66,16 @@ struct ThemeEditor: View {
     @ObservedObject var browser: Browser
     let space: UUID
 
+    @ObservedObject private var drafts = ThemeDrafts.shared
     @State private var harmony: ThemeColors.Harmony?
     @State private var page = 0
 
-    private var theme: SpaceTheme? { browser.spaces.first { $0.id == space }?.theme }
+    init(browser: Browser, space: UUID) {
+        self.browser = browser
+        self.space = space
+    }
+
+    private var theme: SpaceTheme? { drafts.bySpace[space] ?? browser.spaces.first { $0.id == space }?.theme }
     private var colors: [String] { theme?.colors ?? [] }
 
     var body: some View {
@@ -72,8 +87,11 @@ struct ThemeEditor: View {
                 scheme(.light, "sun.max", "Light")
                 scheme(.dark, "moon", "Dark")
                 Spacer()
-                // Level with the close button, so the three sit in the middle.
-                Color.clear.frame(width: Metrics.button, height: 1)
+                Door(icon: "dice", help: "Shuffle: a swatch at random") {
+                    let swatch = SpaceTheme.swatches.randomElement()!
+                    harmony = swatch.dots == 3 ? .analogous : nil
+                    set(swatch.colors, saving: true) { $0.colors = $1 }
+                }
             }
             .background(DragHandle())
             ThemeField(colors: colors, harmony: harmony) { set($0, saving: $1) { $0.colors = $1 } }
@@ -91,8 +109,8 @@ struct ThemeEditor: View {
                         $0.opacity = value; _ = $1
                     }
                 }
-                GrainDial(value: theme?.grain ?? 0) { value in
-                    set(colors, saving: true) {
+                GrainDial(value: theme?.grain ?? 0) { value, done in
+                    set(colors, saving: done) {
                         $0.grain = value; _ = $1
                     }
                 }
@@ -111,15 +129,22 @@ struct ThemeEditor: View {
     }
 
     private var swatches: some View {
-        let pages = SpaceTheme.swatches.count / 8
-        return HStack(spacing: 6) {
+        let pages = SpaceTheme.swatches.count / 9
+        return HStack(spacing: 4) {
             Door(icon: "chevron.left", help: "") { page = (page + pages - 1) % pages }
-            ForEach(SpaceTheme.swatches[page * 8..<page * 8 + 8], id: \.self) { hex in
+            ForEach(SpaceTheme.swatches[page * 9..<page * 9 + 9], id: \.self) { swatch in
                 Button {
-                    harmony = nil
-                    set([hex], saving: true) { $0.colors = $1 }
+                    harmony = swatch.dots == 3 ? .analogous : nil
+                    set(swatch.colors, saving: true) { $0.colors = $1 }
                 } label: {
-                    Circle().fill(Color(hex: hex) ?? .gray).frame(width: 24, height: 24).overlay(Circle().strokeBorder(Palette.edge))
+                    // Three dots show as their gradient.
+                    Circle()
+                        .fill(
+                            LinearGradient(
+                                colors: swatch.colors.compactMap(Color.init(hex:)), startPoint: .topLeading, endPoint: .bottomTrailing)
+                        )
+                        .frame(width: 21, height: 21)
+                        .overlay(Circle().strokeBorder(Palette.edge))
                 }
                 .buttonStyle(.plain)
             }
@@ -151,7 +176,11 @@ struct ThemeEditor: View {
         let kept =
             next.colors.isEmpty && next.scheme == nil
             ? nil : SpaceTheme(colors: next.colors, opacity: next.opacity, grain: next.grain, scheme: next.scheme)
-        browser.setSpaceTheme(space, to: kept, saving: saving)
+        // Mid-drag, only the backdrop and this panel follow; the space itself
+        // changes (and every window with it) once the drag ends.
+        guard saving else { return drafts.bySpace[space] = kept ?? SpaceTheme(colors: []) }
+        browser.setSpaceTheme(space, to: kept)
+        drafts.bySpace[space] = nil
     }
 }
 
@@ -162,6 +191,7 @@ struct ThemeField: View {
     let harmony: ThemeColors.Harmony?
     var limit = 3
     var side: CGFloat = 268
+    @State private var dragging = false
     /// The new colours, and whether the change is done (a drag let go).
     let change: ([String], Bool) -> Void
 
@@ -188,10 +218,19 @@ struct ThemeField: View {
                     .position(place(ThemeColors.point(for: hex)))
                     .gesture(
                         DragGesture(coordinateSpace: .named("field"))
-                            .onChanged { change(moved(index, to: $0.location), false) }
-                            .onEnded { change(moved(index, to: $0.location), true) })
+                            .onChanged {
+                                dragging = true
+                                change(moved(index, to: $0.location), false)
+                            }
+                            .onEnded {
+                                change(moved(index, to: $0.location), true)
+                                dragging = false
+                            })
             }
         }
+        // Set by a swatch, shuffle or harmony, the dots spring to their places,
+        // as Zen's do; dragged, they keep to the pointer.
+        .animation(dragging ? nil : .spring(response: 0.5, dampingFraction: 0.58), value: colors)
         .frame(width: side, height: side)
         .coordinateSpace(name: "field")
         .contentShape(Rectangle())
@@ -271,10 +310,13 @@ private struct WaveSlider: View {
     }
 }
 
-/// Grain on a dial: a click steps it round, a drag turns it.
+/// Grain on a dial: a click steps it round, a drag up or right turns it up.
 private struct GrainDial: View {
     let value: Double
-    let change: (Double) -> Void
+    /// The new value, and whether the drag is done.
+    let change: (Double, Bool) -> Void
+    /// Where it was when the drag began.
+    @State private var from: Double?
 
     var body: some View {
         ZStack {
@@ -287,8 +329,36 @@ private struct GrainDial: View {
         }
         .frame(width: 68, height: 68)
         .contentShape(Circle())
-        .onTapGesture { change(value >= 1 ? 0 : min(1, (value * 4).rounded(.down) / 4 + 0.25)) }
-        .gesture(DragGesture().onEnded { change(min(max(value + Double($0.translation.width - $0.translation.height) / 120, 0), 1)) })
+        .gesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { drag in
+                    let start = from ?? value
+                    from = start
+                    change(turned(start, by: drag.translation), false)
+                }
+                .onEnded { drag in
+                    let start = from ?? value
+                    from = nil
+                    // Barely moved: a click, a step round.
+                    if abs(drag.translation.width) + abs(drag.translation.height) < 3 {
+                        change(start >= 1 ? 0 : min(1, (start * 4).rounded(.down) / 4 + 0.25), true)
+                    } else {
+                        change(turned(start, by: drag.translation), true)
+                    }
+                }
+        )
         .help("Grain")
     }
+
+    private func turned(_ start: Double, by travel: CGSize) -> Double {
+        min(max(start + Double(travel.width - travel.height) / 140, 0), 1)
+    }
+}
+
+/// The theme being dragged in the editor, by space, before it's kept: only
+/// the backdrop and the editor watch it, so a drag redraws nothing else.
+@MainActor
+final class ThemeDrafts: ObservableObject {
+    static let shared = ThemeDrafts()
+    @Published var bySpace: [UUID: SpaceTheme] = [:]
 }

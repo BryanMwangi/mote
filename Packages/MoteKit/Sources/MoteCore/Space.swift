@@ -142,11 +142,25 @@ public struct SpaceTheme: Codable, Equatable, Sendable {
             scheme: try values.decodeIfPresent(Scheme.self, forKey: .scheme))
     }
 
-    /// Single colours to start from, a page of eight at a time, as Zen's swatches.
-    public static let swatches = [
-        "#f3eedd", "#e8bcd0", "#e3c6e6", "#c97a82", "#e38a6f", "#d9cb83", "#86e8b4", "#8f9bb8",
-        "#7c5cff", "#2bb3ff", "#38e0b0", "#ff8a3d", "#ffd23f", "#2f9e44", "#e03131", "#495057",
-    ]
+    /// Zen's swatches, a page of nine at a time: vivid, pale and deep, each
+    /// as one colour and then as three around it (Zen's theme-picker.inc).
+    public static let swatches: [Swatch] = {
+        let vivid = ["#f2eae4", "#f29bbb", "#a6729d", "#f25e6b", "#ff8558", "#f8d558", "#34e895", "#6cbad9", "#666789"]
+        let pale = ["#fefbfa", "#ffe9f3", "#f1d1ec", "#ffcbd1", "#ffe0d3", "#fff9e5", "#defdeb", "#dcf3fc", "#c5c6e5"]
+        let deep = ["#4e3a5a", "#693558", "#8f4042", "#b16d40", "#d7b35d", "#cdcca4", "#7aa982", "#226149", "#26456b"]
+        return [vivid, pale, deep].flatMap { page in page.map { Swatch(hex: $0, dots: 1) } + page.map { Swatch(hex: $0, dots: 3) } }
+    }()
+
+    /// A swatch: a colour, alone or with two more around it.
+    public struct Swatch: Hashable, Sendable {
+        public let hex: String
+        public let dots: Int
+
+        /// The theme's colours for it.
+        public var colors: [String] {
+            dots == 1 ? [hex] : [hex] + ThemeColors.others(.analogous, from: ThemeColors.point(for: hex)).map(ThemeColors.hex(at:))
+        }
+    }
 
     /// A few to start from, as Zen's picker offers.
     public static let presets: [SpaceTheme] = [
