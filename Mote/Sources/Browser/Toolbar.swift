@@ -50,6 +50,7 @@ struct Toolbar: View {
                     AddressBar(browser: browser, prefs: prefs)
                         .padding(.horizontal, 6)
                         .layoutPriority(1)
+                    if let tab = browser.active { TranslateButton(browser: browser, tab: tab) }
                 } else {
                     Spacer(minLength: 0)
                 }
@@ -329,5 +330,22 @@ struct Pressed: ButtonStyle {
         configuration.label
             .scaleEffect(configuration.isPressed ? 0.9 : 1)
             .animation(Motion.press, value: configuration.isPressed)
+    }
+}
+
+/// Translate this page, shown only for a page in a language you don't read,
+/// or one already translated (see Translate.swift).
+private struct TranslateButton: View {
+    let browser: Browser
+    @ObservedObject var tab: Tab
+
+    var body: some View {
+        if tab.pageLanguage != nil || tab.translated {
+            let name = tab.pageLanguage.flatMap { Locale.current.localizedString(forLanguageCode: $0) } ?? "another language"
+            Door(icon: "translate", on: tab.translated, help: tab.translated ? "Show Original" : "Translate this page from \(name)") {
+                browser.toggleTranslation(tab)
+            }
+            .transition(.opacity)
+        }
     }
 }

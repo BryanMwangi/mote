@@ -106,6 +106,8 @@ final class Preferences: ObservableObject {
     /// Option-click (or shift-click) previews a link over the page (see LinkPeek.swift).
     @Published var peeksLinks: Bool
     @Published var peekClick: PeekClick
+    /// A page in a language you don't read offers to translate (Translate.swift).
+    @Published var offersTranslation: Bool
     /// The user's keys over Mote's (Settings › Keyboard).
     @Published var shortcuts: Shortcuts
     /// Links from other apps open in a small window (see LinkWindow.swift).
@@ -190,6 +192,7 @@ final class Preferences: ObservableObject {
         fastPages = store.value("pages.120", or: false)
         peeksLinks = store.value("links.peek", or: true)
         peekClick = store.value("links.peekClick", or: .option)
+        offersTranslation = store.value("pages.translate", or: true)
         shortcuts = store.value("keys.custom", or: Shortcuts())
         littleLinks = store.value("links.little", or: false)
         showsLinks = store.value("links.show", or: false)
@@ -260,6 +263,7 @@ final class Preferences: ObservableObject {
         keep($fastPages, "pages.120") { FrameRate.fast = $0 }
         keep($peeksLinks, "links.peek")
         keep($peekClick, "links.peekClick")
+        keep($offersTranslation, "pages.translate")
         keep($shortcuts, "keys.custom") { _ in
             // SwiftUI rebuilds a menu only as it opens, so a menu not opened
             // since would keep answering to the old key. Ask each to rebuild

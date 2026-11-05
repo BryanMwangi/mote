@@ -74,6 +74,13 @@ struct GeneralSettings: View {
             }
         }
 
+        SettingsSection("Pages") {
+            SettingRow(
+                "Offer to translate pages",
+                "A page in a language you don't read shows a translate button beside its address. Off if you'd rather use an extension",
+                symbol: "translate", tint: Tint.blue, keywords: ["translation", "language"], on: $prefs.offersTranslation)
+        }
+
         SettingsSection("Links") {
             SettingRow(
                 "Preview links", "\(prefs.peekClick.title) a link to see it over the page; keep it as a tab if you like it",

@@ -84,6 +84,7 @@ struct ContentView: View {
             // A window opened since the main one takes its tabs with it.
             .onDisappear { Windows.shared.closed(browser) }
             .focusedSceneObject(browser)
+            .background(TranslationHost(browser: browser))
     }
 
     @ViewBuilder

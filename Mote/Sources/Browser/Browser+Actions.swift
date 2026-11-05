@@ -112,6 +112,9 @@ extension Browser {
                 QuickAction(id: "split", title: "New Split") { [weak self] in self?.newSplit() },
                 QuickAction(id: "others", title: "Close Other Tabs") { [weak self] in self?.closeOthers(but: tab) },
                 QuickAction(id: "route", title: "Always Open in This Space") { [weak self] in self?.alwaysOpenHere(tab) },
+                QuickAction(id: "translate", title: tab.translated ? "Show Original" : "Translate Page") { [weak self] in
+                    self?.toggleTranslation(tab)
+                },
             ]
         }
         actions.append(QuickAction(id: "folder", title: "New Folder") { [weak self] in self?.newFolder() })

@@ -65,6 +65,8 @@ final class Browser: NSObject, ObservableObject {
     @Published var showingProcesses = false
     /// The space whose colours are being chosen (see SpaceThemePanel).
     @Published var themingSpace: UUID?
+    /// A page waiting for a translation session (see Translate.swift).
+    @Published var translating: TranslationJob?
     /// The chat about the active page is docked on the window's trailing edge,
     /// the mirror of the sidebar (its width lives in `Preferences.chatWidth`).
     /// Whether it is open belongs to the tab, not the window (`Tab.chatOpen`),

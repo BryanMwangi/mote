@@ -30,7 +30,8 @@ extension Bench {
             "peeking": browser.peeking, "toolbarMode": browser.prefs.toolbarMode.rawValue, "peekClick": browser.prefs.peekClick.rawValue,
             "spaceIndex": browser.spaces.firstIndex { $0.id == browser.spaceID } ?? -1,
             "settingsQuery": SettingsSearch.shared.query, "settingsFocusAsked": SettingsSearch.shared.focusAsked,
-            "finding": browser.finder.showing, "asking": browser.field.asksAssistant,
+            "finding": browser.finder.showing, "asking": browser.field.asksAssistant, "pageLanguage": browser.active?.pageLanguage ?? "",
+            "translated": browser.active?.translated ?? false,
             "folders": browser.folders.map { folder in
                 [folder.name, folder.collapsed ? "closed" : "open", browser.folders.first { $0.id == folder.parent }?.name ?? ""]
             },
@@ -179,6 +180,7 @@ extension Bench {
             let preset = Int(what).flatMap { SpaceTheme.presets.indices.contains($0) ? SpaceTheme.presets[$0] : nil }
             browser.setSpaceTheme(browser.spaceID, to: preset.map { SpaceTheme(colors: $0.colors, opacity: $0.opacity, grain: true) })
         }
+        if request.flag("translate"), let tab = browser.active { browser.toggleTranslation(tab) }
         if let query = request.string("settingsquery") { SettingsSearch.shared.query = query == "-" ? "" : query }
         // A command given a key (test runs): ID=cmd+e, ID=none, or reset.
         if Storage.testing, let what = request.string("shortcut") {

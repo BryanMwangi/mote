@@ -207,6 +207,7 @@ extension Browser: WKNavigationDelegate, WKUIDelegate {
         // The icon is fetched even when icons are hidden; they may be turned on later.
         Favicons.shared.fetch(for: tab)
         if !tab.shy, !tab.bench { history.record(url, title: tab.title) }
+        noteLanguage(of: tab)
     }
 
     func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
