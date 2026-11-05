@@ -265,6 +265,7 @@ extension Bench {
         // Responsive Design Mode for the tab in front: a preset's name, or off.
         if let name = request.string("device") { browser.active?.device = DeviceList.shared.device(named: name) }
         if let on = request.bool("extensions") { NotificationCenter.default.post(name: PageButton.ask, object: on) }
+        if let on = request.bool("appmenu") { NotificationCenter.default.post(name: AppMenuButton.ask, object: on) }
         call.answer(["ok": true])
     }
 

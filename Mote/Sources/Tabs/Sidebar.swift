@@ -78,6 +78,7 @@ struct Sidebar: View {
                         }
                     }
                     Helm(browser: browser)
+                    AppMenuButton(browser: browser)
                 }
                 .controlSize(prefs.sideWidth >= 260 ? .large : .regular)
                 .padding(.trailing, 8)

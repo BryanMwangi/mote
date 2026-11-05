@@ -69,6 +69,7 @@ struct Toolbar: View {
                     .disabled(!browser.pageChatPossible)
                     .opacity(browser.pageChatPossible ? 1 : 0.3)
                 }
+                AppMenuButton(browser: browser)
             }
             .padding(.horizontal, 6)
             // Room for the traffic lights, which stay at the window's top left.
