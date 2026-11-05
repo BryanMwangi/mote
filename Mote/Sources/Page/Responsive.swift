@@ -90,28 +90,6 @@ extension Tab {
         web.touchScrolls = device?.touch == true
         web.customUserAgent = device?.userAgent ?? ""
     }
-
-    /// A picture of what the page shows (at the device's width in
-    /// Responsive Design Mode), into the downloads folder.
-    func screenshot() {
-        guard let web = built, let browser = owner as? Browser else { return }
-        let shot = WKSnapshotConfiguration()
-        var name = "\(label) – screenshot.png"
-        if let device {
-            shot.snapshotWidth = NSNumber(value: Double(device.width))
-            name = "\(label) – \(device.name) \(Int(device.width))×\(Int(device.height)).png"
-        }
-        let file = browser.downloadsFolder.appendingPathComponent(name.replacingOccurrences(of: "/", with: "-"))
-        web.takeSnapshot(with: shot) { image, _ in
-            MainActor.assumeIsolated {
-                guard let image, let tiff = image.tiffRepresentation,
-                    let png = NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:]),
-                    (try? png.write(to: file)) != nil
-                else { return browser.announce("The screenshot couldn't be saved") }
-                browser.announce("Screenshot saved to \(browser.downloadsFolder.lastPathComponent)")
-            }
-        }
-    }
 }
 
 /// Above the page in Responsive Design Mode, as Firefox's: the device, its

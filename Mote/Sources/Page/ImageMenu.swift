@@ -46,7 +46,7 @@ extension Browser {
             .separator(),
             ActionItem("Set Image as Desktop Background") { [weak self] in self?.setDesktop(to: image, on: window.screen) },
             .separator(),
-            ActionItem("Take Screenshot") { tab.screenshot() },
+            tab.screenshotItem(),
             ActionItem("Ask about This Page") { [weak self] in if self?.chatting == false { self?.togglePageChat() } },
         ]
         // Extensions' items go last, as on the page's own menu.

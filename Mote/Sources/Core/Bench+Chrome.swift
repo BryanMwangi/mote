@@ -135,6 +135,10 @@ extension Bench {
         if Storage.testing, let id = request.string("source"), let found = tab(id) { browser.viewSource(of: found) }
         // An essential or pinned tab back to its pinned page; the click that previews.
         if Storage.testing, let id = request.string("home"), let found = tab(id) { browser.goHome(found) }
+        // A screenshot of the tab in front (test runs): visible, whole, or copy.
+        if Storage.testing, let shot = request.string("screenshot") {
+            browser.active?.screenshot(shot == "whole" ? .wholePage : .visible, copy: shot == "copy")
+        }
         if let query = request.string("settingsquery") { SettingsSearch.shared.query = query == "-" ? "" : query }
         // A command given a key (test runs): ID=cmd+e, ID=none, or reset.
         if Storage.testing, let what = request.string("shortcut") {

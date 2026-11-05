@@ -72,6 +72,8 @@ private struct MenuBar: Commands {
             Button("Save Page As…", action: browser.savePage).keyboardShortcut(keys(.savePage)).disabled(blank)
             Button("Take Screenshot") { browser.active?.screenshot() }.keyboardShortcut(keys(.screenshot))
                 .disabled(blank)
+            Button("Take Screenshot of Whole Page") { browser.active?.screenshot(.wholePage) }.disabled(blank)
+            Button("Copy Screenshot") { browser.active?.screenshot(copy: true) }.disabled(blank)
             Button("Print…", action: browser.printPage).keyboardShortcut(keys(.print)).disabled(blank)
         }
         CommandGroup(after: .pasteboard) {

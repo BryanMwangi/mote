@@ -197,7 +197,7 @@ final class PageView: WKWebView {
             ActionItem("Save Page As…") { browser.savePage() },
             NSMenuItem(title: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: ""),
             .separator(),
-            ActionItem("Take Screenshot") { tab.screenshot() },
+            tab.screenshotItem(),
             ActionItem("Ask about This Page") { if !browser.chatting { browser.togglePageChat() } },
             .separator(),
             ActionItem("View Page Source") { browser.viewSource(of: tab) },
