@@ -9,6 +9,8 @@ public struct Folder: Codable, Identifiable, Equatable, Sendable {
     public var parent: UUID?
     /// What a live folder follows; nil for a folder of tabs.
     public var live: LiveSource?
+    /// An emoji of its own, as Zen's folders can have; nil for the folder symbol.
+    public var icon: String?
 
     public init(id: UUID = UUID(), name: String, parent: UUID? = nil, live: LiveSource? = nil) {
         self.id = id

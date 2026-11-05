@@ -723,10 +723,16 @@ private struct FolderRow: View {
                 .foregroundStyle(Palette.muted)
                 .rotationEffect(.degrees(folder.collapsed ? 0 : 90))
                 .frame(width: 10)
-            Image(systemName: folder.live != nil ? "dot.radiowaves.left.and.right" : folder.collapsed ? "folder" : "folder.fill")
-                .font(.system(size: 12))
-                .foregroundStyle(Palette.ink.opacity(0.7))
-                .frame(width: 16)
+            Group {
+                if let icon = folder.icon {
+                    Text(icon).font(.system(size: 13))
+                } else {
+                    Image(systemName: folder.live != nil ? "dot.radiowaves.left.and.right" : folder.collapsed ? "folder" : "folder.fill")
+                        .font(.system(size: 12))
+                        .foregroundStyle(Palette.ink.opacity(0.7))
+                }
+            }
+            .frame(width: 16)
             Text(folder.name).font(TextStyle.body.font).foregroundStyle(Palette.ink.opacity(0.8)).lineLimit(1)
             Spacer(minLength: 0)
         }
@@ -739,6 +745,7 @@ private struct FolderRow: View {
         .onHover { hovering = $0 }
         .contextMenu {
             Button("Rename Folder…") { browser.renameFolder(folder.id) }
+            Button("Change Icon…") { browser.changeFolderIcon(folder.id) }
             if folder.live != nil { Button("Refresh Now") { LiveFeeds.shared.refresh(folder) } }
             Button("New Subfolder…") { browser.newFolder(in: folder.id) }
             Divider()
