@@ -80,7 +80,13 @@ final class Extensions: NSObject, ObservableObject {
         WKWebExtension.MatchPattern.registerCustomURLScheme(Self.scheme)
         // Test runs keep extension data apart.
         let setup: WKWebExtensionController.Configuration =
-            Storage.testing && !Storage.ownContainer ? .init(identifier: Storage.probeStore(2)) : .default()
+            if let profile = Storage.profile {
+                .init(identifier: Storage.profileStore(2, profile))
+            } else if Storage.testing && !Storage.ownContainer {
+                .init(identifier: Storage.probeStore(2))
+            } else {
+                .default()
+            }
         setup.defaultWebsiteDataStore = Storage.websites
         let pages = setup.webViewConfiguration ?? WKWebViewConfiguration()
         // Otherwise WebKit's default store, not the browser's.

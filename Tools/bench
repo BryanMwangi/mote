@@ -38,7 +38,7 @@ COMMANDS = {
     "probe": ("", "the window's own state: panels, modal, windows"),
     "chat": ("[show|ask|follow|wait|use|mode|lead|search|providers] [args…]", "the chat in front; ask TEXT as the new tab's Ask does, follow TEXT in the chat "
              "(test run); wait [SECONDS] for its reply; use PROVIDER [MODEL] [ADDRESS], mode chat|search|research, search on|off, demo [SOURCES] [MS] [plain] (a long researched reply, streamed from Mote itself; plain: without research steps; test run); providers: how each stands"),
-    "ui": ("key value", "settings/passwords/welcome/history/downloads/bookmarks/hidden, chats, sidebar, spaces, hides, bar, folded, peek, device NAME|off, essential|unessential|newwindow|source TAB, split TAB:left|right|top|bottom / grid|across|down|off, home TAB, peekclick shift|option, settingsquery TEXT|-, shortcut ID=cmd+e|ID=none|reset, screenshot visible|whole|copy, inspect network|sources|storage|timeline, processes on|off, textdirection on, folder new:NAME[/PARENT]|toggle:NAME|unpack:NAME|delete:NAME|TAB:NAME, route HOST:SPACEINDEX|clear, theme N|off, "
+    "ui": ("key value", "settings/passwords/welcome/history/downloads/bookmarks/hidden, chats, sidebar, spaces, hides, bar, folded, peek, device NAME|off, essential|unessential|newwindow|source TAB, split TAB:left|right|top|bottom / grid|across|down|off, home TAB, peekclick shift|option, settingsquery TEXT|-, shortcut ID=cmd+e|ID=none|reset, screenshot visible|whole|copy, inspect network|sources|storage|timeline, processes on|off, textdirection on, folder new:NAME[/PARENT]|toggle:NAME|unpack:NAME|delete:NAME|TAB:NAME, route HOST:SPACEINDEX|clear, theme N|off, profile new:NAME|delete:ID, "
            "pages120 on|off; sitecard on|off|security; notice update|ready|manual|TEXT (test run); look light|dark|system; peeklink keep|close; edittab TEXT; finishedit on"),
     "press": ("code:int chars [mods…]", "a key on the whole app (cmd shift ctrl opt, repeat) — test runs only"),
     "key": ("id text", "keys on a tab as real key events — test runs only"),
@@ -185,7 +185,7 @@ def read_ui(args):
     if len(args) != 2:
         sys.exit(usage("ui"))
     key, value = args
-    return {key: value if key in ("look", "edittab", "peeklink", "sitecard", "notice", "device", "essential", "unessential", "newwindow", "source", "split", "home", "peekclick", "settingsquery", "shortcut", "screenshot", "inspect", "folder", "route", "theme") else value in ON}
+    return {key: value if key in ("look", "edittab", "peeklink", "sitecard", "notice", "device", "essential", "unessential", "newwindow", "source", "split", "home", "peekclick", "settingsquery", "shortcut", "screenshot", "inspect", "folder", "route", "theme", "profile") else value in ON}
 
 
 def read_hit(args):
@@ -338,8 +338,19 @@ def show(verb, answer):
         print(json.dumps(answer, ensure_ascii=False, indent=2))
 
 
+def profile_of(argv):
+    """The profile named by --profile ID (another profile's own Mote), and the arguments left."""
+    if "--profile" not in argv:
+        return None, argv
+    at = argv.index("--profile")
+    if at + 1 >= len(argv):
+        sys.exit("usage: bench --profile ID COMMAND …")
+    return "".join(c for c in argv[at + 1].lower() if c.isascii() and (c.isalnum() or c == "-")), argv[:at] + argv[at + 2:]
+
+
 def main(argv):
     world, argv = world_of(argv)
+    profile, argv = profile_of(argv)
     yes = "--yes" in argv
     argv = [word for word in argv if word not in ("--test", "--yes")]
     if not argv or argv[0] in ("-h", "--help", "help"):
@@ -353,7 +364,8 @@ def main(argv):
     request = {"do": verb, **read(verb, args)}
     if verb in ("ext-add", "ext-folder", "ext-press", "ext-remove", "ext-reload"):
         request["yes"] = yes
-    answer = ask(os.path.join(folder(world), "bench.sock"), request)
+    place = os.path.join(folder(world), "Profiles", profile) if profile else folder(world)
+    answer = ask(os.path.join(place, "bench.sock"), request)
     if "error" in answer:
         sys.exit("error: " + str(answer["error"]))
     show(verb, answer)

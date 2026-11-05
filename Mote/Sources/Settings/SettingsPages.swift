@@ -20,6 +20,8 @@ struct GeneralSettings: View {
     }
 
     @ViewBuilder private var content: some View {
+        ProfileRows()
+
         SettingsSection("Mote and your Mac") {
             SettingRow(
                 "Default browser",
@@ -661,6 +663,58 @@ struct AboutSettings: View {
                 browser.open(next.diskImage, foreground: true)
             }
         case .waiting: Pill("Install", filled: true) { updater.install() }
+        }
+    }
+}
+
+/// Profiles, as Firefox's: each its own Mote that shares nothing with the
+/// others. This one is marked; another opens as its own Mote.
+private struct ProfileRows: View {
+    @ObservedObject private var profiles = Profiles.shared
+
+    var body: some View {
+        SettingsSection(
+            "Profiles", note: "Each profile is its own Mote: its own tabs, history, passwords, sign-ins, extensions and settings."
+        ) {
+            row(id: nil, name: "Default")
+            ForEach(profiles.list) { profile in
+                RowRule()
+                row(id: profile.id, name: profile.name)
+            }
+            RowRule()
+            HStack {
+                Spacer()
+                Pill("New Profile…") {
+                    Prompt.name("New Profile", placeholder: "Work", confirm: "Create") { profiles.add(named: $0) }
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 9)
+            .settingsSearch(["New Profile", "profiles"])
+        }
+    }
+
+    private func row(id: String?, name: String) -> some View {
+        let here = id == Storage.profile
+        return SettingRow(name, here ? "This Mote" : nil, symbol: "person.crop.circle", tint: Tint.indigo, keywords: ["profile"]) {
+            HStack(spacing: 2) {
+                if !here { Pill("Open") { profiles.open(id) } }
+                if let id {
+                    Door(icon: "pencil", help: "Rename") {
+                        Prompt.name("Rename Profile", placeholder: name, initial: name, confirm: "Rename") { profiles.rename(id, to: $0) }
+                    }
+                    if !here {
+                        Door(icon: "trash", help: "Delete") {
+                            Prompt.confirm(
+                                "Delete “\(name)”?",
+                                detail:
+                                    "Its tabs, history, passwords, sign-ins, extensions and settings are removed from this Mac. Quit it first if it's open.",
+                                confirm: "Delete"
+                            ) { profiles.delete(id) }
+                        }
+                    }
+                }
+            }
         }
     }
 }

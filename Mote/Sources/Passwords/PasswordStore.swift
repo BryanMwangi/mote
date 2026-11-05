@@ -97,7 +97,7 @@ enum PasswordStore {
 private enum Keychain {
     /// Every item carries this label. Test worlds use their own, so their
     /// items never mix with the real ones.
-    static let label = Storage.world.map { "Mote (\($0))" } ?? "Mote"
+    static let label = (Storage.world.map { "Mote (\($0))" } ?? "Mote") + (Storage.profile.map { " profile \($0)" } ?? "")
 
     /// An item's attributes, without its secret.
     struct Item {

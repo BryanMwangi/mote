@@ -362,7 +362,9 @@ final class Browser: NSObject, ObservableObject {
 
     private func titleWindow() {
         guard let window else { return }
-        let title = active.map { $0.isBlank ? "Mote" : $0.label } ?? "Mote"
+        // Another profile's windows say whose they are, in the Window menu too.
+        let page = active.map { $0.isBlank ? "Mote" : $0.label } ?? "Mote"
+        let title = Storage.profile == nil ? page : "\(page) — \(Profiles.shared.current)"
         guard window.title != title else { return }
         window.title = title
         // AppKit lays its title bar's buttons out afresh for a new title, back

@@ -11,6 +11,11 @@ struct JSONFile<Value: Codable & Sendable>: Sendable {
         url = Storage.file(name)
     }
 
+    /// A file outside this profile's folder: the list of profiles, kept in the first's.
+    init(at url: URL) {
+        self.url = url
+    }
+
     /// The saved value; nil when there is none or it couldn't be read.
     func load() -> Value? {
         guard let data = try? Data(contentsOf: url) else { return nil }

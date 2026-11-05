@@ -28,8 +28,21 @@ enum Storage {
     /// build's background throttling and App Nap.
     static var measuring: Bool { testing && ProcessInfo.processInfo.environment["MOTE_MEASURE"] != nil }
 
-    /// The profile folder in Application Support.
-    static let folder = URL.applicationSupportDirectory.appending(path: world.map { "Mote (\($0))" } ?? "Mote", directoryHint: .isDirectory)
+    /// The profile this Mote runs (MOTE_PROFILE, set when one is opened from
+    /// another): its id, or nil for the first, whose data is where it always was.
+    static let profile: String? = {
+        let asked = (ProcessInfo.processInfo.environment["MOTE_PROFILE"] ?? "").lowercased()
+            .filter { ($0.isASCII && ($0.isLetter || $0.isNumber)) || $0 == "-" }
+        return asked.isEmpty ? nil : asked
+    }()
+
+    /// The world's folder, where the first profile's data lives and the list
+    /// of profiles is kept.
+    static let base = URL.applicationSupportDirectory.appending(path: world.map { "Mote (\($0))" } ?? "Mote", directoryHint: .isDirectory)
+
+    /// This profile's folder in Application Support: another profile's is
+    /// under Profiles/ in the first's.
+    static let folder = profile.map { base.appending(path: "Profiles/\($0)", directoryHint: .isDirectory) } ?? base
 
     static func file(_ name: String) -> URL { folder.appending(path: name) }
 
@@ -45,9 +58,17 @@ enum Storage {
 
     /// The settings: the standard defaults, or the test world's own suite.
     static let settings: UserDefaults = {
-        guard let world else { return .standard }
-        return UserDefaults(suiteName: "io.github.mote-browser.mote.test" + (world == "test" ? "" : ".\(world)")) ?? .standard
+        guard let suite = suite(for: profile) else { return .standard }
+        return UserDefaults(suiteName: suite) ?? .standard
     }()
+
+    /// A profile's settings suite; nil for the real first profile's, the
+    /// standard defaults.
+    static func suite(for profile: String?) -> String? {
+        let world = world.map { "io.github.mote-browser.mote.test" + ($0 == "test" ? "" : ".\($0)") }
+        guard let profile else { return world }
+        return (world ?? "io.github.mote-browser.mote") + ".profile.\(profile)"
+    }
 
     // MARK: - WebKit
 
@@ -55,8 +76,17 @@ enum Storage {
     /// the folder, so a test world uses one with a fixed identifier instead,
     /// and never shares cookies or sign-ins with the real browser.
     static var websites: WKWebsiteDataStore {
+        if let profile { return WKWebsiteDataStore(forIdentifier: profileStore(1, profile)) }
         guard testing, !ownContainer else { return .default() }
         return WKWebsiteDataStore(forIdentifier: probeStore(1))
+    }
+
+    /// A profile's fixed store identifier (kind 1 for websites, 2 for
+    /// extensions), from a hash of its world and id, apart from the test
+    /// worlds' (5E4C…) and from any space's.
+    static func profileStore(_ kind: UInt32, _ profile: String) -> UUID {
+        let hash = ((world ?? "") + "/" + profile).utf8.reduce(UInt32(2_166_136_261)) { ($0 ^ UInt32($1)) &* 16_777_619 }
+        return UUID(uuidString: String(format: "5E4D%04X-%04X-4000-8000-%012X", hash >> 16, hash & 0xFFFF, kind))!
     }
 
     /// Running under another bundle id, which has its own WebKit container

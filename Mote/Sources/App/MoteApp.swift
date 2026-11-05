@@ -99,6 +99,13 @@ private struct MenuBar: Commands {
             Button("Settings…") { browser.tuning = true }.keyboardShortcut(keys(.settings))
             Button("Welcome…") { browser.welcoming = true }
             Button("Passwords…") { browser.logins.managing = true }.keyboardShortcut(keys(.passwords))
+            // Another profile, as its own Mote (see Profiles).
+            Menu("Open Profile") {
+                Button("Default") { Profiles.shared.open(nil) }.disabled(Storage.profile == nil)
+                ForEach(Profiles.shared.list) { profile in
+                    Button(profile.name) { Profiles.shared.open(profile.id) }.disabled(Storage.profile == profile.id)
+                }
+            }
         }
         CommandGroup(replacing: .help) {
             Button("Send Feedback…") { AppDelegate.writeFeedback() }
