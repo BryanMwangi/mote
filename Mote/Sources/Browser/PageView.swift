@@ -191,17 +191,24 @@ final class PageView: WKWebView {
             let at = menu.items.firstIndex(of: reload), let browser = Windows.shared.all.first(where: { $0.tab(for: self) != nil }),
             let tab = browser.tab(for: self)
         else { return }
-        let items: [NSMenuItem] = [
-            .separator(),
-            ActionItem("Bookmark Page…") { browser.bookmarkCurrent() },
-            ActionItem("Save Page As…") { browser.savePage() },
-            NSMenuItem(title: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: ""),
-            .separator(),
-            tab.screenshotItem(),
-            ActionItem("Ask about This Page") { if !browser.chatting { browser.togglePageChat() } },
-            .separator(),
-            ActionItem("View Page Source") { browser.viewSource(of: tab) },
-        ]
+        // As Firefox's: the whole page, when it's in a language you don't read.
+        let translate: [NSMenuItem] =
+            tab.translated
+            ? [ActionItem("Show Original") { browser.toggleTranslation(tab) }]
+            : tab.pageLanguage != nil ? [ActionItem("Translate Page from \(tab.languageName)") { browser.toggleTranslation(tab) }] : []
+        let items: [NSMenuItem] =
+            [
+                .separator(),
+                ActionItem("Bookmark Page…") { browser.bookmarkCurrent() },
+                ActionItem("Save Page As…") { browser.savePage() },
+                NSMenuItem(title: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: ""),
+                .separator(),
+                tab.screenshotItem(),
+                ActionItem("Ask about This Page") { if !browser.chatting { browser.togglePageChat() } },
+            ] + translate + [
+                .separator(),
+                ActionItem("View Page Source") { browser.viewSource(of: tab) },
+            ]
         for (offset, item) in items.enumerated() { menu.insertItem(item, at: at + 1 + offset) }
         // WebKit's inspector shows an element's accessibility in its Node panel:
         // Inspect Element opens it there; there's no way to open that panel itself.

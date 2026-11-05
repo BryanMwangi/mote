@@ -52,8 +52,10 @@ extension Browser {
         translating = TranslationJob(tab: tab.id, source: code)
     }
 
-    /// Runs with the session SwiftUI hands over (see TranslationHost): the
-    /// page's text in batches, each written back as it comes.
+    /// Runs with the session SwiftUI hands over (see TranslationHost), as
+    /// Firefox translates: what's on screen first, each distinct piece of
+    /// text once however often it repeats, and the results written in as
+    /// they stream back, a few at a time, rather than a batch at a time.
     @available(macOS 15, *)
     func translate(with session: TranslationSession) async {
         guard let job = translating, let tab = tab(job.tab), let web = tab.built else { return }
@@ -63,34 +65,54 @@ extension Browser {
         }
         guard !texts.isEmpty else { return }
         tab.translated = true
-        for start in stride(from: 0, to: texts.count, by: 80) {
-            let batch = Array(texts[start..<min(start + 80, texts.count)])
-            guard let responses = try? await Self.translations(of: batch, from: start, in: session) else {
-                announce("This page couldn't be translated")
-                return
-            }
-            var found: [String: String] = [:]
-            for response in responses { if let id = response.clientIdentifier { found[id] = response.targetText } }
-            guard tab.translated, let json = try? JSONEncoder().encode(found), let text = String(data: json, encoding: .utf8) else {
+        var pending: [String: String] = [:]
+        var flushed = ContinuousClock.now
+        let flush = {
+            guard !pending.isEmpty, let json = try? JSONEncoder().encode(pending), let text = String(data: json, encoding: .utf8) else {
                 return
             }
             web.evaluateInAppWorld("window.__moteTranslation && window.__moteTranslation.put(\(text))")
+            pending = [:]
+            flushed = .now
+        }
+        do {
+            for try await (index, text) in Self.stream(texts, in: session) {
+                guard tab.translated else { return }
+                pending[String(index)] = text
+                // Soon for the first lines, which are what's on screen; then in small groups.
+                if pending.count >= 24 || ContinuousClock.now - flushed > .milliseconds(80) { flush() }
+            }
+            flush()
+        } catch {
+            flush()
+            announce("This page couldn't be translated")
         }
     }
 
-    /// The session works off the main actor; it's only ever used from one
-    /// task at a time, the one `translationTask` runs.
+    /// The translations as they come back, by each text's place. The session
+    /// works off the main actor; only the one `translationTask` task uses it.
     @available(macOS 15, *)
-    private nonisolated static func translations(
-        of texts: [String], from start: Int, in session: TranslationSession
-    ) async throws -> [TranslationSession.Response] {
-        nonisolated(unsafe) let session = session
-        let requests = texts.enumerated().map { TranslationSession.Request(sourceText: $1, clientIdentifier: String(start + $0)) }
-        return try await session.translations(from: requests)
+    private nonisolated static func stream(_ texts: [String], in session: TranslationSession) -> AsyncThrowingStream<(Int, String), Error> {
+        let held = Held(session: session)
+        return AsyncThrowingStream { continuation in
+            let work = Task {
+                do {
+                    let requests = texts.enumerated().map { TranslationSession.Request(sourceText: $1, clientIdentifier: String($0)) }
+                    for try await response in held.session.translate(batch: requests) {
+                        if let index = response.clientIdentifier.flatMap(Int.init) { continuation.yield((index, response.targetText)) }
+                    }
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+            }
+            continuation.onTermination = { _ in work.cancel() }
+        }
     }
 
     /// The page's text nodes, kept in Mote's world with what they said, so
-    /// they can be written to and put back; their text comes back trimmed.
+    /// they can be written to and put back. What comes back is each distinct
+    /// text once, trimmed, the ones on screen first, then by distance from it.
     private static let collect = """
         (() => {
           const skip = /^(SCRIPT|STYLE|NOSCRIPT|CODE|PRE|TEXTAREA|SVG)$/;
@@ -104,13 +126,33 @@ extension Browser {
           const nodes = [];
           for (let n = walker.nextNode(); n && nodes.length < 5000; n = walker.nextNode()) nodes.push(n);
           const original = nodes.map(n => n.nodeValue);
+          const height = innerHeight;
+          const away = nodes.map((n, i) => {
+            const r = n.parentElement.getBoundingClientRect();
+            return [r.bottom < 0 ? height - r.bottom : r.top > height ? r.top - height : 0, i];
+          }).sort((a, b) => a[0] - b[0]);
+          const groups = new Map();
+          for (const [, i] of away) {
+            const text = original[i].trim();
+            if (!groups.has(text)) groups.set(text, []);
+            groups.get(text).push(i);
+          }
+          const places = [...groups.values()];
           window.__moteTranslation = {
-            put: found => { for (const i in found) { const n = nodes[i]; if (n) n.nodeValue = original[i].replace(original[i].trim(), found[i]); } },
+            put: found => {
+              for (const g in found) for (const i of places[g] || []) nodes[i].nodeValue = original[i].replace(original[i].trim(), found[g]);
+            },
             restore: () => nodes.forEach((n, i) => { n.nodeValue = original[i]; })
           };
-          return original.map(t => t.trim());
+          return [...groups.keys()];
         })()
         """
+}
+
+/// The session, carried to the one task that streams with it.
+@available(macOS 15, *)
+nonisolated private struct Held: @unchecked Sendable {
+    let session: TranslationSession
 }
 
 /// A page waiting to be translated: which tab, from what language.

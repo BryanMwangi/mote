@@ -212,6 +212,7 @@ struct AddressPill: View {
             if !editing, browser.active?.isBlank == false {
                 Door(icon: "link", help: "Copy Address   ⇧⌘C", act: browser.copyAddress)
             }
+            if !editing, let tab = browser.active { TranslateButton(browser: browser, tab: tab) }
             if !editing { ExtensionSlot(edge: .trailing) }
         }
         .padding(.trailing, 2)

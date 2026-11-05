@@ -337,17 +337,29 @@ struct Pressed: ButtonStyle {
 
 /// Translate this page, shown only for a page in a language you don't read,
 /// or one already translated (see Translate.swift).
-private struct TranslateButton: View {
+/// In the toolbar, or beside the sidebar's address pill when the toolbar is
+/// hidden: hidden until the page is in another language, then easing in.
+struct TranslateButton: View {
     let browser: Browser
     @ObservedObject var tab: Tab
 
     var body: some View {
-        if tab.pageLanguage != nil || tab.translated {
-            let name = tab.pageLanguage.flatMap { Locale.current.localizedString(forLanguageCode: $0) } ?? "another language"
-            Door(icon: "translate", on: tab.translated, help: tab.translated ? "Show Original" : "Translate this page from \(name)") {
-                browser.toggleTranslation(tab)
+        ZStack {
+            if tab.pageLanguage != nil || tab.translated {
+                Door(
+                    icon: "translate", on: tab.translated,
+                    help: tab.translated ? "Show Original" : "Translate this page from \(tab.languageName)"
+                ) {
+                    browser.toggleTranslation(tab)
+                }
+                .transition(.scale(scale: 0.6).combined(with: .opacity))
             }
-            .transition(.opacity)
         }
+        .animation(Motion.settle, value: tab.pageLanguage != nil || tab.translated)
     }
+}
+
+extension Tab {
+    /// The page's language by name ("French"), for buttons and menus.
+    var languageName: String { pageLanguage.flatMap { Locale.current.localizedString(forLanguageCode: $0) } ?? "another language" }
 }
