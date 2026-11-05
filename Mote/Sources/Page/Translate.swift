@@ -16,18 +16,27 @@ extension Browser {
         guard prefs.offersTranslation, !tab.shy, let web = tab.built else { return }
         let sample = "(document.documentElement.lang || '') + '\\n' + (document.body ? document.body.innerText.slice(0, 2000) : '')"
         web.evaluateInAppWorld(sample) { [weak tab] value in
-            guard let tab, let text = value as? String else { return }
-            let declared = text.prefix { $0 != "\n" }
-            let recognizer = NLLanguageRecognizer()
-            recognizer.processString(String(text.drop { $0 != "\n" }))
-            let code = recognizer.dominantLanguage?.rawValue ?? String(declared.prefix(2))
-            guard !code.isEmpty, !Self.reads(code) else { return }
-            tab.pageLanguage = code
+            guard let text = value as? String else { return }
+            // Recognised off the main thread: it's a few milliseconds a page.
+            Task {
+                let code = await Task.detached(priority: .utility) { Self.language(of: text) }.value
+                guard let code, !Self.reads(code) else { return }
+                tab?.pageLanguage = code
+            }
         }
     }
 
+    /// The language a page's sample is in: what its text reads as, or what
+    /// its `lang` (the sample's first line) says.
+    private nonisolated static func language(of sample: String) -> String? {
+        let recognizer = NLLanguageRecognizer()
+        recognizer.processString(String(sample.drop { $0 != "\n" }))
+        let code = recognizer.dominantLanguage?.rawValue ?? String(sample.prefix { $0 != "\n" }.prefix(2))
+        return code.isEmpty ? nil : code
+    }
+
     /// Whether `code` is one of the languages the Mac is set to read.
-    private static func reads(_ code: String) -> Bool {
+    private nonisolated static func reads(_ code: String) -> Bool {
         let wanted = Locale.Language(identifier: code).languageCode
         return Locale.preferredLanguages.contains { Locale.Language(identifier: $0).languageCode == wanted }
     }
