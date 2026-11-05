@@ -138,6 +138,17 @@ struct AddMenuButton: View {
                 item("GitHub Issues…", symbol: "smallcircle.filled.circle") { browser.newLiveFolder("issues") },
             ]
             menu.addItem(live)
+            // Buttons for the foot, beside the spaces.
+            let missing = FootButton.allCases.filter { !browser.prefs.foot.contains($0) }
+            if !missing.isEmpty {
+                let add = NSMenuItem(title: "Add to Sidebar", action: nil, keyEquivalent: "")
+                add.image = NSImage(systemSymbolName: "rectangle.bottomthird.inset.filled", accessibilityDescription: nil)
+                add.submenu = NSMenu()
+                add.submenu?.items = missing.map { button in
+                    item(button.title, symbol: button.symbol) { browser.prefs.foot.append(button) }
+                }
+                menu.addItem(add)
+            }
             menu.addItem(.separator())
             let split = item("New Split", symbol: "rectangle.split.2x1") { browser.newSplit() }
             split.isEnabled = browser.active.map(browser.splittable) == true

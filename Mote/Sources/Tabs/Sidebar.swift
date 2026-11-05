@@ -13,7 +13,6 @@ struct Sidebar: View {
     var showing = true
 
     @State private var dropping = false
-    @State private var chatsOpen = false
     /// A tab being dragged to a new place in the list.
     @State private var drag: ReorderDrag<Tab.ID>?
     @State private var keptDrag: ReorderDrag<Tab.ID>?
@@ -126,22 +125,7 @@ struct Sidebar: View {
         return essentials + header + keptRows + CGFloat(loose) * (row + gap) + row
     }
 
-    /// The chat archive, in a panel beside the sidebar.
-    private func chats(titled: Bool) -> some View {
-        Group {
-            if titled {
-                Quiet(icon: "bubble.left.and.bubble.right", title: "Chats", height: Self.footHeight - 10) { chatsOpen.toggle() }
-            } else {
-                FootIcon(symbol: "bubble.left.and.bubble.right", help: "Chats") { chatsOpen.toggle() }
-            }
-        }
-        .menuPanel(isPresented: showing ? $chatsOpen : .constant(false), edge: .trailing) {
-            ChatsPage(browser: browser, inPanel: true) { chatsOpen = false }
-                .frame(width: 380, height: 440)
-        }
-    }
-
-    /// The chat archive, every space, and a plus for a new tab or space.
+    /// The user's buttons, every space, and a plus for a new tab or space.
     private var foot: some View {
         HStack(spacing: 2) {
             if browser.isPrivate {
@@ -151,16 +135,14 @@ struct Sidebar: View {
                     .foregroundStyle(Palette.muted)
                     .padding(.leading, 6)
                     .help("A private window: no history, and nothing kept once it closes")
-                Spacer(minLength: 4)
-            } else if browser.usesSpaces {
-                chats(titled: false)
-                Spacer(minLength: 4)
-                SpaceIcons(browser: browser)
-                Spacer(minLength: 4)
             } else {
-                chats(titled: true)
+                FootButtons(browser: browser, prefs: prefs, showing: showing)
+                if browser.usesSpaces {
+                    Spacer(minLength: 4)
+                    SpaceIcons(browser: browser)
+                }
             }
-            FootIcon(symbol: "books.vertical", help: "Library   ⌥⇧L") { browser.toggleLibrary() }
+            Spacer(minLength: 4)
             AddMenuButton(browser: browser)
         }
         .padding(EdgeInsets(top: 0, leading: 10, bottom: 10, trailing: 10))

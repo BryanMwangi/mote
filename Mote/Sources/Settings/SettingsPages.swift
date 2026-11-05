@@ -253,6 +253,23 @@ struct TabSettings: View {
                     symbol: "sidebar.right", tint: Tint.indigo, keywords: ["right side", "position"], on: $prefs.sideRight)
                 RowRule()
                 SettingRow(
+                    "Buttons at the foot",
+                    prefs.foot.isEmpty ? "None; the spaces have it to themselves" : prefs.foot.map(\.title).joined(separator: ", "),
+                    symbol: "rectangle.bottomthird.inset.filled", tint: Tint.indigo, keywords: ["downloads", "history", "chats", "library"]
+                ) {
+                    Menu("Choose") {
+                        ForEach(FootButton.allCases, id: \.self) { button in
+                            Toggle(
+                                button.title,
+                                isOn: Binding(
+                                    get: { prefs.foot.contains(button) },
+                                    set: { prefs.foot = $0 ? prefs.foot + [button] : prefs.foot.filter { $0 != button } }))
+                        }
+                    }
+                    .fixedSize()
+                }
+                RowRule()
+                SettingRow(
                     "Tuck the sidebar away",
                     "The page takes the whole window; reach the left edge and your tabs slide out. ⌘S does it by hand",
                     symbol: "sidebar.left", tint: Tint.blue, on: $prefs.sideHides)

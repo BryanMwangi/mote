@@ -112,6 +112,12 @@ final class Preferences: ObservableObject {
     /// translates to; empty for the Mac's own.
     @Published var neverTranslate: [String]
     @Published var translateTo: String
+    /// The sidebar foot's buttons, by name, in order (see FootButton).
+    @Published var footButtons: [String]
+    var foot: [FootButton] {
+        get { FootButton.read(footButtons) }
+        set { footButtons = newValue.map(\.rawValue) }
+    }
     /// The user's keys over Mote's (Settings › Keyboard).
     @Published var shortcuts: Shortcuts
     /// Links from other apps open in a small window (see LinkWindow.swift).
@@ -201,6 +207,7 @@ final class Preferences: ObservableObject {
         offersTranslation = store.value("pages.translate", or: true)
         neverTranslate = store.value("pages.translate.never", or: [])
         translateTo = store.value("pages.translate.to", or: "")
+        footButtons = store.value("sidebar.foot", or: FootButton.standard.map(\.rawValue))
         shortcuts = store.value("keys.custom", or: Shortcuts())
         littleLinks = store.value("links.little", or: false)
         showsLinks = store.value("links.show", or: false)
@@ -275,6 +282,7 @@ final class Preferences: ObservableObject {
         keep($offersTranslation, "pages.translate")
         keep($neverTranslate, "pages.translate.never")
         keep($translateTo, "pages.translate.to")
+        keep($footButtons, "sidebar.foot")
         keep($shortcuts, "keys.custom") { _ in
             // SwiftUI rebuilds a menu only as it opens, so a menu not opened
             // since would keep answering to the old key. Ask each to rebuild
