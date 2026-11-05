@@ -51,8 +51,9 @@ final class KeyRouter {
             option: flags.contains(.option), control: flags.contains(.control))
 
         if press.code == KeyMap.escape { return escape(in: browser) }
-        // ⌘J in a new tab's composer: Return asks the assistant, or searches again.
-        if KeyMap.switchesAsking(press, inComposer: browser.active?.isStart == true && !browser.field.switching) {
+        // ⌘J in a new tab's composer or the floating search: Return asks the
+        // assistant, or searches again.
+        if KeyMap.switchesAsking(press, inComposer: browser.composing) {
             withAnimation(Motion.settle) { browser.field.asksAssistant.toggle() }
             if browser.field.asksAssistant { Assistant.shared.prepare() }
             browser.field.askFocus()

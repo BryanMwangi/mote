@@ -85,9 +85,13 @@ extension Browser {
         }
     }
 
-    /// The new tab's composer asks the assistant on Return, rather than
-    /// searching with the engine.
-    var assistantLeads: Bool { active?.isStart == true && !field.switching && field.asksAssistant }
+    /// The new tab's composer, or the floating search over a page, asks the
+    /// assistant on Return rather than searching with the engine.
+    var assistantLeads: Bool { composing && field.asksAssistant }
+
+    /// Where ⌘J switches between asking and searching: a new tab's composer,
+    /// or the floating search over a page.
+    var composing: Bool { (active?.isStart == true || field.launching) && !field.switching }
 
     /// Open tabs other than the active one, most recently seen first,
     /// matching the text by title or address.
@@ -189,6 +193,9 @@ extension Browser {
         let text = field.typed.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return field.refuse() }
         guard !field.capturingMentionContext else { return }
+        // From the floating search over a page: a question about that page,
+        // in its chat beside it.
+        if field.launching, let tab = active, pageChatPossible { return ask(text, about: tab) }
         let staged = field.stagedMentions
         guard !staged.isEmpty else { return startAssistantChat(text, with: []) }
         guard assistantLeads, let source = active, source.isStart else {
@@ -227,6 +234,19 @@ extension Browser {
             }
             guard isCurrentMentionAsk(typed: typed, staged: staged, sourceID: sourceID) else { return }
             startAssistantChat(text, with: contexts)
+        }
+    }
+
+    /// Opens the chat about `tab`'s page and asks it `text`, the page shared
+    /// first, as a first question in the panel would.
+    private func ask(_ text: String, about tab: Tab) {
+        let chat = tab.ensurePageChat()
+        editing = false
+        field.clear()
+        if !tab.chatOpen { slidingFold { tab.chatOpen = true } }
+        Task {
+            await tab.attachCurrentPage()
+            Assistant.shared.ask(text, in: chat)
         }
     }
 

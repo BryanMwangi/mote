@@ -174,9 +174,10 @@ struct Composer: View {
     private var hasText: Bool { !browser.field.typed.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
     private var engine: String { browser.prefs.engine.name(custom: browser.prefs.customEngine) }
     private var assistant: Assistant { .shared }
-    /// Return asks here: one of the assistant's modes is chosen.
-    private var leads: Bool { !compact && browser.field.asksAssistant }
-    private var mentionQuery: String? { leads ? MentionMenu.query(in: browser.field.typed) : nil }
+    /// Return asks here: one of the assistant's modes is chosen. The floating
+    /// search asks too (⌘J), about the page under it.
+    private var leads: Bool { browser.field.asksAssistant && (!compact || browser.field.launching) }
+    private var mentionQuery: String? { leads && !compact ? MentionMenu.query(in: browser.field.typed) : nil }
     private var mentionables: [MentionMenu.Candidate] {
         guard browser.field.stagedMentionIDs.count < Conversation.mentionLimit else { return [] }
         let mentioned = Set(stagedTabs.map(\.url))
@@ -214,7 +215,8 @@ struct Composer: View {
 
     private var placeholder: String {
         if browser.field.switching { return "Switch to a tab" }
-        if compact || !leads { return "Search or enter an address" }
+        if !leads { return "Search or enter an address" }
+        if compact { return "Ask about this page" }
         return assistant.mode == .research ? "What should be researched?" : "Ask anything"
     }
 
