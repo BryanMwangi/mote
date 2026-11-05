@@ -7,11 +7,14 @@ public struct Folder: Codable, Identifiable, Equatable, Sendable {
     public var name: String
     public var collapsed = false
     public var parent: UUID?
+    /// What a live folder follows; nil for a folder of tabs.
+    public var live: LiveSource?
 
-    public init(id: UUID = UUID(), name: String, parent: UUID? = nil) {
+    public init(id: UUID = UUID(), name: String, parent: UUID? = nil, live: LiveSource? = nil) {
         self.id = id
         self.name = name
         self.parent = parent
+        self.live = live
     }
 
     /// Zen's limit on folders inside folders.

@@ -101,6 +101,7 @@ extension Browser {
             close(tab)
         }
         FolderStore.shared.change(spaceID) { $0.removeAll { family.contains($0.id) } }
+        family.forEach(LiveFeeds.shared.forget)
         writeSession(now: true)
     }
 

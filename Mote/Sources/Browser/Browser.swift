@@ -339,6 +339,7 @@ final class Browser: NSObject, ObservableObject {
             restoreSession()
         }
         if usesSpaces { preloadSpaces() }
+        if !extra { LiveFeeds.shared.start() }
         follow()
         watchForSleep()
     }

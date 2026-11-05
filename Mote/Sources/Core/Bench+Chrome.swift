@@ -35,7 +35,10 @@ extension Bench {
             "folder": Storage.folder.path, "pageLanguage": browser.active?.pageLanguage ?? "",
             "translated": browser.active?.translated ?? false,
             "folders": browser.folders.map { folder in
-                [folder.name, folder.collapsed ? "closed" : "open", browser.folders.first { $0.id == folder.parent }?.name ?? ""]
+                [
+                    folder.name, folder.collapsed ? "closed" : "open", browser.folders.first { $0.id == folder.parent }?.name ?? "",
+                    folder.live == nil ? "" : "\(LiveFeeds.shared.items(in: folder.id).count) items",
+                ]
             },
             "offers": browser.field.offers.map { "\($0.kind):\($0.key)" }, "launching": browser.field.launching,
             "chatting": browser.chatting,
@@ -160,6 +163,20 @@ extension Bench {
                 let folder = Folder(name: names[0], parent: names.count > 1 ? named(names[1])?.id : nil)
                 FolderStore.shared.change(browser.spaceID) { $0.append(folder) }
             case ("toggle", let name?): named(name).map { browser.toggleFolder($0.id) }
+            // live:pulls:owner/repo, live:issues:owner/repo, live:feed:URL
+            case ("live", let spec?):
+                let bits = spec.split(separator: ":", maxSplits: 1).map(String.init)
+                let source: LiveSource? =
+                    switch bits.first {
+                    case "pulls": bits.last.flatMap(LiveSource.repo(in:)).map { .pulls(repo: $0) }
+                    case "issues": bits.last.flatMap(LiveSource.repo(in:)).map { .issues(repo: $0) }
+                    default: bits.last.flatMap(URL.init(string:)).map { .feed($0) }
+                    }
+                if let source {
+                    let folder = Folder(name: spec, live: source)
+                    FolderStore.shared.change(browser.spaceID) { $0.append(folder) }
+                    LiveFeeds.shared.refresh(folder)
+                }
             case ("unpack", let name?): named(name).map { browser.unpackFolder($0.id) }
             case ("delete", let name?): named(name).map { browser.deleteFolder($0.id) }
             case (let id?, let name?): if let found = tab(id) { browser.move(found, toFolder: named(name)?.id) }

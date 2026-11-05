@@ -128,6 +128,16 @@ struct AddMenuButton: View {
                 menu.addItem(item("Create Space…", symbol: "square.on.square") { browser.askForSpace() })
             }
             menu.addItem(item("Create Folder", symbol: "folder.badge.plus") { browser.newFolder() })
+            // As Zen's: a folder that follows a feed or GitHub.
+            let live = NSMenuItem(title: "Create Live Folder", action: nil, keyEquivalent: "")
+            live.image = NSImage(systemSymbolName: "dot.radiowaves.left.and.right", accessibilityDescription: nil)
+            live.submenu = NSMenu()
+            live.submenu?.items = [
+                item("RSS or Atom Feed…", symbol: "dot.radiowaves.up.forward") { browser.newLiveFolder("feed") },
+                item("GitHub Pull Requests…", symbol: "arrow.triangle.pull") { browser.newLiveFolder("pulls") },
+                item("GitHub Issues…", symbol: "smallcircle.filled.circle") { browser.newLiveFolder("issues") },
+            ]
+            menu.addItem(live)
             menu.addItem(.separator())
             let split = item("New Split", symbol: "rectangle.split.2x1") { browser.newSplit() }
             split.isEnabled = browser.active.map(browser.splittable) == true

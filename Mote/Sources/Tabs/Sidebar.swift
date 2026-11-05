@@ -234,6 +234,7 @@ private struct SpacePage: View {
     @Binding var drag: ReorderDrag<Tab.ID>?
     @Binding var keptDrag: ReorderDrag<Tab.ID>?
     @ObservedObject private var folderStore = FolderStore.shared
+    @ObservedObject private var feeds = LiveFeeds.shared
 
     private static let row = Metrics.row
     private static let gap: CGFloat = 2
@@ -247,7 +248,7 @@ private struct SpacePage: View {
         let essentials = tabs.filter { $0.section == .essential }
         let kept = tabs.filter { $0.section == .pinned }
         let loose = tabs.filter { $0.section == .loose }
-        let lines = Folder.outline(folderStore.folders(in: space.id), tabs: kept.map { ($0.id, $0.folder) }, active: active)
+        let lines = keptLines(kept)
         VStack(alignment: .leading, spacing: 0) {
             if !essentials.isEmpty {
                 PinnedTabs(browser: browser, prefs: prefs, tabs: essentials, active: active, live: live)
@@ -300,43 +301,67 @@ private struct SpacePage: View {
     /// Pinned tabs, rows that stay when closed, above the others: folders
     /// first, each with its folders and tabs a step in, then the tabs in none.
     /// Those last reorder by dragging; a tab goes into a folder from its menu.
-    private func keptRows(_ kept: [Tab], lines: [Folder.Line<Tab.ID>]) -> some View {
+    /// One line of the pinned section: a folder's or a tab's, or an item of
+    /// a live folder (a feed's post, a pull request), under its folder.
+    private enum KeptLine: Hashable {
+        case line(Folder.Line<Tab.ID>)
+        case item(LiveItem, depth: Int)
+    }
+
+    /// The pinned section's lines, an open live folder's items after it.
+    private func keptLines(_ kept: [Tab]) -> [KeptLine] {
+        let folders = folderStore.folders(in: space.id)
+        return Folder.outline(folders, tabs: kept.map { ($0.id, $0.folder) }, active: active).flatMap { line -> [KeptLine] in
+            guard case .folder(let id, let depth) = line, let folder = folders.first(where: { $0.id == id }), folder.live != nil,
+                !folder.collapsed
+            else { return [.line(line)] }
+            // The newest few: a feed can hold hundreds.
+            return [.line(line)] + feeds.items(in: id).prefix(LiveFeeds.shown).map { .item($0, depth: depth + 1) }
+        }
+    }
+
+    private func keptRows(_ kept: [Tab], lines: [KeptLine]) -> some View {
         let folders = folderStore.folders(in: space.id)
         let unfiled = lines.compactMap { line -> Tab? in
-            guard case .tab(let id, 0) = line else { return nil }
+            guard case .line(.tab(let id, 0)) = line else { return nil }
             return kept.first { $0.id == id }
         }
         return VStack(alignment: .leading, spacing: 0) {
             VStack(spacing: Self.gap) {
-                ForEach(lines, id: \.self) { line in
-                    switch line {
-                    case .folder(let id, let depth):
-                        if let folder = folders.first(where: { $0.id == id }) {
-                            FolderRow(browser: browser, folder: folder, live: live).padding(.leading, CGFloat(depth) * Self.indent)
-                        }
-                    case .tab(let id, let depth):
-                        if let tab = kept.first(where: { $0.id == id }) {
-                            if depth == 0, let index = unfiled.firstIndex(where: { $0.id == id }) {
-                                row(tab)
-                                    // Places count among the pinned tabs, after the essentials.
-                                    .modifier(
-                                        Reorderable(
-                                            id: tab.id, index: index, places: 0..<unfiled.count,
-                                            lattice: .column(step: Self.row + Self.gap),
-                                            space: "kept", drag: $keptDrag
-                                        ) { target in
-                                            // To where the tab now in that place sits among all the pinned ones.
-                                            let place = kept.firstIndex { $0.id == unfiled[target].id } ?? target
-                                            browser.move(tab, to: place + browser.essentialCount)
-                                        })
-                            } else {
-                                row(tab).padding(.leading, CGFloat(depth) * Self.indent)
+                ForEach(lines, id: \.self) { entry in
+                    switch entry {
+                    case .item(let item, let depth):
+                        LiveItemRow(browser: browser, item: item, read: feeds.isRead(item)).padding(.leading, CGFloat(depth) * Self.indent)
+                    case .line(let line):
+                        switch line {
+                        case .folder(let id, let depth):
+                            if let folder = folders.first(where: { $0.id == id }) {
+                                FolderRow(browser: browser, folder: folder, live: live).padding(.leading, CGFloat(depth) * Self.indent)
+                            }
+                        case .tab(let id, let depth):
+                            if let tab = kept.first(where: { $0.id == id }) {
+                                if depth == 0, let index = unfiled.firstIndex(where: { $0.id == id }) {
+                                    row(tab)
+                                        // Places count among the pinned tabs, after the essentials.
+                                        .modifier(
+                                            Reorderable(
+                                                id: tab.id, index: index, places: 0..<unfiled.count,
+                                                lattice: .column(step: Self.row + Self.gap),
+                                                space: "kept", drag: $keptDrag
+                                            ) { target in
+                                                // To where the tab now in that place sits among all the pinned ones.
+                                                let place = kept.firstIndex { $0.id == unfiled[target].id } ?? target
+                                                browser.move(tab, to: place + browser.essentialCount)
+                                            })
+                                } else {
+                                    row(tab).padding(.leading, CGFloat(depth) * Self.indent)
+                                }
                             }
                         }
                     }
                 }
             }
-            .overlay { closing(lines.map { line in if case .tab(let id, _) = line { kept.first { $0.id == id } } else { nil } }) }
+            .overlay { closing(lines.map { line in if case .line(.tab(let id, _)) = line { kept.first { $0.id == id } } else { nil } }) }
             .coordinateSpace(name: "kept")
             Self.rule
         }
@@ -696,7 +721,7 @@ private struct FolderRow: View {
                 .foregroundStyle(Palette.muted)
                 .rotationEffect(.degrees(folder.collapsed ? 0 : 90))
                 .frame(width: 10)
-            Image(systemName: folder.collapsed ? "folder" : "folder.fill")
+            Image(systemName: folder.live != nil ? "dot.radiowaves.left.and.right" : folder.collapsed ? "folder" : "folder.fill")
                 .font(.system(size: 12))
                 .foregroundStyle(Palette.ink.opacity(0.7))
                 .frame(width: 16)
@@ -712,6 +737,7 @@ private struct FolderRow: View {
         .onHover { hovering = $0 }
         .contextMenu {
             Button("Rename Folder…") { browser.renameFolder(folder.id) }
+            if folder.live != nil { Button("Refresh Now") { LiveFeeds.shared.refresh(folder) } }
             Button("New Subfolder…") { browser.newFolder(in: folder.id) }
             Divider()
             Button("Unload All Tabs") { browser.unloadFolder(folder.id) }
@@ -720,5 +746,36 @@ private struct FolderRow: View {
         }
         .animation(Motion.hover, value: hovering)
         .accessibilityLabel("Folder \(folder.name), \(folder.collapsed ? "closed" : "open")")
+    }
+}
+
+/// A live folder's item: a post or a pull request, opening in a tab; a dot
+/// until it's been opened.
+private struct LiveItemRow: View {
+    let browser: Browser
+    let item: LiveItem
+    let read: Bool
+
+    @State private var hovering = false
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Circle().fill(read ? Color.clear : Color.accentColor).frame(width: 6, height: 6).frame(width: 16)
+            Text(item.title).font(TextStyle.body.font).foregroundStyle(Palette.ink.opacity(read ? 0.55 : 0.85)).lineLimit(1)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 10)
+        .frame(maxWidth: .infinity, minHeight: Metrics.row, maxHeight: Metrics.row, alignment: .leading)
+        .background { if hovering { RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Palette.veil) } }
+        .contentShape(Rectangle())
+        .onTapGesture { browser.open(item, foreground: true) }
+        .onHover { hovering = $0 }
+        .contextMenu {
+            Button("Open in New Tab") { browser.open(item, foreground: true) }
+            Button("Open in Background") { browser.open(item, foreground: false) }
+            Button("Mark as Read") { LiveFeeds.shared.markRead(item) }.disabled(read)
+        }
+        .help(item.url.absoluteString)
+        .animation(Motion.hover, value: hovering)
     }
 }
