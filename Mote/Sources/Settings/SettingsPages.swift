@@ -10,12 +10,44 @@ struct GeneralSettings: View {
     // Asked when the page shows, not each time it's made: one asks Launch
     // Services, the other looks on disk.
     @State private var isDefault = false
-    @State private var hasZen = false
+    /// The browsers there's something to bring from, and the one picked.
+    @State private var browsers: [String] = []
+    @State private var from = ""
+    @State private var importing = false
 
     var body: some View {
         content.onAppear {
             isDefault = AppDelegate.isDefault
-            hasZen = !ZenImporter.profiles().isEmpty
+            browsers = ChromiumImporter.installed().map(\.name) + (ZenImporter.profiles().isEmpty ? [] : ["Zen"])
+            from = Self.preferredSource(among: browsers)
+        }
+    }
+
+    /// The one last picked, else the Mac's default browser, else the first.
+    private static func preferredSource(among browsers: [String]) -> String {
+        if let kept = Storage.settings.string(forKey: "import.from"), browsers.contains(kept) { return kept }
+        let app = NSWorkspace.shared.urlForApplication(toOpen: URL(string: "https://example.com")!)?.deletingPathExtension()
+            .lastPathComponent
+        return browsers.first { app?.localizedCaseInsensitiveContains($0) == true } ?? browsers.first ?? ""
+    }
+
+    /// Brings what the browser has: Zen's spaces and tabs in their panel;
+    /// a Chromium browser's bookmarks, history and passwords at once.
+    private func bring() {
+        Storage.settings.set(from, forKey: "import.from")
+        if from == "Zen" {
+            browser.tuning = false
+            browser.importingZen = true
+            return
+        }
+        guard let source = ChromiumImporter.installed().first(where: { $0.name == from }) else { return }
+        importing = true
+        Task {
+            let bookmarks = browser.takeBookmarks(from: source)
+            let places = await browser.takePlaces(from: source)
+            let passwords = (try? await browser.logins.bring(from: source).get()) ?? 0
+            importing = false
+            browser.announce("From \(source.name): \(bookmarks) bookmarks, \(places) history entries, \(passwords) passwords")
         }
     }
 
@@ -41,15 +73,22 @@ struct GeneralSettings: View {
                 tint: Tint.teal, on: $prefs.showsFullAddress)
         }
 
-        if hasZen {
+        if !browsers.isEmpty {
             SettingsSection("Coming from another browser") {
                 SettingRow(
-                    "Zen", "Its spaces, essentials, pinned and open tabs. Nothing in Zen changes", symbol: "square.and.arrow.down",
-                    tint: Tint.blue
+                    "Import from",
+                    from == "Zen"
+                        ? "Its spaces, essentials, pinned and open tabs. Nothing in Zen changes"
+                        : "Its bookmarks, history and passwords. Nothing in \(from) changes",
+                    symbol: "square.and.arrow.down",
+                    tint: Tint.blue, keywords: ["import"] + browsers
                 ) {
-                    Pill("Import…") {
-                        browser.tuning = false
-                        browser.importingZen = true
+                    HStack(spacing: 8) {
+                        Picker("", selection: $from) { ForEach(browsers, id: \.self) { Text($0).tag($0) } }
+                            .labelsHidden()
+                            .pickerStyle(.menu)
+                            .fixedSize()
+                        Pill(importing ? "Importing…" : "Import…", action: bring).disabled(importing)
                     }
                 }
             }
@@ -99,7 +138,7 @@ struct GeneralSettings: View {
             if prefs.peeksLinks {
                 RowRule()
                 SettingRow(
-                    "Preview with", "Option-click is Zen's Glance", symbol: "cursorarrow.click", tint: Tint.teal,
+                    "Preview with", "See a link over the page before opening it", symbol: "cursorarrow.click", tint: Tint.teal,
                     keywords: ["glance", "peek"] + PeekClick.allCases.map(\.title)
                 ) {
                     Picker("", selection: $prefs.peekClick) { ForEach(PeekClick.allCases) { Text($0.title).tag($0) } }
@@ -210,7 +249,7 @@ struct TabSettings: View {
         SettingsSection {
             if prefs.sidebar {
                 SettingRow(
-                    "Sidebar on the right", "The tabs on the window's right side, as Zen can; the traffic lights stay on the left",
+                    "Sidebar on the right", "The tabs on the window's right side; the traffic lights stay on the left",
                     symbol: "sidebar.right", tint: Tint.indigo, keywords: ["right side", "position"], on: $prefs.sideRight)
                 RowRule()
                 SettingRow(
@@ -266,7 +305,7 @@ struct TabSettings: View {
 
         SettingsSection("Moving between tabs") {
             SettingRow(
-                "After closing a tab", "Go to the tab you used before it, as Zen does, or to the one beside it",
+                "After closing a tab", "Go to the tab you used before it, or to the one beside it",
                 symbol: "xmark.square", tint: Tint.blue, keywords: ["close", "recently used"]
             ) {
                 Segmented(options: [(true, "Last used"), (false, "Beside it")], selection: $prefs.closeGoesBack)

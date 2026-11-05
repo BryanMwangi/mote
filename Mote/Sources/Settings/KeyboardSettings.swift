@@ -44,11 +44,15 @@ struct KeyboardSettings: View {
 
         HStack {
             Spacer()
-            // As Zen: for habits from there.
-            Pill("Use Zen's Keys") { prefs.shortcuts = .zen }.disabled(prefs.shortcuts == .zen)
+            // Another browser's keys, for habits from there.
+            Menu("Import Shortcuts") {
+                Button("Zen") { prefs.shortcuts = .zen }.disabled(prefs.shortcuts == .zen)
+            }
+            .menuStyle(.button)
+            .fixedSize()
             Pill("Restore Defaults") { prefs.shortcuts = Shortcuts() }.disabled(prefs.shortcuts.changed.isEmpty)
         }
-        .settingsSearch(["Restore default shortcuts", "Use Zen's keys", "keys"])
+        .settingsSearch(["Restore default shortcuts", "Import shortcuts", "Zen", "keys"])
     }
 
     private func combos(_ id: ShortcutID) -> [String] { prefs.shortcuts.combos(for: id).map(\.text) }
