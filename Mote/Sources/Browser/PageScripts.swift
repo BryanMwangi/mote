@@ -8,7 +8,7 @@ enum PageScripts {
     /// middle-clicks, passkeys, and this site's hidden elements (at document
     /// start, so they never show).
     @MainActor
-    static func all(hiding: ElementHidingStyle.Config) -> [WKUserScript] {
+    static func all(hiding: ElementHidingStyle.Config, boost: String = "") -> [WKUserScript] {
         var scripts = [
             mote(ScrollRelay.script, at: .atDocumentEnd),
             mote(ElementPicker.picker, at: .atDocumentStart),
@@ -41,6 +41,8 @@ enum PageScripts {
         // In the page's world, the only one that sees the site's media session.
         scripts.append(WKUserScript(source: MediaRelay.script, injectionTime: .atDocumentStart, forMainFrameOnly: true, in: .page))
         if !hiding.selectors.isEmpty { scripts.append(mote(ElementPicker.hiding(hiding), at: .atDocumentStart)) }
+        // The site's boost (see Boosts.swift), from the first paint.
+        if !boost.isEmpty { scripts.append(mote(Boosts.styling(boost), at: .atDocumentStart)) }
         return scripts
     }
 

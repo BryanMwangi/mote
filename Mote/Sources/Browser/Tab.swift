@@ -192,7 +192,7 @@ final class Tab: ObservableObject, Identifiable {
     private let sound = AudioWatch()
     private var watches: [NSKeyValueObservation] = []
     /// This site's hidden elements, for the next document.
-    private var hiding = ElementHidingStyle.config(selectors: [])
+    private(set) var hiding = ElementHidingStyle.config(selectors: [])
 
     private func build() -> PageView {
         // Here rather than in Web.configuration: a configuration can come from an
@@ -513,8 +513,11 @@ final class Tab: ObservableObject, Identifiable {
         hiding = config
         guard let controller = built?.configuration.userContentController else { return }
         controller.removeAllUserScripts()
-        PageScripts.all(hiding: config).forEach(controller.addUserScript)
+        PageScripts.all(hiding: config, boost: boostSheet).forEach(controller.addUserScript)
     }
+
+    /// The stylesheet of the boost for the site the tab is loading (see Boosts.swift).
+    var boostSheet = ""
 
     /// Hides what `config` selects in the current document, and only that.
     func applyVeils(_ config: ElementHidingStyle.Config) {

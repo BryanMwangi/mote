@@ -67,6 +67,8 @@ final class Browser: NSObject, ObservableObject {
     @Published var themingSpace: UUID?
     /// A page waiting for a translation session (see Translate.swift).
     @Published var translating: TranslationJob?
+    /// The site whose boost is being edited (see BoostPanel).
+    @Published var boosting: String?
     /// The chat about the active page is docked on the window's trailing edge,
     /// the mirror of the sidebar (its width lives in `Preferences.chatWidth`).
     /// Whether it is open belongs to the tab, not the window (`Tab.chatOpen`),

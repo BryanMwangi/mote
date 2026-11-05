@@ -143,6 +143,7 @@ private struct MenuBar: Commands {
         .keyboardShortcut(keys(.pageChat))
         .disabled(!browser.pageChatPossible)
         Divider()
+        Button("Boost This Site…", action: browser.boostSite).disabled(blank)
         Button("Hide Elements…", action: browser.toggleHiding).keyboardShortcut(keys(.hideElements))
         Button("Hidden on This Site…") { browser.reviewing.toggle() }.keyboardShortcut(keys(.hiddenElements))
         Divider()

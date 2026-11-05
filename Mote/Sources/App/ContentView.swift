@@ -95,6 +95,9 @@ struct ContentView: View {
         if browser.showingDownloads {
             Sheet(close: { browser.showingDownloads = false }) { DownloadsPanel(browser: browser, downloads: browser.downloads) }
         }
+        if let site = browser.boosting {
+            Sheet(close: { browser.boosting = nil }) { BoostPanel(browser: browser, site: site) }
+        }
         if let space = browser.themingSpace {
             Sheet(close: { browser.themingSpace = nil }) { SpaceThemePanel(browser: browser, space: space) }
         }

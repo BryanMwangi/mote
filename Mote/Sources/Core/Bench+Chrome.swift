@@ -205,6 +205,10 @@ extension Bench {
             if what.hasPrefix("new:") { Profiles.shared.add(named: String(what.dropFirst(4))) }
             if what.hasPrefix("delete:") { Profiles.shared.delete(String(what.dropFirst(7))) }
         }
+        // The site in front's boost (test runs): dim (brightness 0.7, Georgia), or reset.
+        if Storage.testing, let what = request.string("boost"), let site = Address.siteHost(of: browser.active?.address) {
+            browser.setBoost(what == "reset" ? Boost() : Boost(brightness: 0.7, font: "Georgia"), for: site)
+        }
         if let query = request.string("settingsquery") { SettingsSearch.shared.query = query == "-" ? "" : query }
         // A command given a key (test runs): ID=cmd+e, ID=none, or reset.
         if Storage.testing, let what = request.string("shortcut") {
