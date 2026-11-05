@@ -133,55 +133,8 @@ final class KeyRouter {
     }
 
     private func run(_ command: KeyMap.Command, in browser: Browser, event: NSEvent) {
-        switch command {
-        case .newTab: browser.newTab()
-        case .newPrivateWindow: Windows.shared.open(private: true)
-        // As Safari: a closed window once there's no closed tab left here.
-        case .reopenTab: browser.ghosts.isEmpty ? Windows.shared.reopenClosed() : browser.reopen()
-        case .closeTab:
-            if browser.peekTab != nil { browser.closePeek() } else if let tab = browser.active { browser.close(tab) }
-        case .duplicateTab: browser.duplicate()
-        case .nextTab: browser.step(1)
-        case .previousTab: browser.step(-1)
-        case .tab(let index): browser.select(index: index)
-        case .lastTab: browser.select(index: browser.tabs.count - 1)
-        case .space(let index): browser.switchSpace(index: index)
-        case .back: browser.back()
-        case .forward: browser.forward()
-        case .reload: browser.reload()
-        case .reader: browser.toggleReader()
-        case .editAddress: browser.edit()
-        case .switcher:
-            // ⌘K again moves the pick; letting go of ⌘ goes there.
-            if browser.editing, !browser.field.offers.isEmpty { browser.stepSummon() } else { browser.summon() }
-        case .pasteAndGo: pasteAndGo(in: browser, event: event)
-        case .copyAddress: browser.copyAddress()
-        case .find: browser.openFind()
-        case .findAgain(let backwards): browser.finder.look(forward: !backwards)
-        case .print: browser.printPage()
-        case .pauseSound: browser.pauseMedia()
-        case .floatVideo: browser.toggleFloat()
-        case .pageChat: browser.togglePageChat()
-        case .toggleSidebar: browser.toggleSidebar()
-        case .foldTabs: browser.toggleFold()
-        case .bookmark: browser.bookmarkCurrent()
-        case .history: browser.recalling.toggle()
-        case .downloads: browser.showingDownloads.toggle()
-        // Opens Settings, or brings it forward.
-        case .settings: browser.tuning = true
-        case .hideElements: browser.toggleHiding()
-        case .hiddenElements: browser.reviewing.toggle()
-        case .undoHiding: browser.undoHiding()
-        case .zoomIn: browser.zoom(by: 1.1)
-        case .zoomOut: browser.zoom(by: 1 / 1.1)
-        case .actualSize: browser.resetZoom()
-        case .inspector: browser.toggleInspector()
-        case .split(let grid): browser.splitKey(grid)
-        case .stepSpace(let by): browser.stepSpace(by)
-        case .compactMode: browser.toggleCompact()
-        case .toggleToolbar: browser.toggleToolbar()
-        case .unsplit: if let group = browser.activeID.flatMap(browser.group(of:)) { browser.unsplit(group: group) }
-        }
+        if case .pasteAndGo = command { return pasteAndGo(in: browser, event: event) }
+        browser.run(command)
     }
 
     /// ⇧⌘V: pastes plain text in anything editable, otherwise Paste and Go.

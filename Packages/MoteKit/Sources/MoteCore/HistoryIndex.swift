@@ -13,6 +13,8 @@ public struct Suggestion: Identifiable, Equatable, Sendable {
         case search
         /// An address on the clipboard.
         case clipboard
+        /// A command found by its name (see QuickActions); `url` names it.
+        case action
     }
 
     /// Normalized address without scheme or "www.".

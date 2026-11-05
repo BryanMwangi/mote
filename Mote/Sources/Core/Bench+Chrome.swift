@@ -30,7 +30,8 @@ extension Bench {
             "peeking": browser.peeking, "toolbarMode": browser.prefs.toolbarMode.rawValue, "peekClick": browser.prefs.peekClick.rawValue,
             "spaceIndex": browser.spaces.firstIndex { $0.id == browser.spaceID } ?? -1,
             "settingsQuery": SettingsSearch.shared.query, "settingsFocusAsked": SettingsSearch.shared.focusAsked,
-            "finding": browser.finder.showing, "asking": browser.field.asksAssistant, "launching": browser.field.launching,
+            "finding": browser.finder.showing, "asking": browser.field.asksAssistant,
+            "offers": browser.field.offers.map { "\($0.kind):\($0.key)" }, "launching": browser.field.launching,
             "chatting": browser.chatting,
             "tabSettings": [
                 browser.prefs.closeGoesBack, browser.prefs.backCloses, browser.prefs.stepSkipsEssentials, browser.prefs.stepSkipsSleeping,

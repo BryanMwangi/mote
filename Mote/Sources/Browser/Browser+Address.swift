@@ -21,7 +21,8 @@ extension Browser {
         if field.launching { return launchSuggestions(for: typed) }
         if assistantLeads, MentionMenu.query(in: typed) != nil { return ([], nil) }
         guard !typed.trimmingCharacters(in: .whitespaces).isEmpty else { return ([], nil) }
-        var list = history.suggestions(for: typed, limit: 3)
+        // Commands by name first, as Zen's URL bar actions; they run only when picked.
+        var list = (assistantLeads ? [] : actionSuggestions(for: typed)) + history.suggestions(for: typed, limit: 3)
         // Where the assistant leads, Return asks rather than searches, so
         // searching isn't offered (⌘J switches back to it).
         if !assistantLeads, Address.url(from: typed) == nil, let search = searchURL(for: typed) {
@@ -29,7 +30,7 @@ extension Browser {
         }
         // A question isn't finished for it as an address.
         if assistantLeads { return (list, nil) }
-        return (list, history.completion(for: typed, among: list.filter { $0.kind != .open }))
+        return (list, history.completion(for: typed, among: list.filter { $0.kind != .open && $0.kind != .action }))
     }
 
     /// The floating search: the clipboard's address while nothing is typed,
@@ -45,11 +46,13 @@ extension Browser {
         }
         let open = openPages(matching: typed)
         let openURLs = Set(open.map(\.url))
-        var list = open + history.suggestions(for: typed, limit: 3).filter { !openURLs.contains($0.url) }
+        var list =
+            (assistantLeads ? [] : actionSuggestions(for: typed)) + open
+            + history.suggestions(for: typed, limit: 3).filter { !openURLs.contains($0.url) }
         if Address.url(from: typed) == nil, let search = searchURL(for: typed) {
             list.append(Suggestion(key: typed, title: prefs.engine.name(custom: prefs.customEngine), url: search, kind: .search))
         }
-        return (list, history.completion(for: typed, among: list.filter { $0.kind != .open }))
+        return (list, history.completion(for: typed, among: list.filter { $0.kind != .open && $0.kind != .action }))
     }
 
     /// ⌘T with the floating search on: the palette over the page, and no tab
@@ -168,6 +171,9 @@ extension Browser {
     /// Return.
     /// Return. `searching`: go or search even where the assistant leads.
     func submit(searching: Bool = false) {
+        if let picked = field.picked, field.offers.indices.contains(picked), field.offers[picked].kind == .action {
+            return runAction(field.offers[picked])
+        }
         if !searching, field.input.asks(assistantLeads: assistantLeads, address: Address.url(from:)) { return ask() }
         let launching = field.launching
         switch field.submit(address: Address.url(from:), destination: destination(for:)) {
@@ -309,6 +315,7 @@ extension Browser {
     /// A clicked suggestion opens directly, without moving the keyboard pick,
     /// so a list appearing under a still pointer doesn't change the field.
     func take(_ offer: Suggestion) {
+        if offer.kind == .action { return runAction(offer) }
         if field.launching { return choose(launched: offer.url, in: offer.tab.flatMap(tab)) }
         field.switching = false
         if let id = offer.tab, let tab = tab(id) {

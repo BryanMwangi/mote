@@ -457,6 +457,7 @@ struct SuggestionList: View {
             switch offer.kind {
             case .clipboard: "Visit from clipboard"
             case .open: "Switch to Tab"
+            case .action: "Action"
             default: nil
             }
         }
@@ -476,6 +477,10 @@ struct SuggestionList: View {
                             .foregroundStyle(Palette.muted)
                     case .clipboard:
                         Image(systemName: "doc.on.clipboard")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(Palette.muted)
+                    case .action:
+                        Image(systemName: "command")
                             .font(.system(size: 11, weight: .medium))
                             .foregroundStyle(Palette.muted)
                     default:
