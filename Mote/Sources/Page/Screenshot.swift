@@ -3,16 +3,39 @@ import MoteCore
 import WebKit
 
 extension Browser {
-    /// Take Screenshot, from the page panel and the keys.
-    func startScreenshot() { active?.screenshot() }
+    /// Take Screenshot, as Firefox's: an overlay on the page to pick an
+    /// element or drag out a region, or save what shows or the whole page.
+    /// See Scripts/src/screenshot.ts.
+    func startScreenshot() {
+        guard let tab = active, !tab.isBlank, let web = tab.built else { return }
+        web.callInAppWorld(Tab.overlay, arguments: [:]) { [weak tab] value in
+            guard let tab, let choice = value as? [String: Any] else { return }
+            let numbers = { (key: String) in (choice[key] as? [Double]) ?? [] }
+            switch choice["kind"] as? String {
+            case "visible": tab.screenshot()
+            case "full": tab.screenshot(.wholePage)
+            case let kind where kind == "copy" || kind == "save":
+                let rect = numbers("rect"), scroll = numbers("scroll")
+                guard rect.count == 4, scroll.count == 2 else { return }
+                tab.screenshot(
+                    .region(CGRect(x: rect[0], y: rect[1], width: rect[2], height: rect[3]), scrolled: CGPoint(x: scroll[0], y: scroll[1])),
+                    copy: kind == "copy")
+            default: break
+            }
+        }
+    }
 }
 
 /// Pictures of the page, as Firefox's screenshots take them: what shows, or
 /// the whole page top to bottom; saved to the downloads folder or copied.
 extension Tab {
-    enum Shot {
+    enum Shot: Equatable {
         case visible, wholePage
+        /// Part of the page, in its own coordinates, with how far it was scrolled.
+        case region(CGRect, scrolled: CGPoint)
     }
+
+    static let overlay = InjectedScript.source("screenshot") + "\nreturn await \(InjectedScript.globalName("screenshot")).run();"
 
     /// The tallest whole page taken, in points, so a never-ending feed can't
     /// ask for a picture too big to hold.
@@ -24,7 +47,14 @@ extension Tab {
         guard let web = built, let browser = owner as? Browser else { return }
         var name = "\(label) – \(shot == .wholePage ? "whole page" : "screenshot").png"
         if let device { name = "\(label) – \(device.name) \(Int(device.width))×\(Int(device.height)).png" }
-        let file = browser.downloadsFolder.appendingPathComponent(name.replacingOccurrences(of: "/", with: "-"))
+        // Beside earlier ones, never over them: "Name 2.png", "Name 3.png".
+        let base = name.replacingOccurrences(of: "/", with: "-").dropLast(4)
+        var file = browser.downloadsFolder.appendingPathComponent(base + ".png")
+        var n = 1
+        while FileManager.default.fileExists(atPath: file.path) {
+            n += 1
+            file = browser.downloadsFolder.appendingPathComponent("\(base) \(n).png")
+        }
         let done = { (image: NSImage?) in
             guard let image else { return browser.announce("The screenshot couldn't be taken") }
             if copy {
@@ -38,6 +68,23 @@ extension Tab {
             browser.announce("Screenshot saved to \(browser.downloadsFolder.lastPathComponent)")
         }
         switch shot {
+        case .region(let rect, let scrolled):
+            // What shows is a snapshot, as the eye saw it; what reaches past
+            // the window comes from WebKit's PDF of the page.
+            let shown = rect.offsetBy(dx: -scrolled.x, dy: -scrolled.y)
+            if shown.minY >= 0, shown.maxY <= web.bounds.height, shown.minX >= 0, shown.maxX <= web.bounds.width {
+                let config = WKSnapshotConfiguration()
+                config.rect = shown
+                web.takeSnapshot(with: config) { image, _ in MainActor.assumeIsolated { done(image) } }
+            } else {
+                let config = WKPDFConfiguration()
+                config.rect = CGRect(x: rect.minX, y: rect.minY, width: rect.width, height: min(rect.height, Self.tallest))
+                web.createPDF(configuration: config) { result in
+                    MainActor.assumeIsolated {
+                        done((try? result.get()).flatMap { Self.picture(ofPDF: $0, scale: web.window?.backingScaleFactor ?? 2) })
+                    }
+                }
+            }
         case .visible:
             let config = WKSnapshotConfiguration()
             if let device { config.snapshotWidth = NSNumber(value: Double(device.width)) }
@@ -63,17 +110,9 @@ extension Tab {
         }
     }
 
-    /// "Take Screenshot ›" for the page's menus: what shows, the whole page,
-    /// or what shows onto the clipboard.
+    /// "Take Screenshot…" for the page's menus: the overlay.
     func screenshotItem() -> NSMenuItem {
-        let item = NSMenuItem(title: "Take Screenshot", action: nil, keyEquivalent: "")
-        item.submenu = NSMenu()
-        item.submenu?.items = [
-            ActionItem("Visible Part") { [weak self] in self?.screenshot() },
-            ActionItem("Whole Page") { [weak self] in self?.screenshot(.wholePage) },
-            ActionItem("Copy Visible Part") { [weak self] in self?.screenshot(copy: true) },
-        ]
-        return item
+        ActionItem("Take Screenshot…") { [weak self] in (self?.owner as? Browser)?.startScreenshot() }
     }
 
     /// The first page of a PDF, drawn into a bitmap `scale` times its size.

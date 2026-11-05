@@ -154,9 +154,18 @@ extension Bench {
         // The inspector at a panel: network, sources, storage, timeline.
         if let panel = request.string("inspect").flatMap({ InspectorPanel(rawValue: $0.capitalized) }) { browser.showInspector(panel) }
         if request.flag("textdirection") { browser.switchTextDirection() }
-        // A screenshot of the tab in front (test runs): visible, whole, or copy.
+        // A screenshot of the tab in front (test runs): visible, whole, copy, the
+        // overlay, or region:X,Y,W,H in the page's coordinates, scrolled to the top.
         if Storage.testing, let shot = request.string("screenshot") {
-            browser.active?.screenshot(shot == "whole" ? .wholePage : .visible, copy: shot == "copy")
+            let numbers = shot.hasPrefix("region:") ? shot.dropFirst(7).split(separator: ",").compactMap { Double($0) } : []
+            if shot == "overlay" {
+                browser.startScreenshot()
+            } else if numbers.count == 4 {
+                browser.active?.screenshot(
+                    .region(CGRect(x: numbers[0], y: numbers[1], width: numbers[2], height: numbers[3]), scrolled: .zero))
+            } else {
+                browser.active?.screenshot(shot == "whole" ? .wholePage : .visible, copy: shot == "copy")
+            }
         }
         // Folders (test runs): new:NAME[/PARENT], toggle:NAME, unpack:NAME, delete:NAME; TAB:NAME puts a tab in one.
         if Storage.testing, let what = request.string("folder") {

@@ -67,7 +67,7 @@ extension Browser {
         case .newPrivateTab: newShyTab()
         case .reloadFromOrigin: reloadFromOrigin()
         case .savePage: savePage()
-        case .screenshot: active?.screenshot()
+        case .screenshot: startScreenshot()
         case .passwords: logins.managing = true
         case .inspector: toggleInspector()
         case .console: showConsole()

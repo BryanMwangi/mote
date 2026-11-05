@@ -70,7 +70,7 @@ private struct MenuBar: Commands {
         CommandGroup(replacing: .printItem) {
             Button("Share…", action: browser.share).disabled(blank)
             Button("Save Page As…", action: browser.savePage).keyboardShortcut(keys(.savePage)).disabled(blank)
-            Button("Take Screenshot") { browser.active?.screenshot() }.keyboardShortcut(keys(.screenshot))
+            Button("Take Screenshot…") { browser.startScreenshot() }.keyboardShortcut(keys(.screenshot))
                 .disabled(blank)
             Button("Take Screenshot of Whole Page") { browser.active?.screenshot(.wholePage) }.disabled(blank)
             Button("Copy Screenshot") { browser.active?.screenshot(copy: true) }.disabled(blank)
