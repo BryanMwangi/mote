@@ -194,7 +194,7 @@ private nonisolated struct TabCardShape: Shape {
 }
 
 /// One system-managed blur behind the chrome; pages keep their opaque card.
-private struct WindowMaterial: NSViewRepresentable {
+private struct WindowMaterial: FillsRoom {
     func makeNSView(context: Context) -> NSVisualEffectView {
         let view = NSVisualEffectView()
         view.material = .sidebar
@@ -368,7 +368,7 @@ private struct PageCard: View {
 /// AppKit rather than a SwiftUI gesture: the cursor has to win over the web
 /// view's cursor rects beside it, and the drag must keep tracking once the
 /// pointer leaves the handle.
-struct ResizeGrip: NSViewRepresentable {
+struct ResizeGrip: FillsRoom {
     /// Which of the two docks the handle belongs to.
     enum Edge {
         case leading, trailing

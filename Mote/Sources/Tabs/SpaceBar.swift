@@ -259,7 +259,7 @@ extension View {
     }
 }
 
-private struct RightClickCatcher: NSViewRepresentable {
+private struct RightClickCatcher: FillsRoom {
     let act: () -> Void
 
     func makeNSView(context: Context) -> Catcher { Catcher() }

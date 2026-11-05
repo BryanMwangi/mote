@@ -166,7 +166,7 @@ struct OneClick: ViewModifier {
 /// Firefox listens on the tab strip rather than on each tab: an AppKit view
 /// per row makes every move of the rows cost AppKit a walk through them all.
 /// It's told where, from the top left.
-struct MiddleClick: NSViewRepresentable {
+struct MiddleClick: FillsRoom {
     let act: (CGPoint) -> Void
 
     func makeNSView(context: Context) -> NSView { Catcher() }

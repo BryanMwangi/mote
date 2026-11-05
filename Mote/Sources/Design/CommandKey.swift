@@ -40,7 +40,7 @@ extension View {
     }
 }
 
-private struct ScrollUpWatch: NSViewRepresentable {
+private struct ScrollUpWatch: FillsRoom {
     let act: () -> Void
 
     func makeNSView(context: Context) -> Watcher { Watcher() }

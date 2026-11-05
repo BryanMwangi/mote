@@ -155,7 +155,7 @@ enum SiteCardPanel {
 }
 
 /// Marks the padlock the site card hangs from.
-struct SiteCardAnchor: NSViewRepresentable {
+struct SiteCardAnchor: FillsRoom {
     func makeNSView(context: Context) -> NSView {
         let spot = Spot()
         SiteCardPanel.anchor = spot

@@ -4,7 +4,7 @@ import SwiftUI
 
 /// Hands over the window once the view is in one, for what has to be set
 /// up in AppKit.
-struct WindowSetup: NSViewRepresentable {
+struct WindowSetup: FillsRoom {
     let ready: (NSWindow) -> Void
 
     func makeNSView(context: Context) -> NSView { Probe(ready: ready) }
@@ -36,7 +36,7 @@ struct WindowSetup: NSViewRepresentable {
 
 /// The title bar's behaviour — drag to move, double-click to zoom — in a
 /// window whose title bar is under SwiftUI content.
-struct DragStrip: NSViewRepresentable {
+struct DragStrip: FillsRoom {
     /// From the leading edge, left to the tabs: the strip is under them but
     /// would be hit first, so it lets clicks there through.
     var reserved: CGFloat = 0
@@ -105,5 +105,16 @@ struct DragStrip: NSViewRepresentable {
             case .nothing: break
             }
         }
+    }
+}
+
+/// An AppKit view that fills whatever room SwiftUI gives it. Saying so keeps
+/// SwiftUI from asking AppKit for its fitting size, which runs Auto Layout
+/// over everything inside it, on every update of the view around it.
+protocol FillsRoom: NSViewRepresentable {}
+
+extension FillsRoom {
+    func sizeThatFits(_ proposal: ProposedViewSize, nsView: NSViewType, context: Context) -> CGSize? {
+        proposal.replacingUnspecifiedDimensions()
     }
 }

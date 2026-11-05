@@ -22,7 +22,7 @@ extension Browser {
     static let splitGap: CGFloat = 8
 
     /// The group a tab is in.
-    func group(of id: Tab.ID) -> UUID? { splits.first { $0.value.contains(id) }?.key }
+    func group(of id: Tab.ID) -> UUID? { splitOf[id] }
 
     /// Where `tabs[index]` sits in its group's run along the row, for its
     /// box: nil outside a group.

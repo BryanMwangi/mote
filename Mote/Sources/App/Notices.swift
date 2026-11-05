@@ -45,7 +45,7 @@ final class Announcer: ObservableObject {
 }
 
 /// The message showing, in a view of its own over the window's foot.
-struct Toast: NSViewRepresentable {
+struct Toast: FillsRoom {
     @ObservedObject var announcer: Announcer
     let browser: Browser
 

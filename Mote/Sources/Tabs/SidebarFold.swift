@@ -171,7 +171,7 @@ struct SidebarFold: View {
 /// The floating sidebar, slid in and out by Core Animation, as Zen slides its
 /// compact sidebar with a transform. SwiftUI animating an offset would lay
 /// out the whole window on every frame of the slide.
-private struct SlidingPanel: NSViewRepresentable {
+private struct SlidingPanel: FillsRoom {
     let out: Bool
     /// The panel's own; past it there's room for its shadow.
     let width: CGFloat

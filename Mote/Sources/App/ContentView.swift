@@ -142,7 +142,7 @@ private struct Sheet<Panel: View>: View {
 /// An arrow pointer over panels. WebKit does `cursor: none` with an AppKit
 /// cursor rect over the whole page, and SwiftUI overlays add none of their
 /// own, so without this the pointer stays hidden over a panel.
-private struct ArrowCursor: NSViewRepresentable {
+private struct ArrowCursor: FillsRoom {
     func makeNSView(context: Context) -> NSView { Area() }
     func updateNSView(_ view: NSView, context: Context) {}
 

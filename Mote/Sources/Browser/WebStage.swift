@@ -4,7 +4,7 @@ import WebKit
 
 /// Holds the active tab's web view. Tabs hand theirs over when they come to
 /// the front and get it back as it was: not reloaded, scroll and forms kept.
-struct WebStage: NSViewRepresentable {
+struct WebStage: FillsRoom {
     let page: NSView?
     /// Responsive Design Mode: the size the page is laid out at, and whether
     /// it's scaled down to fit.

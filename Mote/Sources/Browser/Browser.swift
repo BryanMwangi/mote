@@ -152,7 +152,12 @@ final class Browser: NSObject, ObservableObject {
     /// A link preview over the page (see LinkPeek.swift).
     @Published var peekTab: Tab?
     /// Split views, every space's, each by its own id (see Browser+Split.swift).
-    @Published var splits: [UUID: SplitLayout<Tab.ID>] = [:]
+    @Published var splits: [UUID: SplitLayout<Tab.ID>] = [:] {
+        didSet { splitOf = splits.reduce(into: [:]) { found, group in for id in group.value.ids { found[id] = group.key } } }
+    }
+    /// Each grouped tab's group, kept as `splits` changes: the sidebar asks
+    /// for every row on every frame it draws.
+    private(set) var splitOf: [Tab.ID: UUID] = [:]
     /// Where a tab dragged over the page would split in.
     @Published var splitHover: SplitHover?
     /// The page area, where a dragged tab's place is measured (see SplitStage).
@@ -342,7 +347,9 @@ final class Browser: NSObject, ObservableObject {
                 return tab.$title.map { _ in () }.merge(with: tab.$name.map { _ in () }).eraseToAnyPublisher()
             }
             .switchToLatest()
-            .receive(on: DispatchQueue.main)
+            // Once switching settles: the title isn't on screen, and setting it
+            // lays the title bar out again, which a tab switch's frame shouldn't wait on.
+            .debounce(for: .milliseconds(250), scheduler: DispatchQueue.main)
             .sink { [weak self] in self?.titleWindow() }
             .store(in: &bag)
     }

@@ -127,7 +127,7 @@ private struct Grip: View {
 }
 
 /// Tells the browser where the page area is, so a dragged tab can be placed over it.
-private struct StageAnchor: NSViewRepresentable {
+private struct StageAnchor: FillsRoom {
     let browser: Browser
 
     func makeNSView(context: Context) -> Anchor { Anchor() }
@@ -143,7 +143,7 @@ private struct StageAnchor: NSViewRepresentable {
 /// The line between two panes. AppKit, so its cursor wins over the pages'
 /// and the drag keeps tracking past it. Reports how far it was dragged,
 /// rightward or downward, from where it was pressed.
-private struct SplitHandle: NSViewRepresentable {
+private struct SplitHandle: FillsRoom {
     let axis: SplitAxis
     let drag: (CGFloat) -> Void
 

@@ -18,7 +18,7 @@ extension View {
 }
 
 /// Marks where the menu opens from and presents it.
-private struct MenuPanelAnchor<Content: View>: NSViewRepresentable {
+private struct MenuPanelAnchor<Content: View>: FillsRoom {
     @Binding var isPresented: Bool
     let edge: Edge
     let keyboard: Bool

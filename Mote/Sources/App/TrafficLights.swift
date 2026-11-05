@@ -3,7 +3,7 @@ import MoteCore
 import SwiftUI
 
 /// The original AppKit group is hosted inside the moving pane.
-struct TrafficLights: NSViewRepresentable {
+struct TrafficLights: FillsRoom {
     var showing: Bool
     var strip = false
     var inset: CGFloat = 0

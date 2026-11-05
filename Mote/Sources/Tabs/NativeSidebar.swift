@@ -10,6 +10,14 @@ struct NativeSidebar: NSViewControllerRepresentable {
     func makeNSViewController(context: Context) -> Controller { Controller(browser: browser, prefs: prefs) }
     func updateNSViewController(_ controller: Controller, context: Context) { controller.update() }
 
+    /// It fills the window. Said outright, so SwiftUI doesn't ask AppKit for
+    /// its fitting size on every change to the browser, which runs Auto
+    /// Layout over the split view and both its hosting views: most of the
+    /// time a sleeping tab's wake took.
+    func sizeThatFits(_ proposal: ProposedViewSize, nsViewController: Controller, context: Context) -> CGSize? {
+        proposal.replacingUnspecifiedDimensions()
+    }
+
     @MainActor
     final class Controller: NSSplitViewController {
         private let browser: Browser

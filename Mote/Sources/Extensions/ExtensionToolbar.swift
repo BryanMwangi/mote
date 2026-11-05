@@ -60,7 +60,7 @@ private struct PinnedButton: View {
 
 /// Tells Extensions which view a popup hangs from.
 @available(macOS 15.4, *)
-private struct PopupAnchor: NSViewRepresentable {
+private struct PopupAnchor: FillsRoom {
     let id: String
 
     func makeNSView(context: Context) -> NSView {

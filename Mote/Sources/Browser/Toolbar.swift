@@ -298,7 +298,7 @@ struct BarSuggestions: View {
 
 /// Marks a region where a click doesn't end address editing (the field itself,
 /// its suggestions). See `AddressField.outside`.
-struct KeepZone: NSViewRepresentable {
+struct KeepZone: FillsRoom {
     @MainActor static let views = NSHashTable<NSView>.weakObjects()
 
     func makeNSView(context: Context) -> NSView {
