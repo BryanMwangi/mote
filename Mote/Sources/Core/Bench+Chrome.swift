@@ -174,6 +174,11 @@ extension Bench {
                 RouteStore.shared.change { $0.append(SpaceRoute(reference: host, space: browser.spaces[index].id)) }
             }
         }
+        // The space in front's colours (test runs): a preset's number, or off.
+        if Storage.testing, let what = request.string("theme") {
+            let preset = Int(what).flatMap { SpaceTheme.presets.indices.contains($0) ? SpaceTheme.presets[$0] : nil }
+            browser.setSpaceTheme(browser.spaceID, to: preset.map { SpaceTheme(colors: $0.colors, opacity: $0.opacity, grain: true) })
+        }
         if let query = request.string("settingsquery") { SettingsSearch.shared.query = query == "-" ? "" : query }
         // A command given a key (test runs): ID=cmd+e, ID=none, or reset.
         if Storage.testing, let what = request.string("shortcut") {

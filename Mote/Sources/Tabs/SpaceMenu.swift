@@ -43,6 +43,7 @@ enum SpaceMenu {
 
     private static func actions(on here: Space, in browser: Browser, from anchor: IconAnchor) -> [NSMenuItem] {
         var items = [item("Rename “\(here.name)”…") { rename(here, in: browser) }]
+        items.append(item("Colours…", symbol: "paintpalette") { browser.themingSpace = here.id })
         items.append(
             item("Icon…", symbol: here.emoji ?? here.symbol) {
                 browser.pickingIcon = IconPick(space: here.id, from: anchor)

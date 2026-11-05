@@ -94,6 +94,9 @@ struct ContentView: View {
         if browser.showingDownloads {
             Sheet(close: { browser.showingDownloads = false }) { DownloadsPanel(browser: browser, downloads: browser.downloads) }
         }
+        if let space = browser.themingSpace {
+            Sheet(close: { browser.themingSpace = nil }) { SpaceThemePanel(browser: browser, space: space) }
+        }
         if browser.showingProcesses {
             Sheet(close: { browser.showingProcesses = false }) { ProcessesPanel(browser: browser) }
         }

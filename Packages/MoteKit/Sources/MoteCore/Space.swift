@@ -17,6 +17,8 @@ public struct Space: Codable, Identifiable, Equatable, Sendable {
     /// Where it came from when imported ("zen:<uuid>"), so importing again
     /// doesn't make it twice.
     public var origin: String?
+    /// Its colours behind the window's frame, as Zen's space themes; nil for none.
+    public var theme: SpaceTheme?
 
     public init(
         id: UUID, name: String, icon: String? = nil, sharesSignIns: Bool? = nil, downloads: String? = nil, origin: String? = nil
@@ -104,4 +106,41 @@ public struct SpaceList: Equatable, Sendable {
 
     /// The spaces sharing the first space's data.
     public var sharing: Set<UUID> { Set(spaces.filter { $0.sharesSignIns == true }.map(\.id)) }
+}
+
+/// A space's colours, as Zen's themes keep them, leaner: one to three
+/// colours in a gradient across the window's frame, how strongly they show,
+/// and a grain over them.
+public struct SpaceTheme: Codable, Equatable, Sendable {
+    /// "#rrggbb", one to three.
+    public var colors: [String]
+    /// 0 to 1.
+    public var opacity: Double
+    public var grain: Bool
+
+    public init(colors: [String], opacity: Double = 0.45, grain: Bool = false) {
+        self.colors = Array(colors.prefix(3))
+        self.opacity = min(max(opacity, 0), 1)
+        self.grain = grain
+    }
+
+    /// A few to start from, as Zen's picker offers.
+    public static let presets: [SpaceTheme] = [
+        SpaceTheme(colors: ["#7c5cff", "#ff7ab6"]), SpaceTheme(colors: ["#2bb3ff", "#38e0b0"]),
+        SpaceTheme(colors: ["#ff8a3d", "#ffd23f"]), SpaceTheme(colors: ["#3a7bd5", "#00d2ff", "#9b5cff"]),
+        SpaceTheme(colors: ["#2f9e44"]), SpaceTheme(colors: ["#e03131", "#7048e8"]),
+    ]
+
+    /// A colour's red, green and blue from 0 to 1; nil when it isn't "#rrggbb".
+    public static func rgb(_ hex: String) -> (red: Double, green: Double, blue: Double)? {
+        let digits = hex.hasPrefix("#") ? String(hex.dropFirst()) : hex
+        guard digits.count == 6, let value = UInt32(digits, radix: 16) else { return nil }
+        return (Double(value >> 16 & 0xff) / 255, Double(value >> 8 & 0xff) / 255, Double(value & 0xff) / 255)
+    }
+
+    /// "#rrggbb" for red, green and blue from 0 to 1.
+    public static func hex(red: Double, green: Double, blue: Double) -> String {
+        let byte = { (value: Double) in Int((min(max(value, 0), 1) * 255).rounded()) }
+        return String(format: "#%02x%02x%02x", byte(red), byte(green), byte(blue))
+    }
 }
