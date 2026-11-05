@@ -24,6 +24,8 @@ public struct Boost: Codable, Equatable, Sendable {
     public var textCase: String?
     /// Off keeps everything for later.
     public var enabled = true
+    /// What it's called; the site's name until it's given one.
+    public var name: String?
 
     public init(
         brightness: Double = 1, contrast: Double = 1, saturation: Double = 1, font: String? = nil, css: String = "", tint: String? = nil,
@@ -34,7 +36,7 @@ public struct Boost: Codable, Equatable, Sendable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case brightness, contrast, saturation, font, css, tint, accent, dark, size, textCase, enabled
+        case brightness, contrast, saturation, font, css, tint, accent, dark, size, textCase, enabled, name
     }
 
     /// Older boosts have only some of these.
@@ -50,6 +52,7 @@ public struct Boost: Codable, Equatable, Sendable {
             size: try values.decodeIfPresent(Double.self, forKey: .size) ?? 1,
             textCase: try values.decodeIfPresent(String.self, forKey: .textCase),
             enabled: try values.decodeIfPresent(Bool.self, forKey: .enabled) ?? true)
+        name = try values.decodeIfPresent(String.self, forKey: .name)
     }
 
     /// What the colours script is told: the dots, and how far colours move,

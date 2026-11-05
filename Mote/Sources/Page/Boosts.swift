@@ -2,6 +2,7 @@ import AppKit
 import Combine
 import MoteCore
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// Every site's boost, kept in one file every window shares (see Boost).
 @MainActor
@@ -77,6 +78,8 @@ struct BoostEditor: View {
 
     @State private var tuning = false
     @State private var coding = false
+    /// The dots mid-drag: the page is recoloured when the drag ends.
+    @State private var dots: [String]?
 
     private static let fonts = ["Georgia", "Helvetica Neue", "Avenir Next", "New York", "Charter", "Menlo", "Verdana", "Futura", "Optima"]
     private static let sizes = [0.9, 1, 1.1, 1.25, 1.5]
@@ -95,26 +98,52 @@ struct BoostEditor: View {
             HStack {
                 Door(icon: "xmark", help: "Close") { browser.boosting = nil }
                 Spacer()
-                Text(site).font(.system(size: 13, weight: .semibold)).lineLimit(1)
-                Spacer()
-                Door(icon: "dice", help: "Shuffle the colours") {
-                    change {
-                        $0.tint = ThemeColors.hex(at: CGPoint(x: .random(in: -1...1), y: .random(in: -1...1)))
-                        $0.accent = ThemeColors.hex(at: CGPoint(x: .random(in: -1...1), y: .random(in: -1...1)))
+                // The boost's own menu, as Zen's under its name.
+                Menu {
+                    Button("Rename Boost…") {
+                        Prompt.name("Rename Boost", placeholder: site, initial: boost.name ?? "", confirm: "Rename") { name in
+                            change { $0.name = name.isEmpty ? nil : name }
+                        }
+                    }
+                    Button("Shuffle Colours", action: shuffle)
+                    Button("Reset All Edits") { browser.setBoost(Boost(), for: site) }.disabled(boost.isEmpty)
+                    Divider()
+                    Button("Import Boost…", action: importBoost)
+                    Button("Export Boost…", action: exportBoost).disabled(boost.isEmpty)
+                    Divider()
+                    Button("Delete Boost", role: .destructive) {
+                        browser.setBoost(Boost(), for: site)
+                        browser.boosting = nil
+                    }
+                } label: {
+                    HStack(spacing: 4) {
+                        Text(boost.name ?? site).font(.system(size: 13, weight: .semibold)).lineLimit(1)
+                        Image(systemName: "chevron.down").font(.system(size: 9, weight: .bold))
                     }
                 }
+                .menuStyle(.borderlessButton)
+                .menuIndicator(.hidden)
+                .fixedSize()
+                Spacer()
+                Door(icon: "dice", help: "Shuffle the colours", act: shuffle)
             }
             .background(DragHandle())
             if coding { code } else { controls }
         }
         .padding(14)
+        // From the top, the panel as tall as the controls; the code box takes
+        // what's left of it.
         .frame(width: 268)
+        .frame(maxHeight: .infinity, alignment: .top)
     }
 
     private var controls: some View {
         VStack(spacing: 10) {
             ZStack(alignment: .top) {
-                ThemeField(colors: [boost.tint, boost.accent].compactMap { $0 }, harmony: nil, limit: 2, side: 240) { colors, _ in
+                ThemeField(colors: dots ?? [boost.tint, boost.accent].compactMap { $0 }, harmony: nil, limit: 2, side: 240) {
+                    colors, done in
+                    guard done else { return dots = colors }
+                    dots = nil
                     change {
                         $0.tint = colors.first
                         $0.accent = colors.count > 1 ? colors[1] : nil
@@ -126,7 +155,7 @@ struct BoostEditor: View {
                 Tile(symbol: "lightbulb", on: boost.dark, help: "Dark") { change { $0.dark.toggle() } }
                 Tile(symbol: "slider.horizontal.3", on: tuning, help: "Brightness, contrast and colour") { tuning.toggle() }
                     .popover(isPresented: $tuning, arrowEdge: .bottom) { finer }
-                Tile(symbol: "nosign", on: !boost.enabled, help: boost.enabled ? "Switch the boost off" : "Switch it back on") {
+                Tile(symbol: "nosign", on: !boost.enabled, help: boost.enabled ? "Switch the boost off, keeping it" : "Switch it back on") {
                     change { $0.enabled.toggle() }
                 }
             }
@@ -196,7 +225,7 @@ struct BoostEditor: View {
         VStack(spacing: 8) {
             TextEditor(text: Binding(get: { boost.css }, set: { css in change { $0.css = css } }))
                 .font(.system(size: 12, design: .monospaced))
-                .frame(height: 380)
+                .frame(maxHeight: .infinity)
                 .scrollContentBackground(.hidden)
                 .padding(6)
                 .background(.black.opacity(0.25), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
@@ -206,6 +235,33 @@ struct BoostEditor: View {
                 Pill("Reset Boost") { browser.setBoost(Boost(), for: site) }.disabled(boost.isEmpty)
             }
         }
+    }
+
+    /// A swatch of Zen's at random, and the colour across the wheel from it.
+    private func shuffle() {
+        let hex = SpaceTheme.swatches.randomElement()!.hex
+        let across = ThemeColors.others(.complementary, from: ThemeColors.point(for: hex)).map(ThemeColors.hex(at:)).first
+        change {
+            $0.tint = hex
+            $0.accent = across
+        }
+    }
+
+    private func exportBoost() {
+        let save = NSSavePanel()
+        save.nameFieldStringValue = "\(site) boost.json"
+        save.allowedContentTypes = [.json]
+        guard save.runModal() == .OK, let file = save.url, let data = try? JSONEncoder().encode(boost) else { return }
+        try? data.write(to: file)
+    }
+
+    private func importBoost() {
+        let open = NSOpenPanel()
+        open.allowedContentTypes = [.json]
+        guard open.runModal() == .OK, let file = open.url, let data = try? Data(contentsOf: file),
+            let read = try? JSONDecoder().decode(Boost.self, from: data)
+        else { return }
+        browser.setBoost(read, for: site)
     }
 
     private func change(_ edit: (inout Boost) -> Void) {
