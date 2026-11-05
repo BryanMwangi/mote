@@ -50,6 +50,13 @@ extension Browser: WKNavigationDelegate, WKUIDelegate {
             decisionHandler(.cancel)
             handOff(url, clicked: request.clicked, mainFrame: mainFrame, from: webView)
         case .load:
+            // A site a rule gives to another space opens there (Browser+Routing.swift).
+            if mainFrame, action.navigationType != .reload, let from, let space = routedSpace(for: url, from: from) {
+                decisionHandler(.cancel)
+                let fresh = webView.backForwardList.currentItem == nil
+                Task { self.route(url, to: space, from: from, fresh: fresh) }
+                return
+            }
             // The destination site's hidden elements and blocking rules go in
             // before its document loads.
             if mainFrame, let from {

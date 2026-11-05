@@ -192,6 +192,14 @@ struct TabMenu: View {
         Divider()
         TabHoldItems(browser: browser, tab: tab)
         Button("Unload Tab") { browser.unload(tab) }.disabled(tab.isBlank || tab.asleep)
+        if browser.usesSpaces, browser.spaces.count > 1, !tab.isBlank {
+            // As Zen's space routing: this site, in this space, from now on.
+            if let rule = browser.routeHere(for: tab) {
+                Button("Stop Always Opening Here") { browser.forgetRoute(rule.id) }
+            } else {
+                Button("Always Open in This Space") { browser.alwaysOpenHere(tab) }
+            }
+        }
         if browser.usesSpaces, browser.spaces.count > 1 {
             Menu("Move to Space") {
                 ForEach(browser.spaces.filter { $0.id != browser.spaceID }) { space in

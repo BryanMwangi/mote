@@ -180,6 +180,7 @@ struct GeneralSettings: View {
 struct TabSettings: View {
     @ObservedObject var browser: Browser
     @ObservedObject var prefs: Preferences
+    @ObservedObject private var routes = RouteStore.shared
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -275,6 +276,35 @@ struct TabSettings: View {
                 "Each space can share your sign-ins or start clean. Move between them with ⌃1–⌃9, a two-finger swipe over the tabs, or their icon",
                 symbol: "square.stack.3d.up", tint: Tint.purple, on: $prefs.usesSpaces)
             if prefs.usesSpaces { SpaceRows(browser: browser) }
+        }
+
+        if prefs.usesSpaces, !routes.routes.isEmpty {
+            SettingsSection("Sites that open in a space", note: "Add one from a tab's menu: Always Open in This Space.") {
+                ForEach(Array(routes.routes.enumerated()), id: \.element.id) { index, route in
+                    if index > 0 { RowRule() }
+                    SettingRow(
+                        route.reference, route.match == .contains ? nil : route.match.rawValue.capitalized, symbol: "arrow.triangle.branch",
+                        tint: Tint.purple, keywords: ["routing", "always open"]
+                    ) {
+                        HStack(spacing: 6) {
+                            Picker(
+                                "",
+                                selection: Binding(
+                                    get: { route.space },
+                                    set: { space in
+                                        routes.change { list in
+                                            if let at = list.firstIndex(where: { $0.id == route.id }) { list[at].space = space }
+                                        }
+                                    })
+                            ) { ForEach(browser.spaces) { Text($0.name).tag($0.id) } }
+                            .labelsHidden()
+                            .pickerStyle(.menu)
+                            .fixedSize()
+                            Door(icon: "xmark", help: "Remove") { browser.forgetRoute(route.id) }
+                        }
+                    }
+                }
+            }
         }
     }
 }

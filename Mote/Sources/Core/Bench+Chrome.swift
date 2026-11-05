@@ -163,6 +163,17 @@ extension Bench {
             default: break
             }
         }
+        // Space routing (test runs): HOST:SPACEINDEX adds a rule, clear removes them all.
+        if Storage.testing, let what = request.string("route") {
+            if what == "clear" {
+                RouteStore.shared.change { $0.removeAll() }
+            } else if let colon = what.lastIndex(of: ":"), let index = Int(what[what.index(after: colon)...]),
+                browser.spaces.indices.contains(index)
+            {
+                let host = String(what[..<colon])
+                RouteStore.shared.change { $0.append(SpaceRoute(reference: host, space: browser.spaces[index].id)) }
+            }
+        }
         if let query = request.string("settingsquery") { SettingsSearch.shared.query = query == "-" ? "" : query }
         // A command given a key (test runs): ID=cmd+e, ID=none, or reset.
         if Storage.testing, let what = request.string("shortcut") {
