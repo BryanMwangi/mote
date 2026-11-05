@@ -228,7 +228,9 @@ struct AddressPill: View {
         }
         .padding(.trailing, 2)
         .frame(height: Self.height)
-        .background(editing || hovering ? Palette.hover : Palette.wash, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .background {
+            Tinted(shape: RoundedRectangle(cornerRadius: 10, style: .continuous), fill: editing || hovering ? Palette.hover : Palette.wash)
+        }
         .overlay {
             RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Palette.ink.opacity(editing ? 0.14 : 0))
                 .allowsHitTesting(false)

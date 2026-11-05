@@ -1,3 +1,4 @@
+import Foundation
 import MoteCore
 
 // Hiding page elements for good (⌘⇧H), per site. ElementHider keeps what is
@@ -24,6 +25,11 @@ extension Browser {
         // Snapped: to dust, its picture taken before anything hides it, and
         // hidden underneath as the dust starts.
         let gone = {
+            // Out of sight at once, as the dust starts: the hiding rules follow.
+            let quoted = (try? JSONEncoder().encode(selector)).flatMap { String(data: $0, encoding: .utf8) } ?? "\"\""
+            tab.built?.evaluateInAppWorld(
+                "try { document.querySelectorAll(\(quoted)).forEach(e => e.style.setProperty('visibility', 'hidden', 'important')) } catch {}"
+            )
             self.elementHider.hide(selector, label: label, note: note, on: host)
             self.dress(tab, for: host)
         }

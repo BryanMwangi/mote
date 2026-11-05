@@ -49,6 +49,36 @@ struct SpaceGround: View {
     }()
 }
 
+/// The space's own colour, which the chrome's lifted surfaces take a wash
+/// of, as Zen's do: the tab in front, the address, the media strip, the
+/// essentials. Nil without a theme.
+private struct SpaceTint: EnvironmentKey {
+    static let defaultValue: Color? = nil
+}
+
+extension EnvironmentValues {
+    var spaceTint: Color? {
+        get { self[SpaceTint.self] }
+        set { self[SpaceTint.self] = newValue }
+    }
+}
+
+extension Browser {
+    var spaceTint: Color? { spaces.first { $0.id == spaceID }?.theme?.colors.first.flatMap(Color.init(hex:)) }
+}
+
+/// A surface with the space's wash over it, stronger in the dark.
+struct Tinted<S: Shape>: View {
+    let shape: S
+    let fill: Color
+    @Environment(\.spaceTint) private var tint
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        shape.fill(fill).overlay { if let tint { shape.fill(tint.opacity(scheme == .dark ? 0.28 : 0.16)) } }
+    }
+}
+
 extension Color {
     /// "#rrggbb", or nil.
     init?(hex: String) {

@@ -106,6 +106,7 @@ struct ContentView: View {
             // The space's own look, through SwiftUI: it owns the window's
             // appearance and puts back anything set on the window directly.
             .preferredColorScheme(browser.spaceScheme)
+            .environment(\.spaceTint, browser.spaceTint)
             .background(TranslationHost(browser: browser))
     }
 

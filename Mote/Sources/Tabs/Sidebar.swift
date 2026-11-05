@@ -438,6 +438,7 @@ private struct IconGlow: View {
     let icon: NSImage
     let corner: CGFloat
     let dark: Bool
+    var inverted = false
 
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: corner, style: .continuous)
@@ -445,6 +446,7 @@ private struct IconGlow: View {
             ZStack {
                 Image(nsImage: icon)
                     .resizable()
+                    .modifier(Inverted(on: inverted))
                     .frame(width: room.size.width * 2, height: room.size.height * 2)
                     .blur(radius: 20)
                 RoundedRectangle(cornerRadius: corner - 2, style: .continuous)
@@ -495,6 +497,8 @@ private struct PinSquare: View {
     /// Contents scale with the shorter side, so the mark stays its usual size.
     private var side: CGFloat { min(size.width, size.height) }
     private var corner: CGFloat { side * 10 / 36 }
+    /// A white icon would vanish on the light tile: it's drawn dark instead.
+    private var invertsIcon: Bool { colorScheme == .light && tab.icon?.isPale == true }
     private var shape: RoundedRectangle { RoundedRectangle(cornerRadius: corner, style: .continuous) }
 
     var body: some View {
@@ -503,11 +507,11 @@ private struct PinSquare: View {
             .frame(width: size.width, height: size.height)
             .background {
                 if live, let icon = tab.icon {
-                    IconGlow(icon: icon, corner: corner, dark: colorScheme == .dark)
+                    IconGlow(icon: icon, corner: corner, dark: colorScheme == .dark, inverted: invertsIcon)
                 } else if live {
                     Lifted(corner: corner)
                 } else {
-                    shape.fill(Palette.veil.opacity(hovering ? 1.8 : 1))
+                    Tinted(shape: shape, fill: Palette.veil.opacity(hovering ? 1.8 : 1))
                 }
             }
             .contentShape(shape)
@@ -525,6 +529,7 @@ private struct PinSquare: View {
             InlineField.letter(of: tab, in: browser)
         } else if icons, let icon = tab.icon {
             Mark(icon: icon, letter: tab.pin ?? "", size: side * 16 / 34, dim: tab.asleep)
+                .modifier(Inverted(on: invertsIcon))
         } else {
             Text(tab.pin ?? "")
                 .font(.system(size: side * 12 / 34, weight: .medium))
@@ -800,5 +805,12 @@ private struct FolderSpot: FillsRoom {
 
     private final class Spot: NSView {
         override func hitTest(_ point: NSPoint) -> NSView? { nil }
+    }
+}
+
+private struct Inverted: ViewModifier {
+    let on: Bool
+    func body(content: Content) -> some View {
+        if on { content.colorInvert() } else { content }
     }
 }

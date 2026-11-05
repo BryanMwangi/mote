@@ -49,7 +49,9 @@ struct MediaStrip: View {
             }
             .padding(.trailing, 4)
             .frame(height: Self.height)
-            .background(hovering ? Palette.hover : Palette.wash, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .background {
+                Tinted(shape: RoundedRectangle(cornerRadius: 10, style: .continuous), fill: hovering ? Palette.hover : Palette.wash)
+            }
             .onHover { hovering = $0 }
             .animation(Motion.hover, value: hovering)
             .animation(Motion.quick, value: media.playing)

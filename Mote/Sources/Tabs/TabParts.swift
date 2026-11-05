@@ -108,7 +108,7 @@ struct Lifted<Content: View>: View {
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: corner, style: .continuous)
         ZStack(alignment: .leading) {
-            shape.fill(Palette.lift)
+            Tinted(shape: shape, fill: Palette.lift)
             content
         }
         .clipShape(shape)
