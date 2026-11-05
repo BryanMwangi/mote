@@ -7,6 +7,9 @@ import {
   replaceInstallButton,
   setLabel,
   storeInstallButton,
+  amoGetFirefoxButton,
+  amoID,
+  replaceAMOButton,
 } from '../src/web-store-bridge/store-page';
 
 const ID = 'cjpalhdlnbpafiamejdnhcphjbkeiagm';
@@ -138,5 +141,25 @@ describe('setLabel', () => {
     button.innerHTML = '<i></i>';
     setLabel(button, 'Add to Mote');
     expect(button.textContent).toBe('Add to Mote');
+  });
+});
+
+describe('addons.mozilla.org', () => {
+  it("names the add-on as Mote keeps it, from the page's address", () => {
+    expect(amoID('/en-US/firefox/addon/ublock-origin/')).toBe('amo-ublock-origin');
+    expect(amoID('/firefox/addon/Dark_Reader/reviews/')).toBe('amo-darkreader');
+    expect(amoID('/en-US/firefox/')).toBeNull();
+  });
+
+  it('puts Add to Mote in place of Download Firefox, in its style', () => {
+    document.body.innerHTML =
+      '<div><a class="Button GetFirefoxButton-button" href="#">Download Firefox and get the extension</a></div>';
+    const original = amoGetFirefoxButton(document);
+    expect(original).not.toBeNull();
+    const ours = replaceAMOButton(original!);
+    expect(ours.textContent).toBe('Add to Mote');
+    expect(ours.className).toContain('GetFirefoxButton-button');
+    expect(original!.style.display).toBe('none');
+    expect(amoGetFirefoxButton(document)).toBeNull();
   });
 });

@@ -47,7 +47,8 @@ extension Browser {
     }
 
     private func storePage(of tab: Tab) -> URL? {
-        tab.address.flatMap { ExtensionRules.isStorePage($0) ? $0 : nil }
+        // The Chrome Web Store's, or a Firefox add-on's on addons.mozilla.org.
+        tab.address.flatMap { ExtensionRules.isStorePage($0) || AMO.slug(in: $0.absoluteString) != nil ? $0 : nil }
     }
 
     /// Store pages hear again whenever that changes.

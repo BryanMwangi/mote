@@ -96,16 +96,41 @@
 	function mark(element, what) {
 		element.dataset.mote = what;
 	}
+	/**
+	* addons.mozilla.org: the add-on's id as Mote keeps it ("amo-" and its slug,
+	* kept to letters, digits and dashes; InstalledExtension.firefoxID).
+	*/
+	function amoID(pathname) {
+		const slug = /\/addon\/([^/]+)/.exec(pathname)?.[1];
+		return slug ? "amo-" + decodeURIComponent(slug).toLowerCase().replace(/[^a-z0-9-]/g, "") : null;
+	}
+	/** addons.mozilla.org's "Download Firefox and get the extension", not yet replaced. */
+	function amoGetFirefoxButton(document) {
+		return document.querySelector("a.GetFirefoxButton-button:not([data-mote])");
+	}
+	/** Puts "Add to Mote" in place of that link, in its own style, and hides it. */
+	function replaceAMOButton(original) {
+		const ours = original.ownerDocument.createElement("button");
+		ours.className = original.className;
+		ours.textContent = "Add to Mote";
+		mark(ours, "add");
+		mark(original, "theirs");
+		original.style.display = "none";
+		original.parentNode?.insertBefore(ours, original.nextSibling);
+		return ours;
+	}
 
 //#endregion
 //#region src/web-store-bridge.ts
 /** Waits this long after the store redraws, so a burst of changes mends once. */
 	const MEND_DELAY_MS = 60;
+	/** Firefox's add-on store, where a Firefox add-on's page gets the same button. */
+	const onAMO = location.hostname === "addons.mozilla.org";
 	/** The extension this store page shows, from its own address. */
 	function pageID() {
-		return extensionID(location.pathname);
+		return onAMO ? amoID(location.pathname) : extensionID(location.pathname);
 	}
-	if (location.hostname === "chromewebstore.google.com" && !window.__moteStore) {
+	if ((location.hostname === "chromewebstore.google.com" || onAMO) && !window.__moteStore) {
 		let state = {
 			installed: [],
 			busy: null
@@ -120,6 +145,14 @@
 			for (const button of document.querySelectorAll(OUR_BUTTON)) render(button);
 		};
 		const mend = () => {
+			if (onAMO) {
+				const getFirefox = pageID() ? amoGetFirefoxButton(document) : null;
+				if (getFirefox) {
+					replaceAMOButton(getFirefox);
+					post({ placed: pageID() });
+				}
+				return renderAll();
+			}
 			hidePromotions(document);
 			if (!pageID()) return;
 			const original = storeInstallButton(document);

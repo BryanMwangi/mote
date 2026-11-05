@@ -5,10 +5,13 @@
 // at once outside the store. Avoids the store's generated class names.
 
 import {
+  amoGetFirefoxButton,
+  amoID,
   buttonState,
   extensionID,
   hidePromotions,
   OUR_BUTTON,
+  replaceAMOButton,
   replaceInstallButton,
   setLabel,
   storeInstallButton,
@@ -28,12 +31,15 @@ type StoreMessage = { add: true } | { placed: string | null };
 /** Waits this long after the store redraws, so a burst of changes mends once. */
 const MEND_DELAY_MS = 60;
 
+/** Firefox's add-on store, where a Firefox add-on's page gets the same button. */
+const onAMO = location.hostname === 'addons.mozilla.org';
+
 /** The extension this store page shows, from its own address. */
 function pageID(): string | null {
-  return extensionID(location.pathname);
+  return onAMO ? amoID(location.pathname) : extensionID(location.pathname);
 }
 
-if (location.hostname === 'chromewebstore.google.com' && !window.__moteStore) {
+if ((location.hostname === 'chromewebstore.google.com' || onAMO) && !window.__moteStore) {
   let state: StoreState = { installed: [], busy: null };
 
   const post = (message: StoreMessage): void => window.webkit.messageHandlers.moteStore?.postMessage(message);
@@ -50,6 +56,14 @@ if (location.hostname === 'chromewebstore.google.com' && !window.__moteStore) {
   };
 
   const mend = (): void => {
+    if (onAMO) {
+      const getFirefox = pageID() ? amoGetFirefoxButton(document) : null;
+      if (getFirefox) {
+        replaceAMOButton(getFirefox);
+        post({ placed: pageID() });
+      }
+      return renderAll();
+    }
     hidePromotions(document);
     if (!pageID()) return;
     const original = storeInstallButton(document);

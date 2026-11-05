@@ -111,3 +111,34 @@ export function setLabel(button: HTMLElement, text: string): void {
 function mark(element: HTMLElement, what: Mark): void {
   element.dataset.mote = what;
 }
+
+/**
+ * addons.mozilla.org: the add-on's id as Mote keeps it ("amo-" and its slug,
+ * kept to letters, digits and dashes; InstalledExtension.firefoxID).
+ */
+export function amoID(pathname: string): string | null {
+  const slug = /\/addon\/([^/]+)/.exec(pathname)?.[1];
+  return slug
+    ? 'amo-' +
+        decodeURIComponent(slug)
+          .toLowerCase()
+          .replace(/[^a-z0-9-]/g, '')
+    : null;
+}
+
+/** addons.mozilla.org's "Download Firefox and get the extension", not yet replaced. */
+export function amoGetFirefoxButton(document: Document): HTMLElement | null {
+  return document.querySelector<HTMLElement>('a.GetFirefoxButton-button:not([data-mote])');
+}
+
+/** Puts "Add to Mote" in place of that link, in its own style, and hides it. */
+export function replaceAMOButton(original: HTMLElement): HTMLButtonElement {
+  const ours = original.ownerDocument.createElement('button');
+  ours.className = original.className;
+  ours.textContent = 'Add to Mote';
+  mark(ours, 'add');
+  mark(original, 'theirs');
+  original.style.display = 'none';
+  original.parentNode?.insertBefore(ours, original.nextSibling);
+  return ours;
+}
