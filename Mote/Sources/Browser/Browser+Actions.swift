@@ -113,6 +113,13 @@ extension Browser {
                 QuickAction(id: "others", title: "Close Other Tabs") { [weak self] in self?.closeOthers(but: tab) },
             ]
         }
+        actions.append(QuickAction(id: "folder", title: "New Folder") { [weak self] in self?.newFolder() })
+        if !folders.isEmpty {
+            actions += [
+                QuickAction(id: "collapse", title: "Collapse All Folders") { [weak self] in self?.collapseFolders(true) },
+                QuickAction(id: "expand", title: "Expand All Folders") { [weak self] in self?.collapseFolders(false) },
+            ]
+        }
         if usesSpaces {
             actions.append(QuickAction(id: "space", title: "New Space") { [weak self] in self?.askForSpace() })
             actions += spaces.filter { $0.id != spaceID }.map { space in

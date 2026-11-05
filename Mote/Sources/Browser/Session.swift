@@ -20,6 +20,8 @@ enum Session {
         /// An essential or pinned tab's pinned address, when it has browsed
         /// on; nil in older files, where it's `url`.
         var home: String?
+        /// A pinned tab's folder; nil in older files and for the others.
+        var folder: String?
     }
 
     nonisolated struct Saved: Codable, Sendable {

@@ -195,6 +195,7 @@ extension Browser {
         parked.removeValue(forKey: id)?.tabs.forEach { $0.close() }
         editSpaces { $0.remove(id) }
         Session.erase(space: id)
+        FolderStore.shared.change(id) { $0.removeAll() }
         if doomed.ownData { Spaces.erase(id) }
     }
 }

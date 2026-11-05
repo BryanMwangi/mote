@@ -233,6 +233,7 @@ private struct SpacePage: View {
     let room: CGFloat
     @Binding var drag: ReorderDrag<Tab.ID>?
     @Binding var keptDrag: ReorderDrag<Tab.ID>?
+    @ObservedObject private var folderStore = FolderStore.shared
 
     private static let row = Metrics.row
     private static let gap: CGFloat = 2
@@ -246,19 +247,20 @@ private struct SpacePage: View {
         let essentials = tabs.filter { $0.section == .essential }
         let kept = tabs.filter { $0.section == .pinned }
         let loose = tabs.filter { $0.section == .loose }
+        let lines = Folder.outline(folderStore.folders(in: space.id), tabs: kept.map { ($0.id, $0.folder) }, active: active)
         VStack(alignment: .leading, spacing: 0) {
             if !essentials.isEmpty {
                 PinnedTabs(browser: browser, prefs: prefs, tabs: essentials, active: active, live: live)
                     .padding(.bottom, 10)
             }
             if browser.usesSpaces { SpaceHeader(browser: browser, space: space).padding(.bottom, Self.gap) }
-            if !kept.isEmpty { keptRows(kept) }
+            if !lines.isEmpty { keptRows(kept, lines: lines) }
             // A plain stack until the tabs overflow, so the room below them
             // still drags the window. Worked out, not measured: ViewThatFits
             // lays the rows out twice, on every page, on every change.
             let overflows =
                 Sidebar.rowsHeight(
-                    essentials: essentials.count, kept: kept.count, loose: loose.count, width: prefs.sideWidth, named: browser.usesSpaces)
+                    essentials: essentials.count, kept: lines.count, loose: loose.count, width: prefs.sideWidth, named: browser.usesSpaces)
                 > room
             if !overflows {
                 listed(loose)
@@ -295,31 +297,60 @@ private struct SpacePage: View {
         Rectangle().fill(Palette.hairline).frame(height: 1).padding(.horizontal, 6).padding(.vertical, (divider - 1) / 2)
     }
 
-    /// Pinned tabs: rows that stay when closed, above the others.
-    private func keptRows(_ kept: [Tab]) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
+    /// Pinned tabs, rows that stay when closed, above the others: folders
+    /// first, each with its folders and tabs a step in, then the tabs in none.
+    /// Those last reorder by dragging; a tab goes into a folder from its menu.
+    private func keptRows(_ kept: [Tab], lines: [Folder.Line<Tab.ID>]) -> some View {
+        let folders = folderStore.folders(in: space.id)
+        let unfiled = lines.compactMap { line -> Tab? in
+            guard case .tab(let id, 0) = line else { return nil }
+            return kept.first { $0.id == id }
+        }
+        return VStack(alignment: .leading, spacing: 0) {
             VStack(spacing: Self.gap) {
-                ForEach(Array(kept.enumerated()), id: \.element.id) { index, tab in
-                    row(tab)
-                        // Places count among the pinned tabs, after the essentials.
-                        .modifier(
-                            Reorderable(
-                                id: tab.id, index: index, places: 0..<kept.count, lattice: .column(step: Self.row + Self.gap),
-                                space: "kept", drag: $keptDrag
-                            ) { browser.move(tab, to: $0 + browser.essentialCount) })
+                ForEach(lines, id: \.self) { line in
+                    switch line {
+                    case .folder(let id, let depth):
+                        if let folder = folders.first(where: { $0.id == id }) {
+                            FolderRow(browser: browser, folder: folder, live: live).padding(.leading, CGFloat(depth) * Self.indent)
+                        }
+                    case .tab(let id, let depth):
+                        if let tab = kept.first(where: { $0.id == id }) {
+                            if depth == 0, let index = unfiled.firstIndex(where: { $0.id == id }) {
+                                row(tab)
+                                    // Places count among the pinned tabs, after the essentials.
+                                    .modifier(
+                                        Reorderable(
+                                            id: tab.id, index: index, places: 0..<unfiled.count,
+                                            lattice: .column(step: Self.row + Self.gap),
+                                            space: "kept", drag: $keptDrag
+                                        ) { target in
+                                            // To where the tab now in that place sits among all the pinned ones.
+                                            let place = kept.firstIndex { $0.id == unfiled[target].id } ?? target
+                                            browser.move(tab, to: place + browser.essentialCount)
+                                        })
+                            } else {
+                                row(tab).padding(.leading, CGFloat(depth) * Self.indent)
+                            }
+                        }
+                    }
                 }
             }
-            .overlay { closing(kept) }
+            .overlay { closing(lines.map { line in if case .tab(let id, _) = line { kept.first { $0.id == id } } else { nil } }) }
             .coordinateSpace(name: "kept")
             Self.rule
         }
     }
 
+    /// How far each level of folders steps in.
+    private static let indent: CGFloat = 14
+
     /// A middle click on a row closes its tab, as ⌘W does.
-    private func closing(_ tabs: [Tab]) -> some View {
+    /// `tabs` line by line; nil for a line that isn't a tab (a folder).
+    private func closing(_ tabs: [Tab?]) -> some View {
         MiddleClick { at in
             let index = Int(at.y / (Self.row + Self.gap))
-            if tabs.indices.contains(index) { browser.close(tabs[index]) }
+            if tabs.indices.contains(index), let tab = tabs[index] { browser.close(tab) }
         }
     }
 
@@ -341,7 +372,7 @@ private struct SpacePage: View {
                             ) { browser.move(tab, to: $0 + browser.pinnedCount) })
                 }
             }
-            .overlay { closing(loose) }
+            .overlay { closing(loose.map { $0 }) }
             // Drags are measured in the list's space (see Reorderable).
             .coordinateSpace(name: "rows")
             Quiet(icon: "plus", title: "New tab", height: Self.row) { browser.newTab() }.padding(.top, Self.gap)
@@ -645,5 +676,49 @@ private struct PreviewMark: View {
             .contentShape(Rectangle())
             .onTapGesture(perform: keep)
             .help("Previewing “\(tab.label)” — click to keep it as a tab")
+    }
+}
+
+/// A folder among the pinned tabs, as Zen's: a click opens or closes it, and
+/// its menu renames, nests, unloads, unpacks or deletes it.
+private struct FolderRow: View {
+    let browser: Browser
+    let folder: Folder
+    /// The showing space's; another's, during a swipe, is only drawn.
+    let live: Bool
+
+    @State private var hovering = false
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "chevron.right")
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundStyle(Palette.muted)
+                .rotationEffect(.degrees(folder.collapsed ? 0 : 90))
+                .frame(width: 10)
+            Image(systemName: folder.collapsed ? "folder" : "folder.fill")
+                .font(.system(size: 12))
+                .foregroundStyle(Palette.ink.opacity(0.7))
+                .frame(width: 16)
+            Text(folder.name).font(TextStyle.body.font).foregroundStyle(Palette.ink.opacity(0.8)).lineLimit(1)
+            Spacer(minLength: 0)
+        }
+        .padding(.leading, 6)
+        .padding(.trailing, 10)
+        .frame(maxWidth: .infinity, minHeight: Metrics.row, maxHeight: Metrics.row, alignment: .leading)
+        .background { if hovering { RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Palette.veil) } }
+        .contentShape(Rectangle())
+        .onTapGesture { if live { withAnimation(Motion.settle) { browser.toggleFolder(folder.id) } } }
+        .onHover { hovering = $0 }
+        .contextMenu {
+            Button("Rename Folder…") { browser.renameFolder(folder.id) }
+            Button("New Subfolder…") { browser.newFolder(in: folder.id) }
+            Divider()
+            Button("Unload All Tabs") { browser.unloadFolder(folder.id) }
+            Button("Unpack Folder") { browser.unpackFolder(folder.id) }
+            Button("Delete Folder") { browser.deleteFolder(folder.id) }
+        }
+        .animation(Motion.hover, value: hovering)
+        .accessibilityLabel("Folder \(folder.name), \(folder.collapsed ? "closed" : "open")")
     }
 }

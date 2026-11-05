@@ -136,6 +136,20 @@ struct TabHoldItems: View {
                 Button("Pin Tab") { browser.keep(tab) }.disabled(tab.isBlank)
             }
         }
+        // As Zen's: into a folder of pinned tabs, pinning it on the way.
+        if tab.pin == nil, !tab.isBlank {
+            Menu("Move to Folder") {
+                ForEach(browser.folderChoices, id: \.folder.id) { choice in
+                    Button(String(repeating: "   ", count: choice.depth) + choice.folder.name) {
+                        browser.move(tab, toFolder: choice.folder.id)
+                    }
+                    .disabled(tab.folder == choice.folder.id)
+                }
+                if !browser.folderChoices.isEmpty { Divider() }
+                Button("New Folder…") { browser.newFolder(with: tab) }
+            }
+            if tab.folder != nil { Button("Remove from Folder") { browser.move(tab, toFolder: nil) } }
+        }
         // As Zen's: a held tab that has browsed on can go home, or move home here.
         if tab.wandered {
             Button("Back to Pinned Page") { browser.goHome(tab) }

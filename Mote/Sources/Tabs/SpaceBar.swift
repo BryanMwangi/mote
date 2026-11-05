@@ -127,10 +127,7 @@ struct AddMenuButton: View {
             if browser.usesSpaces {
                 menu.addItem(item("Create Space…", symbol: "square.on.square") { browser.askForSpace() })
             }
-            // Folders are still to come.
-            let folder = item("Create Folder", symbol: "folder.badge.plus") {}
-            folder.isEnabled = false
-            menu.addItem(folder)
+            menu.addItem(item("Create Folder", symbol: "folder.badge.plus") { browser.newFolder() })
             menu.addItem(.separator())
             let split = item("New Split", symbol: "rectangle.split.2x1") { browser.newSplit() }
             split.isEnabled = browser.active.map(browser.splittable) == true

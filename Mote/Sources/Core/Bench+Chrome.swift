@@ -31,6 +31,9 @@ extension Bench {
             "spaceIndex": browser.spaces.firstIndex { $0.id == browser.spaceID } ?? -1,
             "settingsQuery": SettingsSearch.shared.query, "settingsFocusAsked": SettingsSearch.shared.focusAsked,
             "finding": browser.finder.showing, "asking": browser.field.asksAssistant,
+            "folders": browser.folders.map { folder in
+                [folder.name, folder.collapsed ? "closed" : "open", browser.folders.first { $0.id == folder.parent }?.name ?? ""]
+            },
             "offers": browser.field.offers.map { "\($0.kind):\($0.key)" }, "launching": browser.field.launching,
             "chatting": browser.chatting,
             "tabSettings": [
@@ -143,6 +146,22 @@ extension Bench {
         // A screenshot of the tab in front (test runs): visible, whole, or copy.
         if Storage.testing, let shot = request.string("screenshot") {
             browser.active?.screenshot(shot == "whole" ? .wholePage : .visible, copy: shot == "copy")
+        }
+        // Folders (test runs): new:NAME[/PARENT], toggle:NAME, unpack:NAME, delete:NAME; TAB:NAME puts a tab in one.
+        if Storage.testing, let what = request.string("folder") {
+            let parts = what.split(separator: ":", maxSplits: 1).map(String.init)
+            let named = { (name: String) in browser.folders.first { $0.name == name } }
+            switch (parts.first, parts.last) {
+            case ("new", let spec?):
+                let names = spec.split(separator: "/").map(String.init)
+                let folder = Folder(name: names[0], parent: names.count > 1 ? named(names[1])?.id : nil)
+                FolderStore.shared.change(browser.spaceID) { $0.append(folder) }
+            case ("toggle", let name?): named(name).map { browser.toggleFolder($0.id) }
+            case ("unpack", let name?): named(name).map { browser.unpackFolder($0.id) }
+            case ("delete", let name?): named(name).map { browser.deleteFolder($0.id) }
+            case (let id?, let name?): if let found = tab(id) { browser.move(found, toFolder: named(name)?.id) }
+            default: break
+            }
         }
         if let query = request.string("settingsquery") { SettingsSearch.shared.query = query == "-" ? "" : query }
         // A command given a key (test runs): ID=cmd+e, ID=none, or reset.

@@ -527,6 +527,7 @@ final class Browser: NSObject, ObservableObject {
         }
         guard let url = URL(string: entry.url) else { return false }
         tab.home = entry.isHeld ? entry.home.flatMap(URL.init(string:)) ?? url : nil
+        tab.folder = entry.kept == true ? entry.folder.flatMap(UUID.init(uuidString:)) : nil
         prepare(tab)
         tab.restore(url: url, title: entry.title, name: entry.name)
         tab.pin = entry.pin
@@ -577,7 +578,8 @@ final class Browser: NSObject, ObservableObject {
         else { return nil }
         let home = tab.held ? tab.home.map(\.absoluteString).flatMap { $0 == url.absoluteString ? nil : $0 } : nil
         return Session.Entry(
-            url: url.absoluteString, title: tab.title, pin: tab.pin, kept: tab.kept ? true : nil, name: tab.name, held: held, home: home)
+            url: url.absoluteString, title: tab.title, pin: tab.pin, kept: tab.kept ? true : nil, name: tab.name, held: held, home: home,
+            folder: tab.kept ? tab.folder?.uuidString : nil)
     }
 
     // MARK: - Merging spaces
@@ -1050,6 +1052,7 @@ final class Browser: NSObject, ObservableObject {
             if !tab.held { tab.home = tab.pending ?? tab.address }
             tab.pin = tab.monogram
             tab.kept = false
+            tab.folder = nil
             reorder { $0.settle(tab.id) }
         }
         writeSession(now: true)
@@ -1070,6 +1073,7 @@ final class Browser: NSObject, ObservableObject {
 
     func unkeep(_ tab: Tab) {
         tab.kept = false
+        tab.folder = nil
         tab.home = nil
         reorder { $0.settle(tab.id) }
         writeSession(now: true)
