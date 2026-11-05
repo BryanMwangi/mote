@@ -44,9 +44,11 @@ struct KeyboardSettings: View {
 
         HStack {
             Spacer()
+            // As Zen: for habits from there.
+            Pill("Use Zen's Keys") { prefs.shortcuts = .zen }.disabled(prefs.shortcuts == .zen)
             Pill("Restore Defaults") { prefs.shortcuts = Shortcuts() }.disabled(prefs.shortcuts.changed.isEmpty)
         }
-        .settingsSearch(["Restore default shortcuts", "keys"])
+        .settingsSearch(["Restore default shortcuts", "Use Zen's keys", "keys"])
     }
 
     private func combos(_ id: ShortcutID) -> [String] { prefs.shortcuts.combos(for: id).map(\.text) }

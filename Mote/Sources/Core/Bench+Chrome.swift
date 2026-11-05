@@ -150,6 +150,8 @@ extension Bench {
             let parts = what.split(separator: "=").map(String.init)
             if what == "reset" {
                 prefs.shortcuts = Shortcuts()
+            } else if what == "zen" {
+                prefs.shortcuts = .zen
             } else if parts.count == 2, let id = ShortcutID(rawValue: parts[0]) {
                 let mods = parts[1].split(separator: "+").map(String.init)
                 let combo = mods.last.map {

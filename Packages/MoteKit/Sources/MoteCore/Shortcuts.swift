@@ -44,16 +44,21 @@ public struct KeyCombo: Hashable, Codable, Sendable {
         case " ": "Space"
         case "\u{7f}": "⌫"
         case "\r": "↩"
+        case KeyCombo.leftArrow: "←"
+        case KeyCombo.rightArrow: "→"
         default: key.uppercased()
         }
     }
+
+    /// The arrow keys, as AppKit writes them.
+    public static let leftArrow = "\u{F702}", rightArrow = "\u{F703}"
 
     /// The US layout's key codes, for writing defaults by character.
     static let codes: [String: UInt16] = [
         "a": 0, "s": 1, "d": 2, "f": 3, "h": 4, "g": 5, "z": 6, "x": 7, "c": 8, "v": 9, "b": 11, "q": 12, "w": 13, "e": 14, "r": 15,
         "y": 16, "t": 17, "1": 18, "2": 19, "3": 20, "4": 21, "6": 22, "5": 23, "=": 24, "+": 24, "9": 25, "7": 26, "-": 27, "8": 28,
         "0": 29, "]": 30, "}": 30, "o": 31, "u": 32, "[": 33, "{": 33, "i": 34, "p": 35, "l": 37, "j": 38, "k": 40, ";": 41,
-        ",": 43, "/": 44, "n": 45, "m": 46, ".": 47,
+        ",": 43, "/": 44, "n": 45, "m": 46, ".": 47, leftArrow: 123, rightArrow: 124,
     ]
 }
 
@@ -316,6 +321,23 @@ public struct Shortcuts: Codable, Equatable, Sendable {
     }
 
     public mutating func reset(_ id: ShortcutID) { changed[id] = nil }
+
+    /// Zen's keys where they differ from Mote's (Zen's `zen-keysets` and the
+    /// Firefox keys it keeps, as on a Mac), for people who'd rather keep
+    /// their habits. A Mote command whose key Zen gives to another is left
+    /// without one; ⌥⌘H stays macOS's Hide Others, so horizontal split keeps ⌃⌥H.
+    public static var zen: Shortcuts {
+        var zen = Shortcuts()
+        let keys: [(ShortcutID, KeyCombo)] = [
+            (.compactMode, .cmd("s")), (.splitGrid, .cmd("g", option: true)), (.splitVertical, .cmd("v", option: true)),
+            (.unsplit, .cmd("u", option: true)), (.viewSource, .cmd("u")),
+            (.previousSpace, .cmd(KeyCombo.leftArrow, option: true)), (.nextSpace, .cmd(KeyCombo.rightArrow, option: true)),
+            (.reloadFromOrigin, .cmd("r", shift: true)), (.reader, .cmd("r", option: true)), (.screenshot, .cmd("s", shift: true)),
+            (.responsive, .cmd("m", option: true)),
+        ]
+        for (id, combo) in keys { zen.set(id, to: combo) }
+        return zen
+    }
 
     /// Keys macOS and text editing keep: recording refuses them.
     public static func reserved(_ combo: KeyCombo) -> Bool {

@@ -76,6 +76,23 @@ struct ShortcutsTests {
         #expect(KeyCombo.cmd(",").text == "⌘,")
     }
 
+    @Test("Zen's keys: no two commands share one, and the ones Zen moves work")
+    func zenKeys() {
+        let zen = Shortcuts.zen
+        var seen: [KeyCombo: ShortcutID] = [:]
+        for id in ShortcutID.allCases {
+            for combo in zen.combos(for: id) {
+                #expect(seen[combo] == nil, "\(combo.text) is both \(seen[combo]?.title ?? "") and \(id.title)")
+                seen[combo] = id
+            }
+        }
+        #expect(zen.id(matching: press(.cmd("s"))) == .compactMode)
+        #expect(zen.id(matching: press(.cmd("g", option: true))) == .splitGrid)
+        #expect(zen.id(matching: press(.cmd(KeyCombo.rightArrow, option: true))) == .nextSpace)
+        #expect(zen.combos(for: .foldTabs) == [.ctrlOpt("s")])
+        #expect(KeyCombo.cmd(KeyCombo.leftArrow, option: true).text == "⌥⌘←")
+    }
+
     @Test("Saved and read back")
     func codable() throws {
         var shortcuts = Shortcuts()
