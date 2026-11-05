@@ -93,8 +93,9 @@ final class Tab: ObservableObject, Identifiable {
     @Published var folder: UUID?
     /// The page's language, when it isn't one you read (see Translate.swift).
     @Published var pageLanguage: String?
-    /// The page shows translated.
-    @Published var translated = false
+    /// What the page shows translated from and to, while it does.
+    @Published var translation: TranslationJob?
+    var translated: Bool { translation != nil }
     /// As an essential or pinned tab, the address it was pinned at, which it
     /// can go back to, as Zen's.
     @Published var home: URL?

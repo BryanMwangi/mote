@@ -108,6 +108,10 @@ final class Preferences: ObservableObject {
     @Published var peekClick: PeekClick
     /// A page in a language you don't read offers to translate (Translate.swift).
     @Published var offersTranslation: Bool
+    /// The languages it doesn't offer to translate from, and the one it
+    /// translates to; empty for the Mac's own.
+    @Published var neverTranslate: [String]
+    @Published var translateTo: String
     /// The user's keys over Mote's (Settings › Keyboard).
     @Published var shortcuts: Shortcuts
     /// Links from other apps open in a small window (see LinkWindow.swift).
@@ -195,6 +199,8 @@ final class Preferences: ObservableObject {
         peeksLinks = store.value("links.peek", or: true)
         peekClick = store.value("links.peekClick", or: .option)
         offersTranslation = store.value("pages.translate", or: true)
+        neverTranslate = store.value("pages.translate.never", or: [])
+        translateTo = store.value("pages.translate.to", or: "")
         shortcuts = store.value("keys.custom", or: Shortcuts())
         littleLinks = store.value("links.little", or: false)
         showsLinks = store.value("links.show", or: false)
@@ -267,6 +273,8 @@ final class Preferences: ObservableObject {
         keep($peeksLinks, "links.peek")
         keep($peekClick, "links.peekClick")
         keep($offersTranslation, "pages.translate")
+        keep($neverTranslate, "pages.translate.never")
+        keep($translateTo, "pages.translate.to")
         keep($shortcuts, "keys.custom") { _ in
             // SwiftUI rebuilds a menu only as it opens, so a menu not opened
             // since would keep answering to the old key. Ask each to rebuild

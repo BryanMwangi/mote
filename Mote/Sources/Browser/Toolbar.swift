@@ -342,24 +342,47 @@ struct Pressed: ButtonStyle {
 struct TranslateButton: View {
     let browser: Browser
     @ObservedObject var tab: Tab
+    @State private var asking = false
+
+    /// The bench opens the popover (test runs).
+    static let ask = Notification.Name("MoteAskTranslation")
 
     var body: some View {
         ZStack {
             if tab.pageLanguage != nil || tab.translated {
                 Door(
-                    icon: "translate", on: tab.translated,
-                    help: tab.translated ? "Show Original" : "Translate this page from \(tab.languageName)"
+                    icon: "translate", on: tab.translated || asking,
+                    help: tab.translation.map { "Translated to \(Browser.languageName($0.target))" }
+                        ?? "Translate this page from \(tab.languageName)"
                 ) {
-                    browser.toggleTranslation(tab)
+                    asking.toggle()
+                }
+                // The language it's translated to, as Firefox shows it.
+                .overlay(alignment: .bottomTrailing) {
+                    if let target = tab.translation?.target {
+                        Text(target.prefix(2).uppercased())
+                            .font(.system(size: 7, weight: .bold))
+                            .foregroundStyle(Palette.ground)
+                            .padding(.horizontal, 2)
+                            .background(Palette.ink.opacity(0.8), in: RoundedRectangle(cornerRadius: 2))
+                            .offset(x: 1, y: 1)
+                            .allowsHitTesting(false)
+                    }
+                }
+                .popover(isPresented: $asking, arrowEdge: .bottom) {
+                    if #available(macOS 15, *) { TranslatePanel(browser: browser, tab: tab) { asking = false } }
                 }
                 .transition(.scale(scale: 0.6).combined(with: .opacity))
             }
         }
         .animation(Motion.settle, value: tab.pageLanguage != nil || tab.translated)
+        // It's about the tab it opened for.
+        .onChange(of: tab.id) { asking = false }
+        .onReceive(NotificationCenter.default.publisher(for: Self.ask)) { _ in asking = true }
     }
 }
 
 extension Tab {
     /// The page's language by name ("French"), for buttons and menus.
-    var languageName: String { pageLanguage.flatMap { Locale.current.localizedString(forLanguageCode: $0) } ?? "another language" }
+    var languageName: String { pageLanguage.map(Browser.languageName) ?? "another language" }
 }

@@ -33,7 +33,8 @@ extension Bench {
             "finding": browser.finder.showing, "asking": browser.field.asksAssistant, "profile": Storage.profile ?? "",
             "profiles": Profiles.shared.list.map(\.id),
             "folder": Storage.folder.path, "pageLanguage": browser.active?.pageLanguage ?? "",
-            "translated": browser.active?.translated ?? false,
+            "translated": browser.active?.translation.map { "\($0.source)>\($0.target)" } ?? "",
+            "toast": browser.announcer.showing?.text ?? "",
             "folders": browser.folders.map { folder in
                 [
                     folder.name, folder.collapsed ? "closed" : "open", browser.folders.first { $0.id == folder.parent }?.name ?? "",
@@ -200,6 +201,7 @@ extension Bench {
             browser.setSpaceTheme(browser.spaceID, to: preset.map { SpaceTheme(colors: $0.colors, opacity: $0.opacity, grain: true) })
         }
         if request.flag("translate"), let tab = browser.active { browser.toggleTranslation(tab) }
+        if Storage.testing, request.flag("translatepanel") { NotificationCenter.default.post(name: TranslateButton.ask, object: nil) }
         // Profiles (test runs only, so their own Motes stay in the test world): new:NAME, delete:ID.
         if Storage.testing, let what = request.string("profile") {
             if what.hasPrefix("new:") { Profiles.shared.add(named: String(what.dropFirst(4))) }

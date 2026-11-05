@@ -81,6 +81,15 @@ struct GeneralSettings: View {
                 "Offer to translate pages",
                 "A page in a language you don't read shows a translate button beside its address. Off if you'd rather use an extension",
                 symbol: "translate", tint: Tint.blue, keywords: ["translation", "language"], on: $prefs.offersTranslation)
+            if prefs.offersTranslation, !prefs.neverTranslate.isEmpty {
+                RowRule()
+                SettingRow(
+                    "Never offered for", ListFormatter.localizedString(byJoining: prefs.neverTranslate.map(Browser.languageName)),
+                    symbol: "nosign", tint: Tint.blue, keywords: ["translation", "language"]
+                ) {
+                    Button("Offer Again") { prefs.neverTranslate = [] }
+                }
+            }
         }
 
         SettingsSection("Links") {
