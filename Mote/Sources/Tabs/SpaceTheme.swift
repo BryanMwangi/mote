@@ -8,8 +8,6 @@ import SwiftUI
 struct SpaceGround: View {
     let theme: SpaceTheme?
     let space: UUID
-    /// The window, which goes light or dark as the space's theme says.
-    let window: NSWindow?
 
     var body: some View {
         ZStack {
@@ -27,10 +25,6 @@ struct SpaceGround: View {
         }
         .animation(.easeInOut(duration: 0.25), value: space)
         .allowsHitTesting(false)
-        .onChange(of: theme?.scheme, initial: true) { _, scheme in
-            let wanted = scheme.map { NSAppearance(named: $0 == .dark ? .darkAqua : .aqua) } ?? nil
-            if window?.appearance?.name != wanted?.name { window?.appearance = wanted }
-        }
     }
 
     /// A square of grey noise, made once, tiled for the grain.
@@ -72,10 +66,16 @@ struct ThemeEditor: View {
     var body: some View {
         VStack(spacing: 14) {
             HStack(spacing: 6) {
+                Door(icon: "xmark", help: "Close") { browser.themingSpace = nil }
+                Spacer()
                 scheme(nil, "sparkles", "Mote's look")
                 scheme(.light, "sun.max", "Light")
                 scheme(.dark, "moon", "Dark")
+                Spacer()
+                // Level with the close button, so the three sit in the middle.
+                Color.clear.frame(width: Metrics.button, height: 1)
             }
+            .background(DragHandle())
             ThemeField(colors: colors, harmony: harmony) { set($0, saving: $1) { $0.colors = $1 } }
             HStack(spacing: 22) {
                 Door(icon: "plus", help: "Add a colour") { addDot() }.disabled(colors.isEmpty || colors.count >= 3)
@@ -155,14 +155,15 @@ struct ThemeEditor: View {
     }
 }
 
-/// The field: a dot grid in a rounded square, the dots on it.
-private struct ThemeField: View {
+/// The field: a dot grid in a rounded square, the dots on it; the boost
+/// editor's too, with two dots.
+struct ThemeField: View {
     let colors: [String]
     let harmony: ThemeColors.Harmony?
+    var limit = 3
+    var side: CGFloat = 268
     /// The new colours, and whether the change is done (a drag let go).
     let change: ([String], Bool) -> Void
-
-    private let side: CGFloat = 268
 
     var body: some View {
         ZStack {
@@ -195,7 +196,7 @@ private struct ThemeField: View {
         .coordinateSpace(name: "field")
         .contentShape(Rectangle())
         .onTapGesture(coordinateSpace: .named("field")) { at in
-            if colors.count < 3 { change(colors + [ThemeColors.hex(at: unit(at))], true) }
+            if colors.count < limit { change(colors + [ThemeColors.hex(at: unit(at))], true) }
         }
     }
 

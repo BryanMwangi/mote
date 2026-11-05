@@ -25,6 +25,9 @@ extension Bench {
             "suggesting": browser.logins.choices != nil, "offering": browser.logins.offer != nil,
             "modal": NSApp.modalWindow.map(describe) ?? "",
             "look": browser.prefs.look.rawValue, "appearance": NSApp.appearance?.name.rawValue ?? "system",
+            "spaceName": browser.spaces.first { $0.id == browser.spaceID }?.name ?? "",
+            "spaceScheme": browser.spaces.first { $0.id == browser.spaceID }?.theme?.scheme?.rawValue ?? "none",
+            "windowLook": browser.window.map { $0.appearance?.name.rawValue ?? "app's" } ?? "no window",
             "key": NSApp.keyWindow.map(describe) ?? "",
             "keysQuieted": PageView.quieted, "peek": browser.peekTab?.address?.absoluteString ?? "", "folded": browser.folded,
             "peeking": browser.peeking, "toolbarMode": browser.prefs.toolbarMode.rawValue, "peekClick": browser.prefs.peekClick.rawValue,
@@ -220,8 +223,15 @@ extension Bench {
         }
         // The space in front's colours (test runs): a preset's number, or off.
         if Storage.testing, let what = request.string("theme") {
-            let preset = Int(what).flatMap { SpaceTheme.presets.indices.contains($0) ? SpaceTheme.presets[$0] : nil }
-            browser.setSpaceTheme(browser.spaceID, to: preset.map { SpaceTheme(colors: $0.colors, opacity: $0.opacity, grain: 1) })
+            // A preset's number, off, or light / dark / auto for the space's look.
+            if let scheme = ["light": SpaceTheme.Scheme.light, "dark": .dark, "auto": nil][what] {
+                var theme = browser.spaces.first { $0.id == browser.spaceID }?.theme ?? SpaceTheme(colors: [])
+                theme.scheme = scheme
+                browser.setSpaceTheme(browser.spaceID, to: theme.colors.isEmpty && scheme == nil ? nil : theme)
+            } else {
+                let preset = Int(what).flatMap { SpaceTheme.presets.indices.contains($0) ? SpaceTheme.presets[$0] : nil }
+                browser.setSpaceTheme(browser.spaceID, to: preset.map { SpaceTheme(colors: $0.colors, opacity: $0.opacity, grain: 1) })
+            }
         }
         if request.flag("translate"), let tab = browser.active { browser.toggleTranslation(tab) }
         // Page Info for the tab in front, at a part (test runs): General, Media, Permissions, Security.
@@ -239,7 +249,12 @@ extension Bench {
         }
         // The site in front's boost (test runs): dim (brightness 0.7, Georgia), or reset.
         if Storage.testing, let what = request.string("boost"), let site = Address.siteHost(of: browser.active?.address) {
-            browser.setBoost(what == "reset" ? Boost() : Boost(brightness: 0.7, font: "Georgia"), for: site)
+            switch what {
+            case "editor": browser.boosting = site
+            case "close": browser.boosting = nil
+            case "tint": browser.setBoost(Boost(tint: "#3a7bd5", accent: "#e03131", dark: true, size: 1.1), for: site)
+            default: browser.setBoost(what == "reset" ? Boost() : Boost(brightness: 0.7, font: "Georgia"), for: site)
+            }
         }
         if let query = request.string("settingsquery") { SettingsSearch.shared.query = query == "-" ? "" : query }
         // A command given a key (test runs): ID=cmd+e, ID=none, or reset.
@@ -274,6 +289,8 @@ extension Bench {
         // Responsive Design Mode for the tab in front: a preset's name, or off.
         if let name = request.string("device") { browser.active?.device = DeviceList.shared.device(named: name) }
         if let on = request.bool("extensions") { NotificationCenter.default.post(name: PageButton.ask, object: on) }
+        // Snap's picker on the tab in front (test runs).
+        if Storage.testing, let on = request.bool("snap"), on != browser.pickingElement { browser.toggleHiding() }
         if let on = request.bool("theming") { browser.themingSpace = on ? browser.spaceID : nil }
         if let on = request.bool("appmenu") { NotificationCenter.default.post(name: AppMenuButton.ask, object: on) }
         call.answer(["ok": true])

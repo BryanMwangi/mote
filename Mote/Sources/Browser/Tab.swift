@@ -538,6 +538,9 @@ final class Tab: ObservableObject, Identifiable {
         web.callInAppWorld("window.__moteVeil?.unpeek(selectors)", arguments: ["selectors": hidden.selectors])
     }
 
+    /// Where the element just picked was in the page's view, for its dust.
+    var pickedRect: CGRect?
+
     func picked(selector: String, label: String, note: String) { owner?.tab(self, hid: selector, label: label, note: note) }
     func pickingEnded() { owner?.tabStoppedPicking(self) }
     func pickingFailed(_ reason: String) { owner?.tab(self, couldNotHide: reason) }

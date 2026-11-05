@@ -21,9 +21,15 @@ extension Browser {
     /// An element picked in `tab`: hidden on its site from now on.
     func hide(_ selector: String, label: String, note: String, in tab: Tab) {
         guard let host = Address.siteHost(of: tab.address) else { return }
-        elementHider.hide(selector, label: label, note: note, on: host)
-        dress(tab, for: host)
-        announce("Hidden — ⌘Z puts it back")
+        // Snapped: to dust, its picture taken before anything hides it, and
+        // hidden underneath as the dust starts.
+        let gone = {
+            self.elementHider.hide(selector, label: label, note: note, on: host)
+            self.dress(tab, for: host)
+        }
+        if let web = tab.built, let rect = tab.pickedRect { Dust.play(over: web, rect: rect, gone: gone) } else { gone() }
+        tab.pickedRect = nil
+        announce("Snapped — ⌘Z puts it back")
     }
 
     /// ⌘Z while picking: brings back the last hidden element.

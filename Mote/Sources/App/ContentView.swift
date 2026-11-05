@@ -61,6 +61,15 @@ struct ContentView: View {
                 if showing { Task { @MainActor in browser.field.askFocus() } } else { keyboardToPage() }
             }
             .onChange(of: browser.activeID) { keyboardToPage() }
+            // The boost editor: a frosted panel at the window's top right, over the page.
+            .onChange(of: browser.boosting) { _, site in
+                FrostedPanel.close("boost")
+                guard let site, let window else { return }
+                FrostedPanel.show(
+                    "boost", BoostEditor(browser: browser, site: site), over: window,
+                    at: NSPoint(x: window.frame.maxX - 296, y: window.frame.maxY - 56)
+                ) { if browser.boosting == site { browser.boosting = nil } }
+            }
             // Theme…: a frosted panel beside the sidebar, as Zen's.
             .onChange(of: browser.themingSpace) { _, space in
                 guard let space, let window else { return FrostedPanel.close("theme") }
@@ -94,6 +103,9 @@ struct ContentView: View {
             // A window opened since the main one takes its tabs with it.
             .onDisappear { Windows.shared.closed(browser) }
             .focusedSceneObject(browser)
+            // The space's own look, through SwiftUI: it owns the window's
+            // appearance and puts back anything set on the window directly.
+            .preferredColorScheme(browser.spaceScheme)
             .background(TranslationHost(browser: browser))
     }
 
@@ -106,9 +118,6 @@ struct ContentView: View {
             Sheet(close: { browser.showingDownloads = false }) {
                 LibraryShelf(browser: browser) { DownloadsPanel(browser: browser, downloads: browser.downloads) }
             }
-        }
-        if let site = browser.boosting {
-            Sheet(close: { browser.boosting = nil }) { BoostPanel(browser: browser, site: site) }
         }
         if browser.showingProcesses {
             Sheet(close: { browser.showingProcesses = false }) { ProcessesPanel(browser: browser) }

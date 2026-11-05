@@ -146,6 +146,11 @@ extension Browser {
     }
 
     func setSpaceIcon(_ id: UUID, to icon: String) { editSpaces { $0.edit(id) { $0.icon = icon } } }
+    /// Light or dark as the space in front's theme says; nil follows Mote's look.
+    var spaceScheme: ColorScheme? {
+        spaces.first { $0.id == spaceID }?.theme?.scheme.map { $0 == .dark ? .dark : .light }
+    }
+
     /// Its colours; a drag shows each step and keeps only the last (`saving`).
     func setSpaceTheme(_ id: UUID, to theme: SpaceTheme?, saving: Bool = true) {
         editSpaces(saving: saving) { $0.edit(id) { $0.theme = theme } }

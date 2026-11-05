@@ -73,6 +73,10 @@ final class ElementHiderRelay: NSObject, WKScriptMessageHandler {
             } else if body["off"] as? Bool == true {
                 tab?.pickingEnded()
             } else if let selector = body["selector"] as? String {
+                let rect = (body["rect"] as? [Double]).flatMap {
+                    $0.count == 4 ? CGRect(x: $0[0], y: $0[1], width: $0[2], height: $0[3]) : nil
+                }
+                tab?.pickedRect = rect
                 tab?.picked(selector: selector, label: body["label"] as? String ?? selector, note: body["note"] as? String ?? "")
             }
         }

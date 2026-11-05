@@ -33,7 +33,8 @@ enum FrostedPanel {
         panel.backgroundColor = .clear
         panel.hasShadow = true
         panel.level = .floating
-        panel.isMovableByWindowBackground = true
+        // By its top bar only (see DragHandle), so what's inside can be dragged.
+        panel.isMovableByWindowBackground = false
         panel.hidesOnDeactivate = true
         panel.appearance = window.effectiveAppearance
         panel.closed = {
@@ -65,6 +66,16 @@ enum FrostedPanel {
             self.closed = {}
             closed()
         }
+    }
+}
+
+/// The top bar of a frosted panel, which moves it as a title bar would.
+struct DragHandle: FillsRoom {
+    func makeNSView(context: Context) -> NSView { Handle() }
+    func updateNSView(_ view: NSView, context: Context) {}
+
+    private final class Handle: NSView {
+        override func mouseDown(with event: NSEvent) { window?.performDrag(with: event) }
     }
 }
 

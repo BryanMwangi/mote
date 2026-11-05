@@ -25,7 +25,10 @@ interface ElementPicker {
 }
 
 /** What the picker posts to Swift. */
-type PickerMessage = { selector: string; label: string; note: string } | { trouble: string } | { off: true };
+type PickerMessage =
+  | { selector: string; label: string; note: string; rect: [number, number, number, number] }
+  | { trouble: string }
+  | { off: true };
 
 declare global {
   interface Window {
@@ -98,7 +101,10 @@ if (!window.__moteVeil) {
     const element = target || document.elementFromPoint(clientX, clientY);
     if (!pickable(element)) return;
     try {
+      const box = element.getBoundingClientRect();
       post({
+        // Where it was, for Snap's dust (Dust.swift).
+        rect: [box.left, box.top, box.width, box.height],
         selector: selectorFor(element),
         label: elementName(element),
         note: elementShape(element.getBoundingClientRect(), {

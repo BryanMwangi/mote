@@ -289,7 +289,14 @@
 			const element = target || document.elementFromPoint(clientX, clientY);
 			if (!pickable(element)) return;
 			try {
+				const box = element.getBoundingClientRect();
 				post({
+					rect: [
+						box.left,
+						box.top,
+						box.width,
+						box.height
+					],
 					selector: selectorFor(element),
 					label: elementName(element),
 					note: elementShape(element.getBoundingClientRect(), {
