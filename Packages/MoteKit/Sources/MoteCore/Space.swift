@@ -143,12 +143,15 @@ public struct SpaceTheme: Codable, Equatable, Sendable {
     }
 
     /// Zen's swatches, a page of nine at a time: vivid, pale and deep, each
-    /// as one colour and then as three around it (Zen's theme-picker.inc).
+    /// as one colour and then as three around it, then greys from white to
+    /// black (Zen's theme-picker.inc).
     public static let swatches: [Swatch] = {
         let vivid = ["#f2eae4", "#f29bbb", "#a6729d", "#f25e6b", "#ff8558", "#f8d558", "#34e895", "#6cbad9", "#666789"]
         let pale = ["#fefbfa", "#ffe9f3", "#f1d1ec", "#ffcbd1", "#ffe0d3", "#fff9e5", "#defdeb", "#dcf3fc", "#c5c6e5"]
         let deep = ["#4e3a5a", "#693558", "#8f4042", "#b16d40", "#d7b35d", "#cdcca4", "#7aa982", "#226149", "#26456b"]
+        let greys = ["#e0e0e0", "#d0d0d0", "#c0c0c0", "#a0a0a0", "#808080", "#606060", "#404040", "#202020", "#000000"]
         return [vivid, pale, deep].flatMap { page in page.map { Swatch(hex: $0, dots: 1) } + page.map { Swatch(hex: $0, dots: 3) } }
+            + greys.map { Swatch(hex: $0, dots: 1) }
     }()
 
     /// A swatch: a colour, alone or with two more around it.
@@ -156,9 +159,10 @@ public struct SpaceTheme: Codable, Equatable, Sendable {
         public let hex: String
         public let dots: Int
 
-        /// The theme's colours for it.
+        /// The theme's colours for it: the others turned round the wheel from
+        /// it as Zen's analogous are, each as light and as strong as it.
         public var colors: [String] {
-            dots == 1 ? [hex] : [hex] + ThemeColors.others(.analogous, from: ThemeColors.point(for: hex)).map(ThemeColors.hex(at:))
+            dots == 1 ? [hex] : [hex] + ThemeColors.Harmony.analogous.turns.map { ThemeColors.turned(hex, by: $0) }
         }
     }
 

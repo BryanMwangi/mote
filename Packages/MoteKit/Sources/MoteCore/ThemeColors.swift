@@ -55,6 +55,26 @@ public enum ThemeColors {
         }
     }
 
+    /// `hex` with its hue turned by `degrees`, its saturation and lightness kept.
+    public static func turned(_ hex: String, by degrees: Double) -> String {
+        guard let rgb = SpaceTheme.rgb(hex) else { return hex }
+        let high = max(rgb.red, rgb.green, rgb.blue), low = min(rgb.red, rgb.green, rgb.blue)
+        let lightness = (high + low) / 2
+        guard high != low else { return hex }
+        let span = high - low
+        let saturation = span / (1 - abs(2 * lightness - 1))
+        var hue =
+            switch high {
+            case rgb.red: (rgb.green - rgb.blue) / span + (rgb.green < rgb.blue ? 6 : 0)
+            case rgb.green: (rgb.blue - rgb.red) / span + 2
+            default: (rgb.red - rgb.green) / span + 4
+            }
+        hue = (hue * 60 + degrees).truncatingRemainder(dividingBy: 360)
+        if hue < 0 { hue += 360 }
+        let turned = self.rgb(hue: hue, saturation: min(saturation, 1), lightness: lightness)
+        return SpaceTheme.hex(red: turned.0, green: turned.1, blue: turned.2)
+    }
+
     private static func rgb(hue: Double, saturation: Double, lightness: Double) -> (Double, Double, Double) {
         let chroma = (1 - abs(2 * lightness - 1)) * saturation
         let part = chroma * (1 - abs((hue / 60).truncatingRemainder(dividingBy: 2) - 1))

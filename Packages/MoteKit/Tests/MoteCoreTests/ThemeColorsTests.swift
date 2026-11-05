@@ -35,4 +35,14 @@ struct ThemeColorsTests {
         let theme = try JSONDecoder().decode(SpaceTheme.self, from: Data(old.utf8))
         #expect(theme.grain == 1 && theme.scheme == nil)
     }
+
+    @Test("Zen's swatches: seven pages of nine; a three keeps its colour's lightness")
+    func swatches() {
+        #expect(SpaceTheme.swatches.count == 63)
+        let pale = SpaceTheme.Swatch(hex: "#ffe9f3", dots: 3).colors
+        #expect(pale.count == 3)
+        // Turned, not darkened: each stays a pastel.
+        #expect(pale.allSatisfy { hex in SpaceTheme.rgb(hex).map { min($0.red, $0.green, $0.blue) > 0.8 } ?? false })
+        #expect(ThemeColors.turned("#808080", by: 50) == "#808080")
+    }
 }
