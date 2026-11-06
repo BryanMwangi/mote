@@ -296,7 +296,18 @@ extension Bench {
         // Snap's picker on the tab in front (test runs).
         if Storage.testing, let on = request.bool("snap"), on != browser.pickingElement { browser.toggleHiding() }
         if let on = request.bool("theming") { browser.themingSpace = on ? browser.spaceID : nil }
-        if let on = request.bool("appmenu") { NotificationCenter.default.post(name: AppMenuButton.ask, object: on) }
+        // The app menu's items, for the bench: a popped-up menu holds the run loop.
+        if Storage.testing, request.flag("appmenu") {
+            let describe = { (item: NSMenuItem) -> String in
+                item.isSeparatorItem
+                    ? "—"
+                    : "\(item.title)\(item.keyEquivalent.isEmpty ? "" : " [\(item.keyEquivalent)]")"
+                        + (item.submenu.map {
+                            " › \($0.items.prefix(4).map { "\($0.title)\($0.action == nil && $0.submenu == nil ? "(dead)" : "")" })"
+                        } ?? "")
+            }
+            return call.answer(["items": AppMenu.make(for: browser).items.map(describe)])
+        }
         call.answer(["ok": true])
     }
 
