@@ -93,7 +93,8 @@ private struct SpaceIcon: View {
             SpaceGlyph(space: space)
                 .foregroundStyle(here || hovering ? Palette.ink : Palette.muted.opacity(0.8))
                 .frame(width: SpaceDot.width, height: 26)
-                .background(here ? Palette.wash : hovering ? Palette.hover : .clear, in: Rounded.row)
+                // The space's own wash, as the tab in front has.
+                .background { if here || hovering { Tinted(shape: Rounded.row, fill: here ? Palette.wash : Palette.hover) } }
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -179,7 +180,7 @@ struct FootIcon: View {
                 .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(hovering ? Palette.ink : Palette.muted)
                 .frame(width: 26, height: 26)
-                .background(hovering ? Palette.hover : .clear, in: Rounded.row)
+                .background { if hovering { Tinted(shape: Rounded.row, fill: Palette.hover) } }
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
