@@ -1,10 +1,12 @@
 import AppKit
 
 extension Browser {
-    /// Share… from a tab's menu: the share menu beside that tab's row in the
-    /// sidebar, as the site card opens; elsewhere, the page's corner.
+    /// Share…, from anywhere: the share menu beside the tab's row in the
+    /// sidebar, as the site card opens; with the tabs out of sight, the page's corner.
     func share(beside tab: Tab) {
-        guard prefs.sidebar, let address = tab.address else { return share() }
+        guard prefs.sidebar, !folded || peeking, let address = tab.address else { return sharePage() }
+        // Whatever row an earlier card or menu marked isn't this one.
+        SiteCardPanel.row = nil
         siteCardRow = tab.id
         Task { @MainActor in
             // A few frames for the row to mark itself (SiteCardAnchor).
@@ -19,14 +21,17 @@ extension Browser {
                 try? await Task.sleep(for: .milliseconds(30))
             }
             siteCardRow = nil
-            share()
+            sharePage()
         }
     }
 
-    /// File › Share: the system's share menu, pointing into the page's top
-    /// right corner (or the window's, with no page showing).
-    func share() {
-        guard let address = active?.address, let window = AppDelegate.window else { return }
+    /// File › Share, the page panel's: beside the tab in front.
+    func share() { active.map(share(beside:)) }
+
+    /// The share menu pointing into the page's top right corner (or the
+    /// window's, with no page showing).
+    private func sharePage() {
+        guard let address = active?.address, let window else { return }
         let page = active?.built.flatMap { $0.window === window ? $0 : nil }
         guard let view = page ?? window.contentView else { return }
         // A little in, so the arrow points at the page rather than its edge.
