@@ -314,7 +314,7 @@ private struct SpacePage: View {
             browser: browser, tab: tab, live: tab.id == active, renaming: renaming,
             draft: renaming ? browser.tabDraft : "", refusals: renaming ? browser.field.refusals : 0,
             icons: prefs.glyph == .icons, showsReading: prefs.showsReading,
-            preview: live && tab.id == active ? browser.peekTab : nil, carded: live && browser.siteCardRow == tab.id)
+            preview: live && tab.id == active ? browser.peekTab : nil, carded: live && showing && browser.siteCardRow == tab.id)
     }
 
     /// The line between the pinned tabs and the others.

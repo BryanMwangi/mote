@@ -15,12 +15,15 @@ enum SiteCardPanel {
     /// The padlocks it may hang from, in the toolbar and the sidebar's
     /// address (see SiteCardAnchor), and the tab row it was asked for from.
     fileprivate static var padlocks: [WeakView] = []
-    private static weak var marked: NSView?
-    private static var markedTab: Tab.ID?
-    /// The row marked for `tab`, if it's that tab's and still on screen.
+    /// The rows marked, with their tabs. More than one can be marked for a
+    /// tab: the docked and the floating sidebar are both built, and only one
+    /// is on screen.
+    private static var marks: [(view: WeakView, tab: Tab.ID)] = []
+    /// The row marked for `tab` that's on screen.
     static func row(for tab: Tab.ID) -> NSView? {
-        guard markedTab == tab, let marked, marked.window != nil, !marked.isHiddenOrHasHiddenAncestor else { return nil }
-        return marked
+        marks.lazy.filter { $0.tab == tab }.compactMap(\.view.view).last {
+            $0.window?.isVisible == true && !$0.isHiddenOrHasHiddenAncestor && !$0.visibleRect.isEmpty
+        }
     }
     private static weak var owner: Browser?
 
@@ -149,8 +152,7 @@ enum SiteCardPanel {
     }
 
     fileprivate static func mark(_ view: NSView, for tab: Tab.ID) {
-        marked = view
-        markedTab = tab
+        marks = marks.filter { $0.view.view != nil && $0.view.view !== view } + [(WeakView(view), tab)]
     }
 
     static func hide() {
