@@ -18,6 +18,11 @@ struct TrafficLights: FillsRoom {
     @MainActor final class Host: NSView {
         static let groups = NSMapTable<NSWindow, NSView>.weakToStrongObjects()
         static let titlebars = NSMapTable<NSWindow, NSView>.weakToWeakObjects()
+        /// Where the group and its buttons sat in the title bar, for full
+        /// screen to have them back.
+        static let frames = NSMapTable<NSWindow, NSArray>.weakToStrongObjects()
+        static let buttons: [NSWindow.ButtonType] = [.closeButton, .miniaturizeButton, .zoomButton]
+        static let watched = NSHashTable<NSWindow>.weakObjects()
         static let hosts = NSHashTable<Host>.weakObjects()
         var showing = false
         var strip = false
@@ -61,13 +66,48 @@ struct TrafficLights: FillsRoom {
             if let titlebar = group.superview {
                 titlebar.isHidden = true
                 Self.titlebars.setObject(titlebar, forKey: window)
+                let frames = [group.frame] + buttons.map { window.standardWindowButton($0)?.frame ?? .zero }
+                Self.frames.setObject(frames.map(NSValue.init(rect:)) as NSArray, forKey: window)
             }
+            watchFullScreen(window)
             group.removeFromSuperview()
             group.autoresizesSubviews = false
             group.autoresizingMask = []
             Self.groups.setObject(group, forKey: window)
             return group
         }
+        /// Full screen wants the buttons in AppKit's own title bar, which
+        /// shows them on hover at the top; they come back on leaving it.
+        private static func watchFullScreen(_ window: NSWindow) {
+            guard !watched.contains(window) else { return }
+            watched.add(window)
+            let center = NotificationCenter.default
+            _ = center.addObserver(forName: NSWindow.willEnterFullScreenNotification, object: window, queue: .main) { [weak window] _ in
+                MainActor.assumeIsolated { if let window { lend(window) } }
+            }
+            _ = center.addObserver(forName: NSWindow.didExitFullScreenNotification, object: window, queue: .main) { [weak window] _ in
+                MainActor.assumeIsolated { if let window { TrafficLights.refresh(in: window) } }
+            }
+        }
+
+        /// Puts the group back in its title bar, as AppKit left it.
+        private static func lend(_ window: NSWindow) {
+            guard let group = groups.object(forKey: window), let titlebar = titlebars.object(forKey: window) else { return }
+            groups.removeObject(forKey: window)
+            group.removeFromSuperview()
+            titlebar.addSubview(group)
+            let saved = (frames.object(forKey: window) as? [NSValue])?.map(\.rectValue) ?? []
+            if let frame = saved.first { group.frame = frame }
+            group.autoresizesSubviews = true
+            group.autoresizingMask = [.width, .minYMargin]
+            titlebar.isHidden = false
+            for (index, type) in buttons.enumerated() {
+                guard let button = window.standardWindowButton(type) else { continue }
+                if index + 1 < saved.count { button.frame = saved[index + 1] }
+                button.isHidden = false
+            }
+        }
+
         override func layout() {
             super.layout()
             layoutControls()
@@ -77,7 +117,7 @@ struct TrafficLights: FillsRoom {
             Self.titlebars.object(forKey: window)?.isHidden = true
             group.frame = bounds
             let center = ChromeLayout.lights(for: strip ? .strip : .sidebar)
-            for (index, type) in [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton].enumerated() {
+            for (index, type) in Self.buttons.enumerated() {
                 guard let button = window.standardWindowButton(type) else { continue }
                 button.autoresizingMask = []
                 let y =

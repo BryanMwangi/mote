@@ -114,7 +114,15 @@ extension Bench {
             ("peek", { browser.peeking = $0 }), ("bar", { if $0 { browser.edit() } else { browser.dismiss() } }),
             ("chats", { if $0 { browser.showChats() } }), ("peeklinks", { prefs.peeksLinks = $0 }),
             ("processes", { browser.showingProcesses = $0 }), ("sideright", { prefs.sideRight = $0 }),
-
+            // The app brought forward, where focus moves as it does for a person.
+            ("appfront", { if $0 { NSApp.activate(ignoringOtherApps: true); browser.window?.makeKeyAndOrderFront(nil) } }),
+            (
+                "fullscreen",
+                { on in
+                    guard let window = browser.window, window.styleMask.contains(.fullScreen) != on else { return }
+                    window.toggleFullScreen(nil)
+                }
+            ),
         ]
         for (key, set) in switches { request.bool(key).map(set) }
         if let look = request.string("look").flatMap(Look.init) { prefs.look = look }

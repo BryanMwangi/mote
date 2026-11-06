@@ -38,7 +38,7 @@ COMMANDS = {
     "probe": ("", "the window's own state: panels, modal, windows"),
     "chat": ("[show|ask|follow|wait|use|mode|lead|search|providers] [args…]", "the chat in front; ask TEXT as the new tab's Ask does, follow TEXT in the chat "
              "(test run); wait [SECONDS] for its reply; use PROVIDER [MODEL] [ADDRESS], mode chat|search|research, search on|off, demo [SOURCES] [MS] [plain] (a long researched reply, streamed from Mote itself; plain: without research steps; test run); providers: how each stands"),
-    "ui": ("key value", "settings/passwords/welcome/history/downloads/bookmarks/hidden, chats, sidebar, spaces, hides, bar, folded, peek, device NAME|off, essential|unessential|newwindow|source TAB, split TAB:left|right|top|bottom / grid|across|down|off, home TAB, peekclick shift|option, settingsquery TEXT|-, shortcut ID=cmd+e|ID=none|reset, screenshot visible|whole|copy|overlay|region:X,Y,W,H, inspect network|sources|storage|timeline, processes on|off, textdirection on, folder new:NAME[/PARENT]|toggle:NAME|unpack:NAME|delete:NAME|TAB:NAME, route HOST:SPACEINDEX|clear, theme N|off|light|dark|auto, profile new:NAME|delete:ID, boost dim|tint|reset|editor|close, "
+    "ui": ("key value", "settings/passwords/welcome/history/downloads/bookmarks/hidden, chats, sidebar, spaces, hides, bar, folded, peek, device NAME|off, essential|unessential|newwindow|source TAB, split TAB:left|right|top|bottom / grid|across|down|off, home TAB, peekclick shift|option, settingsquery TEXT|-, shortcut ID=cmd+e|ID=none|reset, screenshot visible|whole|copy|overlay|region:X,Y,W,H, inspect network|sources|storage|timeline, processes on|off, fullscreen on|off, appfront on, textdirection on, folder new:NAME[/PARENT]|toggle:NAME|unpack:NAME|delete:NAME|TAB:NAME, route HOST:SPACEINDEX|clear, theme N|off|light|dark|auto, profile new:NAME|delete:ID, boost dim|tint|reset|editor|close, "
            "pages120 on|off; sitecard on|off|security|row; pageinfo General|Media|Permissions|Security; notice update|ready|manual|TEXT (test run); look light|dark|system; peeklink keep|close; edittab TEXT; finishedit on"),
     "press": ("code:int chars [mods…]", "a key on the whole app (cmd shift ctrl opt, repeat) — test runs only"),
     "key": ("id text", "keys on a tab as real key events — test runs only"),
@@ -63,7 +63,7 @@ COMMANDS = {
     "windows": ("[new | reopen | close N | front N]", "the browser windows, the front one marked; test run: open, close or bring one forward"),
     "pages": ("on|off", "test run: let a hidden run's pages paint, off every screen (for picture)"),
     "picture": ("path:path", "test run: the whole window, pages included, drawn to a PNG"),
-    "frames": ("[fold|peek|unpeek|scroll|chat|chatdown|tab|space] [seconds:float]", "test run: run that animation and time the frames drawn — missed ones"),
+    "frames": ("[fold|peek|unpeek|scroll|chat|chatdown|tab|space|swipe] [seconds:float]", "test run: run that animation and time the frames drawn — missed ones"),
     "film": ("peek|unpeek|fold|none path:path [frames:int] [every:float]", "test run: the window drawn again and again while it animates → PATH-00.png…"),
     "strip": ("path:path [width:float]", "the row of tabs, drawn off screen to a PNG"),
     "column": ("path:path [height:float]", "the column of tabs, drawn off screen to a PNG"),
@@ -221,7 +221,7 @@ def read_switch(verb, needed):
 
 
 def read_frames(args):
-    if len(args) > 2 or (args and args[0] not in ("fold", "peek", "unpeek", "scroll", "chat", "chatdown", "tab", "space")):
+    if len(args) > 2 or (args and args[0] not in ("fold", "peek", "unpeek", "scroll", "chat", "chatdown", "tab", "space", "swipe")):
         sys.exit(usage("frames"))
     request = {"action": args[0] if args else "fold"}
     if len(args) > 1:
