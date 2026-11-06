@@ -670,11 +670,12 @@ final class Browser: NSObject, ObservableObject {
     // MARK: - Opening tabs
 
     func newTab() {
+        // Over a page, the floating search; a blank tab already is one. In a
+        // private window what it opens is private too (see `open`).
+        if prefs.newTabSearch, let active, !active.isStart, isPrivate || !active.shy { return launch() }
         // A new tab from a private tab is private too, so nothing leaks into history.
         if isPrivate { return show(privateTab(), adopting: true) }
         if active?.shy == true { return newShyTab() }
-        // Over a page, the floating search; a blank tab already is one.
-        if prefs.newTabSearch, let active, !active.isStart { return launch() }
         if #available(macOS 15.4, *), let page = Extensions.shared.newTabPage {
             open(page, foreground: true)
             field.switching = false
@@ -689,7 +690,13 @@ final class Browser: NSObject, ObservableObject {
 
     /// ⌘⇧N: a tab that keeps nothing.
     func newShyTab() {
-        if isPrivate { return show(privateTab(), adopting: true) }
+        if isPrivate { return newTab() }
+        // The floating search, marked private, when that's how new tabs open.
+        if prefs.newTabSearch, let active, !active.isStart {
+            launch()
+            field.launchingPrivate = true
+            return
+        }
         show(Tab(shy: true), adopting: true)
         announce("A tab that keeps nothing")
     }

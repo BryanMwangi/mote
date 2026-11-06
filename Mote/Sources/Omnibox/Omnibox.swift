@@ -210,6 +210,8 @@ struct Composer: View {
     /// The field's symbol: what Return will do now, with ⌘ held or not.
     private var symbol: String {
         if browser.field.switching { return "square.on.square" }
+        // What opens from here keeps nothing: a private window, or a private tab.
+        if browser.field.launching, !leads, browser.isPrivate || browser.field.launchingPrivate { return "eye.slash" }
         return leads ? "sparkle" : "magnifyingglass"
     }
 

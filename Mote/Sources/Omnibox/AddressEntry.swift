@@ -51,6 +51,9 @@ final class AddressEntry {
         }
     }
 
+    /// The floating search opens a private tab (⇧⌘N from a normal window).
+    var launchingPrivate = false
+
     /// ⌘T as a floating search over the page: Return opens a new tab rather
     /// than leaving this one.
     var launching = false {
@@ -94,6 +97,7 @@ final class AddressEntry {
     func clear() {
         input.switching = false
         launching = false
+        launchingPrivate = false
         relocating = false
         asksAssistant = false
         clearStagedMentions()

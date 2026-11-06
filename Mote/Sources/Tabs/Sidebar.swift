@@ -295,7 +295,8 @@ private struct SpacePage: View {
 
     /// The pinned section's lines, an open live folder's items after it.
     private func keptLines(_ kept: [Tab]) -> [KeptLine] {
-        let folders = folderStore.folders(in: space.id)
+        // A private window keeps nothing, folders included.
+        let folders = browser.isPrivate ? [] : folderStore.folders(in: space.id)
         return Folder.outline(folders, tabs: kept.map { ($0.id, $0.folder) }, active: active).flatMap { line -> [KeptLine] in
             guard case .folder(let id, let depth) = line, let folder = folders.first(where: { $0.id == id }), folder.live != nil,
                 !folder.collapsed

@@ -327,10 +327,15 @@ extension Browser {
 
     /// The floating search's choice: the open tab it names, or a new tab.
     private func choose(launched url: URL, in existing: Tab?) {
+        let hidden = field.launchingPrivate
         editing = false
         field.clear()
-        if let existing {
+        if let existing, !hidden {
             select(existing)
+        } else if hidden {
+            let tab = Tab(shy: true)
+            show(tab, adopting: true)
+            tab.go(to: url)
         } else {
             open(url, foreground: true)
             saveSoon()
