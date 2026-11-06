@@ -54,7 +54,8 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         window.title = "Settings"
         window.titlebarAppearsTransparent = true
         window.titleVisibility = .hidden
-        window.isMovableByWindowBackground = true
+        // By its title bar only: what's inside (reordering extensions) drags.
+        window.isMovableByWindowBackground = false
         window.isReleasedWhenClosed = false
         window.backgroundColor = Palette.NS.ground
         window.delegate = self

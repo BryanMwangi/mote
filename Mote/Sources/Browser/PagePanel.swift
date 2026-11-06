@@ -28,6 +28,8 @@ struct PageButton: View {
 struct PagePanel: View {
     let browser: Browser
     let close: () -> Void
+    /// The tile under the pointer, named in the heading.
+    @State private var hovered: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -38,7 +40,7 @@ struct PagePanel: View {
                 Tile(symbol: "square.and.arrow.up", help: "Share") { closing(browser.share) }
             }
             .disabled(browser.active?.isBlank != false)
-            if #available(macOS 15.4, *) { ExtensionGrid(extensions: .shared, close: close) }
+            if #available(macOS 15.4, *) { ExtensionGrid(extensions: .shared, hovered: hovered, close: close) }
             if let tab = browser.active, let host = tab.address?.host(), !tab.isBlank {
                 SiteSettings(browser: browser, tab: tab, host: host)
             }
@@ -46,6 +48,7 @@ struct PagePanel: View {
             foot
         }
         .padding(12)
+        .environment(\.naming) { hovered = $0 }
         .frame(width: 292)
         .fixedSize(horizontal: false, vertical: true)
     }
@@ -92,10 +95,10 @@ private struct Tile<Label: View>: View {
     let act: () -> Void
     @ViewBuilder let label: () -> Label
     @State private var hovering = false
-    /// Its name, after a moment's hover: the panel never has the keyboard,
-    /// and AppKit shows tooltips only in the window that does.
-    @State private var naming = false
     @Environment(\.isEnabled) private var enabled
+    /// Says its name to the panel's heading: the panel never has the
+    /// keyboard, and AppKit shows tooltips only in the window that does.
+    @Environment(\.naming) private var naming
 
     var body: some View {
         Button(action: act) {
@@ -105,33 +108,22 @@ private struct Tile<Label: View>: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .onHover { hovering = $0 }
-        .task(id: hovering) {
-            naming = false
-            guard hovering, !help.isEmpty else { return }
-            try? await Task.sleep(for: .seconds(0.6))
-            naming = !Task.isCancelled
+        .onHover { over in
+            hovering = over
+            naming(over ? help : nil)
         }
-        .overlay(alignment: .bottom) {
-            if naming {
-                Text(help)
-                    .font(.system(size: 11))
-                    .foregroundStyle(Palette.ink)
-                    .lineLimit(1)
-                    .fixedSize()
-                    .padding(.horizontal, 7)
-                    .padding(.vertical, 3)
-                    .background(Palette.ground, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous).strokeBorder(Palette.hairline))
-                    .offset(y: 26)
-                    .allowsHitTesting(false)
-                    .transition(.opacity)
-            }
-        }
-        // Over the tiles below it.
-        .zIndex(naming ? 1 : 0)
-        .animation(Motion.quick, value: naming)
         .opacity(enabled ? 1 : 0.4)
+    }
+}
+
+private struct Naming: EnvironmentKey {
+    static let defaultValue: (String?) -> Void = { _ in }
+}
+
+extension EnvironmentValues {
+    fileprivate var naming: (String?) -> Void {
+        get { self[Naming.self] }
+        set { self[Naming.self] = newValue }
     }
 }
 
@@ -148,15 +140,28 @@ extension Tile where Label == AnyView {
 @available(macOS 15.4, *)
 private struct ExtensionGrid: View {
     @ObservedObject var extensions: Extensions
+    let hovered: String?
     let close: () -> Void
+    /// The extension being dragged to a new place, and how far.
+    @State private var dragging: (id: String, travel: CGSize)?
+    @State private var width: CGFloat = 268
+
+    private static let columns = 4, gap: CGFloat = 6, height: CGFloat = 36
 
     var body: some View {
         if !extensions.installed.isEmpty {
             VStack(alignment: .leading, spacing: 6) {
-                Text("Extensions").font(TextStyle.caption.font.weight(.semibold)).foregroundStyle(Palette.muted)
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 4), spacing: 6) {
-                    ForEach(extensions.buttons) { button in
+                Text(hovered ?? "Extensions")
+                    .font(TextStyle.caption.font.weight(.semibold))
+                    .foregroundStyle(Palette.muted)
+                    .lineLimit(1)
+                    .contentTransition(.opacity)
+                    .animation(Motion.quick, value: hovered)
+                let buttons = extensions.buttons
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: Self.gap), count: Self.columns), spacing: Self.gap) {
+                    ForEach(Array(buttons.enumerated()), id: \.element.id) { index, button in
                         Tile(help: button.label) {
+                            guard dragging == nil else { return }
                             // The panel closes first, so the popup hangs from the page button.
                             close()
                             let id = button.id
@@ -165,21 +170,41 @@ private struct ExtensionGrid: View {
                             ExtensionIcon(button: button, size: 17)
                         }
                         .contextMenu { ExtensionActions(id: button.id, name: button.name, extensions: extensions) }
-                        // Dragged onto another, it takes that one's place.
-                        .draggable(button.id)
-                        .dropDestination(for: String.self) { dropped, _ in
-                            guard let id = dropped.first else { return false }
-                            withAnimation(Motion.settle) { extensions.move(id, to: button.id) }
-                            return true
-                        }
+                        .offset(dragging?.id == button.id ? dragging?.travel ?? .zero : .zero)
+                        .zIndex(dragging?.id == button.id ? 1 : 0)
+                        // Dragged to another's place, it takes it.
+                        .simultaneousGesture(
+                            DragGesture(minimumDistance: 6)
+                                .onChanged { dragging = (button.id, $0.translation) }
+                                .onEnded { drag in
+                                    let target = place(from: index, by: drag.translation, count: buttons.count)
+                                    withAnimation(Motion.settle) {
+                                        if target != index { extensions.move(button.id, to: buttons[target].id) }
+                                        dragging = nil
+                                    }
+                                })
                     }
                     Tile(symbol: "plus", help: "Add extensions") {
                         close()
                         if let browser = extensions.front { browser.open(browser.extensionStore, foreground: true) }
                     }
                 }
+                .onGeometryChange(for: CGFloat.self) {
+                    $0.size.width
+                } action: {
+                    width = $0
+                }
             }
         }
+    }
+
+    /// The cell a tile at `index` lands in, moved by `travel`.
+    private func place(from index: Int, by travel: CGSize, count: Int) -> Int {
+        let cell = CGSize(
+            width: (width - Self.gap * CGFloat(Self.columns - 1)) / CGFloat(Self.columns) + Self.gap, height: Self.height + Self.gap)
+        let column = index % Self.columns + Int((travel.width / cell.width).rounded())
+        let row = index / Self.columns + Int((travel.height / cell.height).rounded())
+        return min(max(row * Self.columns + min(max(column, 0), Self.columns - 1), 0), count - 1)
     }
 }
 
