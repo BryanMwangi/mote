@@ -32,6 +32,10 @@ final class WebStoreBridge: NSObject, WKScriptMessageHandler {
 extension Browser {
     /// The store's extensions, where Settings and the extensions menu send people.
     static let webStore = URL(string: "https://chromewebstore.google.com/category/extensions")!
+    static let addOns = URL(string: "https://addons.mozilla.org/firefox/")!
+
+    /// The store Add Extensions opens, as chosen in Settings › Extensions.
+    var extensionStore: URL { prefs.extensionStore == "firefox" ? Self.addOns : Self.webStore }
 
     /// "Add to Mote": the extension at this tab's address.
     func addFromStore(_ tab: Tab) {

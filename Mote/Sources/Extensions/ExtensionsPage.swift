@@ -79,8 +79,17 @@ private struct StoreSection: View {
     var body: some View {
         SettingsSection(
             "From the Chrome Web Store or Firefox Add-ons",
-            note: "Or find one in the Chrome Web Store and press Add to Mote on its page. A Firefox add-on is told it's in Firefox."
+            note: "Press Add to Mote on an extension's page in either store. A Firefox add-on is told it's in Firefox."
         ) {
+            SettingRow(
+                "Add extensions from", "Where the page panel's + and Add Extensions go", symbol: "plus.app", tint: Tint.blue,
+                keywords: ["store", "default", "chrome", "firefox"]
+            ) {
+                Segmented(
+                    options: [("chrome", "Chrome Web Store"), ("firefox", "Firefox Add-ons")],
+                    selection: Binding(get: { browser.prefs.extensionStore }, set: { browser.prefs.extensionStore = $0 }))
+            }
+            RowRule()
             SettingRow("Browse the Chrome Web Store", "Extensions made for Chrome run here too", symbol: "bag", tint: Tint.purple) {
                 Pill("Open") {
                     browser.tuning = false
@@ -89,12 +98,12 @@ private struct StoreSection: View {
             }
             RowRule()
             SettingRow(
-                "Browse Firefox Add-ons", "Copy an add-on's page address and paste it below", symbol: "flame", tint: Tint.orange,
+                "Browse Firefox Add-ons", "Add-ons made for Firefox, most of them run here too", symbol: "flame", tint: Tint.orange,
                 keywords: ["addons.mozilla.org", "amo", "firefox"]
             ) {
                 Pill("Open") {
                     browser.tuning = false
-                    browser.open(URL(string: "https://addons.mozilla.org/firefox/")!, foreground: true)
+                    browser.open(Browser.addOns, foreground: true)
                 }
             }
             RowRule()

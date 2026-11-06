@@ -114,6 +114,8 @@ final class Preferences: ObservableObject {
     @Published var translateTo: String
     /// The sidebar foot's buttons, by name, in order (see FootButton).
     @Published var footButtons: [String]
+    /// Where Add Extensions goes: "chrome" or "firefox".
+    @Published var extensionStore: String
     var foot: [FootButton] {
         get { FootButton.read(footButtons) }
         set { footButtons = newValue.map(\.rawValue) }
@@ -208,6 +210,7 @@ final class Preferences: ObservableObject {
         neverTranslate = store.value("pages.translate.never", or: [])
         translateTo = store.value("pages.translate.to", or: "")
         footButtons = store.value("sidebar.foot", or: FootButton.standard.map(\.rawValue))
+        extensionStore = store.value("extensions.store", or: "chrome")
         shortcuts = store.value("keys.custom", or: Shortcuts())
         littleLinks = store.value("links.little", or: false)
         showsLinks = store.value("links.show", or: false)
@@ -283,6 +286,7 @@ final class Preferences: ObservableObject {
         keep($neverTranslate, "pages.translate.never")
         keep($translateTo, "pages.translate.to")
         keep($footButtons, "sidebar.foot")
+        keep($extensionStore, "extensions.store")
         keep($shortcuts, "keys.custom") { _ in
             // SwiftUI rebuilds a menu only as it opens, so a menu not opened
             // since would keep answering to the old key. Ask each to rebuild

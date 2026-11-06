@@ -62,7 +62,7 @@ struct PagePanel: View {
                     .disabled(browser.active?.address?.host() == nil)
                 Divider()
                 Button("Manage Extensions") { closing { browser.openSettings(at: .extensions) } }
-                Button("Add Extensions") { closing { browser.open(Browser.webStore, foreground: true) } }
+                Button("Add Extensions") { closing { browser.open(browser.extensionStore, foreground: true) } }
                 Divider()
                 Button("Page Info…") { closing { if let tab = browser.active { PageInfo.show(for: tab, in: browser) } } }
                     .disabled(browser.active?.isBlank != false)
@@ -168,7 +168,7 @@ private struct ExtensionGrid: View {
                     }
                     Tile(symbol: "plus", help: "Add extensions") {
                         close()
-                        extensions.browser?.open(Browser.webStore, foreground: true)
+                        if let browser = extensions.front { browser.open(browser.extensionStore, foreground: true) }
                     }
                 }
             }
