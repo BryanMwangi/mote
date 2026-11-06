@@ -349,7 +349,13 @@ private struct StripTab: View {
             .contentShape(Rectangle())
             // The active tab takes a double click (rename it, or change a pin's
             // letter); the others a single click.
-            .modifier(OneClick(double: live) { press() })
+            .modifier(
+                OneClick(live: live) {
+                    browser.select(tab)
+                } edit: {
+                    pinned ? browser.editLetter(tab) : browser.beginTabRename(tab)
+                }
+            )
             // Over the tab, not inside it: inside, its click would wait out the
             // double-click interval of the tab you're on before closing it.
             .overlay(alignment: .trailing) {
@@ -365,16 +371,6 @@ private struct StripTab: View {
             .accessibilityAddTraits(live ? .isSelected : [])
             .animation(Motion.glide, value: tab.pin)
             .transition(.scale(scale: 0.9, anchor: .bottom).combined(with: .opacity))
-    }
-
-    private func press() {
-        if !live {
-            browser.select(tab)
-        } else if pinned {
-            browser.editLetter(tab)
-        } else {
-            browser.beginTabRename(tab)
-        }
     }
 
     @ViewBuilder

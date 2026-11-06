@@ -162,14 +162,27 @@ final class ScriptedDrag: ObservableObject {
     }
 }
 
-/// One click, or a double click, never both: with both, SwiftUI holds every
-/// single click back for the double-click interval.
+/// A tab's clicks: one picks it; two in quick succession, whether it was
+/// the active tab or became it with the first, edit it (rename it, or a
+/// pin's letter). Single taps only, timed here: SwiftUI's double-tap would
+/// hold every single click back, and miss a double click that starts on a
+/// tab not yet active.
 struct OneClick: ViewModifier {
-    let double: Bool
-    let act: () -> Void
+    let live: Bool
+    let pick: () -> Void
+    let edit: () -> Void
+    @State private var last = Date.distantPast
 
     func body(content: Content) -> some View {
-        content.onTapGesture(count: double ? 2 : 1, perform: act)
+        content.onTapGesture {
+            let now = Date()
+            if now.timeIntervalSince(last) < NSEvent.doubleClickInterval {
+                last = .distantPast
+                return edit()
+            }
+            last = now
+            if !live { pick() }
+        }
     }
 }
 

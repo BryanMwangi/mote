@@ -536,7 +536,13 @@ private struct PinSquare: View {
                 }
             }
             .contentShape(shape)
-            .modifier(OneClick(double: live) { live ? browser.editLetter(tab) : browser.select(tab) })
+            .modifier(
+                OneClick(live: live) {
+                    browser.select(tab)
+                } edit: {
+                    browser.editLetter(tab)
+                }
+            )
             .onHover { hovering = $0 }
             .contextMenu { TabMenu(browser: browser, tab: tab) { browser.close(tab) } }
             .help(tab.label)
@@ -631,7 +637,13 @@ private struct SideRow: View {
         .shakesOnRefusal(refusals, while: renaming, travel: $shake)
         .contentShape(shape)
         // A double click renames the tab you're on; a click goes to any other.
-        .modifier(OneClick(double: live) { live ? browser.beginTabRename(tab) : browser.select(tab) })
+        .modifier(
+            OneClick(live: live) {
+                browser.select(tab)
+            } edit: {
+                browser.beginTabRename(tab)
+            }
+        )
         // Over the row, not inside it: inside, its click would wait out the
         // double-click interval of the tab you're on before closing it.
         .overlay(alignment: .trailing) {
