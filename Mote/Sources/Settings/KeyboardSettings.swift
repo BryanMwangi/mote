@@ -1,12 +1,15 @@
 import AppKit
 import MoteCore
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// Settings › Keyboard: every shortcut, grouped as the menus are, each one
 /// changed by recording a new key (see Shortcuts in MoteCore). Below them,
 /// the keys that stay as they are.
 struct KeyboardSettings: View {
     @ObservedObject var prefs: Preferences
+    /// The keys in Zen on this Mac, if it's here.
+    @State private var zenKeys: Shortcuts?
 
     /// Keys that aren't one command's, so they can't be changed.
     private static let fixed = [
@@ -46,10 +49,11 @@ struct KeyboardSettings: View {
             Spacer()
             // Another browser's keys, for habits from there.
             Menu("Import Shortcuts") {
-                // Your keys in Zen, when it's on this Mac; else its defaults.
-                Button("Zen") { prefs.shortcuts = ZenImporter.profiles().first.flatMap(ZenImporter.shortcuts(in:)) ?? .zen }
-                Button("Zen's Defaults") { prefs.shortcuts = .zen }.disabled(prefs.shortcuts == .zen)
+                // Your keys in Zen, when it's on this Mac.
+                if let zen = zenKeys { Button("Zen") { prefs.shortcuts = zen } }
+                Button("From a File…", action: importFile)
             }
+            .onAppear { zenKeys = ZenImporter.profiles().lazy.compactMap(ZenImporter.shortcuts(in:)).first }
             .menuStyle(.button)
             .fixedSize()
             Pill("Restore Defaults") { prefs.shortcuts = Shortcuts() }.disabled(prefs.shortcuts.changed.isEmpty)
@@ -58,6 +62,19 @@ struct KeyboardSettings: View {
     }
 
     private func combos(_ id: ShortcutID) -> [String] { prefs.shortcuts.combos(for: id).map(\.text) }
+
+    /// Zen's `customKeys.json` or `zen-keyboard-shortcuts.json`, from wherever it was kept.
+    private func importFile() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.json]
+        panel.message = "Choose Zen's customKeys.json or zen-keyboard-shortcuts.json"
+        guard panel.runModal() == .OK, let file = panel.url else { return }
+        if let keys = ZenImporter.shortcuts(from: file) { return prefs.shortcuts = keys }
+        let alert = NSAlert()
+        alert.messageText = "No shortcuts in that file"
+        alert.informativeText = "Mote reads the keyboard shortcuts Zen saves in its profile folder."
+        alert.runModal()
+    }
 }
 
 extension ShortcutID.Group {

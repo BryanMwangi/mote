@@ -34,12 +34,14 @@ nonisolated enum ZenImporter {
     /// The keys a profile has: its changes over Zen's own (`customKeys.json`,
     /// as Zen keeps them now), or every key in its old file.
     static func shortcuts(in profile: Profile) -> Shortcuts? {
-        if let data = try? Data(contentsOf: profile.folder.appending(path: "customKeys.json")),
-            let keys = ZenKeys.shortcuts(customKeys: data)
-        {
-            return keys
-        }
-        return (try? Data(contentsOf: profile.folder.appending(path: "zen-keyboard-shortcuts.json"))).flatMap(ZenKeys.shortcuts(legacy:))
+        shortcuts(from: profile.folder.appending(path: "customKeys.json"))
+            ?? shortcuts(from: profile.folder.appending(path: "zen-keyboard-shortcuts.json"))
+    }
+
+    /// The keys in either of Zen's files, picked out by what's in it.
+    static func shortcuts(from file: URL) -> Shortcuts? {
+        guard let data = try? Data(contentsOf: file) else { return nil }
+        return ZenKeys.shortcuts(customKeys: data) ?? ZenKeys.shortcuts(legacy: data)
     }
 
     /// Zen's session, then its last clean backup.
