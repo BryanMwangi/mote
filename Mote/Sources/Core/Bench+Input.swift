@@ -106,6 +106,7 @@ extension Bench {
         let hit = frame.hitTest(frame.convert(point, from: nil))
         let name = hit.map { String("\(type(of: $0))".prefix(60)) } ?? ""
         if call.request.flag("middle") { return middleClick(call, at: point, in: window, frame: frame) }
+        if let pick = call.request.string("menu") { return contextMenu(call, at: point, in: window, picking: pick) }
         if call.request.flag("double") {
             guard call.testRun() else { return }
             let before = window.frame
@@ -134,6 +135,64 @@ extension Bench {
             "view": name, "canMoveWindow": hit?.mouseDownCanMoveWindow ?? false, "windowMovable": window.isMovable,
             "titleBar": y <= Double(window.frame.height - window.contentLayoutRect.height),
         ])
+    }
+
+    /// A right click there, and the item of its menu titled `pick` chosen as
+    /// a click on it would: the menu's tracking ends, then the item's action
+    /// is sent. Answers with the menus that opened meanwhile, and where the
+    /// share menu pointed if it was Share… (Browser.sharedAt).
+    private static func contextMenu(_ call: BenchCall, at point: NSPoint, in window: NSWindow, picking pick: String) {
+        guard call.testRun() else { return }
+        var picked = "no menu"
+        // Every menu that opens meanwhile, and whether it has closed: the
+        // share menu is one too.
+        var menus: [(menu: NSMenu, opened: String, closed: String?)] = []
+        let stamp = { String(format: "%.3f", Date().timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 1000)) }
+        let center = NotificationCenter.default
+        let begin = center.addObserver(forName: NSMenu.didBeginTrackingNotification, object: nil, queue: nil) { note in
+            nonisolated(unsafe) let menu = note.object as? NSMenu
+            MainActor.assumeIsolated {
+                guard let menu, menu.supermenu == nil else { return }
+                menus.append((menu, stamp(), nil))
+                // The right click's menu only, not the ones it opens.
+                guard menus.count == 1 else { return }
+                guard let index = menu.items.firstIndex(where: { $0.title.hasPrefix(pick) }) else { return picked = "no \(pick)" }
+                picked = menu.items[index].title
+                // As a person takes a moment to pick; a run loop timer, as the
+                // main queue waits while a menu tracks.
+                let timer = Timer(timeInterval: 0.25, repeats: false) { _ in
+                    MainActor.assumeIsolated {
+                        menu.cancelTracking()
+                        menu.performActionForItem(at: index)
+                    }
+                }
+                RunLoop.main.add(timer, forMode: .common)
+            }
+        }
+        let end = center.addObserver(forName: NSMenu.didEndTrackingNotification, object: nil, queue: nil) { note in
+            nonisolated(unsafe) let menu = note.object as? NSMenu
+            MainActor.assumeIsolated {
+                if let index = menus.lastIndex(where: { $0.menu === menu && $0.closed == nil }) { menus[index].closed = stamp() }
+            }
+        }
+        Browser.sharedAt = ""
+        // The answer from a run loop timer too, as the share menu may still be
+        // tracking; then whatever is still open is closed.
+        let answer = Timer(timeInterval: 2, repeats: false) { _ in
+            MainActor.assumeIsolated {
+                center.removeObserver(begin)
+                center.removeObserver(end)
+                call.answer([
+                    "picked": picked, "sharedAt": Browser.sharedAt,
+                    "menus": menus.map { "\($0.menu.items.first?.title ?? "?"): opened \($0.opened), closed \($0.closed ?? "STILL OPEN")" },
+                ])
+                for open in menus where open.closed == nil { open.menu.cancelTracking() }
+            }
+        }
+        RunLoop.main.add(answer, forMode: .common)
+        for kind in [NSEvent.EventType.rightMouseDown, .rightMouseUp] {
+            BenchInput.mouse(kind, at: point, in: window).map(window.sendEvent)
+        }
     }
 
     /// To the topmost middle-click catcher there (MiddleClick in TabGestures).

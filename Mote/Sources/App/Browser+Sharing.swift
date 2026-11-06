@@ -9,12 +9,17 @@ extension Browser {
     /// sidebar, or below it in the strip, as the site card opens; with the
     /// tabs out of sight, the page's corner.
     func share(beside tab: Tab) {
-        guard !prefs.sidebar || !folded || peeking, let address = tab.address else { return sharePage() }
+        let beside = !prefs.sidebar || !folded || peeking
         // The picker doesn't say when it's dismissed, so an earlier share can
         // have left this row marked; a mark counts only for its own tab.
-        siteCardRow = tab.id
+        if beside { siteCardRow = tab.id }
         let edge: NSRectEdge = prefs.sidebar ? (prefs.sideRight ? .minX : .maxX) : .minY
         Task { @MainActor in
+            // The picker is a menu, which can't open while the one Share… was
+            // picked from (the tab's, the menu bar's) is still closing: it
+            // waits for the run loop to be out of menu tracking.
+            await withCheckedContinuation { done in RunLoop.main.perform(inModes: [.default]) { done.resume() } }
+            guard beside, let address = tab.address else { return sharePage() }
             // A few frames for the row to mark itself (SiteCardAnchor).
             for _ in 0..<10 {
                 if let row = SiteCardPanel.row(for: tab.id) {

@@ -46,7 +46,7 @@ COMMANDS = {
     "tabdrag": ("id distance:float [ms:float]", "test run: drag tab ID DISTANCE points along the strip or sidebar over MS, then let go"),
     "move": ("x:float y:float", "test run: the window's top left at X, Y on the main screen, not brought forward"),
     "resize": ("width:float height:float [steps:int]", "take the window to that size in steps, like a drag — test runs only"),
-    "hit": ("x:float y:float [double|middle]", "what a press there (from the window's top left) lands on, and whether a drag moves the "
+    "hit": ("x:float y:float [double|middle|menu ITEM]", "what a press there (from the window's top left) lands on, and whether a drag moves the "
             "window; double or middle: test run, that click there"),
     "field": ("text [type] [go]", "test run: TEXT pasted into the address field (type: a key at a time), timed; go: then Return, timed "
               "until the page is loading"),
@@ -188,6 +188,8 @@ def read_ui(args):
 
 
 def read_hit(args):
+    if len(args) == 4 and args[2] == "menu":
+        return {"x": float(args[0]), "y": float(args[1]), "menu": args[3]}
     if len(args) not in (2, 3) or (len(args) == 3 and args[2] not in ("double", "middle")):
         sys.exit(usage("hit"))
     request = {"x": float(args[0]), "y": float(args[1])}
