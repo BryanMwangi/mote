@@ -72,10 +72,11 @@ extension Browser {
         move(tab, toFolder: folder)
     }
 
-    /// A folder dragged onto another: before it, under the same parent.
-    func moveFolder(_ id: UUID, before target: UUID) {
+    /// A folder dragged onto another: before it, or after it when let go
+    /// on its lower half, under the same parent.
+    func moveFolder(_ id: UUID, before target: UUID, after: Bool = false) {
         FolderStore.shared.change(spaceID) { folders in
-            if let moved = Folder.moving(id, before: target, in: folders) { folders = moved }
+            if let moved = Folder.moving(id, before: target, after: after, in: folders) { folders = moved }
         }
     }
 

@@ -71,5 +71,7 @@ struct FoldersTests {
         #expect(moved[0].parent == nil)
         #expect(Folder.moving(b.id, before: inner.id, in: [a, b, inner]) == nil)
         #expect(Folder.moving(a.id, before: a.id, in: [a, b]) == nil)
+        // After the last: the only way there.
+        #expect(Folder.moving(a.id, before: b.id, after: true, in: [a, b])?.map(\.name) == ["B", "A"])
     }
 }

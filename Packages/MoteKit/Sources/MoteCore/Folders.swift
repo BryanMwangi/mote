@@ -91,17 +91,17 @@ public struct Folder: Codable, Identifiable, Equatable, Sendable {
         frames.first { $0.key != current && $0.value.contains(point) }?.key
     }
 
-    /// `folders` with `id` moved to just before `target`, beside it under
-    /// the same parent. Nil when it would go inside itself.
-    public static func moving(_ id: UUID, before target: UUID, in folders: [Folder]) -> [Folder]? {
+    /// `folders` with `id` moved to just before `target` (or after it),
+    /// beside it under the same parent. Nil when it would go inside itself.
+    public static func moving(_ id: UUID, before target: UUID, after: Bool = false, in folders: [Folder]) -> [Folder]? {
         guard id != target, !family(of: id, in: folders).contains(target), let from = folders.firstIndex(where: { $0.id == id }),
-            let parent = folders.first(where: { $0.id == target })?.parent as UUID??
+            let goal = folders.first(where: { $0.id == target })
         else { return nil }
         var list = folders
         var folder = list.remove(at: from)
-        folder.parent = parent
+        folder.parent = goal.parent
         guard let to = list.firstIndex(where: { $0.id == target }) else { return nil }
-        list.insert(folder, at: to)
+        list.insert(folder, at: after ? to + 1 : to)
         return list
     }
 }

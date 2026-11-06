@@ -777,11 +777,11 @@ private struct FolderRow: View {
         .onTapGesture { if live { withAnimation(Motion.settle) { browser.toggleFolder(folder.id) } } }
         // Dragged onto another folder, it goes before it, beside it.
         .draggable("folder:" + folder.id.uuidString)
-        .dropDestination(for: String.self) { dropped, _ in
+        .dropDestination(for: String.self) { dropped, at in
             guard live, let text = dropped.first, text.hasPrefix("folder:"), let id = UUID(uuidString: String(text.dropFirst(7))) else {
                 return false
             }
-            withAnimation(Motion.settle) { browser.moveFolder(id, before: folder.id) }
+            withAnimation(Motion.settle) { browser.moveFolder(id, before: folder.id, after: at.y > Metrics.row / 2) }
             return true
         }
         .onHover { hovering = $0 }
