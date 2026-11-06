@@ -134,13 +134,17 @@ private final class ZoomRow: NSView {
     private let browser: Browser
     private let tab: Tab
     private let percent = NSTextField(labelWithString: "")
+    private var lead: [NSView] = []
+    private var controls: [NSView] = []
 
     init(browser: Browser, tab: Tab) {
         self.browser = browser
         self.tab = tab
         super.init(frame: NSRect(x: 0, y: 0, width: 280, height: 28))
-        let icon = NSImageView(image: NSImage(systemSymbolName: "plus.magnifyingglass", accessibilityDescription: nil) ?? NSImage())
-        icon.contentTintColor = .secondaryLabelColor
+        // As wide as the menu, however wide its other items make it.
+        autoresizingMask = .width
+        let icon = NSImageView(image: Self.symbol("plus.magnifyingglass"))
+        icon.identifier = NSUserInterfaceItemIdentifier("plus.magnifyingglass")
         let title = NSTextField(labelWithString: "Zoom")
         title.font = .menuFont(ofSize: 0)
         percent.font = .monospacedDigitSystemFont(ofSize: 12, weight: .regular)
@@ -150,26 +154,67 @@ private final class ZoomRow: NSView {
         let whole = button("arrow.up.left.and.arrow.down.right", #selector(fullScreen))
         let reset = NSClickGestureRecognizer(target: self, action: #selector(actualSize))
         percent.addGestureRecognizer(reset)
-        let row = NSStackView(views: [icon, title, NSView(), out, percent, into, whole])
-        row.spacing = 6
-        row.edgeInsets = NSEdgeInsets(top: 0, left: 14, bottom: 0, right: 12)
-        row.frame = bounds
-        row.autoresizingMask = [.width, .height]
-        percent.widthAnchor.constraint(equalToConstant: 44).isActive = true
-        addSubview(row)
-        for control in [out, into, whole] { control.isEnabled = !tab.isBlank }
+        lead = [icon, title]
+        controls = [out, percent, into, whole]
+        for view in lead + controls { addSubview(view) }
+        for control in [out, into, whole] {
+            control.isEnabled = !tab.isBlank
+            control.alphaValue = tab.isBlank ? 0.35 : 1
+        }
         show()
     }
 
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError() }
 
+    /// The icon and "Zoom" where a menu item's icon and title go; the
+    /// controls spread evenly from past "Zoom" to where shortcuts end.
+    override func layout() {
+        super.layout()
+        guard lead.count == 2, controls.count == 4 else { return }
+        let mid = bounds.midY
+        lead[0].frame = NSRect(x: 14, y: mid - Self.box / 2, width: Self.box, height: Self.box)
+        let title = lead[1].fittingSize
+        lead[1].frame = NSRect(x: lead[0].frame.maxX + 6, y: mid - title.height / 2, width: title.width, height: title.height)
+        let widths = controls.map { $0 === percent ? 44 : Self.box }
+        let start = lead[1].frame.maxX + 18, end = bounds.maxX - 10
+        let gap = max(0, (end - start - widths.reduce(0, +)) / CGFloat(controls.count - 1))
+        var x = start
+        for (view, width) in zip(controls, widths) {
+            let height = view === percent ? view.fittingSize.height : Self.box
+            view.frame = NSRect(x: x, y: mid - height / 2, width: width, height: height)
+            x += width + gap
+        }
+    }
+
     private func button(_ symbol: String, _ action: Selector) -> NSButton {
-        let button = NSButton(
-            image: NSImage(systemSymbolName: symbol, accessibilityDescription: nil) ?? NSImage(), target: self, action: action)
+        // A menu doesn't tint a borderless button's template, so the symbol
+        // comes already in the menu's colour, drawn again when the look changes.
+        let button = NSButton(image: Self.symbol(symbol), target: self, action: action)
+        button.bezelStyle = .inline
         button.isBordered = false
-        button.contentTintColor = .labelColor
+        button.imagePosition = .imageOnly
+        button.imageScaling = .scaleNone
+        button.identifier = NSUserInterfaceItemIdentifier(symbol)
         return button
+    }
+
+    /// Every symbol in one box, at one size.
+    private static let box: CGFloat = 22
+
+    private static func symbol(_ name: String) -> NSImage {
+        let paint = NSImage.SymbolConfiguration(pointSize: 13, weight: .regular, scale: .medium)
+            .applying(.init(paletteColors: [.labelColor]))
+        return NSImage(systemSymbolName: name, accessibilityDescription: nil)?.withSymbolConfiguration(paint) ?? NSImage()
+    }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        for view in subviews {
+            guard let name = view.identifier?.rawValue else { continue }
+            (view as? NSButton)?.image = Self.symbol(name)
+            (view as? NSImageView)?.image = Self.symbol(name)
+        }
     }
 
     private func show() { percent.stringValue = "\(Int((tab.zoom * 100).rounded()))%" }

@@ -324,6 +324,24 @@ extension Bench {
             }
             return call.answer(["items": AppMenu.make(for: browser).items.map(describe)])
         }
+        // The app menu's zoom row drawn light and dark, PATH-light.png and PATH-dark.png.
+        if Storage.testing, let path = request.string("zoomrow") {
+            guard let row = AppMenu.make(for: browser).items.compactMap(\.view).first else { return call.fail("no zoom row") }
+            for (name, look) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {
+                row.appearance = NSAppearance(named: look)
+                row.layoutSubtreeIfNeeded()
+                guard let bitmap = row.bitmapImageRepForCachingDisplay(in: row.bounds) else { continue }
+                // A menu's ground behind, as the row has none of its own.
+                NSGraphicsContext.saveGraphicsState()
+                NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: bitmap)
+                (look == .aqua ? NSColor(white: 0.95, alpha: 1) : NSColor(white: 0.17, alpha: 1)).setFill()
+                row.bounds.fill()
+                NSGraphicsContext.restoreGraphicsState()
+                row.cacheDisplay(in: row.bounds, to: bitmap)
+                try? BenchPictures.save(bitmap, to: "\(path)-\(name).png")
+            }
+            return call.answer(["saved": path])
+        }
         call.answer(["ok": true])
     }
 
