@@ -15,7 +15,7 @@ enum SiteCardPanel {
     /// The padlocks it may hang from, in the toolbar and the sidebar's
     /// address (see SiteCardAnchor), and the tab row it was asked for from.
     fileprivate static var padlocks: [WeakView] = []
-    fileprivate static weak var row: NSView?
+    static weak var row: NSView?
     private static weak var owner: Browser?
 
     /// The padlock on screen in `window`.

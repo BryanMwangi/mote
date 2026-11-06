@@ -224,7 +224,10 @@ struct TabMenu: View {
             Button("Copy as Markdown Link") { onThisTab(browser.copyMarkdownLink) }
             Divider()
             Button("Bookmark Tab…") { onThisTab(browser.bookmarkCurrent) }
-            Button("Share…") { onThisTab(browser.share) }
+            Button("Share…") {
+                browser.select(tab)
+                browser.share(beside: tab)
+            }
         }
         .disabled(tab.isBlank)
         Button("Move to New Window") { browser.moveToNewWindow(tab) }.disabled(tab.held || browser.tabs.count < 2)

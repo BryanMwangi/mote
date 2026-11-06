@@ -151,6 +151,10 @@ extension Bench {
         if Storage.testing, let id = request.string("essential"), let found = tab(id) { browser.pin(found) }
         if Storage.testing, let id = request.string("unessential"), let found = tab(id) { browser.unpin(found) }
         if Storage.testing, let id = request.string("newwindow"), let found = tab(id) { browser.moveToNewWindow(found) }
+        if Storage.testing, let id = request.string("share"), let found = tab(id) {
+            browser.select(found)
+            browser.share(beside: found)
+        }
         if Storage.testing, let id = request.string("source"), let found = tab(id) { browser.viewSource(of: found) }
         // An essential or pinned tab back to its pinned page; the click that previews.
         if Storage.testing, let id = request.string("home"), let found = tab(id) { browser.goHome(found) }
