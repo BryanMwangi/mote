@@ -46,7 +46,9 @@ struct KeyboardSettings: View {
             Spacer()
             // Another browser's keys, for habits from there.
             Menu("Import Shortcuts") {
-                Button("Zen") { prefs.shortcuts = .zen }.disabled(prefs.shortcuts == .zen)
+                // Your keys in Zen, when it's on this Mac; else its defaults.
+                Button("Zen") { prefs.shortcuts = ZenImporter.profiles().first.flatMap(ZenImporter.shortcuts(in:)) ?? .zen }
+                Button("Zen's Defaults") { prefs.shortcuts = .zen }.disabled(prefs.shortcuts == .zen)
             }
             .menuStyle(.button)
             .fixedSize()

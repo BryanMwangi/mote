@@ -296,6 +296,14 @@ extension Bench {
         // Snap's picker on the tab in front (test runs).
         if Storage.testing, let on = request.bool("snap"), on != browser.pickingElement { browser.toggleHiding() }
         if let on = request.bool("theming") { browser.themingSpace = on ? browser.spaceID : nil }
+        // Zen's keys on this Mac, as they'd come over: what differs from Mote's (read only).
+        if Storage.testing, request.flag("zenkeys") {
+            let keys = ZenImporter.profiles().first.flatMap(ZenImporter.shortcuts(in:))
+            return call.answer([
+                "found": keys != nil,
+                "changed": (keys?.changed ?? [:]).map { "\($0.key.title): \($0.value.map(\.text).joined(separator: " "))" }.sorted(),
+            ])
+        }
         // The app menu's items, for the bench: a popped-up menu holds the run loop.
         if Storage.testing, request.flag("appmenu") {
             let describe = { (item: NSMenuItem) -> String in
