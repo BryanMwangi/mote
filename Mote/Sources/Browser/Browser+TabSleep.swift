@@ -37,7 +37,10 @@ extension Browser {
     }
 
     /// Why a tab has to stay awake, or nil. Idle time is the caller's to check.
-    func awake(because tab: Tab) -> String? {
+    /// `asked`: the user unloaded it, so only what would be lost or broken
+    /// (a call, a download, its video out) keeps it awake, not what rest
+    /// alone respects (pinned, sound, loading, the opener on screen).
+    func awake(because tab: Tab, asked: Bool = false) -> String? {
         var facts = TabSleep.Facts()
         facts.onScreen = tab.id == activeID || shownSplit?.contains(tab.id) == true
         facts.pinned = tab.held
@@ -53,21 +56,22 @@ extension Browser {
             facts.downloading = downloading.contains { $0.webView === web }
         }
         facts.openedTheTabOnScreen = active?.opener == tab.id
+        if asked { (facts.pinned, facts.playingSound, facts.loading, facts.openedTheTabOnScreen) = (false, false, false, false) }
         return TabSleep.keepsAwake(facts)?.rawValue
     }
 
     /// Checks for unsent input, takes a snapshot, then lets the page go. Each
     /// step waits on the page, so whether the tab may still sleep is asked
     /// again after each: the user may have come back to it.
-    func sleep(_ tab: Tab, done: ((String) -> Void)? = nil) {
-        if let reason = awake(because: tab) { return done?(reason) ?? () }
+    func sleep(_ tab: Tab, asked: Bool = false, done: ((String) -> Void)? = nil) {
+        if let reason = awake(because: tab, asked: asked) { return done?(reason) ?? () }
         tab.unsaved { [weak self, weak tab] typed in
             guard let self, let tab else { return }
-            if typed { return done?(TabSleep.Reason.typed.rawValue) ?? () }
-            if let reason = awake(because: tab) { return done?(reason) ?? () }
+            if typed, !asked { return done?(TabSleep.Reason.typed.rawValue) ?? () }
+            if let reason = awake(because: tab, asked: asked) { return done?(reason) ?? () }
             tab.snapshot { [weak self, weak tab] picture in
                 guard let self, let tab else { return }
-                if let reason = awake(because: tab) { return done?(reason) ?? () }
+                if let reason = awake(because: tab, asked: asked) { return done?(reason) ?? () }
                 tab.sleep(picture: picture)
                 done?("asleep")
             }

@@ -952,7 +952,7 @@ final class Browser: NSObject, ObservableObject {
         unsplit(tab: tab.id)
         reorder { $0.remove(tab.id) }
         if activeID == tab.id,
-            let next = (prefs.closeGoesBack ? recentlyUsed() : nil) ?? row.successor(ofRemovedAt: index).flatMap(self.tab)
+            let next = (prefs.closeGoesBack ? recentlyUsed(besides: nil) : nil) ?? row.successor(ofRemovedAt: index).flatMap(self.tab)
         {
             // Through select(), so a waiting tab wakes.
             select(next)
@@ -1006,9 +1006,9 @@ final class Browser: NSObject, ObservableObject {
 
     /// The tab used last, as Zen goes to on closing one: awake ones first,
     /// so closing doesn't wake a page that was resting.
-    private func recentlyUsed() -> Tab? {
-        let awake = tabs.filter { !$0.asleep }
-        return (awake.isEmpty ? tabs : awake).max { $0.touched < $1.touched }
+    func recentlyUsed(besides leaving: Tab?) -> Tab? {
+        let awake = tabs.filter { !$0.asleep && $0 !== leaving }
+        return (awake.isEmpty ? tabs.filter { $0 !== leaving } : awake).max { $0.touched < $1.touched }
     }
 
     private func remember(_ tab: Tab, at index: Int) {

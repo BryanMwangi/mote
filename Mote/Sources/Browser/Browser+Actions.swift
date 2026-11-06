@@ -63,6 +63,7 @@ extension Browser {
         if let command = id.command { return run(command) }
         switch id {
         case .openFile: openFile()
+        case .unloadTab: unloadActive()
         case .newWindow: Windows.shared.open(space: spaceID)
         case .newPrivateTab: newShyTab()
         case .reloadFromOrigin: reloadFromOrigin()

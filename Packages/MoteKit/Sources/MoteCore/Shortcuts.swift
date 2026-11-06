@@ -67,7 +67,8 @@ public struct KeyCombo: Hashable, Codable, Sendable {
 /// from here, so a change shows and works everywhere.
 public enum ShortcutID: String, CaseIterable, Codable, CodingKeyRepresentable, Sendable {
     // Tabs
-    case newTab, reopenTab, closeTab, duplicateTab, nextTab, previousTab, switcher, editAddress, copyAddress, pasteAndGo, openFile
+    case newTab, reopenTab, closeTab, duplicateTab, unloadTab, nextTab, previousTab, switcher, editAddress, copyAddress, pasteAndGo,
+        openFile
     // Windows
     case newWindow, newPrivateWindow, newPrivateTab
     // Page
@@ -92,7 +93,7 @@ public enum ShortcutID: String, CaseIterable, Codable, CodingKeyRepresentable, S
 
     public var group: Group {
         switch self {
-        case .newTab, .reopenTab, .closeTab, .duplicateTab, .nextTab, .previousTab, .switcher, .editAddress, .copyAddress,
+        case .newTab, .reopenTab, .closeTab, .duplicateTab, .unloadTab, .nextTab, .previousTab, .switcher, .editAddress, .copyAddress,
             .pasteAndGo, .openFile:
             .tabs
         case .newWindow, .newPrivateWindow, .newPrivateTab: .windows
@@ -116,6 +117,7 @@ public enum ShortcutID: String, CaseIterable, Codable, CodingKeyRepresentable, S
         case .reopenTab: "Reopen Closed Tab"
         case .closeTab: "Close Tab"
         case .duplicateTab: "Duplicate Tab"
+        case .unloadTab: "Unload Tab"
         case .nextTab: "Next Tab"
         case .previousTab: "Previous Tab"
         case .switcher: "Search Tabs"
@@ -181,6 +183,7 @@ public enum ShortcutID: String, CaseIterable, Codable, CodingKeyRepresentable, S
         case .reopenTab: [.cmd("t", shift: true)]
         case .closeTab: [.cmd("w")]
         case .duplicateTab: [.cmd("d")]
+        case .unloadTab: [KeyCombo("u", command: true, control: true)]
         // The layout sends ⇧] as "]" or "}".
         case .nextTab: [.cmd("]", shift: true), .cmd("}", shift: true)]
         case .previousTab: [.cmd("[", shift: true), .cmd("{", shift: true)]
@@ -287,7 +290,7 @@ public enum ShortcutID: String, CaseIterable, Codable, CodingKeyRepresentable, S
         case .history: .history
         case .downloads: .downloads
         case .settings: .settings
-        case .openFile, .newWindow, .newPrivateTab, .reloadFromOrigin, .savePage, .screenshot, .passwords, .inspector, .console,
+        case .openFile, .unloadTab, .newWindow, .newPrivateTab, .reloadFromOrigin, .savePage, .screenshot, .passwords, .inspector, .console,
             .inspectElement, .viewSource, .responsive, .library, .inspectNetwork, .inspectSources, .inspectStorage, .textDirection,
             .processes:
             nil

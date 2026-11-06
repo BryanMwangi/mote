@@ -178,6 +178,8 @@ private struct MenuBar: Commands {
         if let tab = browser.active { TabHoldItems(browser: browser, tab: tab) }
         Button("Rename Tab") { if let tab = browser.active { browser.beginTabRename(tab) } }.disabled(browser.active == nil)
         Button("Duplicate Tab", action: browser.duplicate).keyboardShortcut(keys(.duplicateTab)).disabled(blank)
+        Button("Unload Tab", action: browser.unloadActive).keyboardShortcut(keys(.unloadTab))
+            .disabled(blank || browser.active?.asleep == true)
         Button("Copy Address", action: browser.copyAddress).keyboardShortcut(keys(.copyAddress)).disabled(blank)
         Button("Copy as Markdown Link", action: browser.copyMarkdownLink).disabled(blank)
         Button("Paste and Go", action: browser.pasteAndGo).keyboardShortcut(keys(.pasteAndGo))

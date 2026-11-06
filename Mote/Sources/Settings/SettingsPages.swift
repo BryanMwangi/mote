@@ -238,6 +238,8 @@ struct TabSettings: View {
     @ObservedObject var browser: Browser
     @ObservedObject var prefs: Preferences
     @ObservedObject private var routes = RouteStore.shared
+    /// Minutes a tab goes unseen before it rests (`Browser.sleepAfter`).
+    @State private var restAfter = Int(Browser.sleepAfter / 60)
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -344,8 +346,24 @@ struct TabSettings: View {
         SettingsSection("Saving energy") {
             SettingRow(
                 "Let quiet tabs rest",
-                "Unseen for half an hour, a tab lets its page go and picks up where it was. Pinned tabs, sound, calls and unsent text keep it awake",
+                "Unseen for a while, a tab lets its page go and picks up where it was. Pinned tabs, sound, calls and unsent text keep it awake",
                 symbol: "moon.zzz", tint: Tint.indigo, on: $prefs.sleepsTabs)
+            if prefs.sleepsTabs {
+                RowRule()
+                SettingRow(
+                    "Rest after", "How long a tab goes unseen first", symbol: "timer", tint: Tint.indigo, keywords: ["unload", "sleep"]
+                ) {
+                    Picker("", selection: $restAfter) {
+                        ForEach([15, 30, 60, 120, 240], id: \.self) { minutes in
+                            Text(minutes < 60 ? "\(minutes) minutes" : minutes == 60 ? "1 hour" : "\(minutes / 60) hours").tag(minutes)
+                        }
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.menu)
+                    .fixedSize()
+                    .onChange(of: restAfter) { Storage.settings.set(Double(restAfter * 60), forKey: "sleep.after") }
+                }
+            }
         }
 
         SettingsSection("Spaces", note: "Mission Control's ⌃ shortcuts, if they're on, get those keys first.") {
