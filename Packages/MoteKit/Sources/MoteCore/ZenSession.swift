@@ -64,11 +64,14 @@ public struct ZenSession: Decodable, Sendable, Equatable {
         public var userContextId: Int?
         /// An empty tab, or a Glance preview: not tabs anyone kept.
         public var transient: Bool
+        /// Zen's id for it, which its split views name it by.
+        public var syncID: String?
 
         public init(
             entries: [Entry], index: Int? = nil, pinned: Bool = false, essential: Bool = false, workspace: String? = nil,
-            label: String? = nil, userContextId: Int? = nil, transient: Bool = false
+            label: String? = nil, userContextId: Int? = nil, transient: Bool = false, syncID: String? = nil
         ) {
+            self.syncID = syncID
             self.entries = entries
             self.index = index
             self.pinned = pinned
@@ -89,6 +92,7 @@ public struct ZenSession: Decodable, Sendable, Equatable {
             label = c.lenient(String.self, .zenStaticLabel)
             userContextId = c.lenient(Int.self, .userContextId)
             transient = (c.lenient(Bool.self, .zenIsEmpty) ?? false) || (c.lenient(Bool.self, .zenIsGlance) ?? false)
+            syncID = c.lenient(String.self, .zenSyncId)
         }
 
         /// The page it shows: the entry `index` points at, or the last.
@@ -98,22 +102,69 @@ public struct ZenSession: Decodable, Sendable, Equatable {
         }
 
         private enum Keys: String, CodingKey {
-            case entries, index, pinned, zenEssential, zenWorkspace, zenStaticLabel, userContextId, zenIsEmpty, zenIsGlance
+            case entries, index, pinned, zenEssential, zenWorkspace, zenStaticLabel, userContextId, zenIsEmpty, zenIsGlance,
+                zenSyncId
         }
+    }
+
+    /// A split view: its tabs by `syncID`, laid out as Zen's tree has them.
+    public struct Split: Decodable, Sendable, Equatable {
+        public indirect enum Node: Decodable, Sendable, Equatable {
+            /// A tab, and its share of its parent in percent.
+            case leaf(String, Double)
+            /// Side by side ("row") or one over another ("column").
+            case splitter(across: Bool, Double, [Node])
+
+            public init(from decoder: Decoder) throws {
+                let c = try decoder.container(keyedBy: Keys.self)
+                let size = c.lenient(Double.self, .sizeInParent) ?? 100
+                if c.lenient(String.self, .type) == "leaf" {
+                    self = .leaf(c.lenient(String.self, .tabId) ?? "", size)
+                } else {
+                    self = .splitter(
+                        across: c.lenient(String.self, .direction) != "column", size, c.lenient([Node].self, .children) ?? [])
+                }
+            }
+
+            private enum Keys: String, CodingKey { case type, tabId, sizeInParent, direction, children }
+        }
+
+        public var tabs: [String]
+        /// The tree, which older files lack; then `grid` says how.
+        public var layout: Node?
+        public var grid: String?
+
+        public init(tabs: [String], layout: Node? = nil, grid: String? = nil) {
+            self.tabs = tabs
+            self.layout = layout
+            self.grid = grid
+        }
+
+        public init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: Keys.self)
+            tabs = c.lenient([String].self, .tabs) ?? []
+            layout = c.lenient(Node.self, .layoutTree)
+            grid = c.lenient(String.self, .gridType)
+        }
+
+        private enum Keys: String, CodingKey { case tabs, layoutTree, gridType }
     }
 
     public var spaces: [Space]
     public var tabs: [Tab]
+    public var splits: [Split]
 
-    public init(spaces: [Space], tabs: [Tab]) {
+    public init(spaces: [Space], tabs: [Tab], splits: [Split] = []) {
         self.spaces = spaces
         self.tabs = tabs
+        self.splits = splits
     }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: Keys.self)
         spaces = (c.lenient([Space].self, .spaces) ?? []).filter { !$0.uuid.isEmpty }
         tabs = c.lenient([Tab].self, .tabs) ?? []
+        splits = c.lenient([Split].self, .splitViewData) ?? []
     }
 
     /// From the file as Zen writes it.
@@ -121,7 +172,7 @@ public struct ZenSession: Decodable, Sendable, Equatable {
         try JSONDecoder().decode(ZenSession.self, from: MozLZ4.decode(file))
     }
 
-    private enum Keys: String, CodingKey { case spaces, tabs }
+    private enum Keys: String, CodingKey { case spaces, tabs, splitViewData }
 }
 
 extension KeyedDecodingContainer {
@@ -140,6 +191,8 @@ public struct ZenImportPlan: Equatable, Sendable {
         /// The name the user gave it in Zen.
         public var name: String?
         public var tier: TabTier
+        /// Zen's id for it, for its split views.
+        public var syncID: String? = nil
     }
 
     public struct Space: Equatable, Sendable {
@@ -152,6 +205,8 @@ public struct ZenImportPlan: Equatable, Sendable {
         public var ownData: Bool
         /// Essentials, then pinned tabs, then the rest, each in Zen's order.
         public var tabs: [Tab]
+        /// Its split views, by their tabs' places in `tabs`, as a session keeps them.
+        public var splits: [SplitLayout<Int>] = []
 
         public func count(_ tier: TabTier) -> Int { tabs.lazy.filter { $0.tier == tier }.count }
     }
@@ -185,13 +240,40 @@ public struct ZenImportPlan: Equatable, Sendable {
             let tier: TabTier = zen.essential ? .essential : zen.pinned ? .pinned : .loose
             let label = zen.label?.trimmingCharacters(in: .whitespacesAndNewlines)
             let tab = Tab(
-                url: url, title: entry.title ?? url.absoluteString, name: label.flatMap { $0.isEmpty ? nil : $0 }, tier: tier)
+                url: url, title: entry.title ?? url.absoluteString, name: label.flatMap { $0.isEmpty ? nil : $0 }, tier: tier,
+                syncID: zen.syncID)
             spaces[Self.home(of: zen, among: ordered)].tabs.append(tab)
         }
         for index in spaces.indices {
             spaces[index].tabs = [.essential, .pinned, .loose].flatMap { tier in spaces[index].tabs.filter { $0.tier == tier } }
+            // A split goes to the space with its tabs, over their places there.
+            let places = Dictionary(
+                spaces[index].tabs.enumerated().compactMap { place, tab in tab.syncID.map { ($0, place) } }, uniquingKeysWith: { a, _ in a }
+            )
+            spaces[index].splits = session.splits.compactMap { Self.layout(of: $0)?.compactMap { places[$0] } }
         }
         self.spaces = spaces
+    }
+
+    /// A split as Mote lays one out: its tree, or for an older file, its tabs
+    /// in Zen's grid ("hsep" side by side, "vsep" one over another).
+    static func layout(of split: ZenSession.Split) -> SplitLayout<String>? {
+        func node(_ zen: ZenSession.Split.Node) -> SplitLayout<String>.Node {
+            switch zen {
+            case .leaf(let id, _): .leaf(id)
+            case .splitter(let across, _, let children):
+                .split(across ? .across : .down, children.map { .init(node: node($0), share: CGFloat(Self.size(of: $0) / 100)) })
+            }
+        }
+        if let tree = split.layout { return SplitLayout(root: node(tree)) }
+        let grid: SplitGrid = split.grid == "grid" ? .grid : split.grid == "vsep" ? .down : .across
+        return SplitLayout.layout(grid, split.tabs)
+    }
+
+    private static func size(of node: ZenSession.Split.Node) -> Double {
+        switch node {
+        case .leaf(_, let size), .splitter(_, let size, _): size
+        }
     }
 
     /// Its space; an essential without one goes to a space of its

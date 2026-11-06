@@ -25,6 +25,44 @@ struct ZenImportTests {
         #expect(throws: MozLZ4.Failure.corrupt) { try MozLZ4.decode(file.prefix(file.count - 4)) }
     }
 
+    @Test("Split views come with their tree, over their space's tab places, as Zen writes them")
+    func splits() throws {
+        // As Zen 1.17 writes them: tabs named by zenSyncId; the tree's leaves in percent.
+        let json = """
+            {"spaces":[{"uuid":"w","name":"Work"}],
+             "tabs":[{"entries":[{"url":"https://pin.example/"}],"pinned":true,"zenWorkspace":"w","zenSyncId":"p"},
+                     {"entries":[{"url":"https://a.example/"}],"zenWorkspace":"w","zenSyncId":"a"},
+                     {"entries":[{"url":"https://b.example/"}],"zenWorkspace":"w","zenSyncId":"b"},
+                     {"entries":[{"url":"https://c.example/"}],"zenWorkspace":"w","zenSyncId":"c"}],
+             "splitViewData":[
+               {"groupId":"g1","gridType":"hsep","tabs":["b","a"],
+                "layoutTree":{"type":"splitter","direction":"row","children":[
+                  {"type":"leaf","tabId":"b","sizeInParent":30},{"type":"leaf","tabId":"a","sizeInParent":70}]}},
+               {"groupId":"g2","gridType":"vsep","tabs":["p","c"]},
+               {"groupId":"g3","tabs":["gone","c"],
+                "layoutTree":{"type":"splitter","direction":"column","children":[
+                  {"type":"leaf","tabId":"gone","sizeInParent":50},{"type":"leaf","tabId":"c","sizeInParent":50}]}}]}
+            """
+        let plan = ZenImportPlan(try ZenSession.read(MozLZ4.encode(Data(json.utf8))))
+        let space = try #require(plan.spaces.first)
+        #expect(space.tabs.map(\.syncID) == ["p", "a", "b", "c"])
+        // Side by side, b (place 2) on the left at 30%.
+        #expect(space.splits.count == 2)
+        guard case .split(.across, let children) = space.splits[0].root else {
+            Issue.record("not across")
+            return
+        }
+        #expect(children.map(\.node) == [.leaf(2), .leaf(1)])
+        #expect(abs(children[0].share - 0.3) < 0.001)
+        // An older file's group, from its grid: one over another.
+        #expect(space.splits[1].ids == [0, 3])
+        guard case .split(.down, _) = space.splits[1].root else {
+            Issue.record("not down")
+            return
+        }
+        // A group whose other tab didn't come along isn't a split any more.
+    }
+
     @Test("The session file reads with unknown fields and fields of the wrong type")
     func lenientSession() throws {
         let json = """

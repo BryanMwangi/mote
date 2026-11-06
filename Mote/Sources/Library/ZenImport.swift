@@ -82,6 +82,7 @@ extension Browser {
     struct ZenBrought: Equatable {
         var spaces = 0
         var tabs = 0
+        var splits = 0
         /// Spaces brought before, left as they are.
         var already = 0
     }
@@ -112,7 +113,8 @@ extension Browser {
             }
             // In front: the first open tab, or the first of any.
             let front = zen.tabs.firstIndex { $0.tier == .loose } ?? 0
-            Session.write(now: true, space: space.id, .init(tabs: entries, active: front))
+            Session.write(now: true, space: space.id, .init(tabs: entries, active: front, splits: zen.splits.isEmpty ? nil : zen.splits))
+            brought.splits += zen.splits.count
             brought.spaces += 1
             brought.tabs += entries.count
         }
