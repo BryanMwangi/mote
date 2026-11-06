@@ -670,8 +670,13 @@ final class Browser: NSObject, ObservableObject {
     // MARK: - Opening tabs
 
     func newTab() {
-        // Over a page, the floating search; a blank tab already is one. In a
-        // private window what it opens is private too (see `open`).
+        // A blank tab in front already is a new tab: no second one.
+        if let active, active.isStart, !active.loading {
+            editing = false
+            return field.askFocus()
+        }
+        // Over a page, the floating search. In a private window what it
+        // opens is private too (see `open`).
         if prefs.newTabSearch, let active, !active.isStart, isPrivate || !active.shy { return launch() }
         // A new tab from a private tab is private too, so nothing leaks into history.
         if isPrivate { return show(privateTab(), adopting: true) }

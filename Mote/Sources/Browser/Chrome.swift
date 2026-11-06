@@ -29,7 +29,8 @@ extension Browser {
     /// Settings, and always on a new tab, which has no page to cover.
     var bookmarksShown: Bool {
         guard !bookmarks.isEmpty, active?.immersed != true else { return false }
-        return prefs.bookmarksBar || active?.isStart != false
+        // A private window's tabs start blank: there it's the setting alone.
+        return prefs.bookmarksBar || (active?.isStart != false && !isPrivate)
     }
 
     /// Whether the address field is being edited in the toolbar, over a page. A

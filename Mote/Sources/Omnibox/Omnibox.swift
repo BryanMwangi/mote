@@ -211,7 +211,8 @@ struct Composer: View {
     private var symbol: String {
         if browser.field.switching { return "square.on.square" }
         // What opens from here keeps nothing: a private window, or a private tab.
-        if browser.field.launching, !leads, browser.isPrivate || browser.field.launchingPrivate { return "eye.slash" }
+        let fresh = browser.field.launching || browser.active?.isStart == true
+        if fresh, !leads, browser.isPrivate || browser.field.launchingPrivate || browser.active?.shy == true { return "eye.slash" }
         return leads ? "sparkle" : "magnifyingglass"
     }
 
