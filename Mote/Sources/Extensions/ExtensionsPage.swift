@@ -34,14 +34,6 @@ private struct InstalledList: View {
         StoreSection(browser: browser, extensions: extensions)
 
         SettingsSection("Installed", note: reordering ? "Drag by the handles; the page panel follows." : nil) {
-            if extensions.installed.count > 1 {
-                HStack {
-                    Spacer()
-                    Pill(reordering ? "Done" : "Reorder") { withAnimation(Motion.quick) { reordering.toggle() } }
-                }
-                .padding(.horizontal, 12)
-                .padding(.top, 8)
-            }
             if extensions.installed.isEmpty {
                 Text("Nothing yet. Extensions you add show up here.")
                     .font(.system(size: 12.5))
@@ -71,6 +63,14 @@ private struct InstalledList: View {
                     return true
                 }
                 .settingsSearch([item.name, "extension"])
+            }
+            if extensions.installed.count > 1 {
+                HStack {
+                    Spacer()
+                    Pill(reordering ? "Done" : "Reorder") { withAnimation(Motion.quick) { reordering.toggle() } }
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
             }
         }
 
