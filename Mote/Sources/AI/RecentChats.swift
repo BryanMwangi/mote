@@ -66,7 +66,7 @@ struct ChatsPage: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
-        .background(Palette.ground)
+        .background(inPanel ? .clear : Palette.ground)
         .onAppear { searching = true }
         .animation(Motion.quick, value: found.map(\.id))
     }

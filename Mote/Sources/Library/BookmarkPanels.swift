@@ -5,6 +5,8 @@ import SwiftUI
 struct BookmarksDropdown: View {
     @ObservedObject var browser: Browser
     @ObservedObject var bookmarks: Bookmarks
+    /// Closes the list it's in, after a pick (the toolbar's closes itself).
+    var done: () -> Void = {}
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -12,14 +14,24 @@ struct BookmarksDropdown: View {
                 Text("No bookmarks yet").font(.system(size: 12.5)).foregroundStyle(Palette.muted).padding(14)
             } else {
                 ScrollView {
-                    BookmarkOutline(bookmarks: bookmarks, open: browser.pickBookmark).padding(6)
+                    BookmarkOutline(bookmarks: bookmarks) { picked in
+                        browser.pickBookmark(picked)
+                        done()
+                    }
+                    .padding(6)
                 }
                 .frame(maxHeight: 360)
             }
             Divider().overlay(Palette.hairline)
             VStack(spacing: 1) {
-                PopoverLine("Add This Page", symbol: "bookmark") { browser.bookmarkCurrent() }
-                PopoverLine("Manage Bookmarks…") { browser.bookmarking = true }
+                PopoverLine("Add This Page", symbol: "bookmark") {
+                    browser.bookmarkCurrent()
+                    done()
+                }
+                PopoverLine("Manage Bookmarks…") {
+                    done()
+                    browser.bookmarking = true
+                }
             }
             .padding(6)
         }

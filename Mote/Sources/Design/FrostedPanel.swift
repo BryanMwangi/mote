@@ -94,3 +94,20 @@ extension NSImage {
         return image
     }
 }
+
+/// Frosted glass behind SwiftUI content, rounded by a mask image (the blur
+/// ignores rounded layers): the menu panels' ground.
+struct Frost: FillsRoom {
+    let radius: CGFloat
+
+    func makeNSView(context: Context) -> NSVisualEffectView {
+        let view = NSVisualEffectView()
+        view.material = .popover
+        view.blendingMode = .behindWindow
+        view.state = .active
+        view.maskImage = .roundedMask(radius: radius)
+        return view
+    }
+
+    func updateNSView(_ view: NSVisualEffectView, context: Context) {}
+}

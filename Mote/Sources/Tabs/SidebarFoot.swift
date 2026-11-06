@@ -55,8 +55,7 @@ private struct FootItem: View {
 
     private func press() {
         switch button {
-        case .chats, .downloads, .history: open.toggle()
-        case .bookmarks: browser.bookmarksOpen.toggle()
+        case .chats, .downloads, .history, .bookmarks: open.toggle()
         case .library: browser.toggleLibrary()
         case .passwords: browser.perform(.passwords)
         case .screenshot: browser.startScreenshot()
@@ -69,6 +68,7 @@ private struct FootItem: View {
         switch button {
         case .chats: ChatsPage(browser: browser, inPanel: true) { open = false }.frame(width: 380, height: 440)
         case .downloads: SessionDownloads(browser: browser, downloads: browser.downloads) { open = false }
+        case .bookmarks: BookmarksDropdown(browser: browser, bookmarks: browser.bookmarks) { open = false }
         case .history: SessionHistory(browser: browser) { open = false }
         default: EmptyView()
         }

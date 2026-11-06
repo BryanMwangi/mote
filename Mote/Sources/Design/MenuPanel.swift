@@ -101,9 +101,10 @@ final class MenuPanel {
     }
 
     func show(_ content: AnyView, from anchor: NSView, edge: Edge, keyboard: Bool = true) {
+        // On frosted glass, as the frosted editors and the system's menus.
         let card = AnyView(
             content
-                .background(Palette.ground)
+                .background(Frost(radius: MenuPanel.cornerRadius))
                 .clipShape(RoundedRectangle(cornerRadius: MenuPanel.cornerRadius, style: .continuous))
                 .overlay(
                     RoundedRectangle(cornerRadius: MenuPanel.cornerRadius, style: .continuous)
