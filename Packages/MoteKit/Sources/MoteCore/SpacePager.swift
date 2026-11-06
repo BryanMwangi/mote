@@ -8,7 +8,7 @@ import Foundation
 public struct SpacePager: Sendable {
     /// Space switches are at least this far apart, so fingers still moving
     /// after one don't make another.
-    public static let rest: TimeInterval = 0.4
+    public static let rest: TimeInterval = 0.25
     /// Wheel clicks closer together than this are one spin: one space.
     public static let spin: TimeInterval = 0.3
 
@@ -20,6 +20,8 @@ public struct SpacePager: Sendable {
 
     private var along: CGFloat = 0
     private var aside: CGFloat = 0
+    /// The last step along, for a flick.
+    private var step: CGFloat = 0
     /// nil until decided; true when the gesture runs along the spaces.
     private var claimed: Bool?
     private var restUntil = Date.distantPast
@@ -36,6 +38,7 @@ public struct SpacePager: Sendable {
     public mutating func begin(at now: Date) -> Bool {
         along = 0
         aside = 0
+        step = 0
         claimed = nil
         return now > restUntil
     }
@@ -45,6 +48,7 @@ public struct SpacePager: Sendable {
     public mutating func move(along step: CGFloat, aside sideways: CGFloat) -> CGFloat? {
         along += step
         aside += sideways
+        self.step = step
         if claimed == nil {
             guard abs(along) + abs(aside) > 6 else { return nil }
             claimed = abs(along) > abs(aside) * 1.5
@@ -60,7 +64,9 @@ public struct SpacePager: Sendable {
     /// Where letting go leads: back (negative travel) is the next space.
     /// nil means stay.
     public func end(cancelled: Bool) -> Int? {
-        guard claimed == true, !cancelled, abs(along) >= enough else { return nil }
+        // Far enough, or a flick still moving fast that way when let go.
+        let flicked = abs(along) >= enough * 0.4 && abs(step) >= 6 && (step < 0) == (along < 0)
+        guard claimed == true, !cancelled, abs(along) >= enough || flicked else { return nil }
         let target = here + (along < 0 ? 1 : -1)
         return (0...count).contains(target) ? target : nil
     }

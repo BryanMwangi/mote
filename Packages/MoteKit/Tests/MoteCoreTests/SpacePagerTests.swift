@@ -83,4 +83,16 @@ struct SpacePagerTests {
         #expect(same == nil)
         #expect(next == 0)
     }
+
+    @Test("A flick still moving when let go switches with less travel; a slow drag that far doesn't")
+    func flick() {
+        var fast = SpacePager(count: 3, here: 1, enough: 50)
+        _ = fast.begin(at: .distantPast)
+        for _ in 0..<3 { _ = fast.move(along: -8, aside: 0) }
+        #expect(fast.end(cancelled: false) == 2)
+        var slow = SpacePager(count: 3, here: 1, enough: 50)
+        _ = slow.begin(at: .distantPast)
+        for _ in 0..<12 { _ = slow.move(along: -2, aside: 0) }
+        #expect(slow.end(cancelled: false) == nil)
+    }
 }

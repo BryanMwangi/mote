@@ -123,17 +123,16 @@ final class SpaceSwipe {
         let forward = target > here
         browser.spaceStep = forward ? 1 : -1
         pager.switched(at: Date())
-        withAnimation(.easeOut(duration: 0.22), completionCriteria: .removed) {
-            browser.spaceSwipe = (forward ? -1 : 1) * page
-        } completion: {
-            var instant = Transaction()
-            instant.disablesAnimations = true
-            withTransaction(instant) {
-                browser.makingSpace = target == browser.spaces.count
-                if !browser.makingSpace { browser.switchSpace(to: browser.spaces[target].id) }
-                browser.spaceSwipe = 0
-            }
+        // The space switches now, as ⌃1–9 does; the sidebar's pages are put
+        // back where they were in the same update, then ease the rest of the way.
+        var instant = Transaction()
+        instant.disablesAnimations = true
+        withTransaction(instant) {
+            browser.makingSpace = target == browser.spaces.count
+            if !browser.makingSpace { browser.switchSpace(to: browser.spaces[target].id) }
+            browser.spaceSwipe += (forward ? 1 : -1) * page
         }
+        withAnimation(.easeOut(duration: 0.2)) { browser.spaceSwipe = 0 }
     }
 }
 
