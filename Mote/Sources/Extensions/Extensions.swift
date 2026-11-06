@@ -59,6 +59,11 @@ final class Extensions: NSObject, ObservableObject {
     private var loadsThisRun: Set<String> = []
     /// Loaded more than once since launch.
     private(set) var loadedBefore: Set<String> = []
+    /// Every extension that has loaded in any run, kept until it's removed.
+    private static var everLoaded: Set<String> {
+        get { Set(Storage.settings.stringArray(forKey: "extensions.loaded") ?? []) }
+        set { Storage.settings.set(newValue.sorted(), forKey: "extensions.loaded") }
+    }
 
     // Questions (Extensions+Asking).
     var question: Task<Bool, Never>?
@@ -140,6 +145,8 @@ final class Extensions: NSObject, ObservableObject {
 
     @discardableResult
     func load(_ item: Installed) async -> Bool {
+        // Those installed before this was kept have loaded before, every one.
+        if Storage.settings.object(forKey: "extensions.loaded") == nil { Self.everLoaded = Set(installed.map(\.id)) }
         // This build's shim, off the main thread: after an app update it
         // rewrites every script and page the extension ships.
         let folder = Self.folder(for: item.id)
@@ -159,8 +166,13 @@ final class Extensions: NSObject, ObservableObject {
             found.allRequestedMatchPatterns.forEach { context.setPermissionStatus(.grantedExplicitly, for: $0) }
             try controller.load(context)
             watchErrors(of: context)
-            if contexts[item.id] == nil, loadsThisRun.contains(item.id) { loadedBefore.insert(item.id) }
+            // Loaded in this run or an earlier one: WebKit says "install" on
+            // every launch, and extensions open their welcome page on it.
+            if contexts[item.id] == nil, loadsThisRun.contains(item.id) || Self.everLoaded.contains(item.id) {
+                loadedBefore.insert(item.id)
+            }
             loadsThisRun.insert(item.id)
+            Self.everLoaded.insert(item.id)
             contexts[item.id] = context
             actionsChanged += 1
             return true
@@ -182,6 +194,8 @@ final class Extensions: NSObject, ObservableObject {
     func forgetLoads(of id: String) {
         loadsThisRun.remove(id)
         loadedBefore.remove(id)
+        // Added again later, it's a new install.
+        Self.everLoaded.remove(id)
     }
 
     /// Stops and starts an extension, at most once a minute, with its popup
