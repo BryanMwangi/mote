@@ -92,6 +92,9 @@ private struct Tile<Label: View>: View {
     let act: () -> Void
     @ViewBuilder let label: () -> Label
     @State private var hovering = false
+    /// Its name, after a moment's hover: the panel never has the keyboard,
+    /// and AppKit shows tooltips only in the window that does.
+    @State private var naming = false
     @Environment(\.isEnabled) private var enabled
 
     var body: some View {
@@ -103,7 +106,31 @@ private struct Tile<Label: View>: View {
         }
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
-        .help(help)
+        .task(id: hovering) {
+            naming = false
+            guard hovering, !help.isEmpty else { return }
+            try? await Task.sleep(for: .seconds(0.6))
+            naming = !Task.isCancelled
+        }
+        .overlay(alignment: .bottom) {
+            if naming {
+                Text(help)
+                    .font(.system(size: 11))
+                    .foregroundStyle(Palette.ink)
+                    .lineLimit(1)
+                    .fixedSize()
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 3)
+                    .background(Palette.ground, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous).strokeBorder(Palette.hairline))
+                    .offset(y: 26)
+                    .allowsHitTesting(false)
+                    .transition(.opacity)
+            }
+        }
+        // Over the tiles below it.
+        .zIndex(naming ? 1 : 0)
+        .animation(Motion.quick, value: naming)
         .opacity(enabled ? 1 : 0.4)
     }
 }
