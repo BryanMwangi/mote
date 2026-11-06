@@ -15,7 +15,13 @@ enum SiteCardPanel {
     /// The padlocks it may hang from, in the toolbar and the sidebar's
     /// address (see SiteCardAnchor), and the tab row it was asked for from.
     fileprivate static var padlocks: [WeakView] = []
-    static weak var row: NSView?
+    private static weak var marked: NSView?
+    private static var markedTab: Tab.ID?
+    /// The row marked for `tab`, if it's that tab's and still on screen.
+    static func row(for tab: Tab.ID) -> NSView? {
+        guard markedTab == tab, let marked, marked.window != nil, !marked.isHiddenOrHasHiddenAncestor else { return nil }
+        return marked
+    }
     private static weak var owner: Browser?
 
     /// The padlock on screen in `window`.
@@ -42,7 +48,7 @@ enum SiteCardPanel {
         owner = browser
         Task {
             for _ in 0..<16 {
-                let spot = asideRow ? row : padlock(in: browser.window)
+                let spot = asideRow ? row(for: tab.id) : padlock(in: browser.window)
                 if let spot, let window = spot.window, window === browser.window, browser.activeID == tab.id {
                     let place = window.convertToScreen(spot.convert(spot.bounds, to: nil))
                     let side = asideRow ? (browser.prefs.sideRight ? -1 : 1) : 0
@@ -142,6 +148,11 @@ enum SiteCardPanel {
         }
     }
 
+    fileprivate static func mark(_ view: NSView, for tab: Tab.ID) {
+        marked = view
+        markedTab = tab
+    }
+
     static func hide() {
         if let leaving { NotificationCenter.default.removeObserver(leaving) }
         if let clicks { NSEvent.removeMonitor(clicks) }
@@ -169,7 +180,8 @@ enum SiteCardPanel {
 /// Marks what the card hangs from: a padlock, or the row of the tab it was
 /// asked for from.
 struct SiteCardAnchor: FillsRoom {
-    var row = false
+    /// The tab whose row this is; none for a padlock.
+    var row: Tab.ID?
 
     func makeNSView(context: Context) -> NSView {
         let spot = Spot()
@@ -180,7 +192,7 @@ struct SiteCardAnchor: FillsRoom {
     func updateNSView(_ view: NSView, context: Context) { note(view) }
 
     private func note(_ view: NSView) {
-        if row { return SiteCardPanel.row = view }
+        if let row { return SiteCardPanel.mark(view, for: row) }
         guard !SiteCardPanel.padlocks.contains(where: { $0.view === view }) else { return }
         SiteCardPanel.padlocks = SiteCardPanel.padlocks.filter { $0.view != nil } + [WeakView(view)]
     }

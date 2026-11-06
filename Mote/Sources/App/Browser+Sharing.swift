@@ -1,22 +1,30 @@
 import AppKit
 
 extension Browser {
+    /// Where the last share menu pointed, for the bench: a row's frame in its
+    /// window, or the page.
+    static var sharedAt = ""
+
     /// Share…, from anywhere: the share menu beside the tab's row in the
-    /// sidebar, as the site card opens; with the tabs out of sight, the page's corner.
+    /// sidebar, or below it in the strip, as the site card opens; with the
+    /// tabs out of sight, the page's corner.
     func share(beside tab: Tab) {
-        guard prefs.sidebar, !folded || peeking, let address = tab.address else { return sharePage() }
-        // Whatever row an earlier card or menu marked isn't this one.
-        SiteCardPanel.row = nil
+        guard !prefs.sidebar || !folded || peeking, let address = tab.address else { return sharePage() }
+        // The picker doesn't say when it's dismissed, so an earlier share can
+        // have left this row marked; a mark counts only for its own tab.
         siteCardRow = tab.id
+        let edge: NSRectEdge = prefs.sidebar ? (prefs.sideRight ? .minX : .maxX) : .minY
         Task { @MainActor in
             // A few frames for the row to mark itself (SiteCardAnchor).
             for _ in 0..<10 {
-                if let row = SiteCardPanel.row, row.window != nil {
+                if let row = SiteCardPanel.row(for: tab.id) {
                     let picker = NSSharingServicePicker(items: [address])
                     let done = SharingDone { [weak self] in if self?.siteCardRow == tab.id { self?.siteCardRow = nil } }
                     picker.delegate = done
                     SharingDone.current = done
-                    return picker.show(relativeTo: row.bounds, of: row, preferredEdge: prefs.sideRight ? .minX : .maxX)
+                    let place = row.convert(row.bounds, to: nil)
+                    Self.sharedAt = "row \(Int(place.minX)),\(Int(place.minY)) \(Int(place.width))×\(Int(place.height))"
+                    return picker.show(relativeTo: row.bounds, of: row, preferredEdge: edge)
                 }
                 try? await Task.sleep(for: .milliseconds(30))
             }
@@ -32,6 +40,7 @@ extension Browser {
     /// window's, with no page showing).
     private func sharePage() {
         guard let address = active?.address, let window else { return }
+        Self.sharedAt = "page"
         let page = active?.built.flatMap { $0.window === window ? $0 : nil }
         guard let view = page ?? window.contentView else { return }
         // A little in, so the arrow points at the page rather than its edge.

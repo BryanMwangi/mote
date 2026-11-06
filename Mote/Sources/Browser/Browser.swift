@@ -849,6 +849,7 @@ final class Browser: NSObject, ObservableObject {
 
     func select(_ tab: Tab) {
         if peekTab != nil, tab.id != activeID { closePeek() }
+        if siteCardRow != nil, siteCardRow != tab.id { siteCardRow = nil }
         cancelTabEdit()
         field.switching = false
         logins.dropChoices()

@@ -663,7 +663,7 @@ private struct SideRow: View {
             if !Task.isCancelled { fading = false }
         }
         .contextMenu { TabMenu(browser: browser, tab: tab, close: close) }
-        .background { if carded { SiteCardAnchor(row: true) } }
+        .background { if carded { SiteCardAnchor(row: tab.id) } }
         .animation(Motion.hover, value: hovering)
         .animation(Motion.glide, value: renaming)
         .transition(.scale(scale: 0.94, anchor: .leading).combined(with: .opacity))

@@ -364,6 +364,8 @@ private struct StripTab: View {
             .overlay { MiddleClick { _ in close() } }
             .onHover { hovering = $0 }
             .contextMenu { TabMenu(browser: browser, tab: tab, close: close) }
+            // What Share… and the site card point at, from this tab's menu.
+            .background { if browser.siteCardRow == tab.id { SiteCardAnchor(row: tab.id) } }
             .help(pinned || iconOnly ? tab.label : "")
             .environment(\.colorScheme, live ? browser.chromeScheme ?? colorScheme : colorScheme)
             .accessibilityElement(children: .contain)
