@@ -18,6 +18,10 @@ struct InlineField: NSViewRepresentable {
     let ended: (_ keep: Bool) -> Void
     /// Focus left some other way.
     let left: () -> Void
+    /// Whether the edit is still on. Until it's over, anything but a click
+    /// elsewhere taking the keyboard (a page focusing itself, AppKit after a
+    /// menu) has it taken back.
+    var editing: () -> Bool = { true }
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
@@ -47,11 +51,11 @@ struct InlineField: NSViewRepresentable {
         if !coordinator.typing, field.stringValue != text { field.stringValue = text }
         guard !coordinator.focused else { return }
         coordinator.focused = true
+        // On the next turn after that: a menu's Rename hands the keyboard
+        // back to whatever had it once the menu has closed.
         Task { @MainActor in
-            field.window?.makeFirstResponder(field)
-            guard let editor = field.currentEditor() as? NSTextView else { return }
-            editor.selectedTextAttributes = [.backgroundColor: NSColor(Palette.ink.opacity(0.11)), .foregroundColor: Palette.NS.ink]
-            editor.selectAll(nil)
+            await Task.yield()
+            DispatchQueue.main.async { coordinator.focus(field, selecting: true) }
         }
     }
 
@@ -82,7 +86,21 @@ struct InlineField: NSViewRepresentable {
             return true
         }
 
+        /// A click outside since the field opened: losing focus then is meant.
+        private var clickedOutside = false
+
+        /// The keyboard to the field: the text all selected the first time,
+        /// so typing replaces it; taken back, the caret at the end.
+        @MainActor func focus(_ field: NSTextField, selecting: Bool) {
+            guard field.window?.makeFirstResponder(field) == true, let editor = field.currentEditor() as? NSTextView else { return }
+            editor.selectedTextAttributes = [.backgroundColor: NSColor(Palette.ink.opacity(0.11)), .foregroundColor: Palette.NS.ink]
+            if selecting { editor.selectAll(nil) } else { editor.moveToEndOfDocument(nil) }
+        }
+
         func controlTextDidEndEditing(_ note: Notification) {
+            if !clickedOutside, owner?.editing() == true, let field = note.object as? NSTextField {
+                return DispatchQueue.main.async { MainActor.assumeIsolated { self.focus(field, selecting: false) } }
+            }
             let left = owner?.left
             Task { @MainActor in left?() }
         }
@@ -96,6 +114,7 @@ struct InlineField: NSViewRepresentable {
                 [weak self, weak field] event in
                 guard let field, event.window === field.window, !field.bounds.contains(field.convert(event.locationInWindow, from: nil))
                 else { return event }
+                self?.clickedOutside = true
                 let left = self?.owner?.left
                 Task { @MainActor in left?() }
                 return event
@@ -122,6 +141,8 @@ extension InlineField {
             keep ? browser.commitTabEdit() : browser.cancelTabEdit()
         } left: {
             browser.finishTabEdit()
+        } editing: {
+            browser.editingTab != nil
         }
     }
 
@@ -132,6 +153,6 @@ extension InlineField {
             changed: {
                 browser.letter($0, for: tab)
                 return tab.pin ?? ""
-            }, ended: { _ in browser.endPinEdit() }, left: { browser.endPinEdit() })
+            }, ended: { _ in browser.endPinEdit() }, left: { browser.endPinEdit() }, editing: { browser.editingPin != nil })
     }
 }

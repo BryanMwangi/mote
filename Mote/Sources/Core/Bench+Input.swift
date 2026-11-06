@@ -109,9 +109,17 @@ extension Bench {
         if call.request.flag("double") {
             guard call.testRun() else { return }
             let before = window.frame
+            // Through the window, as a person's clicks come, so event monitors
+            // see them too; `direct` hands them to the view underneath.
             for clicks in [1, 2] {
-                BenchInput.mouse(.leftMouseDown, at: point, in: window, clicks: clicks).map { hit?.mouseDown(with: $0) }
-                BenchInput.mouse(.leftMouseUp, at: point, in: window, clicks: clicks).map { hit?.mouseUp(with: $0) }
+                for kind in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
+                    guard let event = BenchInput.mouse(kind, at: point, in: window, clicks: clicks) else { continue }
+                    if call.request.flag("direct") {
+                        kind == .leftMouseDown ? hit?.mouseDown(with: event) : hit?.mouseUp(with: event)
+                    } else {
+                        window.sendEvent(event)
+                    }
+                }
             }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
                 let after = window.frame

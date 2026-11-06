@@ -331,7 +331,7 @@ def show(verb, answer):
         for tab in answer.get("tabs", []):
             mark = "⚗" if tab.get("bench") else ("●" if tab.get("active") else " ")
             state = " …" if tab.get("loading") else (" z" if tab.get("asleep") else "")
-            print(f"{mark} {tab['id']}  {tab.get('title') or '—'}  {tab.get('url')}{state}")
+            print(f"{mark} {tab['id']}  {tab.get('name') or tab.get('title') or '—'}  {tab.get('url')}{state}")
     else:
         print(json.dumps(answer, ensure_ascii=False, indent=2))
 

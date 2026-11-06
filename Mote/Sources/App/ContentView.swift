@@ -145,6 +145,8 @@ struct ContentView: View {
     private func keyboardToPage() {
         guard !browser.fieldShowing, browser.editingTab == nil else { return }
         Task { @MainActor in
+            // A double-click's second click may have begun a rename since.
+            guard !browser.fieldShowing, browser.editingTab == nil else { return }
             if let page = browser.active?.web, let window = page.window { window.makeFirstResponder(page) }
         }
     }

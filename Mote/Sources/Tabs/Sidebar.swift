@@ -96,6 +96,7 @@ struct Sidebar: View {
         .animation(Motion.settle, value: browser.pinnedCount)
         .animation(Motion.settle, value: browser.keptCount)
         .animation(Motion.settle, value: browser.playing?.id)
+        .environment(\.sidebarShowing, showing)
     }
 
     // MARK: - Spaces, side by side
@@ -255,6 +256,11 @@ private struct SpacePage: View {
     private static let gap: CGFloat = 2
     private static let divider: CGFloat = 13
 
+    /// The docked and the floating sidebar are both built; only the one on
+    /// screen edits a tab in place, or the two fields would take the keyboard
+    /// from each other.
+    @Environment(\.sidebarShowing) private var showing
+
     private var tabs: [Tab] { live ? browser.tabs : browser.parked[space.id]?.tabs ?? [] }
     private var active: Tab.ID? { live ? browser.activeID : browser.parked[space.id]?.active }
 
@@ -303,7 +309,7 @@ private struct SpacePage: View {
     /// A row, told only what it draws, so it redraws when that or its tab
     /// changes, not on every change to the browser.
     private func row(_ tab: Tab) -> SideRow {
-        let renaming = live && browser.editingTab == tab.id
+        let renaming = live && showing && browser.editingTab == tab.id
         return SideRow(
             browser: browser, tab: tab, live: tab.id == active, renaming: renaming,
             draft: renaming ? browser.tabDraft : "", refusals: renaming ? browser.field.refusals : 0,
@@ -444,6 +450,7 @@ private struct SpacePage: View {
 
 /// The essentials' grid, where cells drag in two directions.
 private struct PinnedTabs: View {
+    @Environment(\.sidebarShowing) private var showing
     @ObservedObject var browser: Browser
     @ObservedObject var prefs: Preferences
     let tabs: [Tab]
@@ -460,7 +467,7 @@ private struct PinnedTabs: View {
         PinCells(grid: grid) {
             ForEach(Array(tabs.enumerated()), id: \.element.id) { index, tab in
                 PinSquare(
-                    browser: browser, tab: tab, live: tab.id == active, lettering: live && browser.editingPin == tab.id,
+                    browser: browser, tab: tab, live: tab.id == active, lettering: live && showing && browser.editingPin == tab.id,
                     icons: prefs.glyph == .icons, size: grid.cell
                 )
                 .modifier(
@@ -884,5 +891,17 @@ private struct Inverted: ViewModifier {
     let on: Bool
     func body(content: Content) -> some View {
         if on { content.colorInvert() } else { content }
+    }
+}
+
+private struct SidebarShowing: EnvironmentKey {
+    static let defaultValue = true
+}
+
+extension EnvironmentValues {
+    /// Whether this sidebar is the one on screen (see `Sidebar.showing`).
+    fileprivate var sidebarShowing: Bool {
+        get { self[SidebarShowing.self] }
+        set { self[SidebarShowing.self] = newValue }
     }
 }
