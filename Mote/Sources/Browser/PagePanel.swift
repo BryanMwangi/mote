@@ -92,6 +92,9 @@ struct PagePanel: View {
 private struct Tile<Label: View>: View {
     let help: String
     var wide = true
+    /// A tap rather than a button, for tiles that are also dragged: a
+    /// button fires on the mouse-up that ends a drag.
+    var tapped = false
     let act: () -> Void
     @ViewBuilder let label: () -> Label
     @State private var hovering = false
@@ -101,18 +104,25 @@ private struct Tile<Label: View>: View {
     @Environment(\.naming) private var naming
 
     var body: some View {
-        Button(action: act) {
-            label()
-                .frame(maxWidth: wide ? .infinity : 36, minHeight: 36)
-                .background(hovering && enabled ? Palette.hover : Palette.wash, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                .contentShape(Rectangle())
+        Group {
+            if tapped {
+                face.onTapGesture { if enabled { act() } }
+            } else {
+                Button(action: act) { face }.buttonStyle(.plain)
+            }
         }
-        .buttonStyle(.plain)
         .onHover { over in
             hovering = over
             naming(over ? help : nil)
         }
         .opacity(enabled ? 1 : 0.4)
+    }
+
+    private var face: some View {
+        label()
+            .frame(maxWidth: wide ? .infinity : 36, minHeight: 36)
+            .background(hovering && enabled ? Palette.hover : Palette.wash, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .contentShape(Rectangle())
     }
 }
 
@@ -158,10 +168,12 @@ private struct ExtensionGrid: View {
                     .contentTransition(.opacity)
                     .animation(Motion.quick, value: hovered)
                 let buttons = extensions.buttons
+                let target = dragging.flatMap { drag in
+                    buttons.firstIndex { $0.id == drag.id }.map { (from: $0, to: place(from: $0, by: drag.travel, count: buttons.count)) }
+                }
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: Self.gap), count: Self.columns), spacing: Self.gap) {
                     ForEach(Array(buttons.enumerated()), id: \.element.id) { index, button in
-                        Tile(help: button.label) {
-                            guard dragging == nil else { return }
+                        Tile(help: button.label, tapped: true) {
                             // The panel closes first, so the popup hangs from the page button.
                             close()
                             let id = button.id
@@ -170,10 +182,12 @@ private struct ExtensionGrid: View {
                             ExtensionIcon(button: button, size: 17)
                         }
                         .contextMenu { ExtensionActions(id: button.id, name: button.name, extensions: extensions) }
-                        .offset(dragging?.id == button.id ? dragging?.travel ?? .zero : .zero)
+                        .offset(dragging?.id == button.id ? dragging?.travel ?? .zero : room(for: index, making: target))
                         .zIndex(dragging?.id == button.id ? 1 : 0)
-                        // Dragged to another's place, it takes it.
-                        .simultaneousGesture(
+                        .animation(Motion.settle, value: target?.to)
+                        // Dragged to another's place, it takes it; the others
+                        // make room as it goes, as tabs do.
+                        .gesture(
                             DragGesture(minimumDistance: 6)
                                 .onChanged { dragging = (button.id, $0.translation) }
                                 .onEnded { drag in
@@ -198,10 +212,26 @@ private struct ExtensionGrid: View {
         }
     }
 
+    /// A grid cell's size, gap included.
+    private var cell: CGSize {
+        CGSize(width: (width - Self.gap * CGFloat(Self.columns - 1)) / CGFloat(Self.columns) + Self.gap, height: Self.height + Self.gap)
+    }
+
+    /// How far the tile at `index` stands aside while another moves from one
+    /// cell to another: one cell toward the gap it leaves.
+    private func room(for index: Int, making move: (from: Int, to: Int)?) -> CGSize {
+        guard let move, index != move.from else { return .zero }
+        let step = move.from < move.to ? (move.from < index && index <= move.to ? -1 : 0) : (move.to <= index && index < move.from ? 1 : 0)
+        guard step != 0 else { return .zero }
+        let next = index + step, cell = cell
+        return CGSize(
+            width: CGFloat(next % Self.columns - index % Self.columns) * cell.width,
+            height: CGFloat(next / Self.columns - index / Self.columns) * cell.height)
+    }
+
     /// The cell a tile at `index` lands in, moved by `travel`.
     private func place(from index: Int, by travel: CGSize, count: Int) -> Int {
-        let cell = CGSize(
-            width: (width - Self.gap * CGFloat(Self.columns - 1)) / CGFloat(Self.columns) + Self.gap, height: Self.height + Self.gap)
+        let cell = cell
         let column = index % Self.columns + Int((travel.width / cell.width).rounded())
         let row = index / Self.columns + Int((travel.height / cell.height).rounded())
         return min(max(row * Self.columns + min(max(column, 0), Self.columns - 1), 0), count - 1)
