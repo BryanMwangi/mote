@@ -117,7 +117,7 @@ struct SiteCard: View {
     }
 
     private static func showCertificate(_ trust: SecTrust) {
-        guard let window = AppDelegate.window else { return }
+        guard let window = Browser.front?.window ?? AppDelegate.window else { return }
         SFCertificatePanel.shared().beginSheet(
             for: window, modalDelegate: nil, didEnd: nil, contextInfo: nil, trust: trust, showGroup: false)
     }

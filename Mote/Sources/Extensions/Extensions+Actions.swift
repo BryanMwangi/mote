@@ -39,7 +39,8 @@ extension Extensions {
     }
 
     private func showing(_ views: [WeakView]?) -> NSView? {
-        let front = browser?.window
+        // The window in front: a second window's buttons, not the first's.
+        let front = self.front?.window ?? NSApp.keyWindow
         return views?.compactMap(\.view).last { view in
             guard let window = view.window, window.isVisible, front == nil || window === front else { return false }
             return !view.isHiddenOrHasHiddenAncestor && !view.visibleRect.isEmpty

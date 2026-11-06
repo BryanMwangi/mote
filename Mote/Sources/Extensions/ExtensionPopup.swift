@@ -76,7 +76,9 @@ final class ExtensionPopup: NSObject, WKUIDelegate, WKNavigationDelegate, NSPopo
 
     private func present(_ popover: NSPopover, from anchor: NSView?) {
         if let anchor, anchor.window != nil { return popover.show(relativeTo: anchor.bounds, of: anchor, preferredEdge: .maxY) }
-        let window = NSApp.mainWindow ?? NSApp.windows.first { $0.isVisible && $0.canBecomeMain && $0.frame.minX > -10_000 }
+        let window =
+            Extensions.shared.front?.window ?? NSApp.mainWindow
+            ?? NSApp.windows.first { $0.isVisible && $0.canBecomeMain && $0.frame.minX > -10_000 }
         guard let content = window?.contentView else { return }
         popover.show(
             relativeTo: NSRect(x: content.bounds.maxX - 60, y: content.bounds.maxY - 40, width: 1, height: 1), of: content,
