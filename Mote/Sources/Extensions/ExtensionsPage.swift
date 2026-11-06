@@ -28,11 +28,20 @@ struct ExtensionsPage: View {
 private struct InstalledList: View {
     @ObservedObject var browser: Browser
     @ObservedObject var extensions: Extensions
+    @State private var reordering = false
 
     var body: some View {
         StoreSection(browser: browser, extensions: extensions)
 
-        SettingsSection("Installed") {
+        SettingsSection("Installed", note: reordering ? "Drag by the handles; the page panel follows." : nil) {
+            if extensions.installed.count > 1 {
+                HStack {
+                    Spacer()
+                    Pill(reordering ? "Done" : "Reorder") { withAnimation(Motion.quick) { reordering.toggle() } }
+                }
+                .padding(.horizontal, 12)
+                .padding(.top, 8)
+            }
             if extensions.installed.isEmpty {
                 Text("Nothing yet. Extensions you add show up here.")
                     .font(.system(size: 12.5))
@@ -43,7 +52,25 @@ private struct InstalledList: View {
             }
             ForEach(Array(extensions.installed.enumerated()), id: \.element.id) { index, item in
                 if index > 0 { RowRule() }
-                ExtensionRow(item: item, extensions: extensions).settingsSearch([item.name, "extension"])
+                HStack(spacing: 0) {
+                    if reordering {
+                        Image(systemName: "line.3.horizontal")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(Palette.muted)
+                            .frame(width: 30, height: 30)
+                            .contentShape(Rectangle())
+                            .draggable(item.id)
+                            .padding(.leading, 6)
+                            .transition(.move(edge: .leading).combined(with: .opacity))
+                    }
+                    ExtensionRow(item: item, extensions: extensions)
+                }
+                .dropDestination(for: String.self) { dropped, _ in
+                    guard reordering, let id = dropped.first else { return false }
+                    withAnimation(Motion.settle) { extensions.move(id, to: item.id) }
+                    return true
+                }
+                .settingsSearch([item.name, "extension"])
             }
         }
 

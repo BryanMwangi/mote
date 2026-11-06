@@ -165,6 +165,13 @@ private struct ExtensionGrid: View {
                             ExtensionIcon(button: button, size: 17)
                         }
                         .contextMenu { ExtensionActions(id: button.id, name: button.name, extensions: extensions) }
+                        // Dragged onto another, it takes that one's place.
+                        .draggable(button.id)
+                        .dropDestination(for: String.self) { dropped, _ in
+                            guard let id = dropped.first else { return false }
+                            withAnimation(Motion.settle) { extensions.move(id, to: button.id) }
+                            return true
+                        }
                     }
                     Tile(symbol: "plus", help: "Add extensions") {
                         close()

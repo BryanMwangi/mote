@@ -291,6 +291,16 @@ extension Extensions {
         browser?.open(page, foreground: true)
     }
 
+    /// Moves `id` to where `target` is, the others making room: the order the
+    /// page panel and Settings show them in.
+    func move(_ id: String, to target: String) {
+        guard id != target, let from = index(of: id), let to = index(of: target) else { return }
+        let item = installed.remove(at: from)
+        installed.insert(item, at: to)
+        save()
+        actionsChanged += 1
+    }
+
     /// With its settings, its answers and its files.
     func remove(_ id: String) {
         unload(id)
