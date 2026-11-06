@@ -9,6 +9,8 @@ import SwiftUI
 @MainActor
 final class SpaceSwipe {
     static let shared = SpaceSwipe()
+    /// How many times the spaces' pages have been worked out, for the bench.
+    static var pagesDrawn = 0
 
     private weak var browser: Browser?
     private var watch: Any?
@@ -111,7 +113,7 @@ final class SpaceSwipe {
         if let target = pager.end(cancelled: cancelled) {
             slide(browser, to: target, from: pager.here)
         } else {
-            withAnimation(Motion.settle) { browser.spaceSwipe = 0 }
+            browser.swipeOffset.ease()
         }
     }
 
@@ -129,10 +131,10 @@ final class SpaceSwipe {
         instant.disablesAnimations = true
         withTransaction(instant) {
             browser.makingSpace = target == browser.spaces.count
-            if !browser.makingSpace { browser.switchSpace(to: browser.spaces[target].id) }
+            if !browser.makingSpace { browser.switchSpace(to: browser.spaces[target].id, gliding: false) }
             browser.spaceSwipe += (forward ? 1 : -1) * page
         }
-        withAnimation(.easeOut(duration: 0.2)) { browser.spaceSwipe = 0 }
+        browser.swipeOffset.ease()
     }
 }
 
@@ -272,7 +274,102 @@ struct NewSpaceCard: View {
 }
 
 /// How far a swipe has moved the spaces' pages (see `Browser.spaceSwipe`).
+/// The strip follows `value` in SwiftUI; the sidebar's pages are moved by
+/// Core Animation straight from it (SwipeTrack), and redraw only when
+/// `shown` changes, at a swipe's start and end.
 @MainActor
 final class SwipeOffset: ObservableObject {
     @Published var value: CGFloat = 0
+    /// Whether the neighbouring spaces' pages show.
+    let shown = SwipeShown()
+    /// Whether the change of `value` being made eases there, in the sidebar.
+    fileprivate private(set) var easing = false
+
+    /// Back to rest, the whole space at once, as Zen moves a workspace: a
+    /// spring without bounce over a quarter second.
+    func ease() {
+        easing = true
+        withAnimation(.spring(duration: 0.25, bounce: 0)) { value = 0 }
+        easing = false
+    }
+}
+
+/// See `SwipeOffset.shown`.
+@MainActor
+final class SwipeShown: ObservableObject {
+    @Published var swiping = false
+    /// The space a switch is leaving, shown beside the one coming in however
+    /// far apart they are; during a swipe, none: the neighbours show.
+    @Published var leaving: UUID?
+}
+
+/// The sidebar's spaces' pages, moved by a layer transform during a swipe, as
+/// the floating sidebar slides (SlidingPanel): SwiftUI moving them would lay
+/// out every page on every scroll event.
+struct SwipeTrack: FillsRoom {
+    let swipe: SwipeOffset
+    let content: AnyView
+
+    func makeNSView(context: Context) -> Holder { Holder(swipe: swipe, content: content) }
+
+    func updateNSView(_ holder: Holder, context: Context) { holder.host.rootView = content }
+
+    final class Holder: NSView {
+        let host: NSHostingView<AnyView>
+        private let swipe: SwipeOffset
+        private var watch: AnyCancellable?
+
+        init(swipe: SwipeOffset, content: AnyView) {
+            self.swipe = swipe
+            host = NSHostingView(rootView: content)
+            super.init(frame: .zero)
+            wantsLayer = true
+            host.sizingOptions = []
+            host.safeAreaRegions = []
+            host.wantsLayer = true
+            addSubview(host)
+            watch = swipe.$value.sink { [weak self] x in MainActor.assumeIsolated { self?.move(to: x) } }
+        }
+
+        @available(*, unavailable)
+        required init?(coder: NSCoder) { fatalError() }
+
+        override var isFlipped: Bool { true }
+
+        override func layout() {
+            super.layout()
+            host.frame = bounds
+        }
+
+        private func move(to x: CGFloat) {
+            guard let layer = host.layer else { return }
+            if x != 0, !swipe.shown.swiping { swipe.shown.swiping = true }
+            // From where it shows, mid-ease, or where it was put.
+            let was = layer.animation(forKey: "swipe") == nil ? layer.transform : layer.presentation()?.transform ?? layer.transform
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            layer.removeAnimation(forKey: "swipe")
+            layer.transform = CATransform3DMakeTranslation(x, 0, 0)
+            if swipe.easing, window != nil {
+                // SwipeOffset.ease's spring: 0.25 s, critically damped.
+                let animation = CASpringAnimation(keyPath: "transform")
+                animation.stiffness = pow(2 * .pi / 0.25, 2)
+                animation.damping = 4 * .pi / 0.25
+                animation.duration = animation.settlingDuration
+                animation.fromValue = was
+                CATransaction.setCompletionBlock { [weak self] in MainActor.assumeIsolated { self?.rested() } }
+                layer.add(animation, forKey: "swipe")
+            } else if x == 0 {
+                DispatchQueue.main.async { [weak self] in self?.rested() }
+            }
+            CATransaction.commit()
+        }
+
+        /// Home and still: the neighbours hide again.
+        private func rested() {
+            guard swipe.value == 0, host.layer?.animation(forKey: "swipe") == nil, swipe.shown.swiping else { return }
+            swipe.shown.swiping = false
+            swipe.shown.leaving = nil
+        }
+    }
 }

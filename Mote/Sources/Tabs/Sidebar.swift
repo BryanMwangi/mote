@@ -101,7 +101,8 @@ struct Sidebar: View {
     // MARK: - Spaces, side by side
 
     private var spaces: some View {
-        SpacePages(browser: browser, prefs: prefs, swipe: browser.swipeOffset, drag: $drag, keptDrag: $keptDrag)
+        SpacePages(
+            browser: browser, prefs: prefs, shown: browser.swipeOffset.shown, drag: $drag, keptDrag: $keptDrag, dropping: $dropping)
     }
 
     /// Where the rows end and the window-dragging room starts. Worked out, not
@@ -151,14 +152,18 @@ struct Sidebar: View {
 
 /// Every space's page side by side, kept built, as Zen keeps a strip per
 /// workspace: switching only moves another into view and makes it the live
-/// one, rather than taking one list down and building another. Its own view,
-/// so a swipe's every frame moves the pages and redraws nothing else.
+/// one, rather than taking one list down and building another. A swipe moves
+/// them by Core Animation (SwipeTrack); they're worked out again only as one
+/// starts and ends, when the neighbouring pages show and hide.
 private struct SpacePages: View {
     @ObservedObject var browser: Browser
     @ObservedObject var prefs: Preferences
-    @ObservedObject var swipe: SwipeOffset
+    @ObservedObject var shown: SwipeShown
     @Binding var drag: ReorderDrag<Tab.ID>?
     @Binding var keptDrag: ReorderDrag<Tab.ID>?
+    @Binding var dropping: Bool
+    /// Passed into the pages' own hosting view, which starts without it.
+    @Environment(\.self) private var environment
 
     /// This space's place; the spaces' count while the new-space card shows.
     private var spaceIndex: Int {
@@ -166,26 +171,43 @@ private struct SpacePages: View {
     }
 
     var body: some View {
+        let _ = SpaceSwipe.pagesDrawn += 1
+        SwipeTrack(swipe: browser.swipeOffset, content: AnyView(pages.environment(\.self, environment)))
+            // Pages span the whole sidebar and keep their own margins.
+            .padding(.horizontal, -10)
+            .frame(maxHeight: .infinity, alignment: .top)
+    }
+
+    private var pages: some View {
         let width = prefs.sideWidth
-        let swipe = swipe.value
-        let swiping = swipe != 0
+        let swiping = shown.swiping
         let here = spaceIndex
-        GeometryReader { room in
+        return GeometryReader { room in
             ZStack(alignment: .topLeading) {
                 ForEach(Array(browser.spaces.enumerated()), id: \.element.id) { index, space in
                     let live = index == here && !browser.makingSpace
+                    // Its place from the page in front: the space a switch is
+                    // leaving sits right beside it, as the one sliding out.
+                    let leaving = shown.leaving.map { $0 == space.id }
+                    let slot = leaving == true ? (index > here ? 1 : -1) : index - here
+                    let seen = live || (swiping && (leaving ?? (abs(slot) == 1)))
                     SpacePage(
                         browser: browser, prefs: prefs, space: space, live: live, room: room.size.height, drag: $drag, keptDrag: $keptDrag
                     )
+                    // Rows coming and going within a page; never the pages'
+                    // places, which only a swipe or a switch's slide moves.
+                    .animation(Motion.glide, value: browser.editingTab)
+                    .animation(Motion.settle, value: rows(of: space, live: live))
+                    .animation(Motion.settle, value: browser.playing?.id)
                     .padding(.horizontal, 10)
                     .frame(width: width, alignment: .topLeading)
-                    .offset(x: CGFloat(index - here) * width + swipe)
+                    .offset(x: CGFloat(slot) * width)
                     // Built and laid out, but only drawn when it can be seen.
-                    .opacity(live || (swiping && abs(index - here) == 1) ? 1 : 0)
+                    .opacity(seen ? 1 : 0)
                     .allowsHitTesting(live)
                     .accessibilityHidden(!live)
                 }
-                if browser.makingSpace || (swipe < 0 && here == browser.spaces.count - 1) {
+                if browser.makingSpace || (swiping && here == browser.spaces.count - 1) {
                     VStack(spacing: 0) {
                         Spacer(minLength: 0)
                         NewSpaceCard(browser: browser)
@@ -195,14 +217,19 @@ private struct SpacePages: View {
                     .frame(maxHeight: .infinity)
                     .padding(.horizontal, 10)
                     .frame(width: width, alignment: .topLeading)
-                    .offset(x: CGFloat(browser.spaces.count - here) * width + swipe)
+                    .offset(x: CGFloat(browser.spaces.count - here) * width)
                     .allowsHitTesting(browser.makingSpace)
                 }
             }
         }
-        // Pages span the whole sidebar and keep their own margins.
-        .padding(.horizontal, -10)
-        .frame(maxHeight: .infinity, alignment: .top)
+        // The sidebar's own, which don't reach into another hosting view.
+        .onDrop(of: [.url, .text], isTargeted: $dropping) { browser.take($0) }
+    }
+
+    /// A page's own rows and where each stands, which don't change when it
+    /// becomes the space in front or leaves it.
+    private func rows(of space: Space, live: Bool) -> [String] {
+        (live ? browser.tabs : browser.parked[space.id]?.tabs ?? []).map { "\($0.id)\($0.section)" }
     }
 }
 
@@ -258,8 +285,11 @@ private struct SpacePage: View {
                     // No scroll bar, as in Zen: one over the rows would cover their close buttons.
                     ScrollView(.vertical) { listed(loose) }
                         .scrollIndicators(.never)
-                        .onChange(of: browser.activeID) { _, id in
-                            if live, let id { withAnimation(Motion.glide) { scroller.scrollTo(id) } }
+                        // Within the space only: a switch moves the page whole,
+                        // and the page coming in is already where it was left.
+                        .onChange(of: browser.activeID) { old, id in
+                            guard live, let id, tabs.contains(where: { $0.id == old }) else { return }
+                            withAnimation(Motion.glide) { scroller.scrollTo(id) }
                         }
                         .onChange(of: live) { _, now in
                             if now, let id = active { scroller.scrollTo(id, anchor: .center) }

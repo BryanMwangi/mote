@@ -74,9 +74,11 @@ extension Bench {
     private static func frames(_ call: BenchCall) {
         guard call.testRun() else { return }
         guard let window = AppDelegate.window, let view = window.contentView else { return call.fail("no window") }
+        let bodies = SpaceSwipe.pagesDrawn
         FrameWatch(view: view, seconds: call.request.double("seconds") ?? 0.7).start { stamps in
             let refresh = (window.screen?.maximumFramesPerSecond).map { 1000 / Double($0) } ?? 1000 / 60
-            call.answer(BenchWire.frames(stamps, refreshMs: refresh))
+            // How often the spaces' pages were worked out again meanwhile.
+            call.answer(BenchWire.frames(stamps, refreshMs: refresh).merging(["pagesDrawn": SpaceSwipe.pagesDrawn - bodies]) { a, _ in a })
         }
         animate(call.request.string("action") ?? "fold", in: call.browser)
     }
@@ -92,6 +94,18 @@ extension Bench {
             let here = browser.spaces.firstIndex { $0.id == browser.spaceID } ?? 0
             browser.switchSpace(index: (here + 1) % max(1, browser.spaces.count))
         case "scroll": browser.active?.built.map { BenchInput.flick($0) }
+        // Two fingers across the sidebar at a trackpad's pace, 120 pt over a
+        // quarter second, then let go.
+        case "swipe":
+            let swipe = SpaceSwipe.shared
+            swipe.start(for: browser)
+            swipe.began()
+            func step(_ left: Int) {
+                guard left > 0 else { return swipe.ended() }
+                swipe.moved(along: -4)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1 / 120) { step(left - 1) }
+            }
+            step(30)
         // The chat in front: its conversation, the largest scroll view in the window.
         case "chat", "chatdown":
             let window = AppDelegate.window?.contentView

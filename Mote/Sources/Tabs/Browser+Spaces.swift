@@ -19,8 +19,26 @@ extension Browser {
         return URL(fileURLWithPath: path)
     }
 
-    func switchSpace(to id: UUID) {
-        if usesSpaces { enter(id) }
+    /// Another space, its page sliding in whole as at a swipe's end; `gliding`
+    /// off for a swipe, whose pages are already where the fingers left them.
+    func switchSpace(to id: UUID, gliding: Bool = true) {
+        guard usesSpaces else { return }
+        // From the new-space card, when it's open: a switch closes it.
+        let card = makingSpace && gliding
+        let left = spaceID, to = spaces.firstIndex { $0.id == id }
+        let from = card ? spaces.count : spaces.firstIndex { $0.id == spaceID }
+        let glides = gliding && from != to && spaceSwipe == 0 && from != nil && to != nil
+        var still = Transaction()
+        still.disablesAnimations = true
+        withTransaction(still) {
+            if glides, !card { swipeOffset.shown.leaving = left }
+            if card { makingSpace = false }
+            enter(id)
+        }
+        guard glides, let from, let to else { return }
+        let page = prefs.sidebar ? prefs.sideWidth : ChromeLayout.strip
+        withTransaction(still) { spaceSwipe = (to > from ? 1 : -1) * page }
+        swipeOffset.ease()
     }
 
     func switchSpace(index: Int) {
