@@ -108,7 +108,7 @@ extension Bench {
         let switches: [(String, (Bool) -> Void)] = [
             ("settings", { browser.tuning = $0 }), ("passwords", { browser.logins.managing = $0 }), ("welcome", { browser.welcoming = $0 }),
             ("history", { browser.recalling = $0 }), ("downloads", { browser.showingDownloads = $0 }),
-            ("bookmarks", { browser.bookmarking = $0 }),
+            ("bookmarks", { browser.bookmarking = $0 }), ("bookmarksbar", { prefs.bookmarksBar = $0 }),
             ("hidden", { browser.reviewing = $0 }), ("pages120", { prefs.fastPages = $0 }), ("sidebar", { prefs.sidebar = $0 }),
             ("spaces", { prefs.usesSpaces = $0 }), ("hides", { prefs.sideHides = $0 }), ("folded", { browser.folded = $0 }),
             ("peek", { browser.peeking = $0 }), ("bar", { if $0 { browser.edit() } else { browser.dismiss() } }),
@@ -311,7 +311,7 @@ extension Bench {
                     ? "—"
                     : "\(item.title)\(item.keyEquivalent.isEmpty ? "" : " [\(item.keyEquivalent)]")"
                         + (item.submenu.map {
-                            " › \($0.items.prefix(4).map { "\($0.title)\($0.action == nil && $0.submenu == nil ? "(dead)" : "")" })"
+                            " › \($0.items.prefix(4).map { "\($0.state == .on ? "✓" : "")\($0.title)\($0.action == nil && $0.submenu == nil ? "(dead)" : "")" })"
                         } ?? "")
             }
             return call.answer(["items": AppMenu.make(for: browser).items.map(describe)])

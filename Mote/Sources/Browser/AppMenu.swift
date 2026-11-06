@@ -62,6 +62,12 @@ enum AppMenu {
         menu.items += [item("plus.square", .newTab), item("macwindow", .newWindow), item("eyeglasses", .newPrivateWindow), .separator()]
         // The menu bar's own, with their recent pages and folders.
         for (title, symbol) in [("History", "clock.arrow.circlepath"), ("Bookmarks", "book")] {
+            if let original = NSApp.mainMenu?.item(withTitle: title)?.submenu {
+                // Brought up to date first: SwiftUI rebuilds the menu bar's
+                // menus only as they open, so a copy would show them as last seen.
+                original.delegate?.menuNeedsUpdate?(original)
+                original.update()
+            }
             if let bar = NSApp.mainMenu?.item(withTitle: title)?.submenu?.copy() as? NSMenu {
                 // A search box (a view) doesn't come over in a copy.
                 let items = bar.items.filter { !$0.title.isEmpty || $0.isSeparatorItem }
@@ -82,9 +88,7 @@ enum AppMenu {
         menu.items += pageItems
         if let tab = browser.active {
             let zoom = NSMenuItem()
-            let host = NSHostingView(rootView: Zoom.Steps(browser: browser, tab: tab).frame(width: 260))
-            host.frame.size = host.fittingSize
-            zoom.view = host
+            zoom.view = ZoomRow(browser: browser, tab: tab)
             menu.addItem(zoom)
         }
         menu.items += [
@@ -124,31 +128,69 @@ enum AppMenu {
     }
 }
 
-/// − 100% + and full screen, for the page in front.
-private enum Zoom {
-    struct Steps: View {
-        let browser: Browser
-        @ObservedObject var tab: Tab
+/// − 100% + and full screen, for the page in front: AppKit controls, as a
+/// menu runs its own event loop that SwiftUI views in it don't keep up with.
+private final class ZoomRow: NSView {
+    private let browser: Browser
+    private let tab: Tab
+    private let percent = NSTextField(labelWithString: "")
 
-        var body: some View {
-            HStack(spacing: 10) {
-                Image(systemName: "plus.magnifyingglass").font(.system(size: 12)).foregroundStyle(Palette.ink.opacity(0.7)).frame(width: 18)
-                Text("Zoom").font(.system(size: 13)).foregroundStyle(Palette.ink)
-                Spacer(minLength: 8)
-                HStack(spacing: 4) {
-                    Door(icon: "minus", help: "Zoom Out") { browser.zoom(by: 1 / 1.1) }
-                    Button(action: browser.resetZoom) {
-                        Text("\(Int((tab.zoom * 100).rounded()))%").font(.system(size: 12)).monospacedDigit().frame(width: 44)
-                    }
-                    .buttonStyle(.plain)
-                    Door(icon: "plus", help: "Zoom In") { browser.zoom(by: 1.1) }
-                    Divider().frame(height: 16)
-                    Door(icon: "arrow.up.left.and.arrow.down.right", help: "Full Screen") { browser.window?.toggleFullScreen(nil) }
-                }
-            }
-            .padding(.leading, 10)
-            .frame(height: 32)
-            .disabled(tab.isBlank)
-        }
+    init(browser: Browser, tab: Tab) {
+        self.browser = browser
+        self.tab = tab
+        super.init(frame: NSRect(x: 0, y: 0, width: 280, height: 28))
+        let icon = NSImageView(image: NSImage(systemSymbolName: "plus.magnifyingglass", accessibilityDescription: nil) ?? NSImage())
+        icon.contentTintColor = .secondaryLabelColor
+        let title = NSTextField(labelWithString: "Zoom")
+        title.font = .menuFont(ofSize: 0)
+        percent.font = .monospacedDigitSystemFont(ofSize: 12, weight: .regular)
+        percent.alignment = .center
+        percent.textColor = .secondaryLabelColor
+        let out = button("minus", #selector(zoomOut)), into = button("plus", #selector(zoomIn))
+        let whole = button("arrow.up.left.and.arrow.down.right", #selector(fullScreen))
+        let reset = NSClickGestureRecognizer(target: self, action: #selector(actualSize))
+        percent.addGestureRecognizer(reset)
+        let row = NSStackView(views: [icon, title, NSView(), out, percent, into, whole])
+        row.spacing = 6
+        row.edgeInsets = NSEdgeInsets(top: 0, left: 14, bottom: 0, right: 12)
+        row.frame = bounds
+        row.autoresizingMask = [.width, .height]
+        percent.widthAnchor.constraint(equalToConstant: 44).isActive = true
+        addSubview(row)
+        for control in [out, into, whole] { control.isEnabled = !tab.isBlank }
+        show()
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError() }
+
+    private func button(_ symbol: String, _ action: Selector) -> NSButton {
+        let button = NSButton(
+            image: NSImage(systemSymbolName: symbol, accessibilityDescription: nil) ?? NSImage(), target: self, action: action)
+        button.isBordered = false
+        button.contentTintColor = .labelColor
+        return button
+    }
+
+    private func show() { percent.stringValue = "\(Int((tab.zoom * 100).rounded()))%" }
+
+    @objc private func zoomIn() {
+        browser.zoom(by: 1.1)
+        show()
+    }
+
+    @objc private func zoomOut() {
+        browser.zoom(by: 1 / 1.1)
+        show()
+    }
+
+    @objc private func actualSize() {
+        browser.resetZoom()
+        show()
+    }
+
+    @objc private func fullScreen() {
+        enclosingMenuItem?.menu?.cancelTracking()
+        browser.window?.toggleFullScreen(nil)
     }
 }
