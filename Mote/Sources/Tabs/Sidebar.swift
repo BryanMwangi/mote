@@ -218,6 +218,9 @@ private struct SpacePage: View {
     let room: CGFloat
     @Binding var drag: ReorderDrag<Tab.ID>?
     @Binding var keptDrag: ReorderDrag<Tab.ID>?
+    /// A drag among one folder's tabs, by folder: each folder's rows make
+    /// room only for their own.
+    @State private var folderDrags: [UUID: ReorderDrag<Tab.ID>] = [:]
     @ObservedObject private var folderStore = FolderStore.shared
     @ObservedObject private var feeds = LiveFeeds.shared
 
@@ -340,6 +343,23 @@ private struct SpacePage: View {
                                                 let place = kept.firstIndex { $0.id == unfiled[target].id } ?? target
                                                 browser.move(tab, to: place + browser.essentialCount)
                                             })
+                                } else if let home = tab.folder, case let siblings = kept.filter({ $0.folder == home }),
+                                    let index = siblings.firstIndex(where: { $0.id == id }), siblings.count > 1
+                                {
+                                    // Among its folder's own tabs, which sit together.
+                                    row(tab)
+                                        .modifier(
+                                            Reorderable(
+                                                id: tab.id, index: index, places: 0..<siblings.count,
+                                                lattice: .column(step: Self.row + Self.gap), space: "kept",
+                                                drag: Binding(get: { folderDrags[home] }, set: { folderDrags[home] = $0 }),
+                                                filing: (browser, tab)
+                                            ) { target in
+                                                let place = kept.firstIndex { $0.id == siblings[target].id } ?? target
+                                                browser.move(tab, to: place + browser.essentialCount)
+                                            }
+                                        )
+                                        .padding(.leading, CGFloat(depth) * Self.indent)
                                 } else {
                                     row(tab).padding(.leading, CGFloat(depth) * Self.indent)
                                 }
@@ -743,6 +763,15 @@ private struct FolderRow: View {
         .background { if live && folder.live == nil { FolderSpot(browser: browser, id: folder.id) } }
         .contentShape(Rectangle())
         .onTapGesture { if live { withAnimation(Motion.settle) { browser.toggleFolder(folder.id) } } }
+        // Dragged onto another folder, it goes before it, beside it.
+        .draggable("folder:" + folder.id.uuidString)
+        .dropDestination(for: String.self) { dropped, _ in
+            guard live, let text = dropped.first, text.hasPrefix("folder:"), let id = UUID(uuidString: String(text.dropFirst(7))) else {
+                return false
+            }
+            withAnimation(Motion.settle) { browser.moveFolder(id, before: folder.id) }
+            return true
+        }
         .onHover { hovering = $0 }
         .contextMenu {
             Button("Rename Folder…") { browser.renameFolder(folder.id) }

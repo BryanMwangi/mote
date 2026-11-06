@@ -60,4 +60,16 @@ struct FoldersTests {
         #expect(Folder.dropTarget(at: CGPoint(x: 50, y: 150), in: rows, from: docs) == nil)
         #expect(Folder.dropTarget(at: CGPoint(x: 50, y: 135), in: rows, from: nil) == nil)
     }
+
+    @Test("A folder moves before another, beside it; never into itself")
+    func moving() throws {
+        let a = Folder(name: "A")
+        let b = Folder(name: "B")
+        let inner = Folder(name: "Inner", parent: b.id)
+        let moved = try #require(Folder.moving(inner.id, before: a.id, in: [a, b, inner]))
+        #expect(moved.map(\.name) == ["Inner", "A", "B"])
+        #expect(moved[0].parent == nil)
+        #expect(Folder.moving(b.id, before: inner.id, in: [a, b, inner]) == nil)
+        #expect(Folder.moving(a.id, before: a.id, in: [a, b]) == nil)
+    }
 }

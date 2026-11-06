@@ -72,6 +72,13 @@ extension Browser {
         move(tab, toFolder: folder)
     }
 
+    /// A folder dragged onto another: before it, under the same parent.
+    func moveFolder(_ id: UUID, before target: UUID) {
+        FolderStore.shared.change(spaceID) { folders in
+            if let moved = Folder.moving(id, before: target, in: folders) { folders = moved }
+        }
+    }
+
     func renameFolder(_ id: UUID) {
         guard let folder = folders.first(where: { $0.id == id }) else { return }
         Prompt.name("Rename Folder", placeholder: folder.name, initial: folder.name, confirm: "Rename") { [weak self] name in
