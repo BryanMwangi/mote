@@ -3,11 +3,9 @@ import NaturalLanguage
 import SwiftUI
 import Translation
 
-/// Translating a page, as Firefox (and so Zen) offers it: when a page is in a
-/// language you don't read, a quiet button beside the address translates it
-/// with Apple's Translation framework, on this Mac. Mote's script runs only
-/// when asked, in its own world, so a translation extension sees the page
-/// as it was; Show Original puts it back.
+/// Translating a page when a page is in a language the user doesn't read,
+/// a quiet button beside the address translates it
+/// with Apple's Translation framework.
 extension Browser {
     /// Notes the language a page is in, when it's one you don't read.
     func noteLanguage(of tab: Tab) {

@@ -1,10 +1,9 @@
 import Foundation
 
-/// The theme picker's field, as Zen's gradient generator: a dot's angle
+/// The theme picker's field: a dot's angle
 /// about the centre is its hue, its distance its lightness, and harmonies
 /// set the other dots around the colour wheel from the first.
 public enum ThemeColors {
-    /// Zen's harmonies: the other dots' turns from the first, in degrees.
     public enum Harmony: CaseIterable, Sendable {
         case complementary, analogous, triadic
 

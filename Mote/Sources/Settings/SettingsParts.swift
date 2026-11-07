@@ -51,7 +51,7 @@ struct SettingsPageBar: View {
 
 // MARK: - Searching
 
-/// What Settings is searched for, as Zen's: anything in it can be found.
+/// What Settings is searched for anything in it can be found.
 /// Rows hide themselves when they don't match (see `settingsSearch`), and
 /// sections and pages with nothing left hide too, so there's no second list
 /// of settings to keep in step.

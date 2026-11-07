@@ -97,7 +97,7 @@ final class Tab: ObservableObject, Identifiable {
     @Published var translation: TranslationJob?
     var translated: Bool { translation != nil }
     /// As an essential or pinned tab, the address it was pinned at, which it
-    /// can go back to, as Zen's.
+    /// can go back to.
     @Published var home: URL?
     /// Held, and browsed away from its pinned address.
     var wandered: Bool {

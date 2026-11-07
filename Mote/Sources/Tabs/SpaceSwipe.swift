@@ -285,7 +285,7 @@ final class SwipeOffset: ObservableObject {
     /// Whether the change of `value` being made eases there, in the sidebar.
     fileprivate private(set) var easing = false
 
-    /// Back to rest, the whole space at once, as Zen moves a workspace: a
+    /// Back to rest, the whole space at once: a
     /// spring without bounce over a quarter second.
     func ease() {
         easing = true

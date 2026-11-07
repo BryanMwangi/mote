@@ -21,7 +21,6 @@ public struct KeyCombo: Hashable, Codable, Sendable {
         KeyCombo(key, command: true, shift: shift, option: option)
     }
 
-    /// ⌃⌥ and a key, as Zen's view, space and split keys.
     static func ctrlOpt(_ key: String) -> KeyCombo { KeyCombo(key, option: true, control: true) }
 
     /// As the menus write it: ⌃⌥⇧⌘ then the key.
@@ -230,7 +229,6 @@ public enum ShortcutID: String, CaseIterable, Codable, CodingKeyRepresentable, S
         case .downloads: [.cmd("j", shift: true)]
         case .passwords: [.cmd("l", option: true)]
         case .settings: [.cmd(",")]
-        // Zen's key.
         case .library: [KeyCombo("l", shift: true, option: true)]
         case .inspector: [.cmd("i", option: true)]
         case .console: [.cmd("j", option: true)]
@@ -329,10 +327,6 @@ public struct Shortcuts: Codable, Equatable, Sendable {
 
     public mutating func reset(_ id: ShortcutID) { changed[id] = nil }
 
-    /// Zen's keys where they differ from Mote's (Zen's `zen-keysets` and the
-    /// Firefox keys it keeps, as on a Mac), for people who'd rather keep
-    /// their habits. A Mote command whose key Zen gives to another is left
-    /// without one; ⌥⌘H stays macOS's Hide Others, so horizontal split keeps ⌃⌥H.
     public static var zen: Shortcuts {
         var zen = Shortcuts()
         let keys: [(ShortcutID, KeyCombo)] = [

@@ -136,7 +136,6 @@ struct TabHoldItems: View {
                 Button("Pin Tab") { browser.keep(tab) }.disabled(tab.isBlank)
             }
         }
-        // As Zen's: into a folder of pinned tabs, pinning it on the way.
         if tab.pin == nil, !tab.isBlank {
             Menu("Move to Folder") {
                 ForEach(browser.folderChoices, id: \.folder.id) { choice in
@@ -150,7 +149,6 @@ struct TabHoldItems: View {
             }
             if tab.folder != nil { Button("Remove from Folder") { browser.move(tab, toFolder: nil) } }
         }
-        // As Zen's: a held tab that has browsed on can go home, or move home here.
         if tab.wandered {
             Button("Back to Pinned Page") { browser.goHome(tab) }
             Button("Replace Pinned Page with Current") { browser.moveHome(tab) }
@@ -158,7 +156,6 @@ struct TabHoldItems: View {
     }
 }
 
-/// Split view, for a tab's menu, as Zen's.
 struct SplitItems: View {
     @ObservedObject var browser: Browser
     @ObservedObject var tab: Tab
@@ -186,14 +183,12 @@ struct TabMenu: View {
     let close: () -> Void
 
     var body: some View {
-        // In Zen's order.
         Button("Reload Tab") { tab.reload() }.disabled(tab.isBlank)
         Button(tab.muted ? "Unmute Tab" : "Mute Tab") { tab.toggleMute() }
         Divider()
         TabHoldItems(browser: browser, tab: tab)
         Button("Unload Tab") { browser.unload(tab) }.disabled(tab.isBlank || tab.asleep)
         if browser.usesSpaces, browser.spaces.count > 1, !tab.isBlank {
-            // As Zen's space routing: this site, in this space, from now on.
             if let rule = browser.routeHere(for: tab) {
                 Button("Stop Always Opening Here") { browser.forgetRoute(rule.id) }
             } else {

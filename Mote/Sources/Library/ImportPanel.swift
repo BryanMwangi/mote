@@ -71,7 +71,7 @@ struct ImportForm: View {
         }
     }
 
-    /// The source, as a wide field with its browser's icon, as Zen's.
+    /// The source, as a wide field with its browser's icon.
     private var picker: some View {
         Menu {
             let browsers = sources.filter(\.isBrowser), files = sources.filter { !$0.isBrowser }

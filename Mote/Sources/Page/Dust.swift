@@ -2,9 +2,7 @@ import AppKit
 import QuartzCore
 import WebKit
 
-/// Snap: an element turns to dust as it goes, as Zen's zap dissolves it, and
-/// as half of everything went when Thanos snapped. A picture of it breaks
-/// into specks that drift up and away in a sweep across it and fade, all in
+/// Snap: an element turns to dust as it goes
 /// Core Animation over the page; the page only loses the element.
 @MainActor
 enum Dust {

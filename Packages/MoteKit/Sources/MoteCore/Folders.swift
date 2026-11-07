@@ -1,6 +1,6 @@
 import Foundation
 
-/// A folder of pinned tabs, as Zen's: named, collapsible, and possibly inside
+/// A folder of pinned tabs: named, collapsible, and possibly inside
 /// another. Tabs say which folder they're in; folders only know their parent.
 public struct Folder: Codable, Identifiable, Equatable, Sendable {
     public let id: UUID
@@ -9,7 +9,6 @@ public struct Folder: Codable, Identifiable, Equatable, Sendable {
     public var parent: UUID?
     /// What a live folder follows; nil for a folder of tabs.
     public var live: LiveSource?
-    /// An emoji of its own, as Zen's folders can have; nil for the folder symbol.
     public var icon: String?
 
     public init(id: UUID = UUID(), name: String, parent: UUID? = nil, live: LiveSource? = nil) {
@@ -19,7 +18,6 @@ public struct Folder: Codable, Identifiable, Equatable, Sendable {
         self.live = live
     }
 
-    /// Zen's limit on folders inside folders.
     public static let deepest = 5
 
     /// One line of the pinned section, top to bottom.
@@ -30,7 +28,7 @@ public struct Folder: Codable, Identifiable, Equatable, Sendable {
 
     /// The pinned section as drawn: each folder, then its folders and its
     /// tabs, a level further in; then the tabs in no folder. A collapsed
-    /// folder still shows the tab in front, if it's inside, as Zen does.
+    /// folder still shows the tab in front, if it's inside.
     /// `tabs` are in the row's order; one naming a folder that's gone is in none.
     public static func outline<TabID: Hashable>(
         _ folders: [Folder], tabs: [(id: TabID, folder: UUID?)], active: TabID?

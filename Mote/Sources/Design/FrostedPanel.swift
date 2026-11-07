@@ -1,9 +1,8 @@
 import AppKit
 import SwiftUI
 
-/// A floating editor over the window, frosted as Zen's theme picker and
-/// boost editor are: it stays on top while the page changes under it, moves
-/// by its background, and closes with Esc or its owner. One per name.
+/// A floating editor over the window: it stays on top while the page changes
+/// under it, moves by its background, and closes with Esc or its owner. One per name.
 @MainActor
 enum FrostedPanel {
     private static var open: [String: Panel] = [:]

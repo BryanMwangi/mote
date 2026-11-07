@@ -22,7 +22,6 @@ extension Browser {
         for url in panel.urls { open(url, foreground: true) }
     }
 
-    /// ⌃⌥C, Zen's compact mode: the sidebar tucked away and the toolbar on hover.
     func toggleCompact() {
         let on = !(prefs.sideHides && prefs.toolbarMode == .hover)
         if on { Self.beforeCompact = (prefs.sideHides, prefs.toolbarMode == .hover ? .shown : prefs.toolbarMode) }
@@ -40,7 +39,6 @@ extension Browser {
     func back() {
         guard let tab = active else { return }
         if tab.canGoBack { return tab.back() }
-        // As Zen: a tab with nowhere to go back to, opened from another, closes for it.
         guard let opener = backCloses(tab) else { return }
         select(opener)
         close(tab)

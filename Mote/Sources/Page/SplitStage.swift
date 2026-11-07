@@ -21,7 +21,6 @@ struct SplitStage<Pane: View>: View {
             let area = CGRect(origin: .zero, size: proxy.size)
             let frames = layout.frames(in: area, gap: Browser.splitGap)
             ZStack(alignment: .topLeading) {
-                // As Zen's: each page its own card, on the window's frame between them.
                 if split { Palette.frame }
                 ForEach(layout.ids, id: \.self) { id in
                     if let tab = browser.tab(id), let frame = frames[id] {
@@ -72,8 +71,6 @@ struct SplitStage<Pane: View>: View {
         .animation(Motion.hover, value: hovered)
     }
 
-    /// Over a pane's top, as Zen's: a handle to drag it beside another pane,
-    /// and a button to take it out of the split, showing on its own.
     private func tools(for tab: Tab) -> some View {
         HStack(spacing: 0) {
             Grip()
@@ -207,7 +204,6 @@ struct SplitRun: View {
             topLeadingRadius: first ? r : 0, bottomLeadingRadius: (down ? last : first) ? r : 0, bottomTrailingRadius: last ? r : 0,
             topTrailingRadius: (down ? first : last) ? r : 0, style: .continuous
         )
-        // Stronger than a row's hover, as Zen's group, so the split reads as one.
         .fill(Palette.ink.opacity(0.09))
         .padding(down ? .top : .leading, first ? -bleed : -gap / 2)
         .padding(down ? .bottom : .trailing, last ? -bleed : -gap / 2)

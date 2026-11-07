@@ -3,7 +3,7 @@ import MoteCore
 import SwiftUI
 
 /// A space's icon: a symbol from a grid, or an emoji from a grid with a
-/// search field, as Zen picks them.
+/// search field.
 struct IconPicker: View {
     /// The icon now: a symbol's name or an emoji.
     let current: String?

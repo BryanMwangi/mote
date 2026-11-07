@@ -184,7 +184,7 @@ final class PageView: WKWebView {
         items.forEach(menu.addItem)
     }
 
-    /// On the page itself (after WebKit's Reload), as Zen's page menu: keep
+    /// On the page itself (after WebKit's Reload): keep
     /// it, save it, select it all, take a picture of it, ask about it.
     private func pageItems(in menu: NSMenu) {
         guard let reload = menu.items.first(where: { $0.identifier?.rawValue == "WKMenuItemIdentifierReload" }),
@@ -224,7 +224,7 @@ final class PageView: WKWebView {
 
     /// On a link: WebKit's "Open Link in New Window" knows the link, so Mote's
     /// items say where it goes, then send it on through WebKit's action (see
-    /// Browser+Links.swift), in Zen's order. "Download Linked File" is "Save
+    /// Browser+Links.swift). "Download Linked File" is "Save
     /// Link As…", as Firefox calls it.
     private func linkItems(in menu: NSMenu) {
         guard let open = menu.items.first(where: { $0.identifier?.rawValue == "WKMenuItemIdentifierOpenLinkInNewWindow" }),

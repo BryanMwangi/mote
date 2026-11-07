@@ -116,7 +116,7 @@ private struct SpaceIcon: View {
     }
 }
 
-/// The plus at the foot, in Zen's order: a space or folder, then a split
+/// The plus at the foot a space or folder, then a split
 /// or a tab.
 struct AddMenuButton: View {
     @ObservedObject var browser: Browser
@@ -129,7 +129,6 @@ struct AddMenuButton: View {
                 menu.addItem(item("Create Space…", symbol: "square.on.square") { browser.askForSpace() })
             }
             menu.addItem(item("Create Folder", symbol: "folder.badge.plus") { browser.newFolder() })
-            // As Zen's: a folder that follows a feed or GitHub.
             let live = NSMenuItem(title: "Create Live Folder", action: nil, keyEquivalent: "")
             live.image = NSImage(systemSymbolName: "dot.radiowaves.left.and.right", accessibilityDescription: nil)
             live.submenu = NSMenu()

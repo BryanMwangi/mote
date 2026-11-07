@@ -21,7 +21,6 @@ extension Browser {
         if field.launching { return launchSuggestions(for: typed) }
         if assistantLeads, MentionMenu.query(in: typed) != nil { return ([], nil) }
         guard !typed.trimmingCharacters(in: .whitespaces).isEmpty else { return ([], nil) }
-        // Commands by name first, as Zen's URL bar actions; they run only when picked.
         var list = (assistantLeads ? [] : actionSuggestions(for: typed)) + history.suggestions(for: typed, limit: 3)
         // Where the assistant leads, Return asks rather than searches, so
         // searching isn't offered (⌘J switches back to it).

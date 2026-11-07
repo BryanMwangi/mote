@@ -1,6 +1,6 @@
 import Foundation
 
-/// A site made to look how you want, as Zen's boosts: a colour cast over
+/// A site made to look how you want: a colour cast over
 /// it, an accent for its links, dark, brighter or darker, more or less
 /// contrast and colour, another font, bigger, in capitals, and CSS of your
 /// own; switched off without losing any of it.

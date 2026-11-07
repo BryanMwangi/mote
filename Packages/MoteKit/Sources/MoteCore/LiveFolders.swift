@@ -1,6 +1,6 @@
 import Foundation
 
-/// What a live folder follows, as Zen's live folders: a feed, or GitHub's
+/// What a live folder follows: a feed, or GitHub's
 /// open pull requests or issues for a repository, or a search, without
 /// signing in.
 public enum LiveSource: Codable, Equatable, Sendable {

@@ -12,7 +12,6 @@ enum LinkOpening: Equatable {
     case window(private: Bool)
     /// A tab in another space, with that space's sign-ins.
     case space(UUID)
-    /// A new tab split in beside the page, as Zen's "Split Link to New Tab".
     case split
     /// The preview over the page (shift-click's).
     case preview

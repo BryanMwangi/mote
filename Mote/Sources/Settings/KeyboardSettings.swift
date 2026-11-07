@@ -8,7 +8,6 @@ import UniformTypeIdentifiers
 /// the keys that stay as they are.
 struct KeyboardSettings: View {
     @ObservedObject var prefs: Preferences
-    /// The keys in Zen on this Mac, if it's here.
     @State private var zenKeys: Shortcuts?
 
     /// Keys that aren't one command's, so they can't be changed.

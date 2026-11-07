@@ -3,7 +3,7 @@ import MoteCore
 import SwiftUI
 import WebKit
 
-// Responsive Design Mode (⌃⌘R), after Firefox's (and so Zen's): a tab's page
+// Responsive Design Mode (⌃⌘R): a tab's page
 // shown at a device's size. The stage lays the page out at that size
 // (WebStage), the tab gives it the device's user agent, pixel density and
 // touch, and a bar above the page changes them. The devices are Firefox's

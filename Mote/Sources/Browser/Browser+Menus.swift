@@ -3,9 +3,6 @@ import MoteCore
 import UniformTypeIdentifiers
 import WebKit
 
-// What the tab, space and page menus do beyond what was already there, after
-// Zen's menus (see ROADMAP.md, "Context menus and extension popups").
-
 extension Browser {
     /// Puts a space's pages to sleep: the showing one's all but the tab in
     /// front, another's all of them.

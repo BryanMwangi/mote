@@ -1,6 +1,6 @@
 import Foundation
 
-/// A site that always opens in one space, as Zen's space routing: an address
+/// A site that always opens in one space: an address
 /// that contains, equals or matches a pattern goes to `space`.
 public struct SpaceRoute: Codable, Identifiable, Equatable, Sendable {
     public enum Match: String, Codable, CaseIterable, Sendable {
@@ -16,8 +16,6 @@ public struct SpaceRoute: Codable, Identifiable, Equatable, Sendable {
         (self.id, self.reference, self.match, self.space) = (id, reference, match, space)
     }
 
-    /// Zen's `isRouteMatching`, ignoring case; "equals" ignores the scheme,
-    /// "www." and a trailing slash.
     public func matches(_ address: String) -> Bool {
         let reference = reference.trimmingCharacters(in: .whitespaces)
         guard !reference.isEmpty else { return false }

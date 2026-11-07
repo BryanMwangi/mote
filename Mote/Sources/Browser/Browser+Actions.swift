@@ -2,7 +2,7 @@ import AppKit
 import MoteCore
 
 // Running a command by name: what a key does (KeyRouter), and what a quick
-// action typed into the address field does (QuickActions, as Zen's).
+// action typed into the address field does.
 
 extension Browser {
     /// What a key's command does.
@@ -94,8 +94,6 @@ extension Browser {
         let run: () -> Void
     }
 
-    /// What can be done now: every command with a name, and Zen's extras for
-    /// the tab in front and the spaces.
     func quickActions() -> [QuickAction] {
         var actions = ShortcutID.allCases.map { id in
             QuickAction(id: id.rawValue, title: id.title, keys: prefs.shortcuts.combos(for: id).first?.text ?? "") { [weak self] in

@@ -47,7 +47,6 @@ Object.defineProperty(exports, Symbol.toStringTag, { value: 'Module' });
 		3,
 		5
 	].map((at) => parseInt(text.slice(at, at + 2), 16));
-	/** Zen's zenFilterColorChannel: `color` moved toward the dots by `strength`. */
 	function filter(color, first, second, strength) {
 		const [L, A, B] = oklab(color);
 		const half = Math.min(Math.max(.5 - strength * .45, .05), .5);

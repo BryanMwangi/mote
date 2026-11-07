@@ -13,7 +13,7 @@ enum DragZone {
     case list, page, outside
 }
 
-/// Split view, as Zen's: up to four tabs showing at once, each group a
+/// Split view: up to four tabs showing at once, each group a
 /// layout kept in `splits` by its own id. A group's tabs sit together in
 /// the row; selecting any of them shows the group. Essentials and pinned
 /// tabs stay out of groups.
@@ -68,7 +68,7 @@ extension Browser {
         relayout(group, .grid)
     }
 
-    /// The plus menu's New Split, as Zen's: a new tab beside the one in front.
+    /// The plus menu's New Split: a new tab beside the one in front.
     func newSplit() {
         guard let active, splittable(active) else { return }
         let tab = Tab()
@@ -96,7 +96,7 @@ extension Browser {
         saveSoon()
     }
 
-    /// Grid, Vertical or Horizontal, as Zen's.
+    /// Grid, Vertical or Horizontal.
     func relayout(_ group: UUID, _ grid: SplitGrid) {
         guard let ids = splits[group]?.ids, let made = SplitLayout.layout(grid, ids) else { return }
         withAnimation(Motion.settle) { splits[group] = made }

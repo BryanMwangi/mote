@@ -66,7 +66,7 @@ extension Browser {
     }
 }
 
-/// The boost editor, as Zen's, in a frosted panel that stays over the page
+/// The boost editor in a frosted panel that stays over the page
 /// while it changes: a field with two dots, the cast over the page and its
 /// links' colour; dark, the finer controls, and off; fonts; size and case;
 /// Snap, to pick things off the page; and CSS of your own.
@@ -98,7 +98,6 @@ struct BoostEditor: View {
             HStack {
                 Door(icon: "xmark", help: "Close") { browser.boosting = nil }
                 Spacer()
-                // The boost's own menu, as Zen's under its name.
                 Menu {
                     Button("Rename Boost…") {
                         Prompt.name("Rename Boost", placeholder: site, initial: boost.name ?? "", confirm: "Rename") { name in
@@ -237,7 +236,6 @@ struct BoostEditor: View {
         }
     }
 
-    /// A swatch of Zen's at random, and the colour across the wheel from it.
     private func shuffle() {
         let hex = SpaceTheme.swatches.randomElement()!.hex
         let across = ThemeColors.others(.complementary, from: ThemeColors.point(for: hex)).map(ThemeColors.hex(at:)).first

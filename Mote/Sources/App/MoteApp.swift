@@ -123,7 +123,6 @@ private struct MenuBar: Commands {
         // Folds the sidebar or strip away (see SidebarFold).
         Button("\(browser.folded ? "Show" : "Hide") \(browser.prefs.sidebar ? "Sidebar" : "Tab Bar")", action: browser.toggleFold)
             .keyboardShortcut(keys(.foldTabs))
-        // Zen's keys; KeyRouter takes them first, so they work over a page too.
         Button("Compact Mode", action: browser.toggleCompact).keyboardShortcut(keys(.compactMode))
         Button(browser.prefs.toolbarMode == .shown ? "Toolbar on Hover" : "Always Show Toolbar", action: browser.toggleToolbar)
             .keyboardShortcut(keys(.toggleToolbar))

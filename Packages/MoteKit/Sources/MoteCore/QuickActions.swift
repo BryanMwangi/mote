@@ -1,7 +1,5 @@
-/// Commands found by typing their name into the address field, as Zen's
-/// URL bar actions: "compact" finds Compact Mode, "nw" New Window. Scored
-/// as Zen scores them (a VS Code-style fuzzy match), with exact and prefix
-/// matches always first.
+/// Commands found by typing their name into the address field: "compact" finds
+/// Compact Mode, "nw" New Window. Scored with exact and prefix matches always first.
 public enum QuickActions {
     /// How many show among the suggestions at most.
     public static let most = 3
@@ -10,7 +8,7 @@ public enum QuickActions {
     static let prefix = 100_000
 
     /// The ids whose titles `typed` finds, best first: none for two
-    /// characters or fewer, as Zen.
+    /// characters or fewer.
     public static func ranked<ID>(_ actions: [(id: ID, title: String)], for typed: String) -> [ID] {
         let query = typed.trimmingCharacters(in: .whitespaces).lowercased()
         guard query.count > 2 else { return [] }
@@ -23,8 +21,7 @@ public enum QuickActions {
             .map(\.id)
     }
 
-    /// Zen's `#calculateFuzzyScore`: every character of the query found in
-    /// order, more for matches at a word's start and in runs, less for gaps.
+    /// Every character of the query found in order, more for matches at a word's start and in runs, less for gaps.
     static func score(_ target: String, _ query: String) -> Int {
         let target = Array(target.lowercased()), query = Array(query.lowercased())
         guard !query.isEmpty, query.count <= target.count else { return 0 }

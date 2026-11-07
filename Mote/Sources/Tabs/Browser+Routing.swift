@@ -18,7 +18,7 @@ final class RouteStore: ObservableObject {
     }
 }
 
-/// Space routing, as Zen's: a page heading for a site a rule gives to
+/// Space routing a page heading for a site a rule gives to
 /// another space opens there instead.
 extension Browser {
     /// The space a navigation should go to instead of here, or nil to let it

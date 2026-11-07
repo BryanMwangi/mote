@@ -151,9 +151,9 @@ struct Sidebar: View {
     }
 }
 
-/// Every space's page side by side, kept built, as Zen keeps a strip per
-/// workspace: switching only moves another into view and makes it the live
-/// one, rather than taking one list down and building another. A swipe moves
+/// Every space's page side by side, kept built switching only moves another
+/// into view and makes it the live one, rather than taking one list down and
+/// building another. A swipe moves
 /// them by Core Animation (SwipeTrack); they're worked out again only as one
 /// starts and ends, when the neighbouring pages show and hide.
 private struct SpacePages: View {
@@ -288,7 +288,7 @@ private struct SpacePage: View {
                 listed(loose)
             } else {
                 ScrollViewReader { scroller in
-                    // No scroll bar, as in Zen: one over the rows would cover their close buttons.
+                    // No scroll bar one over the rows would cover their close buttons.
                     ScrollView(.vertical) { listed(loose) }
                         .scrollIndicators(.never)
                         // Within the space only: a switch moves the page whole,
@@ -488,9 +488,9 @@ private struct PinnedTabs: View {
     }
 }
 
-/// The essential in front, as Zen's (`zen.theme.essentials-favicon-bg`):
-/// its own icon blown up to twice the square and blurred behind it, under
-/// a frosted panel inset by 2 points, so the icon's colours ring the edge
+/// The essential in front its own icon blown up to twice the square and
+/// blurred behind it, under a frosted panel inset by 2 points, so the
+/// icon's colours ring the edge
 /// and wash the middle. Drawn only for the one in front.
 private struct IconGlow: View {
     let icon: NSImage
@@ -614,8 +614,8 @@ private struct SideRow: View {
     let refusals: Int
     let icons: Bool
     let showsReading: Bool
-    /// The link preview open over this tab, if any: its icon ends the row, as
-    /// Zen's Glance does, and a click on it keeps the preview as a tab.
+    /// The link preview open over this tab, if any, and a click on it keeps the
+    /// preview as a tab.
     let preview: Tab?
     /// The site card hangs beside it.
     let carded: Bool
@@ -768,7 +768,7 @@ private struct PreviewMark: View {
     }
 }
 
-/// A folder among the pinned tabs, as Zen's: a click opens or closes it, and
+/// A folder among the pinned tabs; a click opens or closes it, and
 /// its menu renames, nests, unloads, unpacks or deletes it.
 private struct FolderRow: View {
     let browser: Browser

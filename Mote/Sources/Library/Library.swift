@@ -1,7 +1,7 @@
 import MoteCore
 import SwiftUI
 
-/// The Library, as Zen's: history, downloads and bookmarks in one place, a
+/// The Library: history, downloads and bookmarks in one place, a
 /// tab strip above whichever of their panels is open to go between them.
 /// Each panel is the one it always was.
 enum LibrarySection: String, CaseIterable {

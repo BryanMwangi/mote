@@ -14,14 +14,12 @@ public enum SplitSide: String, Codable, Sendable, CaseIterable {
     public var before: Bool { self == .left || self == .top }
 }
 
-/// Zen's three layouts for a group's tabs.
 public enum SplitGrid: String, Codable, Sendable {
     case grid, across, down
 }
 
 /// A split view: up to four tabs laid out as a tree of rows and columns,
-/// each child with its share of its parent, as Zen's split view keeps them
-/// (`ZenViewSplitter.mjs`). Rectangles are measured from the top left.
+/// each child with its share of its parent. Rectangles are measured from the top left.
 public struct SplitLayout<ID: Hashable & Codable & Sendable>: Codable, Equatable, Sendable {
     public indirect enum Node: Codable, Equatable, Sendable {
         case leaf(ID)
@@ -163,7 +161,7 @@ public struct SplitLayout<ID: Hashable & Codable & Sendable>: Codable, Equatable
         return .split(axis, children)
     }
 
-    /// The tabs laid out afresh, as Zen's `calculateLayoutTree`: side by side,
+    /// The tabs laid out afresh: side by side,
     /// stacked, or two to a column for a grid.
     public static func layout(_ grid: SplitGrid, _ ids: [ID]) -> SplitLayout? {
         guard let first = ids.first, ids.count <= most else { return nil }
@@ -234,8 +232,6 @@ public struct SplitLayout<ID: Hashable & Codable & Sendable>: Codable, Equatable
         }
     }
 
-    /// Zen's rule: the nearest edge of `rect` within a quarter of its width
-    /// or height from `point`; none in the middle.
     public static func dropSide(at point: CGPoint, in rect: CGRect) -> SplitSide? {
         guard rect.contains(point) else { return nil }
         let edges: [(SplitSide, CGFloat, CGFloat)] = [

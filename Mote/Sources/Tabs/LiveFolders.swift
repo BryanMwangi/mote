@@ -70,7 +70,7 @@ final class LiveFeeds: ObservableObject {
 }
 
 extension Browser {
-    /// A live folder, as Zen's: a feed, or a GitHub repository's open pull
+    /// A live folder a feed, or a GitHub repository's open pull
     /// requests or issues, asked for by its address.
     func newLiveFolder(_ kind: String) {
         let (title, placeholder) =

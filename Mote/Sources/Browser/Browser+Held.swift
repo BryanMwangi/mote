@@ -1,8 +1,8 @@
 import Foundation
 import MoteCore
 
-// Essentials and pinned tabs belong to the space, so every window shows them,
-// as Zen does. Each window has tabs of its own for them (a web view lives in
+// Essentials and pinned tabs belong to the space, so every window shows them.
+// Each window has tabs of its own for them (a web view lives in
 // one window); when one window pins, unpins, reorders, renames or changes a
 // letter, the others follow. A tab's page is its own window's: where it
 // browses doesn't travel.

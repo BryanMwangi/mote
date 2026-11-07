@@ -2,7 +2,7 @@ import MoteCore
 import SwiftUI
 import WebKit
 
-/// The page button beside the address, as Zen's site panel: what to do with
+/// The page button beside the address: what to do with
 /// the page, every extension, the site's settings and how safe it is, in
 /// one popover. Extensions' popups hang from it.
 struct PageButton: View {
@@ -145,7 +145,7 @@ extension Tile where Label == AnyView {
     }
 }
 
-/// Every running extension, as Zen's grid: a press opens its popup from the
+/// Every running extension: a press opens its popup from the
 /// page button; a right-click has the rest.
 @available(macOS 15.4, *)
 private struct ExtensionGrid: View {

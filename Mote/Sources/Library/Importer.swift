@@ -53,7 +53,6 @@ struct ImportSource: Identifiable, Hashable {
     let browser: String
     let bundle: String?
     let family: Family
-    /// Zen's profile, for what only Zen has.
     var zen: ZenImporter.Profile?
 
     var kinds: [ImportKind] {
@@ -239,7 +238,6 @@ extension Browser {
             guard let file, let html = try? String(contentsOf: file, encoding: .utf8) else { throw ImportTrouble.unreadable }
             tally.bookmarks = take(NetscapeBookmarks.read(html: html), from: file.deletingPathExtension().lastPathComponent)
         }
-        // What only Zen has.
         if let zen = source.zen {
             if kinds.contains(.spaces), let plan = try? ZenImporter.plan(for: zen) {
                 let brought = importZen(plan)

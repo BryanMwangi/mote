@@ -4,8 +4,7 @@ import SwiftUI
 
 /// The buttons at the sidebar's foot, the user's own choice and order (see
 /// FootButton). Those with something to show open a small popover of this
-/// session's activity first, with the whole panel a click further, as Zen's
-/// downloads button does; the rest act at once.
+/// session's activity first, with the whole panel a click further.
 struct FootButtons: View {
     @ObservedObject var browser: Browser
     @ObservedObject var prefs: Preferences

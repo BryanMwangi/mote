@@ -25,7 +25,7 @@ final class FolderStore: ObservableObject {
     }
 }
 
-/// Folders of pinned tabs, as Zen's: made from the plus menu or a tab's
+/// Folders of pinned tabs made from the plus menu or a tab's
 /// menu, collapsed with a click, renamed, unpacked or deleted from their own.
 extension Browser {
     var folders: [Folder] { FolderStore.shared.folders(in: spaceID) }
@@ -41,7 +41,7 @@ extension Browser {
         }
     }
 
-    /// Into a folder; a tab that isn't pinned is pinned on the way, as in Zen.
+    /// Into a folder; a tab that isn't pinned is pinned on the way.
     func move(_ tab: Tab, toFolder folder: UUID?) {
         if folder != nil, !tab.kept { keep(tab) }
         tab.folder = folder

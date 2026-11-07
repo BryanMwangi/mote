@@ -1,7 +1,7 @@
 import SwiftUI
 
 // Option-clicking a link (or shift-clicking, Settings › General › Links)
-// shows it over the page instead of leaving it, as Zen's Glance. The
+// shows it over the page instead of leaving it. The
 // preview is a tab of its own that isn't in the list yet, so keeping it
 // doesn't load it again.
 

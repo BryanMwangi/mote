@@ -2,7 +2,7 @@ import MoteCore
 import SwiftUI
 
 /// The "…" at the end of the toolbar (or the sidebar's top, with the toolbar
-/// hidden), as Zen's app menu: windows, the library, the page and zoom in
+/// hidden) windows, the library, the page and zoom in
 /// reach, without the menu bar. A native menu, so its submenus open beside
 /// it while it stays.
 struct AppMenuButton: View {

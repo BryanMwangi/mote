@@ -14,10 +14,7 @@ public struct Space: Codable, Identifiable, Equatable, Sendable {
     public var sharesSignIns: Bool?
     /// Where its downloads go; nil for the folder in Settings.
     public var downloads: String?
-    /// Where it came from when imported ("zen:<uuid>"), so importing again
-    /// doesn't make it twice.
     public var origin: String?
-    /// Its colours behind the window's frame, as Zen's space themes; nil for none.
     public var theme: SpaceTheme?
 
     public init(
@@ -108,9 +105,8 @@ public struct SpaceList: Equatable, Sendable {
     public var sharing: Set<UUID> { Set(spaces.filter { $0.sharesSignIns == true }.map(\.id)) }
 }
 
-/// A space's colours, as Zen's themes keep them, leaner: one to three
-/// colours in a gradient across the window's frame, how strongly they show,
-/// a grain over them, and whether the space is light or dark.
+/// A space's colours: one to three colours in a gradient across the window's frame,
+/// how strongly they show, a grain over them, and whether the space is light or dark.
 public struct SpaceTheme: Codable, Equatable, Sendable {
     /// "#rrggbb", one to three.
     public var colors: [String]
@@ -142,9 +138,9 @@ public struct SpaceTheme: Codable, Equatable, Sendable {
             scheme: try values.decodeIfPresent(Scheme.self, forKey: .scheme))
     }
 
-    /// Zen's swatches, a page of nine at a time: vivid, pale and deep, each
+    /// Default swatches, a page of nine at a time: vivid, pale and deep, each
     /// as one colour and then as three around it, then greys from white to
-    /// black (Zen's theme-picker.inc).
+    /// black.
     public static let swatches: [Swatch] = {
         let vivid = ["#f2eae4", "#f29bbb", "#a6729d", "#f25e6b", "#ff8558", "#f8d558", "#34e895", "#6cbad9", "#666789"]
         let pale = ["#fefbfa", "#ffe9f3", "#f1d1ec", "#ffcbd1", "#ffe0d3", "#fff9e5", "#defdeb", "#dcf3fc", "#c5c6e5"]
@@ -159,14 +155,11 @@ public struct SpaceTheme: Codable, Equatable, Sendable {
         public let hex: String
         public let dots: Int
 
-        /// The theme's colours for it: the others turned round the wheel from
-        /// it as Zen's analogous are, each as light and as strong as it.
         public var colors: [String] {
             dots == 1 ? [hex] : [hex] + ThemeColors.Harmony.analogous.turns.map { ThemeColors.turned(hex, by: $0) }
         }
     }
 
-    /// A few to start from, as Zen's picker offers.
     public static let presets: [SpaceTheme] = [
         SpaceTheme(colors: ["#7c5cff", "#ff7ab6"]), SpaceTheme(colors: ["#2bb3ff", "#38e0b0"]),
         SpaceTheme(colors: ["#ff8a3d", "#ffd23f"]), SpaceTheme(colors: ["#3a7bd5", "#00d2ff", "#9b5cff"]),

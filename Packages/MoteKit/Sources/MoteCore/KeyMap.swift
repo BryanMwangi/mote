@@ -36,10 +36,9 @@ public enum KeyMap {
         case hideElements, hiddenElements, undoHiding
         case zoomIn, zoomOut, actualSize
         case inspector
-        /// Split view, as Zen's keys: the tab in front with the one before it,
+        /// Split view: the tab in front with the one before it,
         /// or its group, laid out so; or the group undone.
         case split(SplitGrid), unsplit
-        /// Zen's ⌃⌥ keys: the space before or after, compact mode, the toolbar.
         case stepSpace(Int), compactMode, toggleToolbar
     }
 

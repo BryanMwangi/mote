@@ -1017,7 +1017,7 @@ final class Browser: NSObject, ObservableObject {
         tab.go(to: ghost.url)
     }
 
-    /// The tab used last, as Zen goes to on closing one: awake ones first,
+    /// The tab used last: awake ones first,
     /// so closing doesn't wake a page that was resting.
     func recentlyUsed(besides leaving: Tab?) -> Tab? {
         let awake = tabs.filter { !$0.asleep && $0 !== leaving }

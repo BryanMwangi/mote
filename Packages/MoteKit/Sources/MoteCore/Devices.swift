@@ -2,7 +2,7 @@ import CoreGraphics
 import Foundation
 
 /// A screen to show a page at in Responsive Design Mode, as Firefox's
-/// devtools describe one (and so Zen's): its size in CSS pixels, its pixel
+/// devtools describe one: its size in CSS pixels, its pixel
 /// density, whether it's touched, and the user agent its browser sends.
 public struct Device: Codable, Equatable, Hashable, Sendable {
     public var name: String

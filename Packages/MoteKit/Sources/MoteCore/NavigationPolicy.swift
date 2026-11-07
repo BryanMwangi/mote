@@ -26,7 +26,7 @@ public enum NavigationPolicy {
         /// WebKit's button mask: 1 left, 2 right, 4 middle.
         public var button: Int
         public var keys: Keys
-        /// The keys that preview a link (shift, or option as in Zen); nil
+        /// The keys that preview a link (shift, or option); nil
         /// when previews are off or this tab can't show one.
         public var peekKeys: Keys?
 

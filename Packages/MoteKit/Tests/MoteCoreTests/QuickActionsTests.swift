@@ -16,7 +16,7 @@ struct QuickActionsTests {
         #expect(QuickActions.ranked(actions, for: "Settings") == ["settings"])
     }
 
-    @Test("Letters in order across words find it, as Zen's fuzzy match")
+    @Test("Letters in order across words find it")
     func fuzzy() {
         #expect(QuickActions.ranked(actions, for: "new win").first == "window")
         #expect(QuickActions.ranked(actions, for: "npw").contains("private") == false)

@@ -45,7 +45,7 @@ extension Browser {
         if spaces.indices.contains(index) { switchSpace(to: spaces[index].id) }
     }
 
-    /// ⌃⌥Q and ⌃⌥E: the space before or after, round from the ends, as Zen.
+    /// ⌃⌥Q and ⌃⌥E: the space before or after, round from the ends.
     func stepSpace(_ by: Int) {
         guard spaces.count > 1, let here = spaces.firstIndex(where: { $0.id == spaceID }) else { return }
         switchSpace(index: (here + by + spaces.count) % spaces.count)
@@ -84,7 +84,6 @@ extension Browser {
             }
             editing = active?.isStart ?? true
             field.clear()
-            // The address only for a tab with no page, as Zen focuses the page otherwise.
             if editing { field.askFocus() }
         }
         // After the new space's first frame.
@@ -92,8 +91,8 @@ extension Browser {
         DispatchQueue.main.async { [weak self] in self?.announce(name) }
     }
 
-    /// Readies a space before it's shown, as Zen warms the tab it's about to
-    /// select: its tab in front gets a page, so switching shows it at once.
+    /// Readies a space before it's shown its tab in front gets a
+    /// page, so switching shows it at once.
     func warmSpace(_ id: UUID) {
         guard usesSpaces, id != spaceID, let row = parked[id], let tab = row.active.flatMap({ id in row.tabs.first { $0.id == id } })
         else { return }

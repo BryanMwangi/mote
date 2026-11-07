@@ -13,7 +13,7 @@ enum Glyph: String, CaseIterable, Identifiable, Storable {
 
 /// Where the toolbar is: always on the card, out of the way until the
 /// pointer reaches the card's top edge, or (beside a sidebar) moved into it.
-/// The click that previews a link: shift, or option as Zen's Glance.
+/// The click that previews a link: shift.
 enum PeekClick: String, CaseIterable, Identifiable, Storable {
     case shift, option
 
@@ -130,9 +130,8 @@ final class Preferences: ObservableObject {
     // Tabs and video
     /// Tabs idle for half an hour let their page go and keep their place.
     @Published var sleepsTabs: Bool
-    /// The sidebar on the window's right, as Zen's option.
+    /// The sidebar on the window's right.
     @Published var sideRight: Bool
-    /// Zen's small tab settings: ⌃⇥ passes over essentials and sleeping tabs;
     /// Back on a tab with nowhere to go closes it for the tab that opened it;
     /// closing a tab goes to the one used before it rather than its neighbour.
     @Published var stepSkipsEssentials: Bool
