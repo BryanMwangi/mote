@@ -102,8 +102,9 @@ extension Browser {
                 brought.already += 1
                 continue
             }
-            let space = Space(
+            var space = Space(
                 id: UUID(), name: zen.name, icon: zen.icon ?? list.freeIcon, sharesSignIns: !zen.ownData, origin: origin)
+            space.theme = zen.theme
             list.add(space)
             made.append(space)
             let entries = zen.tabs.map { tab in

@@ -10,7 +10,7 @@ let package = Package(
     ],
     targets: [
         .target(name: "MoteCore"),
-        .testTarget(name: "MoteCoreTests", dependencies: ["MoteCore"]),
+        .testTarget(name: "MoteCoreTests", dependencies: ["MoteCore"], resources: [.copy("Fixtures")]),
         // Talking to language models: cloud APIs, local servers and the coding
         // agents installed on the Mac, behind one streaming interface.
         .target(name: "MoteAI"),

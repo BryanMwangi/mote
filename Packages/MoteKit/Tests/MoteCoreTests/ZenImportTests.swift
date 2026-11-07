@@ -25,6 +25,19 @@ struct ZenImportTests {
         #expect(throws: MozLZ4.Failure.corrupt) { try MozLZ4.decode(file.prefix(file.count - 4)) }
     }
 
+    @Test("A space's colours come along: the primary dot first, its opacity, its texture as grain")
+    func themes() throws {
+        let json = """
+            {"spaces":[{"uuid":"a","name":"Colour","theme":{"type":"gradient","opacity":0.7,"texture":0.25,
+                "gradientColors":[{"c":[255,128,0],"isPrimary":false},{"c":[16,32,48],"isPrimary":true},{"c":"oops"}]}},
+               {"uuid":"b","name":"Plain","theme":{"type":"gradient","gradientColors":[],"opacity":0.5}}],
+             "tabs":[]}
+            """
+        let session = try ZenSession.read(MozLZ4.encode(Data(json.utf8)))
+        #expect(session.spaces[0].theme == SpaceTheme(colors: ["#102030", "#ff8000"], opacity: 0.7, grain: 0.25))
+        #expect(session.spaces[1].theme == nil)
+    }
+
     @Test("Split views come with their tree, over their space's tab places, as Zen writes them")
     func splits() throws {
         // As Zen 1.17 writes them: tabs named by zenSyncId; the tree's leaves in percent.

@@ -12,8 +12,14 @@ public struct ZenSession: Decodable, Sendable, Equatable {
         public var position: Double?
         /// Its container (Firefox's userContextId); 0 is none.
         public var containerTabId: Int?
+        /// Its colours, as Mote keeps a space's: nil when it has none.
+        public var theme: SpaceTheme?
 
-        public init(uuid: String, name: String? = nil, icon: String? = nil, position: Double? = nil, containerTabId: Int? = nil) {
+        public init(
+            uuid: String, name: String? = nil, icon: String? = nil, position: Double? = nil, containerTabId: Int? = nil,
+            theme: SpaceTheme? = nil
+        ) {
+            self.theme = theme
             self.uuid = uuid
             self.name = name
             self.icon = icon
@@ -28,9 +34,49 @@ public struct ZenSession: Decodable, Sendable, Equatable {
             icon = c.lenient(String.self, .icon)
             position = c.lenient(Double.self, .position)
             containerTabId = c.lenient(Int.self, .containerTabId)
+            theme = c.lenient(Theme.self, .theme)?.mote
         }
 
-        private enum Keys: String, CodingKey { case uuid, name, icon, position, containerTabId }
+        private enum Keys: String, CodingKey { case uuid, name, icon, position, containerTabId, theme }
+
+        /// Zen's gradient: dots of colour (`c`, red, green and blue), the
+        /// primary one first in Mote's; its opacity; its texture as grain.
+        private struct Theme: Decodable {
+            struct Dot: Decodable {
+                var c: [Double]?
+                var isPrimary: Bool?
+
+                init(from decoder: Decoder) throws {
+                    let values = try decoder.container(keyedBy: Keys.self)
+                    c = values.lenient([Double].self, .c)
+                    isPrimary = values.lenient(Bool.self, .isPrimary)
+                }
+
+                private enum Keys: String, CodingKey { case c, isPrimary }
+            }
+            var gradientColors: [Dot]?
+            var opacity: Double?
+            var texture: Double?
+
+            var mote: SpaceTheme? {
+                let dots = (gradientColors ?? []).sorted { ($0.isPrimary == true ? 0 : 1) < ($1.isPrimary == true ? 0 : 1) }
+                let colors = dots.compactMap { dot -> String? in
+                    guard let c = dot.c, c.count >= 3 else { return nil }
+                    return String(format: "#%02x%02x%02x", Int(c[0].rounded()), Int(c[1].rounded()), Int(c[2].rounded()))
+                }
+                guard !colors.isEmpty else { return nil }
+                return SpaceTheme(colors: colors, opacity: opacity ?? 0.5, grain: texture ?? 0)
+            }
+
+            init(from decoder: Decoder) throws {
+                let c = try decoder.container(keyedBy: Keys.self)
+                gradientColors = c.lenient([Dot].self, .gradientColors)
+                opacity = c.lenient(Double.self, .opacity)
+                texture = c.lenient(Double.self, .texture)
+            }
+
+            private enum Keys: String, CodingKey { case gradientColors, opacity, texture }
+        }
     }
 
     public struct Entry: Decodable, Sendable, Equatable {
@@ -203,6 +249,7 @@ public struct ZenImportPlan: Equatable, Sendable {
         public var icon: String?
         /// Zen gave it a container, so it gets website data of its own.
         public var ownData: Bool
+        public var theme: SpaceTheme? = nil
         /// Essentials, then pinned tabs, then the rest, each in Zen's order.
         public var tabs: [Tab]
         /// Its split views, by their tabs' places in `tabs`, as a session keeps them.
@@ -227,7 +274,7 @@ public struct ZenImportPlan: Equatable, Sendable {
                 zenID: zen.uuid,
                 name: named.flatMap { $0.isEmpty ? nil : $0 } ?? containers[container] ?? "Space \(number + 1)",
                 icon: zen.icon.flatMap { MoteCore.Space.isEmoji($0) ? $0 : nil },
-                ownData: container != 0, tabs: [])
+                ownData: container != 0, theme: zen.theme, tabs: [])
         }
         guard !spaces.isEmpty else {
             self.spaces = []
