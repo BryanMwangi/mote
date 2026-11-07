@@ -115,7 +115,7 @@ extension Bench {
             ("spaces", { prefs.usesSpaces = $0 }), ("hides", { prefs.sideHides = $0 }), ("folded", { browser.folded = $0 }),
             ("peek", { browser.peeking = $0 }), ("bar", { if $0 { browser.edit() } else { browser.dismiss() } }),
             ("chats", { if $0 { browser.showChats() } }), ("peeklinks", { prefs.peeksLinks = $0 }),
-            ("processes", { browser.showingProcesses = $0 }), ("sideright", { prefs.sideRight = $0 }),
+            ("processes", { browser.showingProcesses = $0 }), ("import", { browser.importing = $0 }), ("sideright", { prefs.sideRight = $0 }),
             // The app brought forward, where focus moves as it does for a person.
             ("appfront", { if $0 { NSApp.activate(ignoringOtherApps: true); browser.window?.makeKeyAndOrderFront(nil) } }),
             (
@@ -325,6 +325,25 @@ extension Bench {
                         } ?? "")
             }
             return call.answer(["items": AppMenu.make(for: browser).items.map(describe)])
+        }
+        // An import run straight (test runs): SOURCE|kind,kind|FILE; the sources' ids too.
+        if Storage.testing, let asked = request.string("importrun") {
+            let parts = asked.split(separator: "|", omittingEmptySubsequences: false).map(String.init)
+            let sources = ImportSource.found()
+            guard let source = sources.first(where: { $0.id == parts[0] }) else {
+                return call.answer(["sources": sources.map { ["id": $0.id, "name": $0.name, "kinds": $0.kinds.map(\.rawValue)] }])
+            }
+            let kinds = Set((parts.count > 1 ? parts[1] : "").split(separator: ",").compactMap { ImportKind(rawValue: String($0)) })
+            let file = parts.count > 2 && !parts[2].isEmpty ? URL(fileURLWithPath: parts[2]) : nil
+            Task {
+                do {
+                    let tally = try await browser.bring(kinds, from: source, file: file)
+                    call.answer(["tally": tally.summary, "bookmarks": tally.bookmarks, "history": tally.history, "passwords": tally.passwords])
+                } catch {
+                    call.answer(["trouble": "\(error)"])
+                }
+            }
+            return
         }
         // The Dock icon as it is now, to a PNG.
         if Storage.testing, let asked = request.string("dockicon") {

@@ -15,15 +15,27 @@ nonisolated enum ChromiumImporter {
         /// The keychain item holding the password key.
         let service: String
         let account: String
+        /// One profile's folder name, when only it is meant.
+        var profile: String? = nil
 
-        var id: String { name }
+        var id: String { name + (profile.map { ":\($0)" } ?? "") }
 
-        /// Each profile's folder (one with a "Login Data" file).
+        var root: URL { URL.applicationSupportDirectory.appending(path: folder, directoryHint: .isDirectory) }
+
+        /// Each profile's folder (one with a "Login Data" file), or the one meant.
         var profiles: [URL] {
-            let root = URL.applicationSupportDirectory.appending(path: folder, directoryHint: .isDirectory)
             let folders =
                 (try? FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: nil, options: .skipsHiddenFiles)) ?? []
-            return folders.filter { FileManager.default.fileExists(atPath: $0.appending(path: "Login Data").path) }
+            return folders.filter {
+                (profile == nil || $0.lastPathComponent == profile) && FileManager.default.fileExists(atPath: $0.appending(path: "Login Data").path)
+            }
+        }
+
+        /// Only one of its profiles.
+        func only(_ folder: String) -> Source {
+            var one = self
+            one.profile = folder
+            return one
         }
 
         /// A file in every profile that has it.
@@ -43,6 +55,17 @@ nonisolated enum ChromiumImporter {
     /// The known browsers with a profile on this Mac.
     static func installed() -> [Source] {
         known.filter { !$0.profiles.isEmpty }
+    }
+
+    /// Its profiles' folders and the names the browser shows for them
+    /// ("Local State"'s profile list), "Default" first.
+    static func profileNames(in source: Source) -> [(folder: String, name: String)] {
+        let state = (try? Data(contentsOf: source.root.appending(path: "Local State")))
+            .flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }
+        let info = (state?["profile"] as? [String: Any])?["info_cache"] as? [String: [String: Any]] ?? [:]
+        return source.profiles.map(\.lastPathComponent)
+            .sorted { ($0 == "Default" ? 0 : 1, $0) < ($1 == "Default" ? 0 : 1, $1) }
+            .map { ($0, info[$0]?["name"] as? String ?? $0) }
     }
 
     enum Trouble: Error {

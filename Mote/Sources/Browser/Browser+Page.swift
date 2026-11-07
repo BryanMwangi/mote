@@ -122,11 +122,11 @@ extension Browser {
     /// Brings in another browser's bookmarks, then its cached icons for them
     /// in the background. Returns how many bookmarks came.
     @discardableResult
-    func takeBookmarks(from source: ChromiumImporter.Source) -> Int {
+    func takeBookmarks(from source: ChromiumImporter.Source, saying: Bool = true) -> Int {
         let found = ChromiumImporter.bookmarks(in: source)
         bookmarks.take(found, from: source.name)
         let count = BookmarkTree.count(found)
-        announce(count == 0 ? "No bookmarks in \(source.name)" : "\(count) bookmarks from \(source.name)")
+        if saying { announce(count == 0 ? "No bookmarks in \(source.name)" : "\(count) bookmarks from \(source.name)") }
         let urls = BookmarkTree.urls(found)
         Task {
             let icons = await Task.detached(priority: .utility) { ChromiumImporter.icons(in: source, for: urls) }.value

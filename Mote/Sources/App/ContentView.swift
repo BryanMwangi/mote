@@ -131,8 +131,8 @@ struct ContentView: View {
         if browser.welcoming, !browser.arriving {
             WelcomePanel(browser: browser, prefs: browser.prefs).ignoresSafeArea()
         }
-        if browser.importingZen {
-            Sheet(close: { browser.importingZen = false }) { ZenImportPanel(browser: browser) }
+        if browser.importing {
+            Sheet(close: { browser.importing = false }) { ImportPanel(browser: browser) }
         }
         if browser.logins.managing {
             Sheet(close: { browser.logins.managing = false }) { PasswordsPanel(logins: browser.logins) }

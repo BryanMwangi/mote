@@ -58,7 +58,7 @@ final class Browser: NSObject, ObservableObject {
     @Published var bookmarking = false
     @Published var bookmarksOpen = false
     /// Settings › General › Import from Zen.
-    @Published var importingZen = false
+    @Published var importing = false
     @Published var recalling = false
     @Published var showingDownloads = false
     /// About Processes (see ProcessesPanel).

@@ -24,6 +24,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Another profile's Mote wears its avatar on the Dock icon.
         Profiles.shared.dressDock()
+        // A profile made from another browser's brings its things in, once.
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(1))
+            Browser.front?.importOnLaunch()
+        }
         guard notification.userInfo?[NSApplication.launchIsDefaultUserInfoKey] as? Bool == false else { return }
         Task { @MainActor in
             if !NSApp.windows.contains(where: { $0.contentView != nil && !($0 is NSPanel) }) { LinkInbox.openWindow() }

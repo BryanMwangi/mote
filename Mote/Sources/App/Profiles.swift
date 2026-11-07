@@ -83,13 +83,14 @@ final class Profiles: ObservableObject {
     }
 
     /// A new profile, with the first's settings, opened at once.
-    func add(named name: String, avatar: Avatar, picture: NSImage? = nil) {
+    /// `importing`: another browser's things for it to bring once it opens (see importOnLaunch).
+    func add(named name: String, avatar: Avatar, picture: NSImage? = nil, importing: String? = nil) {
         let id = String(UUID().uuidString.prefix(8)).lowercased()
         list.append(Profile(id: id, name: name.isEmpty ? "Profile" : name, avatar: avatar))
         if let picture { keep(picture, for: id) }
         file.save(list)
         copySettings(to: id)
-        open(id)
+        open(id, importing: importing)
     }
 
     func rename(_ id: String, to name: String) {
@@ -150,11 +151,12 @@ final class Profiles: ObservableObject {
     }
 
     /// A profile as its own Mote, as Firefox's -P does: nil for the first.
-    func open(_ id: String?) {
+    func open(_ id: String?, importing: String? = nil) {
         let setup = NSWorkspace.OpenConfiguration()
         setup.createsNewApplicationInstance = true
         var environment = ProcessInfo.processInfo.environment.filter { $0.key == "MOTE_PROBE" }
         if let id { environment["MOTE_PROFILE"] = id }
+        if let importing { environment["MOTE_IMPORT"] = importing }
         setup.environment = environment
         NSWorkspace.shared.openApplication(at: Bundle.main.bundleURL, configuration: setup)
     }
