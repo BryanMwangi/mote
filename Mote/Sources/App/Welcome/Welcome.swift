@@ -1,386 +1,418 @@
+import AppKit
+import MoteAI
+import MoteCore
 import SwiftUI
 
-/// First-run setup, after the arrival (see Arrival.swift): a single card over
-/// the new tab that changes shape as it goes. It asks only what the browser
-/// can't guess — what to bring from another browser, where the tabs go, and
-/// whether to be the default — and drops any question that is already settled.
-struct WelcomePanel: View {
+/// First-run setup: a card of two panes, what to do on the left and
+/// the thing itself on the right, one step at a time. After the arrival it
+/// sits over the arrival's mesh, which takes the space's colours as they're
+/// picked, at the size of the window it then shrinks into (see Arrival);
+/// without the arrival it shows inside the window.
+struct WelcomeCard: View {
     @ObservedObject var browser: Browser
     @ObservedObject var prefs: Preferences
+    let finish: () -> Void
 
-    private enum Step { case bring, hold, links }
+    enum Step: CaseIterable { case bring, theme, search, apps, ads, layout, ai, links, start }
 
-    @State private var steps: [Step] = []
     @State private var index = 0
-    @State private var shown = false
-    @State private var leaving = false
+    @State private var apps: Set<String> = []
+    @State private var isDefault = AppDelegate.isDefault
+    @State private var forward = true
+    @ObservedObject private var drafts = ThemeDrafts.shared
+    private var assistant: Assistant { .shared }
 
-    // Import state. `source` stays nil until picked (nil means the first
-    // installed browser) so the filesystem scan runs once.
-    @State private var sources: [ChromiumImporter.Source] = []
-    @State private var source: ChromiumImporter.Source?
-    @State private var wantsPasswords = true
-    @State private var wantsHistory = true
-    @State private var wantsBookmarks = true
-    /// Zen's default profile, when Zen is on this Mac: its spaces and tabs.
-    @State private var zen: ZenImporter.Profile?
-    @State private var wantsZen = true
-    @State private var bringing = false
-    @State private var brought: Brought?
+    private var step: Step { Step.allCases[index] }
+    @Environment(\.colorScheme) private var scheme
+    @Environment(\.displayScale) private var displayScale
 
-    /// Asked when it shows, not each time it's made: it asks Launch Services.
-    @State private var isDefault = false
-    @State private var asked = false
+    /// The accent as text: lifted toward white in the dark, so a deep colour still reads.
+    private var ink: Color {
+        guard scheme == .dark else { return accent }
+        if #available(macOS 15, *) { return accent.mix(with: .white, by: 0.5) }
+        return accent.opacity(0.9)
+    }
 
-    private var step: Step? { steps.indices.contains(index) ? steps[index] : nil }
+    /// The space's first colour, as it's picked; Mote's ink before there is one.
+    private var accent: Color { picked ?? Palette.ink }
+
+    private var picked: Color? {
+        let theme = drafts.bySpace[browser.spaceID] ?? browser.spaces.first { $0.id == browser.spaceID }?.theme
+        return theme?.colors.first.flatMap(Color.init(hex:))
+    }
+
+    /// The card is laid out this wide and scaled to fit, so every part of it
+    /// grows with the window it's the size of.
+    private static let designWidth: CGFloat = 1000
 
     var body: some View {
-        content.onAppear { isDefault = AppDelegate.isDefault }
-    }
-
-    private var content: some View {
-        ZStack {
-            Color.black.opacity(shown && !leaving ? 0.16 : 0)
-                .ignoresSafeArea()
-                .allowsHitTesting(!leaving)
-
-            if shown, !leaving, let step {
-                card(step)
-                    .transition(
-                        .asymmetric(
-                            insertion: .offset(y: 28).combined(with: .scale(scale: 0.94)).combined(with: .opacity),
-                            removal: .scale(scale: 0.96).combined(with: .opacity)))
+        GeometryReader { room in
+            let scale = max(room.size.width / Self.designWidth, 0.01)
+            HStack(spacing: 0) {
+                side.frame(width: 380)
+                stage.frame(maxWidth: .infinity, maxHeight: .infinity).background(Palette.wash)
             }
+            .background(Palette.ground)
+            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .frame(width: Self.designWidth, height: room.size.height / scale)
+            // Drawn at the scale it's shown at, so text and edges stay sharp.
+            .environment(\.displayScale, displayScale * scale)
+            .scaleEffect(scale, anchor: .topLeading)
         }
-        .animation(.spring(response: 0.5, dampingFraction: 0.8), value: shown)
-        .animation(.easeIn(duration: 0.25), value: leaving)
-        .task { await begin() }
+        .shadow(color: .black.opacity(0.18), radius: 40, y: 14)
+        .animation(.spring(response: 0.45, dampingFraction: 0.86), value: index)
     }
 
-    // MARK: - The card
+    // MARK: - The left pane
 
-    private func card(_ step: Step) -> some View {
-        VStack(alignment: .leading, spacing: 22) {
-            if steps.count > 1 { dots }
-            Group {
-                switch step {
-                case .bring: bring
-                case .hold: hold
-                case .links: links
-                }
+    private var side: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Button {
+                forward = false
+                index -= 1
+            } label: {
+                Label("Back", systemImage: "arrow.left").font(.system(size: 13.5, weight: .medium)).foregroundStyle(ink)
+            }
+            .buttonStyle(.plain)
+            .opacity(index > 0 ? 1 : 0)
+            .disabled(index == 0)
+            .padding(.bottom, 22)
+
+            VStack(alignment: .leading, spacing: 16) {
+                Text(title).font(.system(size: 34, weight: .bold)).foregroundStyle(Palette.ink).fixedSize(horizontal: false, vertical: true)
+                Text(line).font(.system(size: 14.5)).foregroundStyle(Palette.muted).lineSpacing(3)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             .id(step)
             .transition(.blurReplace)
+
+            Spacer(minLength: 24)
+
+            Button(action: next) {
+                Text(step == .start ? "Start Browsing" : "Next")
+                    .font(.system(size: 14.5, weight: .semibold))
+                    // On a picked colour, white; on Mote's ink, the ground.
+                    .foregroundStyle(picked == nil ? Palette.ground : .white)
+                    .frame(maxWidth: .infinity, minHeight: 46)
+                    .background(accent, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .keyboardShortcut(.defaultAction)
+            Button("Skip for now") { skip() }
+                .buttonStyle(.plain)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(ink)
+                .frame(maxWidth: .infinity)
+                .padding(.top, 14)
+                .opacity(optional ? 1 : 0)
+                .disabled(!optional)
         }
-        .padding(28)
-        .frame(width: 440, alignment: .leading)
-        .welcomeGlass()
-        .shadow(color: .black.opacity(0.12), radius: 30, y: 12)
-        .animation(.spring(response: 0.45, dampingFraction: 0.86), value: step)
-        .animation(.spring(response: 0.45, dampingFraction: 0.86), value: brought)
+        .padding(EdgeInsets(top: 44, leading: 44, bottom: 40, trailing: 40))
     }
 
-    private var dots: some View {
-        HStack(spacing: 5) {
-            ForEach(steps.indices, id: \.self) { i in
-                Capsule()
-                    .fill(i == index ? Palette.ink : Palette.faint)
-                    .frame(width: i == index ? 16 : 5, height: 5)
-            }
-        }
-        .animation(Motion.glide, value: index)
-    }
+    private var optional: Bool { [.bring, .apps, .ai].contains(step) }
 
-    private var bring: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            heading("Bring your things over", "Nothing in \(fromNames) changes.")
-
-            if sources.count > 1 {
-                Segmented(
-                    options: sources.map { ($0, $0.name) },
-                    selection: Binding(get: { chosen ?? sources[0] }, set: { source = $0 }))
-            }
-
-            if let brought {
-                HStack(spacing: 18) {
-                    if let n = brought.spaces { Tally(value: n, label: "spaces") }
-                    if let n = brought.tabs { Tally(value: n, label: "tabs") }
-                    if let n = brought.bookmarks { Tally(value: n, label: "bookmarks") }
-                    if let n = brought.places { Tally(value: n, label: "places") }
-                    if let n = brought.passwords { Tally(value: n, label: "passwords") }
-                }
-                if let trouble = brought.trouble {
-                    Text(trouble).font(.system(size: 12)).foregroundStyle(Palette.muted)
-                }
-            } else {
-                VStack(alignment: .leading, spacing: 12) {
-                    if zen != nil {
-                        Choice("Spaces and tabs from Zen", "Essentials, pinned and open tabs, each in its space", on: $wantsZen)
-                    }
-                    if !sources.isEmpty {
-                        Choice("Bookmarks", on: $wantsBookmarks)
-                        Choice("History", on: $wantsHistory)
-                        Choice("Passwords", "macOS asks once for its keychain key", on: $wantsPasswords)
-                    }
-                }
-            }
-
-            HStack(spacing: 10) {
-                if brought == nil {
-                    Big(bringing ? "Bringing…" : "Bring them over", filled: true) { bringAll() }
-                        .disabled(
-                            bringing || !(wantsZen && zen != nil || !sources.isEmpty && (wantsPasswords || wantsHistory || wantsBookmarks)))
-                    if bringing { Ring(size: 10) }
-                    Spacer()
-                    if !bringing { Quiet("Not now") { next() } }
-                } else {
-                    Big("Continue", filled: true) { next() }
-                }
-            }
+    private var title: String {
+        switch step {
+        case .bring: "Bring your stuff along."
+        case .theme: "Your space, your colours."
+        case .search: "Pick your search engine."
+        case .apps: "Choose the apps you use most."
+        case .ads: "Browse without the clutter."
+        case .layout: "Tabs on top, or down the side."
+        case .ai: "Ask anything, your way."
+        case .links: "Open links here."
+        case .start: "You're all set."
         }
     }
 
-    private var hold: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            heading("Tabs on top, or down the side", "The window changes as you pick. ⇧⌘S switches any time.")
-            TabLayoutChoice(prefs: prefs)
-            HStack {
-                Spacer()
-                Big("Continue", filled: true) { next() }
-            }
+    private var line: String {
+        switch step {
+        case .bring: "Import your bookmarks, history and passwords from another browser and pick up right where you left off."
+        case .theme: "Give each space colours of its own. Watch them fill the screen as you pick."
+        case .search: "Where your searches go. You can always change it later."
+        case .apps: "They stay at the top of your sidebar as essentials, one click away."
+        case .ads: "Mote can block ads and trackers on every site. Any site can be let off later."
+        case .layout: "Pick what feels right. ⇧⌘S switches any time."
+        case .ai: "Choose who answers when you ask: an app on this Mac, or a service with your key."
+        case .links: "A click in Mail, Slack or a PDF goes to your default browser. It can be Mote."
+        case .start: "Everything here can be changed in Settings whenever you like."
         }
     }
 
-    private var links: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            heading(
-                "Open links here",
-                "A click in Mail, Slack or a PDF goes to your default browser. It can be this one.")
-            HStack(spacing: 10) {
-                if isDefault {
-                    HStack(spacing: 8) {
-                        Image(systemName: "checkmark.circle.fill")
-                            .symbolEffect(.bounce, value: isDefault)
-                        Text("Mote is your default browser")
-                    }
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(Palette.ink)
-                    .transition(.blurReplace)
-                } else {
-                    Big("Make Mote the default", filled: true) {
-                        asked = true
-                        AppDelegate.becomeDefault { _ in
-                            isDefault = AppDelegate.isDefault
-                            if isDefault { later(1.1) { next() } }
+    // MARK: - The right pane
+
+    private var stage: some View {
+        ZStack {
+            Group {
+                switch step {
+                case .bring: framed { ImportForm(browser: browser).frame(width: 400) }
+                case .theme: framed { ThemeEditor(browser: browser, space: browser.spaceID, embedded: true) }
+                case .search: engines
+                case .apps: appGrid
+                case .ads: adChoices
+                case .layout: TabLayoutChoice(prefs: prefs).frame(maxWidth: 460)
+                case .ai: providers
+                case .links: defaultBrowser
+                case .start: summary
+                }
+            }
+            .id(step)
+            .transition(.asymmetric(insertion: .offset(x: forward ? 40 : -40).combined(with: .opacity), removal: .opacity))
+        }
+        .padding(40)
+    }
+
+    private func framed<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+        content()
+            .padding(20)
+            .background(Palette.ground, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .shadow(color: .black.opacity(0.08), radius: 18, y: 6)
+    }
+
+    private var engines: some View {
+        VStack(spacing: 14) {
+            ForEach([SearchEngine.google, .duckduckgo, .bing, .kagi], id: \.self) { engine in
+                let on = prefs.engine == engine
+                Button {
+                    prefs.engine = engine
+                } label: {
+                    HStack(spacing: 0) {
+                        HStack(spacing: 12) {
+                            Circle()
+                                .strokeBorder(on ? accent : Palette.faint, lineWidth: on ? 5 : 1.5)
+                                .frame(width: 20, height: 20)
+                            Text(engine.title).font(.system(size: 15, weight: .semibold)).foregroundStyle(on ? accent : Palette.ink)
+                            Spacer()
                         }
+                        .padding(.horizontal, 18)
+                        SiteMark(host: Self.engineHosts[engine] ?? "", tint: accent, size: 28)
+                            .frame(width: 84, height: 72)
+                            .background(Palette.wash)
                     }
-                    Spacer()
-                    Quiet(asked ? "Keep as is" : "Not now") { next() }
+                    .frame(width: 300, height: 72)
+                    .background(Palette.ground)
+                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(on ? accent : .clear, lineWidth: 1.5))
+                    .shadow(color: .black.opacity(0.07), radius: 10, y: 4)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
+    private static let engineHosts: [SearchEngine: String] = [
+        .google: "google.com", .duckduckgo: "duckduckgo.com", .bing: "bing.com", .kagi: "kagi.com",
+    ]
+
+    private static let appList: [(url: String, name: String, color: String)] = [
+        ("https://obsidian.md", "Obsidian", "#7c3aed"), ("https://discord.com", "Discord", "#5865f2"),
+        ("https://trello.com", "Trello", "#0052cc"), ("https://slack.com", "Slack", "#e01e5a"),
+        ("https://github.com", "GitHub", "#57606a"), ("https://app.tuta.com/", "Tuta", "#c00002"),
+        ("https://notion.com", "Notion", "#37352f"), ("https://calendar.google.com", "Calendar", "#4285f4"),
+        ("https://figma.com", "Figma", "#f24e1e"),
+    ]
+
+    private var appGrid: some View {
+        framed {
+            LazyVGrid(columns: Array(repeating: GridItem(.fixed(104), spacing: 14), count: 3), spacing: 14) {
+                ForEach(Self.appList, id: \.url) { app in
+                    let on = apps.contains(app.url)
+                    Button {
+                        if on { apps.remove(app.url) } else { apps.insert(app.url) }
+                    } label: {
+                        SiteMark(host: URL(string: app.url)?.host() ?? "", tint: Color(hex: app.color) ?? accent, size: 40)
+                            .frame(width: 104, height: 104)
+                            .background(on ? accent.opacity(0.12) : Palette.wash, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                            .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(on ? accent : .clear, lineWidth: 2))
+                            .overlay(alignment: .topTrailing) {
+                                if on {
+                                    Image(systemName: "checkmark.circle.fill").font(.system(size: 18)).foregroundStyle(accent).padding(8)
+                                        .transition(.scale.combined(with: .opacity))
+                                }
+                            }
+                            .scaleEffect(on ? 0.96 : 1)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .help(app.name)
+                    .animation(Motion.press, value: on)
                 }
             }
-            .animation(Motion.settle, value: isDefault)
         }
+    }
+
+    private var adChoices: some View {
+        VStack(spacing: 14) {
+            choice(
+                "Block ads and trackers", "Pages load faster and follow you less", symbol: "shield.lefthalf.filled", on: prefs.shielded
+            ) { prefs.shielded = true }
+            choice("Show pages as they come", "Nothing blocked", symbol: "shield.slash", on: !prefs.shielded) { prefs.shielded = false }
+        }
+    }
+
+    private var providers: some View {
+        let list = Provider.all.filter { $0.kind != .agent } + Provider.all.filter { $0.kind == .agent }
+        return ScrollView(showsIndicators: false) {
+            VStack(spacing: 10) {
+                ForEach(list.prefix(8), id: \.id) { provider in
+                    choice(
+                        provider.name, provider.kind == .cloud ? "With your API key, added in Settings › AI" : "On this Mac",
+                        symbol: provider.kind == .cloud ? "cloud" : "desktopcomputer", on: assistant.providerID == provider.id
+                    ) { assistant.providerID = provider.id }
+                }
+            }
+            .padding(.vertical, 4)
+        }
+        .frame(maxHeight: 460)
+    }
+
+    private var defaultBrowser: some View {
+        VStack(spacing: 18) {
+            Image(systemName: isDefault ? "checkmark.seal.fill" : "link")
+                .font(.system(size: 44, weight: .medium))
+                .foregroundStyle(accent)
+                .symbolEffect(.bounce, value: isDefault)
+            if isDefault {
+                Text("Mote is your default browser").font(.system(size: 15, weight: .semibold)).foregroundStyle(Palette.ink)
+            } else {
+                Button {
+                    AppDelegate.becomeDefault { _ in isDefault = AppDelegate.isDefault }
+                } label: {
+                    Text("Make Mote the Default").font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(picked == nil ? Palette.ground : .white)
+                        .padding(.horizontal, 22).frame(height: 42)
+                        .background(accent, in: Capsule())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .animation(Motion.settle, value: isDefault)
+    }
+
+    private var summary: some View {
+        framed {
+            VStack(alignment: .leading, spacing: 14) {
+                fact("magnifyingglass", "Searching with \(prefs.engine.title)")
+                fact(prefs.sidebar ? "sidebar.left" : "rectangle.topthird.inset.filled", prefs.sidebar ? "Tabs down the side" : "Tabs on top")
+                fact(prefs.shielded ? "shield.lefthalf.filled" : "shield.slash", prefs.shielded ? "Ads and trackers blocked" : "Nothing blocked")
+                fact("sparkles", "Asking \(assistant.provider.name)")
+                if browser.essentialCount > 0 { fact("square.grid.3x3", "\(browser.essentialCount) essentials") }
+            }
+            .frame(width: 300, alignment: .leading)
+        }
+    }
+
+    private func fact(_ symbol: String, _ text: String) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: symbol).font(.system(size: 14, weight: .medium)).foregroundStyle(accent).frame(width: 22)
+            Text(text).font(.system(size: 14)).foregroundStyle(Palette.ink)
+        }
+    }
+
+    private func choice(_ title: String, _ detail: String, symbol: String, on: Bool, pick: @escaping () -> Void) -> some View {
+        Button(action: pick) {
+            HStack(spacing: 14) {
+                Image(systemName: symbol).font(.system(size: 17, weight: .medium)).foregroundStyle(on ? accent : Palette.muted).frame(width: 26)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title).font(.system(size: 14.5, weight: .semibold)).foregroundStyle(Palette.ink)
+                    Text(detail).font(.system(size: 12)).foregroundStyle(Palette.muted)
+                }
+                Spacer()
+                Circle().strokeBorder(on ? accent : Palette.faint, lineWidth: on ? 5 : 1.5).frame(width: 20, height: 20)
+            }
+            .padding(.horizontal, 18)
+            .frame(width: 360, height: 66)
+            .background(Palette.ground, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(on ? accent : .clear, lineWidth: 1.5))
+            .shadow(color: .black.opacity(0.07), radius: 10, y: 4)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: - Flow
 
-    private func begin() async {
-        sources = ChromiumImporter.installed()
-        zen = ZenImporter.profiles().first
-        steps = [sources.isEmpty && zen == nil ? nil : .bring, .hold, isDefault ? nil : .links].compactMap { $0 }
-        // Let the window settle in after the arrival before the card rises.
-        try? await Task.sleep(for: .seconds(0.35))
-        shown = true
-    }
-
     private func next() {
-        guard index + 1 < steps.count else { return finish() }
+        if step == .apps { addApps() }
+        guard index + 1 < Step.allCases.count else { return finish() }
+        forward = true
         index += 1
     }
 
-    /// The card dissolves and the address field takes focus.
-    private func finish() {
-        leaving = true
-        later(0.25) { browser.finishWelcome() }
+    private func skip() {
+        if step == .apps { apps = [] }
+        forward = true
+        index += 1
     }
 
-    private func later(_ seconds: Double, _ act: @escaping () -> Void) {
-        Task {
-            try? await Task.sleep(for: .seconds(seconds))
-            act()
+    private func addApps() {
+        for app in Self.appList where apps.contains(app.url) {
+            guard let url = URL(string: app.url), !browser.tabs.contains(where: { $0.home == url || $0.address == url }) else { continue }
+            browser.pin(browser.open(url, foreground: false, atEnd: true))
         }
-    }
-
-    // MARK: - Import
-
-    private var chosen: ChromiumImporter.Source? { source ?? sources.first }
-
-    /// The browsers things come from, for "Nothing in … changes".
-    private var fromNames: String {
-        [chosen?.name, zen.map { _ in "Zen" }].compactMap { $0 }.joined(separator: " or ")
-    }
-
-    private struct Brought: Equatable {
-        var spaces: Int?
-        var tabs: Int?
-        var bookmarks: Int?
-        var places: Int?
-        var passwords: Int?
-        var trouble: String?
-    }
-
-    private func bringAll() {
-        bringing = true
-        Task {
-            var result = Brought()
-            if wantsZen, let zen {
-                if let plan = try? ZenImporter.plan(for: zen) {
-                    let made = browser.importZen(plan)
-                    result.spaces = made.spaces
-                    result.tabs = made.tabs
-                } else {
-                    result.trouble = "Zen's saved tabs couldn't be read. Settings › General can try again."
-                }
-            }
-            guard let source = chosen else {
-                bringing = false
-                brought = result
-                return
-            }
-            if wantsBookmarks { result.bookmarks = browser.takeBookmarks(from: source) }
-            if wantsHistory { result.places = await browser.takePlaces(from: source) }
-            if wantsPasswords {
-                switch await browser.logins.bring(from: source) {
-                case .success(let n): result.passwords = n
-                case .failure(.locked): result.trouble = "Passwords: macOS didn't hand over the key. Settings › Passwords can try again."
-                case .failure(.unreadable): result.trouble = "Passwords: nothing readable."
-                }
-            }
-            bringing = false
-            brought = result
-        }
-    }
-
-    private func heading(_ title: String, _ line: String) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(title)
-                .font(.system(size: 22, weight: .semibold))
-                .foregroundStyle(Palette.ink)
-            Text(line)
-                .font(.system(size: 13.5))
-                .foregroundStyle(Palette.muted)
-                .lineSpacing(2)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-    }
-
-    // MARK: - Components
-
-    private struct Big: View {
-        let title: String
-        var filled = false
-        let act: () -> Void
-        @State private var hovering = false
-
-        init(_ title: String, filled: Bool = false, act: @escaping () -> Void) {
-            self.title = title
-            self.filled = filled
-            self.act = act
-        }
-
-        var body: some View {
-            Button(action: act) {
-                Text(title)
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(filled ? Palette.ground : Palette.ink)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 9)
-                    .background(filled ? Palette.ink : (hovering ? Palette.hover : Palette.wash), in: Capsule())
-                    .scaleEffect(hovering ? 1.03 : 1)
-                    .contentShape(Capsule())
-            }
-            .buttonStyle(.plain)
-            .onHover { hovering = $0 }
-            .animation(Motion.press, value: hovering)
-        }
-    }
-
-    /// The secondary way on: plain text.
-    private struct Quiet: View {
-        let title: String
-        let act: () -> Void
-        init(_ title: String, act: @escaping () -> Void) {
-            self.title = title
-            self.act = act
-        }
-        var body: some View {
-            Button(title, action: act)
-                .buttonStyle(.plain)
-                .font(.system(size: 13))
-                .foregroundStyle(Palette.muted)
-        }
-    }
-
-    private struct Choice: View {
-        let title: String
-        let detail: String?
-        @Binding var on: Bool
-
-        init(_ title: String, _ detail: String? = nil, on: Binding<Bool>) {
-            self.title = title
-            self.detail = detail
-            _on = on
-        }
-
-        var body: some View {
-            HStack(spacing: 12) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title).font(.system(size: 13.5)).foregroundStyle(Palette.ink)
-                    if let detail {
-                        Text(detail).font(.system(size: 11.5)).foregroundStyle(Palette.muted)
-                    }
-                }
-                Spacer()
-                Switch(on: $on)
-            }
-        }
-    }
-
-    /// A number that counts up to `value` when it appears.
-    private struct Tally: View {
-        let value: Int
-        let label: String
-        @State private var shown = 0.0
-
-        var body: some View {
-            VStack(alignment: .leading, spacing: 2) {
-                Count(value: shown)
-                    .font(.system(size: 26, weight: .semibold).monospacedDigit())
-                    .foregroundStyle(Palette.ink)
-                Text(label).font(.system(size: 12)).foregroundStyle(Palette.muted)
-            }
-            .onAppear { withAnimation(.easeOut(duration: 1.2)) { shown = Double(value) } }
-        }
-
-        private struct Count: View, Animatable {
-            var value: Double
-            var animatableData: Double {
-                get { value }
-                set { value = newValue }
-            }
-            var body: some View { Text(Int(value.rounded()), format: .number) }
-        }
+        apps = []
     }
 }
 
-extension View {
-    /// Liquid Glass where the system has it, a material elsewhere.
-    @ViewBuilder
-    fileprivate func welcomeGlass() -> some View {
-        if #available(macOS 26, *) {
-            glassEffect(.regular, in: .rect(cornerRadius: 26))
-        } else {
-            background(.regularMaterial, in: RoundedRectangle(cornerRadius: 26, style: .continuous))
+/// A site's own icon (its touch icon, which most sites have), or its initial
+/// on its colour while that loads or when there's none.
+private struct SiteMark: View {
+    let host: String
+    let tint: Color
+    let size: CGFloat
+    @State private var icon: NSImage?
+
+    var body: some View {
+        Group {
+            if let icon {
+                Image(nsImage: icon).resizable().interpolation(.high).scaledToFit()
+                    .clipShape(RoundedRectangle(cornerRadius: size * 0.22, style: .continuous))
+                    .transition(.opacity)
+            } else {
+                Text(host.split(separator: ".").first.map { String($0.prefix(1)).uppercased() } ?? "?")
+                    .font(.system(size: size * 0.55, weight: .bold, design: .rounded))
+                    .foregroundStyle(.white)
+                    .frame(width: size, height: size)
+                    .background(tint.gradient, in: RoundedRectangle(cornerRadius: size * 0.22, style: .continuous))
+            }
         }
+        .frame(width: size, height: size)
+        .animation(.easeOut(duration: 0.25), value: icon != nil)
+        .task(id: host) { icon = await Self.load(host) }
+    }
+
+    /// The site's touch icon, else a large favicon from either service that
+    /// keeps them; the first that's a real picture of some size.
+    private static func load(_ host: String) async -> NSImage? {
+        let sources = [
+            "https://\(host)/apple-touch-icon.png", "https://www.google.com/s2/favicons?domain=\(host)&sz=128",
+            "https://icons.duckduckgo.com/ip3/\(host).ico",
+        ]
+        for source in sources {
+            guard let url = URL(string: source), let (data, response) = try? await URLSession.shared.data(from: url),
+                (response as? HTTPURLResponse)?.statusCode == 200, let image = NSImage(data: data), image.size.width >= 32
+            else { continue }
+            return image
+        }
+        return nil
+    }
+}
+
+/// The welcome inside the window, when there's no arrival (Reduce Motion,
+/// or macOS before 15): the same card, over the dimmed window.
+struct WelcomeInWindow: View {
+    @ObservedObject var browser: Browser
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.28).ignoresSafeArea()
+            WelcomeCard(browser: browser, prefs: browser.prefs) { browser.finishWelcome() }
+                .padding(48)
+                .frame(maxWidth: 1100, maxHeight: 720)
+        }
+        .transition(.opacity)
     }
 }

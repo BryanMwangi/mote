@@ -3,7 +3,7 @@ import Combine
 import MoteCore
 import SwiftUI
 
-/// The space's colours behind the window's frame, as Zen's space themes: a
+/// The space's colours behind the window's frame: a
 /// gradient across it, as strong as the theme says, with an optional grain.
 /// A switch of space fades from one to the next.
 struct SpaceGround: View {
@@ -50,7 +50,7 @@ struct SpaceGround: View {
 }
 
 /// The space's own colour, which the chrome's lifted surfaces take a wash
-/// of, as Zen's do: the tab in front, the address, the media strip, the
+/// of: the tab in front, the address, the media strip, the
 /// essentials. Nil without a theme.
 private struct SpaceTint: EnvironmentKey {
     static let defaultValue: Color? = nil
@@ -87,22 +87,24 @@ extension Color {
     }
 }
 
-/// Theme…, from a space's menu, as Zen's picker in a frosted panel beside
-/// the sidebar: light, dark or Mote's own look; a field where a click adds a
-/// colour (up to three) and dots drag, their angle the hue and their reach
+/// Theme…, from a space's menu: light, dark or Mote's own look; a field where a
+/// click adds a colour (up to three) and dots drag, their angle the hue and their reach
 /// the lightness; harmonies; swatches; a wave for strength and a dial for
 /// grain. Every change shows at once, and is kept when a drag ends.
 struct ThemeEditor: View {
     @ObservedObject var browser: Browser
     let space: UUID
+    /// Inside the welcome: no close button, and nothing to drag.
+    var embedded = false
 
     @ObservedObject private var drafts = ThemeDrafts.shared
     @State private var harmony: ThemeColors.Harmony?
     @State private var page = 0
 
-    init(browser: Browser, space: UUID) {
+    init(browser: Browser, space: UUID, embedded: Bool = false) {
         self.browser = browser
         self.space = space
+        self.embedded = embedded
     }
 
     private var theme: SpaceTheme? { drafts.bySpace[space] ?? browser.spaces.first { $0.id == space }?.theme }
@@ -111,7 +113,7 @@ struct ThemeEditor: View {
     var body: some View {
         VStack(spacing: 14) {
             HStack(spacing: 6) {
-                Door(icon: "xmark", help: "Close") { browser.themingSpace = nil }
+                if !embedded { Door(icon: "xmark", help: "Close") { browser.themingSpace = nil } }
                 Spacer()
                 scheme(nil, "sparkles", "Mote's look")
                 scheme(.light, "sun.max", "Light")
@@ -123,7 +125,7 @@ struct ThemeEditor: View {
                     set(swatch.colors, saving: true) { $0.colors = $1 }
                 }
             }
-            .background(DragHandle())
+            .background { if !embedded { DragHandle() } }
             ThemeField(colors: colors, harmony: harmony) { set($0, saving: $1) { $0.colors = $1 } }
             HStack(spacing: 22) {
                 Door(icon: "plus", help: "Add a colour") { addDot() }.disabled(colors.isEmpty || colors.count >= 3)
@@ -258,8 +260,8 @@ struct ThemeField: View {
                             })
             }
         }
-        // Set by a swatch, shuffle or harmony, the dots spring to their places,
-        // as Zen's do; dragged, they keep to the pointer.
+        // Set by a swatch, shuffle or harmony, the dots spring to their places; dragged,
+        // they keep to the pointer.
         .animation(dragging ? nil : .spring(response: 0.5, dampingFraction: 0.58), value: colors)
         .frame(width: side, height: side)
         .coordinateSpace(name: "field")
@@ -295,7 +297,7 @@ struct ThemeField: View {
     }
 }
 
-/// Strength as a wave, as Zen's: the stronger, the higher it swings.
+/// Strength as a wave: the stronger, the higher it swings.
 private struct WaveSlider: View {
     let value: Double
     /// The new value, and whether the drag is done.
@@ -305,10 +307,10 @@ private struct WaveSlider: View {
         GeometryReader { proxy in
             let width = proxy.size.width
             ZStack(alignment: .leading) {
-                Capsule().fill(.white.opacity(0.08)).frame(height: 14)
-                Wave(amplitude: 4 + value * 12).stroke(.white.opacity(0.25), style: StrokeStyle(lineWidth: 5, lineCap: .round))
+                Capsule().fill(Palette.ink.opacity(0.08)).frame(height: 14)
+                Wave(amplitude: 4 + value * 12).stroke(Palette.ink.opacity(0.25), style: StrokeStyle(lineWidth: 5, lineCap: .round))
                 Wave(amplitude: 4 + value * 12).trim(from: 0, to: value)
-                    .stroke(.white.opacity(0.8), style: StrokeStyle(lineWidth: 5, lineCap: .round))
+                    .stroke(Palette.ink.opacity(0.8), style: StrokeStyle(lineWidth: 5, lineCap: .round))
             }
             .contentShape(Rectangle())
             .gesture(
@@ -351,11 +353,11 @@ private struct GrainDial: View {
     var body: some View {
         ZStack {
             ForEach(0..<12, id: \.self) { tick in
-                Circle().fill(.white.opacity(Double(tick) / 11 <= value ? 0.7 : 0.2)).frame(width: 3, height: 3)
+                Circle().fill(Palette.ink.opacity(Double(tick) / 11 <= value ? 0.7 : 0.2)).frame(width: 3, height: 3)
                     .offset(y: -30).rotationEffect(.degrees(-135 + Double(tick) * 270 / 11))
             }
-            Circle().fill(.black.opacity(0.35)).frame(width: 44, height: 44)
-            Capsule().fill(.white.opacity(0.85)).frame(width: 3, height: 9).offset(y: -15).rotationEffect(.degrees(-135 + value * 270))
+            Circle().fill(Palette.ink.opacity(0.12)).frame(width: 44, height: 44)
+            Capsule().fill(Palette.ink.opacity(0.85)).frame(width: 3, height: 9).offset(y: -15).rotationEffect(.degrees(-135 + value * 270))
         }
         .frame(width: 68, height: 68)
         .contentShape(Circle())

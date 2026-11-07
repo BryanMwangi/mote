@@ -70,7 +70,7 @@ struct ContentView: View {
                     at: NSPoint(x: window.frame.maxX - 296, y: window.frame.maxY - 56)
                 ) { if browser.boosting == site { browser.boosting = nil } }
             }
-            // Theme…: a frosted panel beside the sidebar, as Zen's.
+            // Theme…: a frosted panel beside the sidebar.
             .onChange(of: browser.themingSpace) { _, space in
                 guard let space, let window else { return FrostedPanel.close("theme") }
                 let prefs = browser.prefs
@@ -129,7 +129,7 @@ struct ContentView: View {
             }
         }
         if browser.welcoming, !browser.arriving {
-            WelcomePanel(browser: browser, prefs: browser.prefs).ignoresSafeArea()
+            WelcomeInWindow(browser: browser)
         }
         if browser.importing {
             Sheet(close: { browser.importing = false }) { ImportPanel(browser: browser) }
@@ -154,7 +154,7 @@ struct ContentView: View {
     /// The arrival, when the welcome starts (see Arrival.swift).
     private func arrive() {
         guard browser.welcoming, !browser.arriving, let window, #available(macOS 15, *) else { return }
-        browser.arriving = Arrival.play(over: window) { browser.arriving = false }
+        browser.arriving = Arrival.play(over: window, setup: browser) { browser.arriving = false }
     }
 }
 

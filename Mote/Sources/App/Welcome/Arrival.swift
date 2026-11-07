@@ -1,5 +1,6 @@
 import AppKit
 import Combine
+import MoteCore
 import SwiftUI
 
 /// The first-launch arrival: the screen dims, a speck grows into the pebble,
@@ -13,17 +14,22 @@ import SwiftUI
 @MainActor
 final class Arrival: ObservableObject {
     enum Stage: Int, Comparable {
-        case dark, dimmed, speck, pebble, named, quiet, opening, gone
+        /// `setup`: the welcome card over the space's colours, for as long as it takes.
+        case dark, dimmed, speck, pebble, named, setup, quiet, opening, gone
         static func < (a: Stage, b: Stage) -> Bool { a.rawValue < b.rawValue }
     }
 
     @Published private(set) var stage = Stage.dark
     /// The browser window's frame in the overlay's SwiftUI coordinates.
     @Published private(set) var target = CGRect.zero
+    /// The welcome card going, before the colours shrink into the window.
+    @Published private(set) var leaving = false
 
     private static var playing: Arrival?
 
     private let browser: NSWindow
+    /// The browser to set up, for the welcome card; nil plays the arrival alone.
+    let setup: Browser?
     private var overlay: NSWindow?
     private var script: Task<Void, Never>?
     private var done: () -> Void = {}
@@ -32,23 +38,31 @@ final class Arrival: ObservableObject {
     /// Plays the arrival over `window`, then calls `done`. Returns false (and
     /// does nothing) when Reduce Motion is on or an arrival is already playing.
     @discardableResult
-    static func play(over window: NSWindow, done: @escaping () -> Void) -> Bool {
+    static func play(over window: NSWindow, setup: Browser? = nil, done: @escaping () -> Void) -> Bool {
         guard playing == nil, !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion,
             let screen = window.screen ?? NSScreen.main
         else { return false }
-        let arrival = Arrival(browser: window)
+        let arrival = Arrival(browser: window, setup: setup)
         playing = arrival
         arrival.done = done
         arrival.start(on: screen)
         return true
     }
 
-    private init(browser: NSWindow) { self.browser = browser }
+    private init(browser: NSWindow, setup: Browser?) {
+        self.browser = browser
+        self.setup = setup
+    }
+
+    /// Takes the keyboard, for the welcome card's fields.
+    private final class Curtain: NSWindow {
+        override var canBecomeKey: Bool { true }
+    }
 
     private func start(on screen: NSScreen) {
         browser.alphaValue = 0
 
-        let window = NSWindow(contentRect: screen.frame, styleMask: .borderless, backing: .buffered, defer: false)
+        let window = Curtain(contentRect: screen.frame, styleMask: .borderless, backing: .buffered, defer: false)
         window.isOpaque = false
         window.backgroundColor = .clear
         window.hasShadow = false
@@ -72,8 +86,11 @@ final class Arrival: ObservableObject {
         overlay = window
 
         keys = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard let self else { return event }
+            // While setting up, the card has the keys; Escape finishes it.
+            if self.stage == .setup { return event.keyCode == 53 ? (self.finishSetup(), nil).1 : event }
             guard event.keyCode == 53 || event.keyCode == 36 || event.keyCode == 49 else { return event }
-            self?.skip()
+            self.skip()
             return nil
         }
 
@@ -99,6 +116,7 @@ final class Arrival: ObservableObject {
         for (wait, stage, animation) in steps {
             try? await Task.sleep(for: .seconds(wait))
             if Task.isCancelled { return }
+            if stage == .quiet, setup != nil { return settle() }
             withAnimation(animation) { self.stage = stage }
         }
         try? await Task.sleep(for: .seconds(0.2))
@@ -107,10 +125,28 @@ final class Arrival: ObservableObject {
     }
 
     private func skip() {
-        guard stage < .opening else { return }
+        guard stage < .setup else { return }
         script?.cancel()
+        if setup != nil { return settle() }
         withAnimation(.easeIn(duration: 0.2)) { stage = .quiet }
         open()
+    }
+
+    /// The pebble to its corner and the card up, over the space's colours.
+    private func settle() {
+        overlay?.makeKey()
+        withAnimation(.spring(response: 0.8, dampingFraction: 0.86)) { stage = .setup }
+    }
+
+    /// The card's done: it dissolves, and the colours shrink into the window.
+    func finishSetup() {
+        guard stage == .setup, !leaving else { return }
+        setup?.finishWelcome()
+        withAnimation(.spring(response: 0.5, dampingFraction: 0.9)) { leaving = true }
+        Task {
+            try? await Task.sleep(for: .seconds(0.3))
+            open()
+        }
     }
 
     /// Stretches the pebble into the window, then swaps the real window in.
@@ -169,18 +205,36 @@ private struct ArrivalView: View {
     var body: some View {
         let stage = arrival.stage
         let target = arrival.target
-        let center = CGPoint(x: target.midX, y: target.midY)
+        let setup = arrival.setup
+        let settled = setup != nil && stage >= .setup
+        // Set up, the pebble waits small in the corner, and goes as the window opens.
+        let center = settled ? CGPoint(x: 52, y: 52) : CGPoint(x: target.midX, y: target.midY)
         let pebble: CGFloat =
             switch stage {
             case .dark, .dimmed: 0
             case .speck: 10
-            default: PebbleFill.size.width
+            default: settled ? 34 : PebbleFill.size.width
             }
         let opening = stage >= .opening
 
         ZStack {
             // The dim, over the blurred desktop.
             Color.black.opacity(stage >= .dimmed ? (opening ? 0.1 : 0.4) : 0)
+
+            // Setting up: the space's colours over everything, which shrink
+            // into the window at the end.
+            if let setup {
+                GeometryReader { room in
+                    SetupGround(browser: setup)
+                        .overlay { Palette.frame.opacity(opening ? 1 : 0).animation(.easeIn(duration: 0.3).delay(0.3), value: opening) }
+                        .frame(width: opening ? target.width : room.size.width, height: opening ? target.height : room.size.height)
+                        .clipShape(RoundedRectangle(cornerRadius: opening ? windowRadius : 0, style: .continuous))
+                        .position(
+                            x: opening ? target.midX : room.size.width / 2, y: opening ? target.midY : room.size.height / 2)
+                }
+                .opacity(settled ? 1 : 0)
+                .allowsHitTesting(false)
+            }
 
             // The pebble, which becomes the window. The lit pebble is scaled on
             // the same spring as the outline, so it always covers it; the
@@ -191,8 +245,8 @@ private struct ArrivalView: View {
                 PebbleFill()
                     .frame(width: PebbleFill.size.width * 1.5, height: PebbleFill.size.height * 1.5)
                     .scaleEffect(
-                        x: opening ? target.width / PebbleFill.size.width : 1,
-                        y: opening ? target.height / PebbleFill.size.height : 1
+                        x: opening && !settled ? target.width / PebbleFill.size.width : settled ? 34 / PebbleFill.size.width : 1,
+                        y: opening && !settled ? target.height / PebbleFill.size.height : settled ? 34 / PebbleFill.size.width : 1
                     )
                     .position(center)
                 Palette.frame.opacity(opening ? 1 : 0)
@@ -201,9 +255,22 @@ private struct ArrivalView: View {
             .clipShape(
                 PebbleMorph(
                     center: center, size: pebble, target: target.size, radius: windowRadius,
-                    progress: opening ? 1 : 0)
+                    progress: opening && !settled ? 1 : 0)
             )
-            .shadow(color: PebbleFill.glow.opacity(opening ? 0 : 0.55), radius: 60)
+            .shadow(color: PebbleFill.glow.opacity(opening ? 0 : settled ? 0.3 : 0.55), radius: settled ? 16 : 60)
+            .opacity(settled && opening ? 0 : 1)
+
+            // The welcome card, the size of the window it becomes.
+            if let setup, stage == .setup, !arrival.leaving {
+                WelcomeCard(browser: setup, prefs: setup.prefs) { arrival.finishSetup() }
+                    .padding(min(64, target.width * 0.05))
+                    .frame(width: target.width, height: target.height)
+                    .position(x: target.midX, y: target.midY)
+                    .transition(
+                        .asymmetric(
+                            insertion: .scale(scale: 0.94).combined(with: .opacity),
+                            removal: .scale(scale: 0.97).combined(with: .opacity)))
+            }
 
             // The name, under the pebble.
             VStack(spacing: 10) {
@@ -218,14 +285,43 @@ private struct ArrivalView: View {
                     .blur(radius: stage >= .named ? 0 : 6)
                     .animation(.easeOut(duration: 0.9).delay(0.6), value: stage >= .named)
             }
-            .opacity(stage >= .quiet ? 0 : 1)
-            .blur(radius: stage >= .quiet ? 10 : 0)
-            .scaleEffect(stage >= .quiet ? 0.96 : 1)
+            .opacity(stage >= .setup ? 0 : 1)
+            .blur(radius: stage >= .setup ? 10 : 0)
+            .scaleEffect(stage >= .setup ? 0.96 : 1)
             .position(x: center.x, y: center.y + 150)
         }
         .ignoresSafeArea()
         .contentShape(Rectangle())
-        .onTapGesture(perform: skip)
+        .onTapGesture { if arrival.stage < .setup { skip() } }
+    }
+}
+
+/// The space's colours as a slowly drifting mesh over the whole screen,
+/// following the theme as it's picked; the pebble's own before there are any.
+@available(macOS 15, *)
+private struct SetupGround: View {
+    @ObservedObject var browser: Browser
+    @ObservedObject private var drafts = ThemeDrafts.shared
+
+    private var colors: [Color] {
+        let theme = drafts.bySpace[browser.spaceID] ?? browser.spaces.first { $0.id == browser.spaceID }?.theme
+        let picked = (theme?.colors ?? []).compactMap(Color.init(hex:))
+        guard !picked.isEmpty else { return PebbleFill.palette }
+        let a = picked[0], b = picked.count > 1 ? picked[1] : picked[0], c = picked.count > 2 ? picked[2] : b
+        let light = Color.white
+        return [light.mix(with: a, by: 0.55), a, light.mix(with: b, by: 0.6), b, light.mix(with: a, by: 0.45), c, a, light.mix(with: c, by: 0.5), b]
+    }
+
+    var body: some View {
+        TimelineView(.animation) { timeline in
+            let t = timeline.date.timeIntervalSinceReferenceDate
+            let drift = SIMD2<Float>(Float(sin(t * 0.35)) * 0.16, Float(cos(t * 0.27)) * 0.14)
+            MeshGradient(
+                width: 3, height: 3,
+                points: [[0, 0], [0.5, 0], [1, 0], [0, 0.5], SIMD2(0.5, 0.5) + drift, [1, 0.5], [0, 1], [0.5, 1], [1, 1]],
+                colors: colors)
+        }
+        .animation(.easeInOut(duration: 0.6), value: colors)
     }
 }
 
@@ -239,6 +335,8 @@ struct PebbleFill: View {
     static let size = CGSize(width: 150, height: 150 * Logomark.canvas.height / Logomark.canvas.width)
 
     static let glow = Color(red: 0.96, green: 0.78, blue: 0.66)
+
+    static var palette: [Color] { colors }
 
     private static let colors: [Color] = [
         Color(red: 1.00, green: 0.95, blue: 0.90), Color(red: 0.98, green: 0.90, blue: 0.82),
