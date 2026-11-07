@@ -209,7 +209,13 @@ final class Preferences: ObservableObject {
         offersTranslation = store.value("pages.translate", or: true)
         neverTranslate = store.value("pages.translate.never", or: [])
         translateTo = store.value("pages.translate.to", or: "")
-        footButtons = store.value("sidebar.foot", or: FootButton.standard.map(\.rawValue))
+        var foot: [String] = store.value("sidebar.foot", or: FootButton.standard.map(\.rawValue))
+        // The profile's avatar, once, for sidebars set up before it was a button.
+        if !store.value("sidebar.foot.profile", or: false) {
+            if !foot.contains(FootButton.profile.rawValue) { foot.insert(FootButton.profile.rawValue, at: 0) }
+            Storage.settings.set(true, forKey: "sidebar.foot.profile")
+        }
+        footButtons = foot
         extensionStore = store.value("extensions.store", or: "chrome")
         shortcuts = store.value("keys.custom", or: Shortcuts())
         littleLinks = store.value("links.little", or: false)

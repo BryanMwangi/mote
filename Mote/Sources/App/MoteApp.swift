@@ -101,9 +101,13 @@ private struct MenuBar: Commands {
             Button("Passwords…") { browser.logins.managing = true }.keyboardShortcut(keys(.passwords))
             // Another profile, as its own Mote (see Profiles).
             Menu("Open Profile") {
-                Button("Default") { Profiles.shared.open(nil) }.disabled(Storage.profile == nil)
-                ForEach(Profiles.shared.list) { profile in
-                    Button(profile.name) { Profiles.shared.open(profile.id) }.disabled(Storage.profile == profile.id)
+                ForEach([nil] + Profiles.shared.list.map(\.id), id: \.self) { id in
+                    Button {
+                        Profiles.shared.open(id)
+                    } label: {
+                        Label { Text(Profiles.shared.name(of: id)) } icon: { Image(nsImage: Profiles.shared.image(of: id, size: 16)) }
+                    }
+                    .disabled(Storage.profile == id)
                 }
             }
         }

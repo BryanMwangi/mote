@@ -755,41 +755,79 @@ struct AboutSettings: View {
 }
 
 /// Profiles, as Firefox's: each its own Mote that shares nothing with the
-/// others. This one is marked; another opens as its own Mote.
+/// others. This one is marked; another opens as its own Mote. A click on
+/// an avatar changes it; another profile's row offers its Dock badge on hover.
 private struct ProfileRows: View {
     @ObservedObject private var profiles = Profiles.shared
+    /// The profile being made (`making`) or changed.
+    @State private var editing: Editing?
+
+    private struct Editing {
+        let id: String?
+        let making: Bool
+        var key: String { making ? "new" : id ?? "first" }
+    }
 
     var body: some View {
         SettingsSection(
-            "Profiles", note: "Each profile is its own Mote: its own tabs, history, passwords, sign-ins, extensions and settings."
+            "Profiles",
+            note: "Each profile is its own Mote: its own tabs, history, passwords, sign-ins and extensions. A new one starts with these settings."
         ) {
-            row(id: nil, name: "Default")
+            ProfileRow(id: nil, editing: { editing = Editing(id: nil, making: false) })
             ForEach(profiles.list) { profile in
                 RowRule()
-                row(id: profile.id, name: profile.name)
+                ProfileRow(id: profile.id, editing: { editing = Editing(id: profile.id, making: false) })
             }
             RowRule()
             HStack {
                 Spacer()
-                Pill("New Profile…") {
-                    Prompt.name("New Profile", placeholder: "Work", confirm: "Create") { profiles.add(named: $0) }
-                }
+                Pill("New Profile…") { editing = Editing(id: nil, making: true) }
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 9)
-            .settingsSearch(["New Profile", "profiles"])
+            .settingsSearch(["New Profile", "profiles", "avatar"])
+        }
+        .sheet(item: Binding(get: { editing.map(Keyed.init) }, set: { editing = $0?.editing })) { keyed in
+            ProfileEditor(id: keyed.editing.id, making: keyed.editing.making) { editing = nil }
         }
     }
 
-    private func row(id: String?, name: String) -> some View {
+    /// Identifiable by a string, for the sheet.
+    private struct Keyed: Identifiable {
+        let editing: Editing
+        var id: String { editing.key }
+    }
+}
+
+private struct ProfileRow: View {
+    let id: String?
+    let editing: () -> Void
+    @ObservedObject private var profiles = Profiles.shared
+    @State private var hovering = false
+
+    var body: some View {
         let here = id == Storage.profile
-        return SettingRow(name, here ? "This Mote" : nil, symbol: "person.crop.circle", tint: Tint.indigo, keywords: ["profile"]) {
+        let name = profiles.name(of: id)
+        HStack(spacing: 11) {
+            Button(action: editing) { ProfileAvatar(id: id, size: 24, squircle: true, profiles: profiles) }
+                .buttonStyle(.plain)
+                .help("Change the avatar")
+            VStack(alignment: .leading, spacing: 2) {
+                Text(name).font(.system(size: 13)).foregroundStyle(Palette.ink)
+                if here { Text("This Mote").font(.system(size: 11.5)).foregroundStyle(Palette.muted) }
+            }
+            Spacer(minLength: 12)
             HStack(spacing: 2) {
+                // Only another profile wears a badge; shown on hover, as Chrome's row tools.
+                if let id, hovering || !profiles.avatar(of: id).inDock {
+                    Toggle("Show in Dock", isOn: Binding(get: { profiles.avatar(of: id).inDock }, set: { profiles.showInDock(id, $0) }))
+                        .toggleStyle(.checkbox)
+                        .font(.system(size: 11.5))
+                        .help("Its avatar on Mote's Dock icon while it runs")
+                }
                 if !here { Pill("Open") { profiles.open(id) } }
                 if let id {
-                    Door(icon: "pencil", help: "Rename") {
-                        Prompt.name("Rename Profile", placeholder: name, initial: name, confirm: "Rename") { profiles.rename(id, to: $0) }
-                    }
+                    Door(icon: "pencil", help: "Edit") { editing() }
                     if !here {
                         Door(icon: "trash", help: "Delete") {
                             Prompt.confirm(
@@ -803,5 +841,10 @@ private struct ProfileRows: View {
                 }
             }
         }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .contentShape(Rectangle())
+        .onHover { hovering = $0 }
+        .settingsSearch([name, "profile", "Show in Dock"])
     }
 }

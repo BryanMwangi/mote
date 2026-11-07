@@ -1,10 +1,11 @@
 /// A button at the sidebar's foot, beside the spaces. Which show, and in
 /// what order, is the user's (Settings › Tabs, the plus menu, a right-click).
 public enum FootButton: String, Codable, CaseIterable, Sendable {
-    case chats, downloads, history, bookmarks, library, passwords, screenshot, newWindow, settings
+    case profile, chats, downloads, history, bookmarks, library, passwords, screenshot, newWindow, settings
 
     public var title: String {
         switch self {
+        case .profile: "Profile"
         case .chats: "Chats"
         case .downloads: "Downloads"
         case .history: "History"
@@ -18,7 +19,7 @@ public enum FootButton: String, Codable, CaseIterable, Sendable {
     }
 
     /// What a new sidebar has.
-    public static let standard: [FootButton] = [.chats, .library]
+    public static let standard: [FootButton] = [.profile, .chats, .library]
 
     /// The kept order, from how it's saved: unknown names dropped, each once.
     public static func read(_ saved: [String]?) -> [FootButton] {

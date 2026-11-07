@@ -258,7 +258,7 @@ extension Bench {
         if Storage.testing, request.flag("translatepanel") { NotificationCenter.default.post(name: TranslateButton.ask, object: nil) }
         // Profiles (test runs only, so their own Motes stay in the test world): new:NAME, delete:ID.
         if Storage.testing, let what = request.string("profile") {
-            if what.hasPrefix("new:") { Profiles.shared.add(named: String(what.dropFirst(4))) }
+            if what.hasPrefix("new:") { Profiles.shared.add(named: String(what.dropFirst(4)), avatar: .init(symbol: "briefcase.fill", color: "#26456b")) }
             if what.hasPrefix("delete:") { Profiles.shared.delete(String(what.dropFirst(7))) }
         }
         // The site in front's boost (test runs): dim (brightness 0.7, Georgia), or reset.
@@ -325,6 +325,18 @@ extension Bench {
                         } ?? "")
             }
             return call.answer(["items": AppMenu.make(for: browser).items.map(describe)])
+        }
+        // The Dock icon as it is now, to a PNG.
+        if Storage.testing, let asked = request.string("dockicon") {
+            // PATH@ID: another profile's, as its own Mote wears it.
+            let parts = asked.split(separator: "@").map(String.init)
+            let path = parts[0]
+            let icon = parts.count > 1 ? Profiles.shared.dockIcon(for: parts[1]) : NSApp.applicationIconImage
+            guard let tiff = icon?.tiffRepresentation,
+                let png = NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:])
+            else { return call.fail("no icon") }
+            try? png.write(to: URL(fileURLWithPath: path))
+            return call.answer(["saved": path, "profile": Storage.profile ?? "first"])
         }
         // The app menu's zoom row drawn light and dark, PATH-light.png and PATH-dark.png.
         if Storage.testing, let path = request.string("zoomrow") {

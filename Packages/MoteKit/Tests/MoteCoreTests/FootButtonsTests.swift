@@ -4,9 +4,9 @@ import Testing
 
 @Suite("FootButtons")
 struct FootButtonsTests {
-    @Test("Nothing saved is the standard pair; unknown and repeated names go")
+    @Test("Nothing saved is the standard set; unknown and repeated names go")
     func read() {
-        #expect(FootButton.read(nil) == [.chats, .library])
+        #expect(FootButton.read(nil) == [.profile, .chats, .library])
         #expect(FootButton.read([]) == [])
         #expect(FootButton.read(["downloads", "gone", "downloads", "chats"]) == [.downloads, .chats])
     }

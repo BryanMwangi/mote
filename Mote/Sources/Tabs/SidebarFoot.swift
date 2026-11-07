@@ -14,7 +14,8 @@ struct FootButtons: View {
 
     var body: some View {
         let list = prefs.foot
-        ForEach(list, id: \.self) { button in
+        // The profile's avatar only once there's more than one profile.
+        ForEach(list.filter { $0 != .profile || !Profiles.shared.list.isEmpty }, id: \.self) { button in
             FootItem(browser: browser, button: button, showing: showing)
                 .contextMenu {
                     if list.first != button { Button("Move Left") { prefs.foot = FootButton.moving(button, by: -1, in: list) } }
@@ -38,6 +39,7 @@ extension FootButton {
         case .screenshot: "camera"
         case .newWindow: "macwindow.badge.plus"
         case .settings: "gearshape"
+        case .profile: "person.crop.circle"
         }
     }
 }
@@ -49,6 +51,18 @@ private struct FootItem: View {
     @State private var open = false
 
     var body: some View {
+        if button == .profile {
+            Button(action: press) { ProfileAvatar(id: Storage.profile, size: 18) }
+                .buttonStyle(.plain)
+                .frame(width: 28, height: 28)
+                .contentShape(Rectangle())
+                .help("\(Profiles.shared.current) profile")
+        } else {
+            icon
+        }
+    }
+
+    private var icon: some View {
         FootIcon(symbol: button.symbol, help: button.title, act: press)
             .menuPanel(isPresented: showing ? $open : .constant(false), edge: button == .chats ? .trailing : .top) { popover }
     }
@@ -61,6 +75,7 @@ private struct FootItem: View {
         case .screenshot: browser.startScreenshot()
         case .newWindow: browser.perform(.newWindow)
         case .settings: browser.perform(.settings)
+        case .profile: browser.openSettings(at: .general)
         }
     }
 
