@@ -23,3 +23,6 @@ xcuserdata/
 
 # Claude Code worktrees
 .claude/worktrees/
+
+# Private Roadmap
+ROADMAP.md
