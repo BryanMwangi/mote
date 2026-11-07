@@ -65,6 +65,7 @@ private struct InstalledList: View {
                 .settingsSearch([item.name, "extension"])
             }
             if extensions.installed.count > 1 {
+                RowRule()
                 HStack {
                     Spacer()
                     Pill(reordering ? "Done" : "Reorder") { withAnimation(Motion.quick) { reordering.toggle() } }
