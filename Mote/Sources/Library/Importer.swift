@@ -106,6 +106,9 @@ struct ImportSource: Identifiable, Hashable {
         return AddOns.name(manifest: manifest) { try? Data(contentsOf: newest.appending(path: "_locales/\($0)/messages.json")) }
     }
 
+    /// The profile's own name ("Work" of "Zen — Work"), or the browser's.
+    var profileName: String { name.components(separatedBy: " — ").last ?? name }
+
     /// A browser rather than a file, so it can be brought into a profile of its own.
     var isBrowser: Bool {
         switch family {

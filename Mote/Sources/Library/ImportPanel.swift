@@ -16,6 +16,8 @@ struct ImportForm: View {
     @State private var source: ImportSource?
     @State private var kinds: Set<ImportKind> = []
     @State private var ownProfile = false
+    /// The browser's other profiles come too, each into a Mote profile of its own.
+    @State private var everyProfile = true
     @State private var asking = false
     @State private var primaryPassword = ""
     @State private var working = false
@@ -48,6 +50,15 @@ struct ImportForm: View {
                 if source.isBrowser, close != nil {
                     Card {
                         Line("Into a new profile", "A Mote of its own for \(source.name), apart from this one") { Switch(on: $ownProfile) }
+                    }
+                }
+                let others = siblings(of: source)
+                if !others.isEmpty {
+                    Card {
+                        Line(
+                            "Its other profiles too",
+                            "\(ListFormatter.localizedString(byJoining: others.map(\.profileName))), each into a Mote profile of its own"
+                        ) { Switch(on: $everyProfile) }
                     }
                 }
                 if asking {
@@ -160,10 +171,29 @@ struct ImportForm: View {
         asking = false
         primaryPassword = ""
         ownProfile = false
+        everyProfile = true
+    }
+
+    /// The same browser's other profiles, not imported yet.
+    private func siblings(of source: ImportSource) -> [ImportSource] {
+        sources.filter { $0.isBrowser && $0.browser == source.browser && $0.id != source.id && imported[$0.id] == nil }
+    }
+
+    /// Each into a Mote profile of its own, named after it, which brings its
+    /// things once it opens (see importOnLaunch).
+    private func bringOthers(of source: ImportSource) {
+        guard everyProfile else { return }
+        for other in siblings(of: source) {
+            let wanted = kinds.intersection(other.kinds).map(\.rawValue).joined(separator: ",")
+            Profiles.shared.add(
+                named: other.profileName, avatar: .init(symbol: "person.fill", color: "#6cbad9"), importing: "\(other.id)|\(wanted)")
+            imported[other.id] = ImportTally()
+        }
     }
 
     private func run() {
         guard let source else { return }
+        bringOthers(of: source)
         if ownProfile {
             Profiles.shared.add(
                 named: source.name, avatar: .init(symbol: "person.fill", color: "#6cbad9"),
