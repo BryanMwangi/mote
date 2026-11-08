@@ -121,6 +121,22 @@ extension Browser {
 
     // MARK: - A page that died
 
+    /// Why WebKit ended a page's process, which it says only through this
+    /// unpublished call (and then not the public one): logged, kept for the
+    /// bench, and the page brought back as below.
+    @objc(_webView:webContentProcessDidTerminateWithReason:)
+    func webView(_ webView: WKWebView, contentProcessEndedWithReason reason: Int) {
+        let why = ["ran over its memory limit", "ran over its CPU limit", "was ended by Mote", "crashed"]
+        let said = why.indices.contains(reason) ? why[reason] : "ended (reason \(reason))"
+        let site = webView.url?.host() ?? "a page"
+        NSLog("Mote: the page process for %@ %@", site, said)
+        Self.endedPages = Array((Self.endedPages + ["\(site) \(said)"]).suffix(5))
+        webViewWebContentProcessDidTerminate(webView)
+    }
+
+    /// The last pages whose process ended, and why, for the bench.
+    static var endedPages: [String] = []
+
     /// The system can end a page's process when memory runs short, leaving
     /// the tab blank. The tab in front loads again now, others when picked.
     func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {

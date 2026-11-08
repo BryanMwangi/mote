@@ -861,6 +861,7 @@ final class Browser: NSObject, ObservableObject {
         field.switching = false
         logins.dropChoices()
         guard tab.id != activeID else { return }
+        active?.keepPlace()
         let interval = switching.beginInterval("Select tab")
         defer { switching.endInterval("Select tab", interval) }
         if floating == tab.id { land() }

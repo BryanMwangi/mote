@@ -557,6 +557,34 @@ final class Tab: ObservableObject, Identifiable {
     func scrolled(to y: Double, of ceiling: Double) {
         let fraction = readingFraction(y: y, of: ceiling)
         if fraction != reading.fraction { reading.fraction = fraction }
+        // Where it's scrolled to, for a page that dies: WebKit's history
+        // only learns a page's scroll position as it's left.
+        scrolledTo = y
+        if -(placeKept?.timeIntervalSinceNow ?? -99) > 4 { keepPlace() }
+    }
+
+    private var scrolledTo: Double = 0
+    /// A page brought back after its process ended scrolls here once loaded.
+    private var scrollBack: Double?
+
+    /// Once a page brought back has loaded (see `recoverFromCrash`).
+    func scrollBackIfAsked() {
+        guard let y = scrollBack, y > 0 else { return }
+        scrollBack = nil
+        built?.evaluateJavaScript("window.scrollTo(0, \(Int(y)))")
+    }
+
+    /// The page's history and scroll position, as last kept: a page whose
+    /// process ended (memory ran short, a crash) comes back to them rather
+    /// than to the top of its address. Kept when the tab goes to the
+    /// background, when a load finishes, and every few seconds of scrolling.
+    private var place: Any?
+    private var placeKept: Date?
+
+    func keepPlace() {
+        guard let built, built.url != nil else { return }
+        place = built.interactionState
+        placeKept = Date()
     }
 
     func linkHovered(_ address: String?) { owner?.tab(self, hovers: address) }
@@ -735,6 +763,15 @@ final class Tab: ObservableObject, Identifiable {
     func recoverFromCrash() {
         guard let address else { return }
         failure = nil
+        scrollBack = scrolledTo
+        // In a fresh view, as waking does: a view whose process ended
+        // doesn't take its history back.
+        if let place {
+            rested = Rested(url: address, state: place, picture: nil)
+            letPageGo()
+            _ = wake()
+            return
+        }
         load(address)
     }
 

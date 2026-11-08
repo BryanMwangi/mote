@@ -203,6 +203,8 @@ extension Browser: WKNavigationDelegate, WKUIDelegate {
         (webView as? PageView)?.showFirstFrame()
         guard let tab = tab(for: webView), let url = tab.address else { return }
         tab.uncover()
+        tab.scrollBackIfAsked()
+        tab.keepPlace()
         tellStore(tab)
         tab.settleSignIn()
         // The icon is fetched even when icons are hidden; they may be turned on later.

@@ -41,7 +41,8 @@ extension Bench {
             "spaceIndex": browser.spaces.firstIndex { $0.id == browser.spaceID } ?? -1,
             "settingsQuery": SettingsSearch.shared.query, "settingsFocusAsked": SettingsSearch.shared.focusAsked,
             "finding": browser.finder.showing, "asking": browser.field.asksAssistant, "profile": Storage.profile ?? "",
-            "profiles": Profiles.shared.list.map(\.id), "sharedAt": Browser.sharedAt, "pageWindowMoves": PageView.windowMoves,
+            "profiles": Profiles.shared.list.map(\.id), "sharedAt": Browser.sharedAt, "endedPages": Browser.endedPages,
+            "pagePID": browser.active?.built?.unpublishedPID("_webProcessIdentifier") ?? 0, "pageWindowMoves": PageView.windowMoves,
             "tabListAt": tabList(of: browser).map { Int($0.contentView.bounds.minY) } ?? -1, "beepsSpared": PageKeySink.caught,
             "pageTracking": (browser.active?.built?.trackingAreas ?? []).map {
                 "\($0.owner.map { String(describing: type(of: $0)) } ?? "nil") \($0.options.rawValue)"
