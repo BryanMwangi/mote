@@ -87,6 +87,13 @@ final class Browser: NSObject, ObservableObject {
         }
     }
     @Published var peeking = false
+
+    /// Something lies over the page: the floating tabs or toolbar, or a panel
+    /// over the dimmed window. The page doesn't hover under it (see PageView).
+    var pageCovered: Bool {
+        peeking || toolbarRevealed || recalling || showingDownloads || showingProcesses || bookmarking || importing
+            || logins.managing || welcoming
+    }
     /// The toolbar, when it isn't on the card, is out over the page's top
     /// because the pointer reached it (see ToolbarReveal.swift).
     @Published var toolbarRevealed = false

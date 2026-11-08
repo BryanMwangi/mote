@@ -368,11 +368,29 @@ final class PageView: WKWebView {
         super.mouseUp(with: event)
     }
 
-    /// Tracking areas ignore what lies on top: under the peeking tabs the
-    /// page would still hover.
+    /// Tracking areas ignore what lies on top: under the floating tabs or a
+    /// panel the page would still hover its links and set its cursor. It
+    /// hears the pointer leave instead, once, and the arrow comes back.
     override func mouseMoved(with event: NSEvent) {
-        if Browser.front?.peeking == true { return }
-        super.mouseMoved(with: event)
+        guard Windows.shared.browser(for: window)?.pageCovered == true else {
+            covered = false
+            return super.mouseMoved(with: event)
+        }
+        guard !covered else { return }
+        covered = true
+        let left = NSEvent.enterExitEvent(
+            with: .mouseExited, location: event.locationInWindow, modifierFlags: event.modifierFlags, timestamp: event.timestamp,
+            windowNumber: event.windowNumber, context: nil, eventNumber: 0, trackingNumber: 0, userData: nil)
+        left.map(super.mouseExited)
+        NSCursor.arrow.set()
+    }
+
+    /// Under something, the pointer last heard as leaving (see `mouseMoved`).
+    private var covered = false
+
+    override func cursorUpdate(with event: NSEvent) {
+        if Windows.shared.browser(for: window)?.pageCovered == true { return NSCursor.arrow.set() }
+        super.cursorUpdate(with: event)
     }
 
     /// Side buttons, numbered as most mouse drivers do: 3 back, 4 forward.
