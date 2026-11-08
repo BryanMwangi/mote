@@ -288,9 +288,8 @@ private struct SpacePage: View {
                 listed(loose)
             } else {
                 ScrollViewReader { scroller in
-                    // No scroll bar one over the rows would cover their close buttons.
                     ScrollView(.vertical) { listed(loose) }
-                        .scrollIndicators(.never)
+                        .floatingScrollBar()
                         // Within the space only: a switch moves the page whole,
                         // and the page coming in is already where it was left.
                         .onChange(of: browser.activeID) { old, id in
@@ -580,7 +579,7 @@ private struct PinSquare: View {
                     browser.editLetter(tab)
                 }
             )
-            .onHover { hovering = $0 }
+            .rowHover { hovering = $0 }
             .contextMenu { TabMenu(browser: browser, tab: tab) { browser.close(tab) } }
             .help(tab.label)
             .animation(Motion.hover, value: hovering)
@@ -675,7 +674,8 @@ private struct SideRow: View {
         .contentShape(shape)
         // A double click renames the tab you're on; a click goes to any other.
         .modifier(
-            OneClick(live: live) {
+            // The speaker, ring or preview's mark, and the speaker moved aside on hover.
+            OneClick(live: live, spare: status ? (hovering && speaker ? 60 : 34) : 0) {
                 browser.select(tab)
             } edit: {
                 browser.beginTabRename(tab)
@@ -690,7 +690,7 @@ private struct SideRow: View {
                     .padding(.trailing, preview == nil ? 7 : 30)
             }
         }
-        .onHover { over in
+        .rowHover { over in
             hovering = over
             if over { fading = true }
         }
@@ -821,7 +821,7 @@ private struct FolderRow: View {
             withAnimation(Motion.settle) { browser.moveFolder(id, before: folder.id, after: at.y > Metrics.row / 2) }
             return true
         }
-        .onHover { hovering = $0 }
+        .rowHover { hovering = $0 }
         .contextMenu {
             Button("Rename Folder…") { browser.renameFolder(folder.id) }
             Button("Change Icon…") { browser.changeFolderIcon(folder.id) }
@@ -857,7 +857,7 @@ private struct LiveItemRow: View {
         .background { if hovering { RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Palette.veil) } }
         .contentShape(Rectangle())
         .onTapGesture { browser.open(item, foreground: true) }
-        .onHover { hovering = $0 }
+        .rowHover { hovering = $0 }
         .contextMenu {
             Button("Open in New Tab") { browser.open(item, foreground: true) }
             Button("Open in Background") { browser.open(item, foreground: false) }

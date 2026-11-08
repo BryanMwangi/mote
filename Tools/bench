@@ -46,7 +46,7 @@ COMMANDS = {
     "tabdrag": ("id distance:float [ms:float]", "test run: drag tab ID DISTANCE points along the strip or sidebar over MS, then let go"),
     "move": ("x:float y:float", "test run: the window's top left at X, Y on the main screen, not brought forward"),
     "resize": ("width:float height:float [steps:int]", "take the window to that size in steps, like a drag — test runs only"),
-    "hit": ("x:float y:float [double|middle|menu ITEM]", "what a press there (from the window's top left) lands on, and whether a drag moves the "
+    "hit": ("x:float y:float [double|middle|hold|drag|menu ITEM]", "what a press there (from the window's top left) lands on, and whether a drag moves the "
             "window; double or middle: test run, that click there"),
     "field": ("text [type] [go]", "test run: TEXT pasted into the address field (type: a key at a time), timed; go: then Return, timed "
               "until the page is loading"),
@@ -63,7 +63,7 @@ COMMANDS = {
     "windows": ("[new | reopen | close N | front N]", "the browser windows, the front one marked; test run: open, close or bring one forward"),
     "pages": ("on|off", "test run: let a hidden run's pages paint, off every screen (for picture)"),
     "picture": ("path:path", "test run: the whole window, pages included, drawn to a PNG"),
-    "frames": ("[fold|peek|unpeek|scroll|chat|chatdown|tab|space|swipe] [seconds:float]", "test run: run that animation and time the frames drawn — missed ones"),
+    "frames": ("[fold|peek|unpeek|scroll|chat|chatdown|tab|space|swipe|tabs] [seconds:float]", "test run: run that animation and time the frames drawn — missed ones"),
     "film": ("peek|unpeek|fold|none path:path [frames:int] [every:float]", "test run: the window drawn again and again while it animates → PATH-00.png…"),
     "strip": ("path:path [width:float]", "the row of tabs, drawn off screen to a PNG"),
     "column": ("path:path [height:float]", "the column of tabs, drawn off screen to a PNG"),
@@ -190,7 +190,7 @@ def read_ui(args):
 def read_hit(args):
     if len(args) == 4 and args[2] == "menu":
         return {"x": float(args[0]), "y": float(args[1]), "menu": args[3]}
-    if len(args) not in (2, 3) or (len(args) == 3 and args[2] not in ("double", "middle")):
+    if len(args) not in (2, 3) or (len(args) == 3 and args[2] not in ("double", "middle", "hold", "drag")):
         sys.exit(usage("hit"))
     request = {"x": float(args[0]), "y": float(args[1])}
     if len(args) == 3:
@@ -223,7 +223,7 @@ def read_switch(verb, needed):
 
 
 def read_frames(args):
-    if len(args) > 2 or (args and args[0] not in ("fold", "peek", "unpeek", "scroll", "chat", "chatdown", "tab", "space", "swipe")):
+    if len(args) > 2 or (args and args[0] not in ("fold", "peek", "unpeek", "scroll", "chat", "chatdown", "tab", "space", "swipe", "tabs")):
         sys.exit(usage("frames"))
     request = {"action": args[0] if args else "fold"}
     if len(args) > 1:

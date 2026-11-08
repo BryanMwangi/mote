@@ -94,6 +94,19 @@ extension Bench {
             let here = browser.spaces.firstIndex { $0.id == browser.spaceID } ?? 0
             browser.switchSpace(index: (here + 1) % max(1, browser.spaces.count))
         case "scroll": browser.active?.built.map { BenchInput.flick($0) }
+        // The tab list, with the pointer resting over it as a hand's would,
+        // so the rows passing under it hear it come and go.
+        case "tabs":
+            guard let content = AppDelegate.window?.contentView else { return }
+            let lists = BenchInput.views(of: NSScrollView.self, in: content).filter {
+                $0.window != nil && !$0.visibleRect.isEmpty && $0.convert($0.bounds, to: nil).maxX <= browser.prefs.sideWidth + 20
+            }
+            guard let list = lists.max(by: { $0.visibleRect.height < $1.visibleRect.height }), let window = list.window else { return }
+            let middle = window.convertPoint(toScreen: list.convert(NSPoint(x: list.bounds.midX, y: list.visibleRect.midY), to: nil))
+            CGWarpMouseCursorPosition(CGPoint(x: middle.x, y: (window.screen?.frame.maxY ?? 0) - middle.y))
+            // Down from the top half, up from the bottom one, so each run moves.
+            let room = (list.documentView?.frame.height ?? 0) - list.contentView.bounds.height
+            BenchInput.flick(list, points: list.contentView.bounds.minY > room / 2 ? -600 : 600)
         // Two fingers across the sidebar at a trackpad's pace, 120 pt over a
         // quarter second, then let go.
         case "swipe":

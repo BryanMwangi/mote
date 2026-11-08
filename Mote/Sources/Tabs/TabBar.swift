@@ -350,7 +350,8 @@ private struct StripTab: View {
             // The active tab takes a double click (rename it, or change a pin's
             // letter); the others a single click.
             .modifier(
-                OneClick(live: live) {
+                // The speaker, before the close button's room.
+                OneClick(live: live, spare: speaker && !pinned && !iconOnly ? 48 : 0) {
                     browser.select(tab)
                 } edit: {
                     pinned ? browser.editLetter(tab) : browser.beginTabRename(tab)

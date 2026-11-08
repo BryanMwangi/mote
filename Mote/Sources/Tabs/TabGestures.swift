@@ -49,7 +49,9 @@ struct Reorderable: ViewModifier {
             } action: {
                 originX = $0
             }
-            .gesture(
+            // Alongside the row's own press (OneClick), which picks the tab
+            // as the button goes down and would otherwise keep the drag out.
+            .simultaneousGesture(
                 DragGesture(minimumDistance: 5, coordinateSpace: .named(space))
                     .onChanged { changed($0.translation) }
                     .onEnded { _ in ended() }
@@ -162,27 +164,64 @@ final class ScriptedDrag: ObservableObject {
     }
 }
 
+/// Rows passing under a still pointer while their list scrolls don't light
+/// up, as in Firefox, which leaves hover alone until the scroll stops: each
+/// one lit and let go is a row worked out again, every frame of the scroll.
+/// Leaving still counts. Not observed, so the scroll starting and stopping
+/// redraws nothing.
+@MainActor enum ScrollHover {
+    static var moving = false
+}
+
+extension View {
+    /// `onHover` for a row in a list that scrolls (see ScrollHover).
+    func rowHover(_ set: @escaping (Bool) -> Void) -> some View {
+        onHover { over in if !over || !ScrollHover.moving { set(over) } }
+    }
+}
+
 /// A tab's clicks: one picks it; two in quick succession, whether it was
 /// the active tab or became it with the first, edit it (rename it, or a
 /// pin's letter). Single taps only, timed here: SwiftUI's double-tap would
 /// hold every single click back, and miss a double click that starts on a
 /// tab not yet active.
+///
+/// On the press, not the release, as Firefox's tabs: a tap would wait for the
+/// button to come up and for the row's drag to give up first, a tenth of a
+/// second or two that a switch feels. A drag still goes on from the press.
 struct OneClick: ViewModifier {
     let live: Bool
+    /// The row's end where a speaker or a preview's mark sits: a press there is theirs.
+    var spare: CGFloat = 0
     let pick: () -> Void
     let edit: () -> Void
     @State private var last = Date.distantPast
+    @State private var pressed = false
+    @State private var width: CGFloat = 0
 
     func body(content: Content) -> some View {
-        content.onTapGesture {
-            let now = Date()
-            if now.timeIntervalSince(last) < NSEvent.doubleClickInterval {
-                last = .distantPast
-                return edit()
-            }
-            last = now
-            if !live { pick() }
+        content
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { press in
+                        guard !pressed else { return }
+                        pressed = true
+                        // A control-click is the tab's menu.
+                        guard press.startLocation.x < width - spare, !NSEvent.modifierFlags.contains(.control) else { return }
+                        pressedDown()
+                    }
+                    .onEnded { _ in pressed = false })
+    }
+
+    private func pressedDown() {
+        let now = Date()
+        if now.timeIntervalSince(last) < NSEvent.doubleClickInterval {
+            last = .distantPast
+            return edit()
         }
+        last = now
+        if !live { pick() }
     }
 }
 

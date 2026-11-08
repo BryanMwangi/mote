@@ -27,7 +27,7 @@ struct Shut: View {
                 .frame(width: 30, height: 28)
                 .contentShape(Rectangle())
                 .onTapGesture { if shown { act() } }
-                .onHover { hovering = $0 }
+                .rowHover { hovering = $0 }
         }
         .help(shown ? home ? "Back to Pinned Page" : "Close Tab   ⌘W" : "")
         .accessibilityLabel(home ? "Back to Pinned Page" : "Close Tab")

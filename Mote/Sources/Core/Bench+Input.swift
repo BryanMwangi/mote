@@ -107,6 +107,47 @@ extension Bench {
         let name = hit.map { String("\(type(of: $0))".prefix(60)) } ?? ""
         if call.request.flag("middle") { return middleClick(call, at: point, in: window, frame: frame) }
         if let pick = call.request.string("menu") { return contextMenu(call, at: point, in: window, picking: pick) }
+        // A press held a fifth of a second, as a hand's click: when the tab
+        // in front changed after it went down, and whether before it came up.
+        if call.request.flag("hold") {
+            guard call.testRun(), let down = BenchInput.mouse(.leftMouseDown, at: point, in: window, clicks: 1) else { return }
+            let browser = call.browser, before = browser.activeID, start = CACurrentMediaTime()
+            var switched: Double?
+            let watch = browser.$activeID.dropFirst().sink { _ in switched = switched ?? (CACurrentMediaTime() - start) * 1000 }
+            window.sendEvent(down)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                let held = switched
+                BenchInput.mouse(.leftMouseUp, at: point, in: window, clicks: 1).map(window.sendEvent)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    watch.cancel()
+                    call.answer([
+                        "view": name, "switched": browser.activeID != before, "whileHeldMs": held.map { Int($0) } ?? -1,
+                        "afterMs": switched.map { Int($0) } ?? -1,
+                    ])
+                }
+            }
+            return
+        }
+        // Pressed there and dragged 60 points down by hand: the order of the
+        // tabs before and after, to see the row went along.
+        if call.request.flag("drag") {
+            guard call.testRun() else { return }
+            let browser = call.browser, before = browser.tabs.map(\.id)
+            let steps: [(NSEvent.EventType, CGFloat)] = [(.leftMouseDown, 0)] + (1...12).map { (.leftMouseDragged, CGFloat($0) * 60 / 12) } + [(.leftMouseUp, 60)]
+            for (n, (kind, dy)) in steps.enumerated() {
+                DispatchQueue.main.asyncAfter(deadline: .now() + Double(n) / 60) {
+                    let at = NSPoint(x: point.x, y: point.y - dy)
+                    // The pointer goes along: a drag asks it whether the tab left its list.
+                    let screen = window.convertPoint(toScreen: at)
+                    CGWarpMouseCursorPosition(CGPoint(x: screen.x, y: (window.screen?.frame.maxY ?? 0) - screen.y))
+                    BenchInput.mouse(kind, at: at, in: window, clicks: 1).map(window.sendEvent)
+                }
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + Double(steps.count) / 60 + 0.6) {
+                call.answer(["view": name, "moved": browser.tabs.map(\.id) != before])
+            }
+            return
+        }
         if call.request.flag("double") {
             guard call.testRun() else { return }
             let before = window.frame
