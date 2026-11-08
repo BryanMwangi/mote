@@ -162,6 +162,8 @@ enum DefaultBrowser {
     static func ask(_ done: @escaping (Bool) -> Void) {
         let app = Bundle.main.bundleURL
         Task { @MainActor in
+            curtainMakesWay(true)
+            defer { curtainMakesWay(false) }
             var worked = true
             for scheme in ["http", "https"] {
                 do { try await NSWorkspace.shared.setDefaultApplication(at: app, toOpenURLsWithScheme: scheme) } catch { worked = false }

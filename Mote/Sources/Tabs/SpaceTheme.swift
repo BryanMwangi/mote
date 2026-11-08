@@ -36,8 +36,9 @@ struct SpaceGround: View {
         .allowsHitTesting(false)
     }
 
-    /// A square of grey noise, made once, tiled for the grain.
-    private static let grain: NSImage = {
+    /// A square of grey noise, made once, tiled for the grain (here and
+    /// behind the welcome).
+    static let grain: NSImage = {
         let side = 96
         let bitmap = NSBitmapImageRep(
             bitmapDataPlanes: nil, pixelsWide: side, pixelsHigh: side, bitsPerSample: 8, samplesPerPixel: 1, hasAlpha: false,

@@ -160,6 +160,8 @@ struct ImportForm: View {
             case .passwordsFile: panel.allowedContentTypes = [.commaSeparatedText, .plainText]
             default: panel.allowedContentTypes = [.html]
             }
+            curtainMakesWay(true)
+            defer { curtainMakesWay(false) }
             guard panel.runModal() == .OK, let chosen = panel.url else { return }
             file = chosen
         }

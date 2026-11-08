@@ -54,6 +54,16 @@ final class Arrival: ObservableObject {
         self.setup = setup
     }
 
+    /// Above the menu bar and Dock, like a curtain.
+    private static let curtainLevel = NSWindow.Level(rawValue: NSWindow.Level.statusBar.rawValue + 1)
+
+    /// macOS's own dialogs (an Open panel, the question about the default
+    /// browser) come up below the curtain, where they can't be seen: it
+    /// steps down among the windows while one is up, and back after.
+    static func makeWay(_ way: Bool) {
+        playing?.overlay?.level = way ? .normal : curtainLevel
+    }
+
     /// Takes the keyboard, for the welcome card's fields.
     private final class Curtain: NSWindow {
         override var canBecomeKey: Bool { true }
@@ -66,8 +76,7 @@ final class Arrival: ObservableObject {
         window.isOpaque = false
         window.backgroundColor = .clear
         window.hasShadow = false
-        // Above the menu bar and Dock, like a curtain.
-        window.level = NSWindow.Level(rawValue: NSWindow.Level.statusBar.rawValue + 1)
+        window.level = Self.curtainLevel
         window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .ignoresCycle]
         window.isReleasedWhenClosed = false
 
@@ -303,13 +312,17 @@ private struct SetupGround: View {
     @ObservedObject var browser: Browser
     @ObservedObject private var drafts = ThemeDrafts.shared
 
+    private var theme: SpaceTheme? { drafts.bySpace[browser.spaceID] ?? browser.spaces.first { $0.id == browser.spaceID }?.theme }
+
     private var colors: [Color] {
-        let theme = drafts.bySpace[browser.spaceID] ?? browser.spaces.first { $0.id == browser.spaceID }?.theme
         let picked = (theme?.colors ?? []).compactMap(Color.init(hex:))
         guard !picked.isEmpty else { return PebbleFill.palette }
         let a = picked[0], b = picked.count > 1 ? picked[1] : picked[0], c = picked.count > 2 ? picked[2] : b
         let light = Color.white
-        return [light.mix(with: a, by: 0.55), a, light.mix(with: b, by: 0.6), b, light.mix(with: a, by: 0.45), c, a, light.mix(with: c, by: 0.5), b]
+        return [
+            light.mix(with: a, by: 0.55), a, light.mix(with: b, by: 0.6), b, light.mix(with: a, by: 0.45), c, a,
+            light.mix(with: c, by: 0.5), b,
+        ]
     }
 
     var body: some View {
@@ -320,6 +333,12 @@ private struct SetupGround: View {
                 width: 3, height: 3,
                 points: [[0, 0], [0.5, 0], [1, 0], [0, 0.5], SIMD2(0.5, 0.5) + drift, [1, 0.5], [0, 1], [0.5, 1], [1, 1]],
                 colors: colors)
+        }
+        // The grain as the dial turns, as the window will have it.
+        .overlay {
+            if let grain = theme?.grain, grain > 0 {
+                Image(nsImage: SpaceGround.grain).resizable(resizingMode: .tile).opacity(0.2 * grain).blendMode(.overlay)
+            }
         }
         .animation(.easeInOut(duration: 0.6), value: colors)
     }
@@ -499,4 +518,10 @@ nonisolated struct GlyphReveal: TextRenderer, Animatable {
             copy.draw(glyph)
         }
     }
+}
+
+/// The welcome's curtain steps aside for one of macOS's dialogs, and back
+/// (see Arrival.makeWay); before macOS 15 there's no curtain.
+@MainActor func curtainMakesWay(_ way: Bool) {
+    if #available(macOS 15, *) { Arrival.makeWay(way) }
 }
