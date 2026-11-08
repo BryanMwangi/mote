@@ -126,6 +126,27 @@ struct ZenImportTests {
         #expect(other[0].title == "T")
     }
 
+    @Test("Folders come with their tabs, pinned, and the folders around them; split views' groups aren't folders")
+    func folders() throws {
+        let json = """
+            {"spaces":[{"uuid":"a","position":0}],
+             "tabs":[{"entries":[{"url":"https://in.example/"}],"index":1,"pinned":true,"zenWorkspace":"a","groupId":"inner"},
+                     {"entries":[{"url":"https://loose.example/"}],"index":1,"zenWorkspace":"a","groupId":"outer"},
+                     {"entries":[{"url":"https://split.example/"}],"index":1,"zenWorkspace":"a","groupId":"split"}],
+             "folders":[{"id":"inner","name":"Inner","parentId":"outer","collapsed":true},
+                        {"id":"outer","name":"Outer"},
+                        {"id":"split","name":"","splitViewGroup":true},
+                        {"id":"unused","name":"Empty elsewhere"}]}
+            """
+        let plan = ZenImportPlan(try ZenSession.read(MozLZ4.encode(Data(json.utf8))))
+        let space = plan.spaces[0]
+        #expect(space.folders.map(\.zenID) == ["outer", "inner"])
+        #expect(space.folders.map(\.parent) == [nil, "outer"])
+        #expect(space.folders[1].collapsed)
+        #expect(space.tabs.map(\.folder) == ["inner", "outer", nil])
+        #expect(space.tabs.map(\.tier) == [.pinned, .pinned, .loose])
+    }
+
     @Test("Empty tabs, Glance previews and pages that aren't on the web stay behind")
     func skipped() {
         let session = ZenSession(

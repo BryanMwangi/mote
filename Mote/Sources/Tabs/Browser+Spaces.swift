@@ -166,6 +166,10 @@ extension Browser {
         guard let chosen = spaces.first(where: { $0.id == id }), !chosen.isFirst else { return (false, false) }
         let first = Space.firstID
         let before = essentials(in: first)
+        // Its folders come too, before its tabs, which name them.
+        let folders = FolderStore.shared.folders(in: id)
+        FolderStore.shared.change(first) { $0 += folders }
+        FolderStore.shared.change(id) { $0.removeAll() }
         _ = await mergeSpace(id, into: first)
         // It keeps its origin, so importing it again doesn't bring it back.
         editSpaces {

@@ -107,10 +107,22 @@ extension Browser {
             space.theme = zen.theme
             list.add(space)
             made.append(space)
+            // Zen's folders, as Mote's, each after its parent.
+            var folders: [String: UUID] = [:]
+            FolderStore.shared.change(space.id) { list in
+                for zenFolder in zen.folders {
+                    var folder = Folder(name: zenFolder.name, parent: zenFolder.parent.flatMap { folders[$0] })
+                    folder.collapsed = zenFolder.collapsed
+                    folders[zenFolder.zenID] = folder.id
+                    list.append(folder)
+                }
+            }
             let entries = zen.tabs.map { tab in
-                Session.Entry(
+                var entry = Session.Entry(
                     url: tab.url.absoluteString, title: tab.title, pin: tab.tier == .essential ? TabLabel.monogram(for: tab.url) : nil,
                     kept: tab.tier == .pinned ? true : nil, name: tab.name)
+                entry.folder = tab.folder.flatMap { folders[$0] }?.uuidString
+                return entry
             }
             // In front: the first open tab, or the first of any.
             let front = zen.tabs.firstIndex { $0.tier == .loose } ?? 0

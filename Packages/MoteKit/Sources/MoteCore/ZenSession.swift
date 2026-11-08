@@ -112,12 +112,15 @@ public struct ZenSession: Decodable, Sendable, Equatable {
         public var transient: Bool
         /// Zen's id for it, which its split views name it by.
         public var syncID: String?
+        /// The folder (or split view's group) it's in.
+        public var groupID: String?
 
         public init(
             entries: [Entry], index: Int? = nil, pinned: Bool = false, essential: Bool = false, workspace: String? = nil,
-            label: String? = nil, userContextId: Int? = nil, transient: Bool = false, syncID: String? = nil
+            label: String? = nil, userContextId: Int? = nil, transient: Bool = false, syncID: String? = nil, groupID: String? = nil
         ) {
             self.syncID = syncID
+            self.groupID = groupID
             self.entries = entries
             self.index = index
             self.pinned = pinned
@@ -139,6 +142,7 @@ public struct ZenSession: Decodable, Sendable, Equatable {
             userContextId = c.lenient(Int.self, .userContextId)
             transient = (c.lenient(Bool.self, .zenIsEmpty) ?? false) || (c.lenient(Bool.self, .zenIsGlance) ?? false)
             syncID = c.lenient(String.self, .zenSyncId)
+            groupID = c.lenient(String.self, .groupId)
         }
 
         /// The page it shows: the entry `index` points at, or the last.
@@ -149,8 +153,37 @@ public struct ZenSession: Decodable, Sendable, Equatable {
 
         private enum Keys: String, CodingKey {
             case entries, index, pinned, zenEssential, zenWorkspace, zenStaticLabel, userContextId, zenIsEmpty, zenIsGlance,
-                zenSyncId
+                zenSyncId, groupId
         }
+    }
+
+    /// A folder of pinned tabs, which may be in another. Split views' groups
+    /// are kept beside them, marked.
+    public struct Folder: Decodable, Sendable, Equatable {
+        public var id: String
+        public var name: String
+        public var collapsed: Bool
+        public var parentID: String?
+        public var splitView: Bool
+
+        public init(id: String, name: String, collapsed: Bool = false, parentID: String? = nil, splitView: Bool = false) {
+            self.id = id
+            self.name = name
+            self.collapsed = collapsed
+            self.parentID = parentID
+            self.splitView = splitView
+        }
+
+        public init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: Keys.self)
+            id = c.lenient(String.self, .id) ?? ""
+            name = c.lenient(String.self, .name) ?? ""
+            collapsed = c.lenient(Bool.self, .collapsed) ?? false
+            parentID = c.lenient(String.self, .parentId)
+            splitView = c.lenient(Bool.self, .splitViewGroup) ?? false
+        }
+
+        private enum Keys: String, CodingKey { case id, name, collapsed, parentId, splitViewGroup }
     }
 
     /// A split view: its tabs by `syncID`, laid out as Zen's tree has them.
@@ -199,11 +232,13 @@ public struct ZenSession: Decodable, Sendable, Equatable {
     public var spaces: [Space]
     public var tabs: [Tab]
     public var splits: [Split]
+    public var folders: [Folder]
 
-    public init(spaces: [Space], tabs: [Tab], splits: [Split] = []) {
+    public init(spaces: [Space], tabs: [Tab], splits: [Split] = [], folders: [Folder] = []) {
         self.spaces = spaces
         self.tabs = tabs
         self.splits = splits
+        self.folders = folders
     }
 
     public init(from decoder: Decoder) throws {
@@ -211,6 +246,7 @@ public struct ZenSession: Decodable, Sendable, Equatable {
         spaces = (c.lenient([Space].self, .spaces) ?? []).filter { !$0.uuid.isEmpty }
         tabs = c.lenient([Tab].self, .tabs) ?? []
         splits = c.lenient([Split].self, .splitViewData) ?? []
+        folders = (c.lenient([Folder].self, .folders) ?? []).filter { !$0.id.isEmpty && !$0.splitView }
     }
 
     /// From the file as Zen writes it.
@@ -218,7 +254,7 @@ public struct ZenSession: Decodable, Sendable, Equatable {
         try JSONDecoder().decode(ZenSession.self, from: MozLZ4.decode(file))
     }
 
-    private enum Keys: String, CodingKey { case spaces, tabs, splitViewData }
+    private enum Keys: String, CodingKey { case spaces, tabs, splitViewData, folders }
 }
 
 extension KeyedDecodingContainer {
@@ -239,6 +275,16 @@ public struct ZenImportPlan: Equatable, Sendable {
         public var tier: TabTier
         /// Zen's id for it, for its split views.
         public var syncID: String? = nil
+        /// Zen's id for its folder.
+        public var folder: String? = nil
+    }
+
+    /// A folder of pinned tabs, by Zen's ids.
+    public struct Folder: Equatable, Sendable {
+        public var zenID: String
+        public var name: String
+        public var collapsed: Bool
+        public var parent: String?
     }
 
     public struct Space: Equatable, Sendable {
@@ -254,6 +300,8 @@ public struct ZenImportPlan: Equatable, Sendable {
         public var tabs: [Tab]
         /// Its split views, by their tabs' places in `tabs`, as a session keeps them.
         public var splits: [SplitLayout<Int>] = []
+        /// Its folders, parents before what's in them.
+        public var folders: [Folder] = []
 
         public func count(_ tier: TabTier) -> Int { tabs.lazy.filter { $0.tier == tier }.count }
     }
@@ -284,11 +332,13 @@ public struct ZenImportPlan: Equatable, Sendable {
             guard let entry = zen.current, let text = entry.url, let url = URL(string: text),
                 ["http", "https"].contains(url.scheme?.lowercased() ?? "")
             else { continue }
-            let tier: TabTier = zen.essential ? .essential : zen.pinned ? .pinned : .loose
+            // In a folder it's pinned, as folders are of pinned tabs.
+            let folder = zen.essential ? nil : zen.groupID.flatMap { id in session.folders.contains { $0.id == id } ? id : nil }
+            let tier: TabTier = zen.essential ? .essential : zen.pinned || folder != nil ? .pinned : .loose
             let label = zen.label?.trimmingCharacters(in: .whitespacesAndNewlines)
             let tab = Tab(
                 url: url, title: entry.title ?? url.absoluteString, name: label.flatMap { $0.isEmpty ? nil : $0 }, tier: tier,
-                syncID: zen.syncID)
+                syncID: zen.syncID, folder: folder)
             spaces[Self.home(of: zen, among: ordered)].tabs.append(tab)
         }
         for index in spaces.indices {
@@ -298,6 +348,7 @@ public struct ZenImportPlan: Equatable, Sendable {
                 spaces[index].tabs.enumerated().compactMap { place, tab in tab.syncID.map { ($0, place) } }, uniquingKeysWith: { a, _ in a }
             )
             spaces[index].splits = session.splits.compactMap { Self.layout(of: $0)?.compactMap { places[$0] } }
+            spaces[index].folders = Self.folders(holding: Set(spaces[index].tabs.compactMap(\.folder)), in: session.folders)
         }
         self.spaces = spaces
     }
@@ -320,6 +371,28 @@ public struct ZenImportPlan: Equatable, Sendable {
     private static func size(of node: ZenSession.Split.Node) -> Double {
         switch node {
         case .leaf(_, let size), .splitter(_, let size, _): size
+        }
+    }
+
+    /// The folders that hold these, and the folders around them, each
+    /// after its parent.
+    static func folders(holding held: Set<String>, in all: [ZenSession.Folder]) -> [Folder] {
+        let byID = Dictionary(all.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        var wanted = Set<String>()
+        for id in held {
+            var at: String? = id
+            while let here = at, byID[here] != nil, wanted.insert(here).inserted { at = byID[here]?.parentID }
+        }
+        func depth(_ id: String) -> Int {
+            var count = 0, at = byID[id]?.parentID
+            while let here = at, count < 10 {
+                count += 1
+                at = byID[here]?.parentID
+            }
+            return count
+        }
+        return all.filter { wanted.contains($0.id) }.sorted { depth($0.id) < depth($1.id) }.map {
+            Folder(zenID: $0.id, name: $0.name.isEmpty ? "Folder" : $0.name, collapsed: $0.collapsed, parent: $0.parentID)
         }
     }
 
