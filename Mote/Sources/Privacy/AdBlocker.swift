@@ -36,6 +36,9 @@ final class AdBlocker: ObservableObject {
 
     private func blocks(_ site: String?) -> Bool { enabled && !isPaused(on: site) }
 
+    /// Whether a page from `site` gets ads taken out of it (see YouTubeAds).
+    func blocksAds(on site: String?) -> Bool { blocks(site) }
+
     func compile() {
         guard list == nil else { return }
         trouble = nil

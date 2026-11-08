@@ -8,13 +8,15 @@ enum PageScripts {
     /// middle-clicks, passkeys, and this site's hidden elements (at document
     /// start, so they never show).
     @MainActor
-    static func all(hiding: ElementHidingStyle.Config, boost: String = "") -> [WKUserScript] {
+    static func all(hiding: ElementHidingStyle.Config, boost: String = "", ads: Bool = false) -> [WKUserScript] {
         var scripts = [
             mote(ScrollRelay.script, at: .atDocumentEnd),
             mote(ElementPicker.picker, at: .atDocumentStart),
             mote(FormRelay.script, at: .atDocumentEnd),
         ]
         if AutoScroll.on { scripts.append(mote(AutoScroll.script, at: .atDocumentEnd)) }
+        // YouTube's ads come inside its player's data, out of a block list's reach.
+        if ads { scripts.append(YouTubeAds.userScript) }
         // Every frame: only a frame's own document knows whether it takes a
         // swipe (a map) or holds the image under the pointer.
         scripts += [
