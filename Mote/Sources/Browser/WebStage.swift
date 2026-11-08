@@ -6,6 +6,8 @@ import WebKit
 /// the front and get it back as it was: not reloaded, scroll and forms kept.
 struct WebStage: FillsRoom {
     let page: NSView?
+    /// Pages about to be switched to, kept drawing behind it (see StageView.warm).
+    var warm: [NSView] = []
     /// Responsive Design Mode: the size the page is laid out at, and whether
     /// it's scaled down to fit.
     var device: CGSize? = nil
@@ -15,6 +17,7 @@ struct WebStage: FillsRoom {
     func updateNSView(_ view: StageView, context: Context) {
         view.device = device
         view.fits = fits
+        view.warm = warm
         view.show(page)
     }
 }
@@ -23,6 +26,11 @@ final class StageView: NSView {
     /// The view to show; the one thing kept. Every layout brings the subviews
     /// in line with it, so they can't drift apart.
     private weak var wanted: NSView?
+    /// Pages a switch is likely to go to next: kept in the window, drawing,
+    /// behind the one in front, as Firefox warms a tab. A page that wasn't
+    /// showing is drawn afresh when it comes back, which a switch waited on
+    /// (about 130 ms); a warm one is already drawn.
+    var warm: [NSView] = []
     var device: CGSize?
     var fits = true
     /// Around a device, so its edges and handles show.
@@ -48,9 +56,21 @@ final class StageView: NSView {
         // beside the page and narrows the page to fit, so removing it would leave
         // the page narrow beside an empty space.
         let inspecting = inspectorOpen
-        for view in subviews where view !== wanted && !(inspecting && Self.isInspector(view)) { view.removeFromSuperview() }
+        let keep = warm.filter { $0 !== wanted }
+        for view in subviews where view !== wanted && !keep.contains(where: { $0 === view }) && !(inspecting && Self.isInspector(view)) {
+            view.removeFromSuperview()
+        }
 
         guard let wanted, window != nil else { return }
+        // Behind the page in front, which takes the clicks.
+        for page in keep {
+            if page.superview !== self {
+                page.removeFromSuperview()
+                page.alphaValue = 1
+                addSubview(page, positioned: .below, relativeTo: wanted.superview === self ? wanted : nil)
+            }
+            place(page)
+        }
         if wanted.superview !== self {
             // Adding it takes it from wherever it was.
             wanted.removeFromSuperview()
@@ -67,6 +87,16 @@ final class StageView: NSView {
         // say, while the page loads) made the window beep.
         if let window, window.firstResponder === window || (window.firstResponder is PageView && window.firstResponder !== wanted) {
             window.makeFirstResponder(wanted)
+        }
+        // In front of the warm pages, as it may have been one of them: by
+        // sorting, as adding it again would take it out of the window and
+        // back, and it would be drawn afresh.
+        if subviews.last(where: { !Self.isInspector($0) }) !== wanted {
+            sortSubviews(
+                { one, other, front in
+                    let front = front.map { Unmanaged<NSView>.fromOpaque($0).takeUnretainedValue() }
+                    return one === front ? .orderedDescending : other === front ? .orderedAscending : .orderedSame
+                }, context: Unmanaged.passUnretained(wanted).toOpaque())
         }
         // With the inspector docked, WebKit lays both out; a frame here would cover the inspector.
         if !(inspecting && subviews.contains(where: Self.isInspector)) { place(wanted) }

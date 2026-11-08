@@ -10,6 +10,8 @@ import WebKit
 /// it here is what redraws the page area when the tab changes.
 struct Page: View {
     @ObservedObject var tab: Tab
+    /// Pages a switch will likely go to next, drawing behind (see Browser.warm).
+    var warm: [NSView] = []
 
     var body: some View {
         VStack(spacing: 0) {
@@ -24,7 +26,8 @@ struct Page: View {
             // Blank and sleeping tabs have no page, and asking would make an empty
             // one. A floating page is left out so its return is a change and the
             // stage takes it back.
-            WebStage(page: tab.isBlank || tab.asleep || tab.floating ? nil : tab.web, device: tab.device?.size, fits: tab.deviceFits)
+            WebStage(
+                page: tab.isBlank || tab.asleep || tab.floating ? nil : tab.web, warm: warm, device: tab.device?.size, fits: tab.deviceFits)
             if let device = tab.device { DeviceFrame(tab: tab, device: device) }
 
             if let cover = tab.cover {

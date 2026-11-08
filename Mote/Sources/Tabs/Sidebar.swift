@@ -694,6 +694,12 @@ private struct SideRow: View {
             hovering = over
             if over { fading = true }
         }
+        // A tab the pointer rests on is likely the next: it warms (see Browser.warm).
+        .task(id: hovering) {
+            guard hovering, !live else { return }
+            try? await Task.sleep(for: .milliseconds(120))
+            if !Task.isCancelled { browser.warm(tab) }
+        }
         .task(id: hovering) {
             guard !hovering, fading else { return }
             try? await Task.sleep(for: .seconds(0.15))

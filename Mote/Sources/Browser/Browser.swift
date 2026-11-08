@@ -87,6 +87,9 @@ final class Browser: NSObject, ObservableObject {
         }
     }
     @Published var peeking = false
+    /// See `warm(_:)`.
+    @Published private(set) var warmTabs: [Tab.ID] = []
+    private var cooling: [Tab.ID: Task<Void, Never>] = [:]
 
     /// Something lies over the page: the floating tabs or toolbar, or a panel
     /// over the dimmed window. The page doesn't hover under it (see PageView).
@@ -862,6 +865,8 @@ final class Browser: NSObject, ObservableObject {
         logins.dropChoices()
         guard tab.id != activeID else { return }
         active?.keepPlace()
+        // The tab left stays warm a moment: switching back is the likeliest next.
+        let left = active
         let interval = switching.beginInterval("Select tab")
         defer { switching.endInterval("Select tab", interval) }
         if floating == tab.id { land() }
@@ -871,6 +876,7 @@ final class Browser: NSObject, ObservableObject {
         // Load a waiting tab now; only when there was nothing to wake, check
         // whether a background page's process died (doing both races two loads).
         if !tab.wake() { tab.revive() }
+        warm(left)
         wakeSplit()
         saveSoon()
         editing = false
@@ -882,11 +888,33 @@ final class Browser: NSObject, ObservableObject {
         select(tabs[index])
     }
 
-    /// ⌃Tab and ⌃⇧Tab.
+    /// ⌃Tab and ⌃⇧Tab. The tab the next press would go to is warmed.
     func step(_ direction: Int) {
         let skips = { (tab: Tab) in (self.prefs.stepSkipsEssentials && tab.pin != nil) || (self.prefs.stepSkipsSleeping && tab.asleep) }
         guard let id = activeID, let next = row.neighbour(of: id, by: direction, skipping: skips).flatMap(tab) else { return }
         select(next)
+        warm(row.neighbour(of: next.id, by: direction, skipping: skips).flatMap(tab))
+    }
+
+    // MARK: - Warm tabs
+
+    /// Awake tabs a switch will likely go to next, drawing behind the one in
+    /// front for a few seconds (see StageView.warm): the one just left, the
+    /// one ⌃Tab goes to next, a row under the pointer. Two at most.
+    func warm(_ tab: Tab?, for seconds: Double = 3) {
+        guard let tab, tab.id != activeID, !tab.asleep, !tab.isBlank, tab.built != nil else { return }
+        if !warmTabs.contains(tab.id) { warmTabs = Array((warmTabs + [tab.id]).suffix(2)) }
+        cooling[tab.id]?.cancel()
+        cooling[tab.id] = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(seconds))
+            guard !Task.isCancelled else { return }
+            self?.warmTabs.removeAll { $0 == tab.id }
+        }
+    }
+
+    /// The warm tabs' pages, for the stage.
+    var warmPages: [NSView] {
+        warmTabs.compactMap(tab).filter { $0.id != activeID && !$0.asleep && !$0.floating }.compactMap(\.built)
     }
 
     /// Drag and drop within the row; tabs stay in their section.

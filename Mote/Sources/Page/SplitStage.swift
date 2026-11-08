@@ -4,6 +4,9 @@ import SwiftUI
 /// The page area: the active tab's page, or its split view's pages side by
 /// side, with dividers to drag between them. A tab dragged over it shows
 /// where it would split in. A lone page fills it as before.
+/// The one place of a page shown alone (see SplitStage's panes).
+private let alonePane = UUID()
+
 struct SplitStage<Pane: View>: View {
     @ObservedObject var browser: Browser
     let layout: SplitLayout<Tab.ID>
@@ -22,7 +25,11 @@ struct SplitStage<Pane: View>: View {
             let frames = layout.frames(in: area, gap: Browser.splitGap)
             ZStack(alignment: .topLeading) {
                 if split { Palette.frame }
-                ForEach(layout.ids, id: \.self) { id in
+                // A page alone keeps one place whatever its tab: keyed by the
+                // tab, every switch made the stage again, moving the page out
+                // of the window and back, where it was drawn afresh (130 ms).
+                ForEach(layout.ids.map { (key: split ? $0 : alonePane, id: $0) }, id: \.key) { entry in
+                    let id = entry.id
                     if let tab = browser.tab(id), let frame = frames[id] {
                         let shape = RoundedRectangle(cornerRadius: split ? Self.corner : 0, style: .continuous)
                         pane(tab)

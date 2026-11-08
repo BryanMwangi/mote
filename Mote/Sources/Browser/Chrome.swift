@@ -345,7 +345,7 @@ private struct PageCard: View {
         } else if tab.isBlank {
             NewTabPage(browser: browser, prefs: prefs)
         } else {
-            Page(tab: tab)
+            Page(tab: tab, warm: browser.warmPages)
                 .overlay {
                     LinkBubble(status: browser.linkStatus, tab: tab, loadingFrom: tab.loadingFrom, showsLinks: prefs.showsLinks)
                 }
