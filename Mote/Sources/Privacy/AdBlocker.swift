@@ -49,15 +49,19 @@ final class AdBlocker: ObservableObject {
     private func compiled(_ compiled: WKContentRuleList?, _ error: Error?) {
         guard let compiled else { return trouble = error?.localizedDescription ?? "Compiling the block list failed" }
         list = compiled
-        if enabled { waiting.forEach { $0.add(compiled) } }
+        if enabled { waiting.forEach { set($0, blocking: true) } }
         waiting = []
     }
 
     /// A new page: the list now, or once it's compiled.
     func protect(_ controller: WKUserContentController) {
-        guard let list else { return waiting.append(controller) }
-        if enabled { controller.add(list) }
+        guard list != nil else { return waiting.append(controller) }
+        if enabled { set(controller, blocking: true) }
     }
+
+    /// The pages holding the list, so a navigation that changes nothing
+    /// doesn't send it to the page again.
+    private let holding = NSHashTable<WKUserContentController>.weakObjects()
 
     /// Before loading a page from `site`: the list only counts from when
     /// it's added, so this runs as the navigation starts.
@@ -71,8 +75,15 @@ final class AdBlocker: ObservableObject {
     }
 
     private func set(_ controller: WKUserContentController, blocking: Bool) {
-        guard let list else { return }
-        controller.remove(list)
-        if blocking { controller.add(list) }
+        guard let list, holding.contains(controller) != blocking else { return }
+        if blocking {
+            // One copied from an opener's may hold it already, untracked.
+            controller.remove(list)
+            controller.add(list)
+            holding.add(controller)
+        } else {
+            controller.remove(list)
+            holding.remove(controller)
+        }
     }
 }

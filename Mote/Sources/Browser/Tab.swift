@@ -513,9 +513,17 @@ final class Tab: ObservableObject, Identifiable {
     func arm(hiding config: ElementHidingStyle.Config) {
         hiding = config
         guard let controller = built?.configuration.userContentController else { return }
+        // Every navigation arms the page; the scripts go to it again only when
+        // they'd differ, or it's a page made since.
+        let armed = (ObjectIdentifier(controller), config, boostScript)
+        if let last = lastArmed, last.0 == armed.0, last.1 == armed.1, last.2 == armed.2 { return }
+        lastArmed = armed
         controller.removeAllUserScripts()
         PageScripts.all(hiding: config, boost: boostScript).forEach(controller.addUserScript)
     }
+
+    /// What the page's scripts were last made from, and for which controller.
+    private var lastArmed: (ObjectIdentifier, ElementHidingStyle.Config, String)?
 
     /// The boost for the site the tab is loading, as script (see Boosts.swift).
     var boostScript = ""
