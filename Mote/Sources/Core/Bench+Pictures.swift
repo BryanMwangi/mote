@@ -83,6 +83,15 @@ extension Bench {
         animate(call.request.string("action") ?? "fold", in: call.browser)
     }
 
+    /// The sidebar's list of tabs on screen, when it scrolls.
+    static func tabList(of browser: Browser) -> NSScrollView? {
+        guard let content = AppDelegate.window?.contentView else { return nil }
+        let lists = BenchInput.views(of: NSScrollView.self, in: content).filter {
+            $0.window != nil && !$0.visibleRect.isEmpty && $0.convert($0.bounds, to: nil).maxX <= browser.prefs.sideWidth + 20
+        }
+        return lists.max { $0.visibleRect.height < $1.visibleRect.height }
+    }
+
     private static func animate(_ action: String, in browser: Browser) {
         switch action {
         case "peek": browser.peek(true)
@@ -97,11 +106,7 @@ extension Bench {
         // The tab list, with the pointer resting over it as a hand's would,
         // so the rows passing under it hear it come and go.
         case "tabs":
-            guard let content = AppDelegate.window?.contentView else { return }
-            let lists = BenchInput.views(of: NSScrollView.self, in: content).filter {
-                $0.window != nil && !$0.visibleRect.isEmpty && $0.convert($0.bounds, to: nil).maxX <= browser.prefs.sideWidth + 20
-            }
-            guard let list = lists.max(by: { $0.visibleRect.height < $1.visibleRect.height }), let window = list.window else { return }
+            guard let list = tabList(of: browser), let window = list.window else { return }
             let middle = window.convertPoint(toScreen: list.convert(NSPoint(x: list.bounds.midX, y: list.visibleRect.midY), to: nil))
             CGWarpMouseCursorPosition(CGPoint(x: middle.x, y: (window.screen?.frame.maxY ?? 0) - middle.y))
             // Down from the top half, up from the bottom one, so each run moves.
