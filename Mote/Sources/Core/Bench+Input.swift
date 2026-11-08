@@ -50,17 +50,26 @@ extension Bench {
             if pressed.contains(where: { PageView.same($0, event) }) { sentBack += 1 }
             return event
         }
+        // Arrows as the keyboard sends them: function-key characters.
+        let arrows: [Character: (String, UInt16)] = [
+            "←": ("\u{F702}", 123), "→": ("\u{F703}", 124), "↑": ("\u{F700}", 126), "↓": ("\u{F701}", 125),
+        ]
+        let sunkBefore = PageKeySink.caught
         for character in text {
-            let code = BenchWire.keyCode(for: character)
-            if let down = BenchInput.key(.keyDown, String(character), code: code, in: view.window) {
+            let (chars, code) = arrows[character] ?? (String(character), BenchWire.keyCode(for: character))
+            let flags: NSEvent.ModifierFlags = arrows[character] == nil ? [] : [.function, .numericPad]
+            if let down = BenchInput.key(.keyDown, chars, code: code, flags: flags, in: view.window) {
                 pressed.append(down)
                 view.keyDown(with: down)
             }
-            BenchInput.key(.keyUp, String(character), code: code, in: view.window).map(view.keyUp)
+            BenchInput.key(.keyUp, chars, code: code, flags: flags, in: view.window).map(view.keyUp)
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
             watch.map(NSEvent.removeMonitor)
-            call.answer(["typed": text, "sentBackUnused": sentBack, "quieted": PageView.quieted - quietedBefore])
+            call.answer([
+                "typed": text, "sentBackUnused": sentBack, "quieted": PageView.quieted - quietedBefore,
+                "beepsSpared": PageKeySink.caught - sunkBefore,
+            ])
         }
     }
 
@@ -417,7 +426,9 @@ extension Bench {
 @MainActor
 enum BenchInput {
     static func flags(_ names: Set<String>) -> NSEvent.ModifierFlags {
-        let known: [String: NSEvent.ModifierFlags] = ["cmd": .command, "shift": .shift, "ctrl": .control, "opt": .option]
+        let known: [String: NSEvent.ModifierFlags] = [
+            "cmd": .command, "shift": .shift, "ctrl": .control, "opt": .option, "fn": [.function, .numericPad],
+        ]
         return names.reduce(into: []) { flags, name in
             if let flag = known[name] { flags.insert(flag) }
         }

@@ -29,6 +29,7 @@ enum WindowDressing {
     /// `id`: a window opened since, which keeps its own place by it.
     static func dress(_ window: NSWindow, main: Bool = true, id: UUID? = nil) {
         if main { AppDelegate.window = window }
+        PageKeySink.end(window)
         window.titlebarAppearsTransparent = true
         window.titleVisibility = .hidden
         window.isOpaque = false
@@ -45,4 +46,49 @@ enum WindowDressing {
         TrafficLights.refresh(in: window)
     }
 
+}
+
+/// The end of a browser window's responder chain. A key the page used
+/// without saying so comes back up from WebKit as a command (`moveLeft:` for
+/// ←, which YouTube seeks with) or the key again; with nothing to take it,
+/// AppKit beeps. Safari stays quiet about those, and so does Mote. Keys
+/// meant for Mote are taken before the page sees them (KeyRouter, the menus).
+final class PageKeySink: NSResponder {
+    /// How many it kept quiet, for the bench.
+    @MainActor static var caught = 0
+    private weak var window: NSWindow?
+
+    /// Puts one at the end of the window's chain, once.
+    @MainActor static func end(_ window: NSWindow) {
+        var last: NSResponder = window
+        while let next = last.nextResponder {
+            if next is PageKeySink { return }
+            last = next
+        }
+        let sink = PageKeySink()
+        sink.window = window
+        last.nextResponder = sink
+    }
+
+    @MainActor private var fromPage: Bool { window?.firstResponder is PageView }
+
+    override func tryToPerform(_ action: Selector, with object: Any?) -> Bool {
+        guard MainActor.assumeIsolated({ fromPage }) else { return super.tryToPerform(action, with: object) }
+        MainActor.assumeIsolated { Self.caught += 1 }
+        return true
+    }
+
+    override func doCommand(by selector: Selector) {
+        guard MainActor.assumeIsolated({ fromPage }) else { return super.doCommand(by: selector) }
+        MainActor.assumeIsolated { Self.caught += 1 }
+    }
+
+    override func keyDown(with event: NSEvent) {
+        guard MainActor.assumeIsolated({ fromPage }) else { return super.keyDown(with: event) }
+        MainActor.assumeIsolated { Self.caught += 1 }
+    }
+
+    override func noResponder(for eventSelector: Selector) {
+        if !MainActor.assumeIsolated({ fromPage }) { super.noResponder(for: eventSelector) }
+    }
 }
