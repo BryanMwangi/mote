@@ -9,6 +9,8 @@ enum ImportKind: String, CaseIterable, Identifiable, Hashable {
     /// views and colours.
     case spaces
     case shortcuts
+    /// The same extensions, from their stores.
+    case addOns
 
     var id: String { rawValue }
 
@@ -19,6 +21,7 @@ enum ImportKind: String, CaseIterable, Identifiable, Hashable {
         case .passwords: "Passwords"
         case .spaces: "Spaces and tabs"
         case .shortcuts: "Keyboard shortcuts"
+        case .addOns: "Extensions"
         }
     }
 
@@ -29,6 +32,7 @@ enum ImportKind: String, CaseIterable, Identifiable, Hashable {
         case .passwords: "key"
         case .spaces: "square.stack"
         case .shortcuts: "command"
+        case .addOns: "puzzlepiece.extension"
         }
     }
 }
@@ -57,10 +61,49 @@ struct ImportSource: Identifiable, Hashable {
 
     var kinds: [ImportKind] {
         switch family {
-        case .chromium, .firefox, .safari: [.bookmarks, .history, .passwords] + (zen == nil ? [] : [.spaces, .shortcuts])
+        case .chromium, .firefox: [.bookmarks, .history, .passwords] + (zen == nil ? [] : [.spaces, .shortcuts]) + Self.extensions
+        case .safari: [.bookmarks, .history, .passwords]
         case .passwordsFile: [.passwords]
         case .bookmarksFile: [.bookmarks]
         }
+    }
+
+    /// Extensions run from macOS 15.4.
+    private static var extensions: [ImportKind] {
+        if #available(macOS 15.4, *) { return [.addOns] }
+        return []
+    }
+
+    /// Its extensions that came from a store, to install here (as WebKit can
+    /// run them: see AddOns.Found.forWebKit). Names and store ids only.
+    var addOns: [AddOns.Found] {
+        let found: [AddOns.Found]
+        switch family {
+        case .firefox(let folder):
+            found = (try? Data(contentsOf: folder.appending(path: "extensions.json"))).map(AddOns.firefox) ?? []
+        case .chromium(let chromium):
+            found = chromium.profiles.flatMap { profile in
+                let preferences = ["Secure Preferences", "Preferences"].lazy
+                    .compactMap { try? Data(contentsOf: profile.appending(path: $0)) }
+                    .map { AddOns.chromium(preferences: $0, name: { Self.folderName(of: $0, in: profile) }) }
+                    .first { !$0.isEmpty }
+                return preferences ?? []
+            }
+        default:
+            found = []
+        }
+        var seen = Set<String>()
+        return found.map(\.forWebKit).filter { seen.insert($0.id).inserted }
+    }
+
+    /// An extension's name from its newest folder in a Chromium profile.
+    private static func folderName(of id: String, in profile: URL) -> String? {
+        let versions = profile.appending(path: "Extensions/\(id)", directoryHint: .isDirectory)
+        guard let newest = (try? FileManager.default.contentsOfDirectory(at: versions, includingPropertiesForKeys: nil))?.max(by: {
+            $0.lastPathComponent.compare($1.lastPathComponent, options: .numeric) == .orderedAscending
+        }), let manifest = try? Data(contentsOf: newest.appending(path: "manifest.json"))
+        else { return nil }
+        return AddOns.name(manifest: manifest) { try? Data(contentsOf: newest.appending(path: "_locales/\($0)/messages.json")) }
     }
 
     /// A browser rather than a file, so it can be brought into a profile of its own.
@@ -148,6 +191,7 @@ struct ImportTally: Equatable {
     var spaces = 0
     var tabs = 0
     var shortcuts = false
+    var addOns = 0
 
     var summary: String {
         var parts: [String] = []
@@ -156,6 +200,7 @@ struct ImportTally: Equatable {
         if passwords > 0 { parts.append("\(passwords) passwords") }
         if spaces > 0 { parts.append("\(spaces) spaces with \(tabs) tabs") }
         if shortcuts { parts.append("keyboard shortcuts") }
+        if addOns > 0 { parts.append(addOns == 1 ? "1 extension" : "\(addOns) extensions") }
         return parts.isEmpty ? "Nothing new to bring." : ListFormatter.localizedString(byJoining: parts) + "."
     }
 }
@@ -237,6 +282,17 @@ extension Browser {
         case .bookmarksFile:
             guard let file, let html = try? String(contentsOf: file, encoding: .utf8) else { throw ImportTrouble.unreadable }
             tally.bookmarks = take(NetscapeBookmarks.read(html: html), from: file.deletingPathExtension().lastPathComponent)
+        }
+        if kinds.contains(.addOns), #available(macOS 15.4, *) {
+            // Agreed to as a whole by the switch, which lists them: no question each.
+            let found = source.addOns
+            for addOn in found {
+                switch addOn.store {
+                case .chrome: Extensions.shared.install(from: addOn.id, agreed: true)
+                case .firefox: Extensions.shared.installFirefox(addOn.id, agreed: true)
+                }
+            }
+            tally.addOns = found.count
         }
         if let zen = source.zen {
             if kinds.contains(.spaces), let plan = try? ZenImporter.plan(for: zen) {

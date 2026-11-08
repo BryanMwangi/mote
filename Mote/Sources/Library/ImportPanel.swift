@@ -140,6 +140,13 @@ struct ImportForm: View {
     }
 
     private func detail(_ kind: ImportKind, of source: ImportSource) -> String? {
+        // Listed, as switching it on is saying yes to installing each.
+        if kind == .addOns {
+            let names = source.addOns.map(\.name)
+            guard !names.isEmpty else { return "None from a store" }
+            let shown = names.count > 4 ? Array(names.prefix(3)) + ["\(names.count - 3) more"] : names
+            return ListFormatter.localizedString(byJoining: shown) + ", from their stores"
+        }
         guard kind == .spaces, let zen = source.zen, let plan = try? ZenImporter.plan(for: zen) else { return nil }
         let spaces = plan.spaces.count
         return "\(spaces) \(spaces == 1 ? "space" : "spaces"), \(plan.tabCount) tabs, with their split views and colours"

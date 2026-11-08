@@ -72,16 +72,18 @@ extension Extensions {
     // MARK: - Adding
 
     /// From a Chrome Web Store link or id. `confirm: false` skips the question
-    /// in test runs only.
-    func install(from text: String, confirm: Bool = true) {
-        if let slug = AMO.slug(in: text) { return installFirefox(slug, confirm: confirm) }
+    /// in test runs only; `agreed`, when the person said yes to it already
+    /// (an import's list of extensions).
+    func install(from text: String, confirm: Bool = true, agreed: Bool = false) {
+        if let slug = AMO.slug(in: text) { return installFirefox(slug, confirm: confirm, agreed: agreed) }
         guard let id = CRX.extensionID(in: text) else { return say(CRX.Failure.notAnExtensionID.localizedDescription) }
         guard index(of: id) == nil else { return say("Already installed") }
         busy = id
         Task {
             defer { busy = nil }
             do {
-                try await admit(try await Self.stage(fromStore: id), as: id, fromStore: true, confirm: confirm || !Storage.testing)
+                try await admit(
+                    try await Self.stage(fromStore: id), as: id, fromStore: true, confirm: (confirm || !Storage.testing) && !agreed)
             } catch {
                 say(error.localizedDescription)
             }
@@ -90,7 +92,7 @@ extension Extensions {
 
     /// From addons.mozilla.org, by its page's address or slug: the API's
     /// latest file, checked against its hash.
-    func installFirefox(_ slug: String, confirm: Bool = true) {
+    func installFirefox(_ slug: String, confirm: Bool = true, agreed: Bool = false) {
         let id = InstalledExtension.firefoxID(for: slug)
         guard index(of: id) == nil else { return say("Already installed") }
         busy = id
@@ -98,8 +100,15 @@ extension Extensions {
             defer { busy = nil }
             do {
                 let addon = try await Self.latest(onAMO: slug)
+                // One that can't do its work in WebKit comes in a version that can.
+                let instead = AddOns.Found(name: addon.name, id: addon.guid, store: .firefox).forWebKit
+                if instead.store == .chrome {
+                    say("\(instead.name) instead: WebKit can't run \(addon.name)'s blocking for Firefox")
+                    return install(from: instead.id, confirm: confirm, agreed: agreed)
+                }
                 try await admit(
-                    try await Self.stage(fromAMO: addon, as: id), as: id, fromStore: false, confirm: confirm || !Storage.testing,
+                    try await Self.stage(fromAMO: addon, as: id), as: id, fromStore: false,
+                    confirm: (confirm || !Storage.testing) && !agreed,
                     firefox: addon.slug)
             } catch {
                 say(error.localizedDescription)
