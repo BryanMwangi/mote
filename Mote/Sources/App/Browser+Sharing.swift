@@ -62,16 +62,29 @@ extension Browser {
     }
 }
 
-/// Lets the tab row go once the share menu has closed.
+/// Lets the tab row go once the share menu has closed: on a choice, or when
+/// its popover closes, which the picker doesn't always say.
 private final class SharingDone: NSObject, NSSharingServicePickerDelegate {
     static var current: SharingDone?
     let done: () -> Void
-    init(_ done: @escaping () -> Void) { self.done = done }
+    private var closing: NSObjectProtocol?
+
+    init(_ done: @escaping () -> Void) {
+        self.done = done
+        super.init()
+        closing = NotificationCenter.default.addObserver(forName: NSPopover.didCloseNotification, object: nil, queue: .main) {
+            [weak self] _ in MainActor.assumeIsolated { self?.finish() }
+        }
+    }
 
     func sharingServicePicker(_ picker: NSSharingServicePicker, didChoose service: NSSharingService?) {
-        MainActor.assumeIsolated {
-            done()
-            Self.current = nil
-        }
+        MainActor.assumeIsolated { finish() }
+    }
+
+    @MainActor private func finish() {
+        guard Self.current === self else { return }
+        closing.map(NotificationCenter.default.removeObserver)
+        done()
+        Self.current = nil
     }
 }

@@ -172,7 +172,13 @@ struct SidebarFold: View {
     private func hide() {
         timers.hideAfter(EdgeReveal.grace) {
             guard folding, browser.editingTab == nil else { return }
-            if MenuPanel.open > 0 || Browser.sharing || pointer.window?.childWindows?.contains(where: \.isVisible) == true {
+            // Nor while a tab's right-click menu is open, the pointer over it
+            // outside the tabs, nor while Share… or the site card looks for
+            // the row it hangs from.
+            let menuOpen = NSApp.windows.contains { $0.isVisible && $0.className.contains("Menu") && $0.level >= .popUpMenu }
+            if MenuPanel.open > 0 || Browser.sharing || browser.siteCardRow != nil || menuOpen
+                || pointer.window?.childWindows?.contains(where: \.isVisible) == true
+            {
                 return hide()
             }
             browser.peek(false)
