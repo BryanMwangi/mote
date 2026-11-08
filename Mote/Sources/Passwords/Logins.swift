@@ -41,6 +41,7 @@ final class Logins {
     var managing = false {
         didSet { if managing { reload() } }
     }
+    /// The accounts, without their passwords (see PasswordStore.accounts).
     private(set) var saved: [Login] = []
     /// The panel's search text.
     var query = ""
@@ -146,7 +147,19 @@ final class Logins {
 
     // MARK: - The Passwords panel
 
-    func reload() { saved = PasswordStore.all() }
+    func reload() { saved = PasswordStore.accounts() }
+
+    /// A listed account's new username or password; the old account goes if
+    /// it was renamed.
+    func edit(_ login: Login, user: String, password: String) {
+        var next = login
+        next.user = user
+        next.password = password
+        guard PasswordStore.save(next) else { return say("The keychain refused it") }
+        if user != login.user { PasswordStore.forget(host: login.host, user: login.user) }
+        reload()
+        say("Saved for \(login.host)")
+    }
 
     func add(host: String, user: String, password: String) {
         guard PasswordStore.save(host: host, user: user, password: password) else { return say("The keychain refused it") }
@@ -165,10 +178,10 @@ final class Logins {
     /// seconds unless something else was copied.
     func copy(_ login: Login) {
         PasswordStore.prove("copy the password for \(login.host)") { [weak self] ok in
-            guard ok else { return }
+            guard ok, let password = PasswordStore.password(for: login) else { return }
             let board = NSPasteboard.general
             board.prepareForNewContents(with: .currentHostOnly)
-            board.setString(login.password, forType: .string)
+            board.setString(password, forType: .string)
             board.setData(Data(), forType: NSPasteboard.PasteboardType("org.nspasteboard.ConcealedType"))
             board.setData(Data(), forType: NSPasteboard.PasteboardType("org.nspasteboard.TransientType"))
             let copied = board.changeCount

@@ -22,9 +22,16 @@ enum PasswordStore {
         return Login.matching(host, in: items.compactMap(\.login), site: registrable)
     }
 
-    /// Every saved login, by site and account.
-    static func all() -> [Login] {
-        Login.listed(Keychain.items().compactMap(\.login))
+    /// Every saved account, by site and account, without its password: one
+    /// keychain query for the list, where reading each password was one more
+    /// apiece. A password is read when it's asked for (`password(for:)`).
+    static func accounts() -> [Login] {
+        Login.listed(Keychain.items().map { Login(host: $0.server, user: $0.account, password: "", used: $0.used, clear: $0.clear) })
+    }
+
+    /// A listed account's password.
+    static func password(for login: Login) -> String? {
+        Keychain.secret(server: login.host, account: login.user)
     }
 
     // MARK: - Writing

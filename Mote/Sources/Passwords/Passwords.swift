@@ -45,10 +45,14 @@ struct PasswordsPanel: View {
         } else {
             ScrollView(showsIndicators: false) {
                 Card {
-                    ForEach(Array(sites.enumerated()), id: \.element.host) { index, site in
-                        if index > 0 { Rule() }
-                        SiteRow(site: site, open: openSite == site.host, logins: logins) {
-                            openSite = openSite == site.host ? nil : site.host
+                    // Rows are made as they scroll into view: hundreds of
+                    // sites, each with its icon, made at once kept the panel waiting.
+                    LazyVStack(spacing: 0) {
+                        ForEach(Array(sites.enumerated()), id: \.element.host) { index, site in
+                            if index > 0 { Rule() }
+                            SiteRow(site: site, open: openSite == site.host, logins: logins) {
+                                openSite = openSite == site.host ? nil : site.host
+                            }
                         }
                     }
                 }
@@ -144,18 +148,28 @@ private struct SiteRow: View {
     }
 }
 
-/// One account. Its password shows for 15 seconds once you've proved it's you.
+/// One account. Its password is read and shows for 15 seconds once you've
+/// proved it's you; editing it asks the same.
 private struct AccountRow: View {
     let login: Login
     let logins: Logins
 
     @State private var hovering = false
-    @State private var shown = false
+    /// The password, while shown.
+    @State private var secret: String?
     @State private var hiding: Task<Void, Never>?
-
-    private var dots: String { String(repeating: "•", count: min(12, max(6, login.password.count))) }
+    /// The new username and password, while editing.
+    @State private var draft: (user: String, password: String)?
 
     var body: some View {
+        if let draft {
+            editor(draft)
+        } else {
+            row
+        }
+    }
+
+    private var row: some View {
         HStack(spacing: 10) {
             Text(login.user.isEmpty ? "No username" : login.user)
                 .font(.system(size: 12))
@@ -163,15 +177,16 @@ private struct AccountRow: View {
                 .lineLimit(1)
                 .truncationMode(.middle)
                 .frame(minWidth: 120, alignment: .leading)
-            Text(shown ? login.password : dots)
-                .font(.system(size: shown ? 12.5 : 10, design: .monospaced))
-                .foregroundStyle(shown ? Palette.ink : Palette.muted)
+            Text(secret ?? "••••••••••")
+                .font(.system(size: secret == nil ? 10 : 12.5, design: .monospaced))
+                .foregroundStyle(secret == nil ? Palette.muted : Palette.ink)
                 .lineLimit(1)
                 .textSelection(.enabled)
             Spacer(minLength: 8)
-            if hovering || shown {
-                Quick(shown ? "Hide" : "Show") { shown ? hide() : show() }
+            if hovering || secret != nil {
+                Quick(secret == nil ? "Show" : "Hide") { secret == nil ? show() : hide() }
                 Quick("Copy") { logins.copy(login) }
+                Quick("Edit", act: edit)
                 Quick("Remove", tint: .red.opacity(0.75)) { logins.forget(login) }
             }
         }
@@ -181,25 +196,54 @@ private struct AccountRow: View {
         .contentShape(Rectangle())
         .onHover { hovering = $0 }
         .animation(Motion.quick, value: hovering)
-        .animation(Motion.quick, value: shown)
+        .animation(Motion.quick, value: secret)
         .onDisappear(perform: hide)
+    }
+
+    private func editor(_ draft: (user: String, password: String)) -> some View {
+        HStack(spacing: 8) {
+            TextField("Username", text: Binding(get: { draft.user }, set: { self.draft?.user = $0 }))
+            SecureField("Password", text: Binding(get: { draft.password }, set: { self.draft?.password = $0 }))
+                .font(.system(size: 12.5, design: .monospaced))
+                .onSubmit(save)
+            Quick("Cancel") { self.draft = nil }
+            Pill("Save", filled: true, action: save).disabled(draft.password.isEmpty)
+        }
+        .textFieldStyle(.roundedBorder)
+        .font(.system(size: 12))
+        .padding(.horizontal, 10)
+        .padding(.vertical, 5)
     }
 
     private func show() {
         PasswordStore.prove("show the password for \(login.host)") { ok in
-            guard ok else { return }
-            shown = true
+            guard ok, let password = PasswordStore.password(for: login) else { return }
+            secret = password
             hiding?.cancel()
             hiding = Task {
                 try? await Task.sleep(for: .seconds(15))
-                if !Task.isCancelled { shown = false }
+                if !Task.isCancelled { secret = nil }
             }
         }
     }
 
     private func hide() {
         hiding?.cancel()
-        shown = false
+        secret = nil
+    }
+
+    private func edit() {
+        PasswordStore.prove("edit the password for \(login.host)") { ok in
+            guard ok, let password = PasswordStore.password(for: login) else { return }
+            hide()
+            draft = (login.user, password)
+        }
+    }
+
+    private func save() {
+        guard let draft, !draft.password.isEmpty else { return }
+        self.draft = nil
+        logins.edit(login, user: draft.user.trimmingCharacters(in: .whitespaces), password: draft.password)
     }
 }
 
