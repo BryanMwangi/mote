@@ -253,9 +253,10 @@ struct TabSettings: View {
                 "How far you've read", "The tab you're on fills in as you scroll", symbol: "text.line.first.and.arrowtriangle.forward",
                 tint: Tint.green, on: $prefs.showsReading)
             RowRule()
+            SettingRow("Bookmarks bar on new tabs", symbol: "bookmark", tint: Tint.pink, on: $prefs.bookmarksOnStart)
+            RowRule()
             SettingRow(
-                "Bookmarks bar everywhere", "New tabs always show it; this keeps it over every page", symbol: "bookmark", tint: Tint.pink,
-                on: $prefs.bookmarksBar)
+                "Bookmarks bar everywhere", "Over every page too", symbol: "bookmark.fill", tint: Tint.pink, on: $prefs.bookmarksBar)
         }
 
         SettingsSection("Moving between tabs") {
