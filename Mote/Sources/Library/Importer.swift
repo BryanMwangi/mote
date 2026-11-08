@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import MoteCore
 import UniformTypeIdentifiers
 
@@ -99,9 +100,10 @@ struct ImportSource: Identifiable, Hashable {
     /// An extension's name from its newest folder in a Chromium profile.
     private static func folderName(of id: String, in profile: URL) -> String? {
         let versions = profile.appending(path: "Extensions/\(id)", directoryHint: .isDirectory)
-        guard let newest = (try? FileManager.default.contentsOfDirectory(at: versions, includingPropertiesForKeys: nil))?.max(by: {
-            $0.lastPathComponent.compare($1.lastPathComponent, options: .numeric) == .orderedAscending
-        }), let manifest = try? Data(contentsOf: newest.appending(path: "manifest.json"))
+        guard
+            let newest = (try? FileManager.default.contentsOfDirectory(at: versions, includingPropertiesForKeys: nil))?.max(by: {
+                $0.lastPathComponent.compare($1.lastPathComponent, options: .numeric) == .orderedAscending
+            }), let manifest = try? Data(contentsOf: newest.appending(path: "manifest.json"))
         else { return nil }
         return AddOns.name(manifest: manifest) { try? Data(contentsOf: newest.appending(path: "_locales/\($0)/messages.json")) }
     }
@@ -157,7 +159,8 @@ struct ImportSource: Identifiable, Hashable {
                 browsers.append(
                     ImportSource(
                         id: "firefox:\(path.path)", name: profiles.count > 1 ? "\(name) — \(profile)" : name, browser: name, bundle: bundle,
-                        family: .firefox(path), zen: name == "Zen" ? zens.first { $0.folder.standardizedFileURL == path.standardizedFileURL } : nil))
+                        family: .firefox(path),
+                        zen: name == "Zen" ? zens.first { $0.folder.standardizedFileURL == path.standardizedFileURL } : nil))
             }
         }
         let preferred = NSWorkspace.shared.urlForApplication(toOpen: URL(string: "https://example.com")!)
@@ -179,8 +182,11 @@ struct ImportSource: Identifiable, Hashable {
         return FirefoxProfiles.parse(profiles: list, installs: installs)
             .sorted { $0.isDefault && !$1.isDefault }
             .compactMap { found in
-                let path = found.isRelative ? root.appending(path: found.path, directoryHint: .isDirectory) : URL(fileURLWithPath: found.path)
-                let has = ["places.sqlite", "logins.json"].contains { FileManager.default.fileExists(atPath: path.appending(path: $0).path) }
+                let path =
+                    found.isRelative ? root.appending(path: found.path, directoryHint: .isDirectory) : URL(fileURLWithPath: found.path)
+                let has = ["places.sqlite", "logins.json"].contains {
+                    FileManager.default.fileExists(atPath: path.appending(path: $0).path)
+                }
                 return has ? (found.name, path) : nil
             }
     }
@@ -220,10 +226,14 @@ extension Browser {
     /// Brings `kinds` over from `source`. Safari and the files need `file`:
     /// Safari's export (its folder or zip), or the file itself. Nothing in the
     /// other browser changes.
-    func bring(_ kinds: Set<ImportKind>, from source: ImportSource, file: URL? = nil, primaryPassword: String = "")
+    func bring(
+        _ kinds: Set<ImportKind>, from source: ImportSource, file: URL? = nil, primaryPassword: String = ""
+    )
         async throws -> ImportTally
     {
         var tally = ImportTally()
+        /// Pages whose icons a Firefox-family browser has kept.
+        var iconsWanted: [URL] = []
         switch source.family {
         case .chromium(let chromium):
             if kinds.contains(.bookmarks) { tally.bookmarks = takeBookmarks(from: chromium, saying: false) }
@@ -240,25 +250,32 @@ extension Browser {
                 let found = try await Task.detached(priority: .userInitiated) {
                     try Self.firefoxLogins(in: folder, primaryPassword: primaryPassword)
                 }.value
-                tally.passwords = found.filter { login in
-                    PasswordStore.save(
-                        host: Address.siteHost(typed: login.site), user: login.user, password: login.password, used: login.used,
-                        clear: login.site.lowercased().hasPrefix("http://"))
-                }.count
+                tally.passwords =
+                    found.filter { login in
+                        PasswordStore.save(
+                            host: Address.siteHost(typed: login.site), user: login.user, password: login.password, used: login.used,
+                            clear: login.site.lowercased().hasPrefix("http://"))
+                    }.count
                 logins.reload()
             }
             let places = folder.appending(path: "places.sqlite")
             if kinds.contains(.bookmarks) {
-                let rows = (try? SQLiteCopy.rows(of: places, FirefoxPlaces.bookmarksSQL) { row in
-                    FirefoxPlaces.Row(
-                        id: row.int(0), parent: row.int(1), type: row.int(2), title: row.text(3), url: row.text(4), guid: row.text(5))
-                }) ?? []
-                tally.bookmarks = take(FirefoxPlaces.bookmarks(rows), from: source.browser)
+                let rows =
+                    (try? SQLiteCopy.rows(of: places, FirefoxPlaces.bookmarksSQL) { row in
+                        FirefoxPlaces.Row(
+                            id: row.int(0), parent: row.int(1), type: row.int(2), title: row.text(3), url: row.text(4), guid: row.text(5))
+                    }) ?? []
+                let found = FirefoxPlaces.bookmarks(rows)
+                tally.bookmarks = take(found, from: source.browser)
+                iconsWanted += BookmarkTree.urls(found)
             }
             if kinds.contains(.history) {
-                let visits = (try? SQLiteCopy.rows(of: places, FirefoxPlaces.historySQL) { row in
-                    URL(string: row.text(0)).map { Visit(url: $0, title: row.text(1), count: Int(max(1, row.int(2))), last: FirefoxPlaces.date(row.int(3))) }
-                })?.compactMap { $0 } ?? []
+                let visits =
+                    (try? SQLiteCopy.rows(of: places, FirefoxPlaces.historySQL) { row in
+                        URL(string: row.text(0)).map {
+                            Visit(url: $0, title: row.text(1), count: Int(max(1, row.int(2))), last: FirefoxPlaces.date(row.int(3)))
+                        }
+                    })?.compactMap { $0 } ?? []
                 tally.history = take(visits)
             }
         case .safari:
@@ -299,6 +316,7 @@ extension Browser {
         }
         if let zen = source.zen {
             if kinds.contains(.spaces), let plan = try? ZenImporter.plan(for: zen) {
+                iconsWanted += plan.spaces.flatMap { $0.tabs.map(\.url) }
                 let brought = importZen(plan)
                 tally.spaces = brought.spaces
                 tally.tabs = brought.tabs
@@ -308,7 +326,39 @@ extension Browser {
                 tally.shortcuts = true
             }
         }
+        if case .firefox(let folder) = source.family, !iconsWanted.isEmpty {
+            // In the background: the tabs and bookmarks show the icons as they come.
+            Task {
+                let urls = iconsWanted
+                let icons = await Task.detached(priority: .utility) { Self.firefoxIcons(in: folder, for: urls) }.value
+                for (host, data) in icons { await Favicons.shared.adopt(data, for: host) }
+                Favicons.shared.relook(tabs)
+                objectWillChange.send()
+            }
+        }
         return tally
+    }
+
+    /// A Firefox-family profile's kept icons for these pages' sites, by host:
+    /// the largest of each up to 256 pixels.
+    nonisolated static func firefoxIcons(in folder: URL, for urls: [URL], limit: Int = 400) -> [String: Data] {
+        let sites = Chromium.iconSites(urls, limit: limit)
+        var icons: [String: Data] = [:]
+        let sql = """
+            SELECT i.data FROM moz_pages_w_icons p JOIN moz_icons_to_pages m ON m.page_id = p.id JOIN moz_icons i ON i.id = m.icon_id
+            WHERE p.page_url = ? AND i.data IS NOT NULL AND i.width BETWEEN 16 AND 256 ORDER BY i.width DESC LIMIT 1
+            """
+        try? SQLiteCopy.open(folder.appending(path: "favicons.sqlite")) { database in
+            for (host, url) in sites where icons[host] == nil {
+                for page in Chromium.iconPages(for: url) {
+                    if let data = database.first(sql, binding: page, { $0.blob(0) }), data.count > 60 {
+                        icons[host] = data
+                        break
+                    }
+                }
+            }
+        }
+        return icons
     }
 
     private func take(_ found: [Bookmark], from browser: String) -> Int {
@@ -326,8 +376,10 @@ extension Browser {
     nonisolated private static func firefoxLogins(in folder: URL, primaryPassword: String) throws -> [FirefoxLogins.Login] {
         let database = folder.appending(path: "key4.db")
         guard
-            let check = try? SQLiteCopy.rows(of: database, "SELECT item1, item2 FROM metadata WHERE id = 'password'", { ($0.blob(0), $0.blob(1)) })
-                .first,
+            let check = try? SQLiteCopy.rows(
+                of: database, "SELECT item1, item2 FROM metadata WHERE id = 'password'", { ($0.blob(0), $0.blob(1)) }
+            )
+            .first,
             let keys = try? SQLiteCopy.rows(of: database, "SELECT a11, a102 FROM nssPrivate", { (key: $0.blob(0), id: $0.blob(1)) }),
             let json = try? Data(contentsOf: folder.appending(path: "logins.json"))
         else { return [] }
