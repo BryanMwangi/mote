@@ -21,6 +21,9 @@ struct ImportForm: View {
     @State private var working = false
     @State private var tally: ImportTally?
     @State private var trouble: String?
+    /// What each source brought, by its id: one imported can't be again,
+    /// which would bring its history twice; another can be picked after it.
+    @State private var imported: [String: ImportTally] = [:]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -33,9 +36,12 @@ struct ImportForm: View {
                     ForEach(Array(source.kinds.enumerated()), id: \.element) { index, kind in
                         if index > 0 { Rule() }
                         Line(kind.title, detail(kind, of: source)) {
-                            Switch(on: Binding(get: { kinds.contains(kind) }, set: { on in
-                                if on { kinds.insert(kind) } else { kinds.remove(kind) }
-                            }))
+                            Switch(
+                                on: Binding(
+                                    get: { kinds.contains(kind) },
+                                    set: { on in
+                                        if on { kinds.insert(kind) } else { kinds.remove(kind) }
+                                    }))
                         }
                     }
                 }
@@ -50,7 +56,11 @@ struct ImportForm: View {
                         .onSubmit(run)
                 }
             }
-            if let tally { note(tally.summary, strong: true) }
+            if let tally {
+                note(
+                    close == nil && sources.contains(where: { $0.isBrowser && imported[$0.id] == nil })
+                        ? "\(tally.summary) Another browser can come along too: pick it above." : tally.summary, strong: true)
+            }
             if let trouble { note(trouble, strong: true) }
             HStack(spacing: 8) {
                 note(source.map { $0.isBrowser ? "Nothing in \($0.browser) changes." : "The file is read, not kept." } ?? "")
@@ -58,6 +68,8 @@ struct ImportForm: View {
                 if let close, tally == nil { Pill("Cancel", action: close) }
                 if tally != nil, let close {
                     Pill("Done", filled: true, action: close)
+                } else if tally != nil {
+                    Pill("Imported") {}.disabled(true)
                 } else {
                     Pill(working ? "Importing…" : needsFile ? "Choose File…" : "Import", filled: true, action: run)
                         .disabled(working || source == nil || kinds.isEmpty)
@@ -99,7 +111,11 @@ struct ImportForm: View {
         Button {
             pick(item)
         } label: {
-            Label { Text(item.name) } icon: { Image(nsImage: Self.small(item.icon)) }
+            Label {
+                Text(imported[item.id] == nil ? item.name : "\(item.name) — imported")
+            } icon: {
+                Image(nsImage: Self.small(item.icon))
+            }
         }
     }
 
@@ -132,7 +148,7 @@ struct ImportForm: View {
     private func pick(_ chosen: ImportSource?) {
         source = chosen
         kinds = Set(chosen?.kinds ?? [])
-        tally = nil
+        tally = chosen.flatMap { imported[$0.id] }
         trouble = nil
         asking = false
         primaryPassword = ""
@@ -170,7 +186,9 @@ struct ImportForm: View {
         Task {
             defer { working = false }
             do {
-                tally = try await browser.bring(kinds, from: source, file: file, primaryPassword: primaryPassword)
+                let brought = try await browser.bring(kinds, from: source, file: file, primaryPassword: primaryPassword)
+                imported[source.id] = brought
+                tally = brought
                 asking = false
             } catch ImportTrouble.primaryPassword {
                 asking = true
