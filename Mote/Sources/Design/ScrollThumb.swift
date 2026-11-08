@@ -90,37 +90,42 @@ private struct Thumb: View {
                 let travel = part < 1 ? span.lowerBound / (1 - part) : 0
                 let wide: CGFloat = place.held ? 7 : 4
                 ZStack(alignment: .topTrailing) {
-                    // The strip: thin, so the rows' close buttons stay clear of it.
-                    Color.clear.frame(width: 9).contentShape(Rectangle())
                     Capsule()
                         .fill(Palette.ink.opacity(place.held ? 0.45 : 0.32))
                         .frame(width: wide, height: height)
                         .offset(x: -1, y: travel * room)
+                        .opacity(place.shown || place.held ? 1 : 0)
+                        .allowsHitTesting(false)
+                    // The strip alone takes the pointer: thin, along the very
+                    // edge, so a press on a row stays the row's (a click, a drag).
+                    Color.clear
+                        .frame(width: 6)
+                        .frame(maxHeight: .infinity)
+                        .contentShape(Rectangle())
+                        .onHover { place.held = $0 || grabbed != nil }
+                        .gesture(
+                            DragGesture(minimumDistance: 0)
+                                .onChanged { drag in
+                                    guard room > 0 else { return }
+                                    // On the thumb it's held where taken; off it, it centres there first.
+                                    let start =
+                                        grabbed
+                                        ?? {
+                                            let top = travel * room
+                                            let on = drag.startLocation.y >= top && drag.startLocation.y <= top + height
+                                            return (on ? drag.startLocation.y - top : height / 2, travel)
+                                        }()
+                                    grabbed = start
+                                    place.held = true
+                                    let share = min(max((drag.location.y - start.at) / room, 0), 1)
+                                    place.scroll(share * place.room)
+                                }
+                                .onEnded { _ in
+                                    grabbed = nil
+                                    place.held = false
+                                })
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
-                .opacity(place.shown || place.held ? 1 : 0)
-                .onHover { place.held = $0 || grabbed != nil }
-                .gesture(
-                    DragGesture(minimumDistance: 0)
-                        .onChanged { drag in
-                            guard room > 0 else { return }
-                            // On the thumb it's held where taken; off it, it centres there first.
-                            let start =
-                                grabbed
-                                ?? {
-                                    let top = travel * room
-                                    let on = drag.startLocation.y >= top && drag.startLocation.y <= top + height
-                                    return (on ? drag.startLocation.y - top : height / 2, travel)
-                                }()
-                            grabbed = start
-                            place.held = true
-                            let share = min(max((drag.location.y - start.at) / room, 0), 1)
-                            place.scroll(share * place.room)
-                        }
-                        .onEnded { _ in
-                            grabbed = nil
-                            place.held = false
-                        })
             }
         }
         .padding(.vertical, 3)
