@@ -172,7 +172,9 @@ struct SidebarFold: View {
     private func hide() {
         timers.hideAfter(EdgeReveal.grace) {
             guard folding, browser.editingTab == nil else { return }
-            if MenuPanel.open > 0 || pointer.window?.childWindows?.contains(where: \.isVisible) == true { return hide() }
+            if MenuPanel.open > 0 || Browser.sharing || pointer.window?.childWindows?.contains(where: \.isVisible) == true {
+                return hide()
+            }
             browser.peek(false)
         }
     }

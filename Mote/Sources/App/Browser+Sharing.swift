@@ -5,6 +5,10 @@ extension Browser {
     /// window, or the page.
     static var sharedAt = ""
 
+    /// A share menu is open from a tab's row: the floating tabs stay out
+    /// under it, or it would point at nothing, or close with them.
+    static var sharing: Bool { SharingDone.current != nil }
+
     /// Share…, from anywhere: the share menu beside the tab's row in the
     /// sidebar, or below it in the strip, as the site card opens; with the
     /// tabs out of sight, the page's corner.
