@@ -156,6 +156,33 @@ extension Browser {
     /// Spaces made elsewhere (an import), after the others.
     func addSpaces(_ made: [Space]) { editSpaces { list in made.forEach { list.add($0) } } }
 
+    /// Spaces brought from another browser (see importZen).
+    var importedSpaces: [Space] { spaces.filter { $0.origin != nil && !$0.isFirst } }
+
+    /// An imported space becomes the first: its tabs, essentials and pinned
+    /// tabs go into it, and its name, icon and colours with them. Whether it
+    /// brought colours and essentials, which the welcome then doesn't ask for.
+    func makeFirst(_ id: UUID) async -> (colours: Bool, essentials: Bool) {
+        guard let chosen = spaces.first(where: { $0.id == id }), !chosen.isFirst else { return (false, false) }
+        let first = Space.firstID
+        let before = essentials(in: first)
+        _ = await mergeSpace(id, into: first)
+        // It keeps its origin, so importing it again doesn't bring it back.
+        editSpaces {
+            $0.edit(first) {
+                $0.name = chosen.name
+                $0.icon = chosen.icon
+                $0.theme = chosen.theme
+                $0.origin = chosen.origin
+            }
+        }
+        return (chosen.theme != nil, essentials(in: first) > before)
+    }
+
+    private func essentials(in space: UUID) -> Int {
+        (spaceID == space ? tabs : parked[space]?.tabs ?? []).filter { $0.section == .essential }.count
+    }
+
     func moveSpace(_ id: UUID, to index: Int) { editSpaces { $0.move(id, to: index) } }
 
     func renameSpace(_ id: UUID, to name: String) {

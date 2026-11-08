@@ -13,7 +13,7 @@ struct WelcomeCard: View {
     @ObservedObject var prefs: Preferences
     let finish: () -> Void
 
-    enum Step: CaseIterable { case bring, theme, search, apps, ads, layout, ai, links, start }
+    enum Step: CaseIterable { case bring, home, theme, search, apps, ads, layout, ai, links, start }
 
     @State private var index = 0
     @State private var apps: Set<String> = []
@@ -22,7 +22,27 @@ struct WelcomeCard: View {
     @ObservedObject private var drafts = ThemeDrafts.shared
     private var assistant: Assistant { .shared }
 
-    private var step: Step { Step.allCases[index] }
+    /// The imported space picked as the first, and whether it brought
+    /// colours and essentials: then those steps aren't asked.
+    @State private var home: UUID?
+    @State private var brought = (colours: false, essentials: false)
+    /// The first space has been chosen: once only, even coming back to the step.
+    @State private var homed = false
+
+    /// The steps there are: choosing the first space only after an import
+    /// brought several, and not those the chosen space already answers.
+    private var steps: [Step] {
+        Step.allCases.filter {
+            switch $0 {
+            case .home: browser.importedSpaces.count > 1 || home != nil
+            case .theme: !brought.colours
+            case .apps: !brought.essentials
+            default: true
+            }
+        }
+    }
+
+    private var step: Step { steps[min(index, steps.count - 1)] }
     @Environment(\.colorScheme) private var scheme
     @Environment(\.displayScale) private var displayScale
 
@@ -111,11 +131,39 @@ struct WelcomeCard: View {
         .padding(EdgeInsets(top: 44, leading: 44, bottom: 40, trailing: 40))
     }
 
-    private var optional: Bool { [.bring, .apps, .ai].contains(step) }
+    private var optional: Bool { [.bring, .home, .apps, .ai].contains(step) }
+
+    /// The imported spaces, to pick the first from.
+    private var homes: some View {
+        VStack(spacing: 6) {
+            ForEach(browser.importedSpaces) { space in
+                let on = (home ?? browser.importedSpaces.first?.id) == space.id
+                Button {
+                    home = space.id
+                } label: {
+                    HStack(spacing: 12) {
+                        Text(space.emoji ?? "").font(.system(size: 18)).frame(width: 24)
+                        Text(space.name).font(.system(size: 14, weight: .medium)).foregroundStyle(on ? accent : Palette.ink)
+                        Spacer()
+                        if let colours = space.theme?.colors.compactMap(Color.init(hex:)), !colours.isEmpty {
+                            HStack(spacing: -4) { ForEach(colours.indices, id: \.self) { Circle().fill(colours[$0]).frame(width: 14) } }
+                        }
+                        Image(systemName: on ? "checkmark.circle.fill" : "circle").foregroundStyle(on ? accent : Palette.faint)
+                    }
+                    .padding(.horizontal, 14)
+                    .frame(height: 46)
+                    .background(on ? Palette.wash : .clear, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
 
     private var title: String {
         switch step {
         case .bring: "Bring your stuff along."
+        case .home: "Which space is home?"
         case .theme: "Your space, your colours."
         case .search: "Pick your search engine."
         case .apps: "Choose the apps you use most."
@@ -130,6 +178,7 @@ struct WelcomeCard: View {
     private var line: String {
         switch step {
         case .bring: "Import your bookmarks, history and passwords from another browser and pick up right where you left off."
+        case .home: "Its tabs, essentials and colours become your first space. The others come along as spaces of their own."
         case .theme: "Give each space colours of its own. Watch them fill the screen as you pick."
         case .search: "Where your searches go. You can always change it later."
         case .apps: "They stay at the top of your sidebar as essentials, one click away."
@@ -148,6 +197,7 @@ struct WelcomeCard: View {
             Group {
                 switch step {
                 case .bring: framed { ImportForm(browser: browser).frame(width: 400) }
+                case .home: framed { homes.frame(width: 360) }
                 case .theme: framed { ThemeEditor(browser: browser, space: browser.spaceID, embedded: true) }
                 case .search: engines
                 case .apps: appGrid
@@ -225,8 +275,12 @@ struct WelcomeCard: View {
                     } label: {
                         SiteMark(host: URL(string: app.url)?.host() ?? "", tint: Color(hex: app.color) ?? accent, size: 40)
                             .frame(width: 104, height: 104)
-                            .background(on ? accent.opacity(0.12) : Palette.wash, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-                            .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(on ? accent : .clear, lineWidth: 2))
+                            .background(
+                                on ? accent.opacity(0.12) : Palette.wash, in: RoundedRectangle(cornerRadius: 20, style: .continuous)
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(on ? accent : .clear, lineWidth: 2)
+                            )
                             .overlay(alignment: .topTrailing) {
                                 if on {
                                     Image(systemName: "checkmark.circle.fill").font(.system(size: 18)).foregroundStyle(accent).padding(8)
@@ -296,8 +350,12 @@ struct WelcomeCard: View {
         framed {
             VStack(alignment: .leading, spacing: 14) {
                 fact("magnifyingglass", "Searching with \(prefs.engine.title)")
-                fact(prefs.sidebar ? "sidebar.left" : "rectangle.topthird.inset.filled", prefs.sidebar ? "Tabs down the side" : "Tabs on top")
-                fact(prefs.shielded ? "shield.lefthalf.filled" : "shield.slash", prefs.shielded ? "Ads and trackers blocked" : "Nothing blocked")
+                fact(
+                    prefs.sidebar ? "sidebar.left" : "rectangle.topthird.inset.filled", prefs.sidebar ? "Tabs down the side" : "Tabs on top"
+                )
+                fact(
+                    prefs.shielded ? "shield.lefthalf.filled" : "shield.slash",
+                    prefs.shielded ? "Ads and trackers blocked" : "Nothing blocked")
                 fact("sparkles", "Asking \(assistant.provider.name)")
                 if browser.essentialCount > 0 { fact("square.grid.3x3", "\(browser.essentialCount) essentials") }
             }
@@ -315,7 +373,8 @@ struct WelcomeCard: View {
     private func choice(_ title: String, _ detail: String, symbol: String, on: Bool, pick: @escaping () -> Void) -> some View {
         Button(action: pick) {
             HStack(spacing: 14) {
-                Image(systemName: symbol).font(.system(size: 17, weight: .medium)).foregroundStyle(on ? accent : Palette.muted).frame(width: 26)
+                Image(systemName: symbol).font(.system(size: 17, weight: .medium)).foregroundStyle(on ? accent : Palette.muted).frame(
+                    width: 26)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title).font(.system(size: 14.5, weight: .semibold)).foregroundStyle(Palette.ink)
                     Text(detail).font(.system(size: 12)).foregroundStyle(Palette.muted)
@@ -337,7 +396,20 @@ struct WelcomeCard: View {
 
     private func next() {
         if step == .apps { addApps() }
-        guard index + 1 < Step.allCases.count else { return finish() }
+        if step == .home, !homed, let chosen = home ?? browser.importedSpaces.first?.id {
+            home = chosen
+            homed = true
+            Task {
+                brought = await browser.makeFirst(chosen)
+                advance()
+            }
+            return
+        }
+        advance()
+    }
+
+    private func advance() {
+        guard index + 1 < steps.count else { return finish() }
         forward = true
         index += 1
     }
