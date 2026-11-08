@@ -41,7 +41,10 @@ extension Bench {
             "spaceIndex": browser.spaces.firstIndex { $0.id == browser.spaceID } ?? -1,
             "settingsQuery": SettingsSearch.shared.query, "settingsFocusAsked": SettingsSearch.shared.focusAsked,
             "finding": browser.finder.showing, "asking": browser.field.asksAssistant, "profile": Storage.profile ?? "",
-            "profiles": Profiles.shared.list.map(\.id), "sharedAt": Browser.sharedAt, "sharing": Browser.sharing,
+            "profiles": Profiles.shared.list.map(\.id), "sharedAt": Browser.sharedAt,
+            "pageTracking": (browser.active?.built?.trackingAreas ?? []).map {
+                "\($0.owner.map { String(describing: type(of: $0)) } ?? "nil") \($0.options.rawValue)"
+            }, "sharing": Browser.sharing,
             "siteCardRow": browser.siteCardRow.map(BenchWire.short) ?? "",
             "editingTab": browser.editingTab.map(BenchWire.short) ?? "",
             "responder": browser.window?.firstResponder.map { String(describing: type(of: $0)) } ?? "",

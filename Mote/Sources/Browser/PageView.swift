@@ -382,25 +382,31 @@ final class PageView: WKWebView {
         super.mouseUp(with: event)
     }
 
-    /// Tracking areas ignore what lies on top: under the floating tabs or a
-    /// panel the page would still hover its links and set its cursor. It
-    /// hears the pointer leave instead, once, and the arrow comes back.
-    override func mouseMoved(with event: NSEvent) {
-        guard Windows.shared.browser(for: window)?.pageCovered == true else {
-            covered = false
-            return super.mouseMoved(with: event)
+    /// Something lies over the page (the floating tabs, a panel), or no
+    /// longer does. Tracking areas ignore what lies on top, and WebKit's own,
+    /// which follow the pointer for hover and the cursor, belong to an object
+    /// of its own rather than this view: they're set aside meanwhile, and the
+    /// page hears the pointer leave, so what it hovered lets go.
+    func cover(_ covered: Bool) {
+        guard covered != !setAside.isEmpty else { return }
+        if covered {
+            setAside = trackingAreas.filter { area in area.owner.map { $0 !== self && "\(type(of: $0))".contains("Tracking") } ?? false }
+            setAside.forEach(removeTrackingArea)
+            let point = window?.mouseLocationOutsideOfEventStream ?? .zero
+            let left = NSEvent.enterExitEvent(
+                with: .mouseExited, location: point, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                windowNumber: window?.windowNumber ?? 0, context: nil, eventNumber: 0, trackingNumber: 0, userData: nil)
+            left.map(super.mouseExited)
+            NSCursor.arrow.set()
+        } else {
+            // WebKit may have put them back itself, moving windows.
+            for area in setAside where !trackingAreas.contains(area) { addTrackingArea(area) }
+            setAside = []
         }
-        guard !covered else { return }
-        covered = true
-        let left = NSEvent.enterExitEvent(
-            with: .mouseExited, location: event.locationInWindow, modifierFlags: event.modifierFlags, timestamp: event.timestamp,
-            windowNumber: event.windowNumber, context: nil, eventNumber: 0, trackingNumber: 0, userData: nil)
-        left.map(super.mouseExited)
-        NSCursor.arrow.set()
     }
 
-    /// Under something, the pointer last heard as leaving (see `mouseMoved`).
-    private var covered = false
+    /// WebKit's pointer tracking, while something covers the page.
+    private var setAside: [NSTrackingArea] = []
 
     override func cursorUpdate(with event: NSEvent) {
         if Windows.shared.browser(for: window)?.pageCovered == true { return NSCursor.arrow.set() }

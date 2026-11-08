@@ -60,7 +60,13 @@ struct ContentView: View {
             .onChange(of: browser.fieldShowing) { _, showing in
                 if showing { Task { @MainActor in browser.field.askFocus() } } else { keyboardToPage() }
             }
-            .onChange(of: browser.activeID) { keyboardToPage() }
+            .onChange(of: browser.activeID) { old, _ in
+                keyboardToPage()
+                // The page leaving gets its pointer back; the one coming in is covered as the window is.
+                old.flatMap { browser.tab($0) }?.built?.cover(false)
+                browser.active?.built?.cover(browser.pageCovered)
+            }
+            .onChange(of: browser.pageCovered) { _, covered in browser.active?.built?.cover(covered) }
             // The boost editor: a frosted panel at the window's top right, over the page.
             .onChange(of: browser.boosting) { _, site in
                 FrostedPanel.close("boost")
