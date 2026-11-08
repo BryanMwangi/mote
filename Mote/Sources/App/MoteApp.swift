@@ -52,6 +52,12 @@ private struct MenuBar: Commands {
         browser.prefs.shortcuts.combos(for: id).first.map(\.keyboardShortcut)
     }
 
+    /// An Edit menu item for the page or field that has the keyboard.
+    private func edit(_ title: String, _ action: Selector, _ key: Character? = nil, _ modifiers: EventModifiers = .command) -> some View {
+        Button(title) { NSApp.sendAction(action, to: nil, from: nil) }
+            .keyboardShortcut(key.map { KeyEquivalent($0) }.map { KeyboardShortcut($0, modifiers: modifiers) })
+    }
+
     var body: some Commands {
         CommandGroup(replacing: .newItem) {
             Button("New Tab", action: browser.newTab).keyboardShortcut(keys(.newTab))
@@ -75,6 +81,16 @@ private struct MenuBar: Commands {
             Button("Take Screenshot of Whole Page") { browser.active?.screenshot(.wholePage) }.disabled(blank)
             Button("Copy Screenshot") { browser.active?.screenshot(copy: true) }.disabled(blank)
             Button("Print…", action: browser.printPage).keyboardShortcut(keys(.print)).disabled(blank)
+        }
+        // The main window's commands are removed (see MoteApp), and these with
+        // them: put back, sent to whatever has the keyboard as AppKit's are.
+        CommandGroup(replacing: .pasteboard) {
+            edit("Cut", #selector(NSText.cut(_:)), "x")
+            edit("Copy", #selector(NSText.copy(_:)), "c")
+            edit("Paste", #selector(NSText.paste(_:)), "v")
+            edit("Paste and Match Style", #selector(NSTextView.pasteAsPlainText(_:)), "v", [.command, .option, .shift])
+            edit("Delete", #selector(NSText.delete(_:)))
+            edit("Select All", #selector(NSText.selectAll(_:)), "a")
         }
         CommandGroup(after: .pasteboard) {
             Divider()
@@ -112,7 +128,11 @@ private struct MenuBar: Commands {
                     Button {
                         Profiles.shared.open(id)
                     } label: {
-                        Label { Text(Profiles.shared.name(of: id)) } icon: { Image(nsImage: Profiles.shared.image(of: id, size: 16)) }
+                        Label {
+                            Text(Profiles.shared.name(of: id))
+                        } icon: {
+                            Image(nsImage: Profiles.shared.image(of: id, size: 16))
+                        }
                     }
                     .disabled(Storage.profile == id)
                 }

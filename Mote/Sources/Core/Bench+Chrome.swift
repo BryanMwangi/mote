@@ -29,6 +29,10 @@ extension Bench {
             "spaceScheme": browser.spaces.first { $0.id == browser.spaceID }?.theme?.scheme?.rawValue ?? "none",
             "windowLook": browser.window.map { $0.appearance?.name.rawValue ?? "app's" } ?? "no window",
             "key": NSApp.keyWindow.map(describe) ?? "",
+            // The Edit menu's items and their keys, for copy and paste.
+            "editMenu": (NSApp.mainMenu?.items.first { $0.title == "Edit" }?.submenu?.items ?? []).filter { !$0.isSeparatorItem }.map {
+                "\($0.title) ⌘\($0.keyEquivalent) \($0.action.map(NSStringFromSelector) ?? "-")"
+            },
             "keysQuieted": PageView.quieted, "peek": browser.peekTab?.address?.absoluteString ?? "", "folded": browser.folded,
             "peeking": browser.peeking, "toolbarMode": browser.prefs.toolbarMode.rawValue, "peekClick": browser.prefs.peekClick.rawValue,
             "spaceIndex": browser.spaces.firstIndex { $0.id == browser.spaceID } ?? -1,
@@ -115,7 +119,8 @@ extension Bench {
             ("spaces", { prefs.usesSpaces = $0 }), ("hides", { prefs.sideHides = $0 }), ("folded", { browser.folded = $0 }),
             ("peek", { browser.peeking = $0 }), ("bar", { if $0 { browser.edit() } else { browser.dismiss() } }),
             ("chats", { if $0 { browser.showChats() } }), ("peeklinks", { prefs.peeksLinks = $0 }),
-            ("processes", { browser.showingProcesses = $0 }), ("import", { browser.importing = $0 }), ("sideright", { prefs.sideRight = $0 }),
+            ("processes", { browser.showingProcesses = $0 }), ("import", { browser.importing = $0 }),
+            ("sideright", { prefs.sideRight = $0 }),
             // The app brought forward, where focus moves as it does for a person.
             ("appfront", { if $0 { NSApp.activate(ignoringOtherApps: true); browser.window?.makeKeyAndOrderFront(nil) } }),
             (
@@ -258,7 +263,9 @@ extension Bench {
         if Storage.testing, request.flag("translatepanel") { NotificationCenter.default.post(name: TranslateButton.ask, object: nil) }
         // Profiles (test runs only, so their own Motes stay in the test world): new:NAME, delete:ID.
         if Storage.testing, let what = request.string("profile") {
-            if what.hasPrefix("new:") { Profiles.shared.add(named: String(what.dropFirst(4)), avatar: .init(symbol: "briefcase.fill", color: "#26456b")) }
+            if what.hasPrefix("new:") {
+                Profiles.shared.add(named: String(what.dropFirst(4)), avatar: .init(symbol: "briefcase.fill", color: "#26456b"))
+            }
             if what.hasPrefix("delete:") { Profiles.shared.delete(String(what.dropFirst(7))) }
         }
         // The site in front's boost (test runs): dim (brightness 0.7, Georgia), or reset.
@@ -337,7 +344,9 @@ extension Bench {
             Task {
                 do {
                     let tally = try await browser.bring(kinds, from: source, file: file)
-                    call.answer(["tally": tally.summary, "bookmarks": tally.bookmarks, "history": tally.history, "passwords": tally.passwords])
+                    call.answer([
+                        "tally": tally.summary, "bookmarks": tally.bookmarks, "history": tally.history, "passwords": tally.passwords,
+                    ])
                 } catch {
                     call.answer(["trouble": "\(error)"])
                 }
