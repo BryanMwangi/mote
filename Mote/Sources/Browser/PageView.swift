@@ -89,11 +89,14 @@ final class PageView: WKWebView {
     /// the page has a video to control or is full screen: then WebKit's own
     /// playback bar (play, time, scrubber, full screen), which is Safari's.
     override func makeTouchBar() -> NSTouchBar? {
-        let immersed = Browser.front?.tab(for: self)?.immersed == true
+        // This page's own window's: the window in front may be another one
+        // for a moment as windows change, and its buttons would act there.
+        let browser = Windows.shared.browser(for: window) ?? Browser.front
+        let immersed = browser?.tab(for: self)?.immersed == true
         let playback = wantsPlaybackBar(immersed: immersed)
         barIsPlayback = playback
         barImmersed = immersed
-        guard let browser = Browser.front else { return super.makeTouchBar() }
+        guard let browser else { return super.makeTouchBar() }
         guard playback else { return browser.touchBarItems.make() }
         // WebKit's controls inside Mote's bar, beside reload and full screen.
         guard let controls = super.makeTouchBar() else { return browser.touchBarItems.make() }
@@ -115,6 +118,17 @@ final class PageView: WKWebView {
         let changed = made != wantsPlaybackBar(immersed: immersed) || (made && immersed != barImmersed)
         if changed { touchBar = nil }
     }
+
+    /// A tab moved to another window makes its bar again, for that window.
+    /// Not on every switch, which takes the page out of its window and back.
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        guard let window, window !== barWindow else { return }
+        if barWindow != nil { touchBar = nil }
+        barWindow = window
+    }
+
+    private weak var barWindow: NSWindow?
 
     /// The Touch Bar's full-screen button: the playing video (or the largest)
     /// in full screen, or out of it. Run from the app, which WebKit counts
