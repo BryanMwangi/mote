@@ -2,8 +2,9 @@ import Combine
 import SwiftUI
 
 // Settings in a window of its own, beside the browser rather than over it.
-// Follows `browser.tuning`: setting it opens the window (or brings it to the
-// front), clearing it closes the window, and closing the window clears it.
+// Follows every browser window's `tuning`: setting it opens the window over
+// that browser window (or brings it to the front), clearing it closes the
+// window, and closing the window clears it.
 
 @MainActor
 final class SettingsWindow: NSObject, NSWindowDelegate {
@@ -11,29 +12,18 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     private static var shared: SettingsWindow?
 
     let window: NSWindow
-    /// Builds the window's content each time it opens.
-    private let panel: () -> NSView
-    /// Called when the window closes while settings are still asked for.
-    private let dismissed: () -> Void
-    private var watching: AnyCancellable?
+    /// The browser window it was opened from, whose settings it shows.
+    private weak var owner: Browser?
+    private var watching: [AnyCancellable] = []
     /// Its keys, before the menus see them: its own, not a browser window's
     /// router's, as a browser window may not be open.
     private var keys: Any?
 
-    /// Starts following the browser's settings state. Called once the browser
-    /// window exists.
+    /// Starts following a browser window's settings state, once it exists.
     static func watch(_ browser: Browser) {
-        guard shared == nil else { return }
-        shared = SettingsWindow(
-            showing: browser.$tuning,
-            panel: { [weak browser] in
-                guard let browser else { return NSView() }
-                return NSHostingView(rootView: SettingsPanel(browser: browser, prefs: browser.prefs))
-            },
-            dismissed: { [weak browser] in
-                if browser?.tuning == true { browser?.tuning = false }
-            }
-        )
+        let settings = shared ?? SettingsWindow()
+        shared = settings
+        settings.follow(browser)
     }
 
     /// The settings window that owns a given window, if any.
@@ -42,9 +32,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         return shared
     }
 
-    init(showing: some Publisher<Bool, Never>, panel: @escaping () -> NSView, dismissed: @escaping () -> Void) {
-        self.panel = panel
-        self.dismissed = dismissed
+    override init() {
         window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: SettingsPanel.width, height: SettingsPanel.height),
             styleMask: [.titled, .closable, .miniaturizable, .fullSizeContentView],
@@ -63,13 +51,32 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
             guard let self, event.window === self.window else { return event }
             return self.take(event) ? nil : event
         }
-        // Receives the current value too, so settings asked for before the
-        // browser window appeared still open. On the next turn, since
-        // @Published sends before the value is stored.
-        watching =
-            showing
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] on in on ? self?.show() : self?.hide() }
+    }
+
+    /// Receives the current value too, so settings asked for before the
+    /// browser window appeared still open. On the next turn, since
+    /// @Published sends before the value is stored.
+    private func follow(_ browser: Browser) {
+        let watch = browser.$tuning.receive(on: DispatchQueue.main).sink { [weak self, weak browser] on in
+            guard let self, let browser else { return }
+            if on {
+                // Asked for from another window: it's that window's now.
+                if owner !== browser {
+                    let earlier = owner
+                    owner = browser
+                    if earlier?.tuning == true { earlier?.tuning = false }
+                    if window.isVisible { window.contentView = panel(for: browser) }
+                }
+                show()
+            } else if owner === browser {
+                hide()
+            }
+        }
+        watching.append(watch)
+    }
+
+    private func panel(for browser: Browser) -> NSView {
+        NSHostingView(rootView: SettingsPanel(browser: browser, prefs: browser.prefs))
     }
 
     /// Handles the window's key shortcuts before the browser: Escape and ⌘W
@@ -97,7 +104,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         if !window.isVisible {
             // A fresh panel each time, so it opens on the page last chosen
             // (Manage Extensions… picks one before opening settings).
-            window.contentView = panel()
+            if let owner { window.contentView = panel(for: owner) }
             place()
         }
         window.makeKeyAndOrderFront(nil)
@@ -105,7 +112,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
 
     /// Centres the window over the browser window, or on screen without one.
     private func place() {
-        guard let main = AppDelegate.window, main.isVisible,
+        guard let main = owner?.window ?? AppDelegate.window, main.isVisible,
             let screen = (main.screen ?? NSScreen.main)?.visibleFrame
         else {
             window.center()
@@ -131,11 +138,11 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         guard window.isVisible else { return }
         let wasKey = window.isKeyWindow
         window.close()
-        if wasKey { AppDelegate.window?.makeKeyAndOrderFront(nil) }
+        if wasKey { (owner?.window ?? AppDelegate.window)?.makeKeyAndOrderFront(nil) }
     }
 
     func windowWillClose(_ notification: Notification) {
-        dismissed()
+        if owner?.tuning == true { owner?.tuning = false }
         // Drops the panel so it stops observing while hidden.
         DispatchQueue.main.async { [weak self] in
             guard let self, !self.window.isVisible else { return }

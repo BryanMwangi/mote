@@ -97,13 +97,14 @@ struct ContentView: View {
                 Self.keyHook = { [keys] in keys.route($0) }
                 browser.field.askFocus()
                 Windows.shared.opener = { [openWindow] in openWindow(id: "window", value: $0) }
+                // Settings opens from any window.
+                SettingsWindow.watch(browser)
                 // The rest belongs to the main window, as before there were others.
                 guard !browser.extra else { return }
                 Windows.shared.main = browser
                 // The windows open at the last quit come back beside it.
                 Windows.shared.restore()
                 AppDelegate.hand(to: browser)
-                SettingsWindow.watch(browser)
                 BookmarkMenu.shared.start(for: browser)
             }
             // A window opened since the main one takes its tabs with it.
