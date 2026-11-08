@@ -75,12 +75,30 @@ extension Bench {
         guard call.testRun() else { return }
         guard let window = AppDelegate.window, let view = window.contentView else { return call.fail("no window") }
         let bodies = SpaceSwipe.pagesDrawn
+        // For a switch, when the page in front first showed its content.
+        var shown: Double?
+        let start = CACurrentMediaTime()
         FrameWatch(view: view, seconds: call.request.double("seconds") ?? 0.7).start { stamps in
             let refresh = (window.screen?.maximumFramesPerSecond).map { 1000 / Double($0) } ?? 1000 / 60
             // How often the spaces' pages were worked out again meanwhile.
-            call.answer(BenchWire.frames(stamps, refreshMs: refresh).merging(["pagesDrawn": SpaceSwipe.pagesDrawn - bodies]) { a, _ in a })
+            call.answer(
+                BenchWire.frames(stamps, refreshMs: refresh).merging([
+                    "pagesDrawn": SpaceSwipe.pagesDrawn - bodies, "shownMs": shown.map { Int($0) } ?? -1,
+                ]) { a, _ in a })
         }
-        animate(call.request.string("action") ?? "fold", in: call.browser)
+        let action = call.request.string("action") ?? "fold"
+        animate(action, in: call.browser)
+        if action == "tab", let page = call.browser.active?.built {
+            afterPresentation(page) { shown = (CACurrentMediaTime() - start) * 1000 }
+        }
+    }
+
+    /// Once WebKit next shows the page's content (`_doAfterNextPresentationUpdate:`).
+    private static func afterPresentation(_ web: WKWebView, _ done: @escaping () -> Void) {
+        let name = NSSelectorFromString("_doAfterNextPresentationUpdate:")
+        guard web.responds(to: name) else { return done() }
+        typealias Call = @convention(c) (AnyObject, Selector, @escaping @convention(block) () -> Void) -> Void
+        unsafeBitCast(web.method(for: name), to: Call.self)(web, name, done)
     }
 
     /// The sidebar's list of tabs on screen, when it scrolls.
