@@ -311,6 +311,19 @@ extension Extensions {
     }
 
     /// With its settings, its answers and its files.
+    /// Installs `other` in place of `id`, which goes once it's in (and stays
+    /// if the install is turned down or fails).
+    func swap(_ id: String, for other: String) {
+        install(from: other)
+        Task {
+            for _ in 0..<240 {
+                try? await Task.sleep(for: .seconds(0.5))
+                if installed.contains(where: { $0.id == other }) { return remove(id) }
+                if busy == nil, !installed.contains(where: { $0.id == other }) { return }
+            }
+        }
+    }
+
     func remove(_ id: String) {
         unload(id)
         forgetErrors(of: id)

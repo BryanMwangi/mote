@@ -30,7 +30,9 @@ public enum AddOns {
             return Found(name: chrome.name, id: chrome.id, store: .chrome)
         }
 
-        static let lighter = ["uBlock0@raymondhill.net": (name: "uBlock Origin Lite", id: "ddkjiahejlhfcafbddmgiahcphecmpfh")]
+        static let lighter = ["uBlock0@raymondhill.net": (name: "uBlock Origin Lite", id: liteBlocker)]
+        /// uBlock Origin Lite's Chrome Web Store id.
+        public static let liteBlocker = "ddkjiahejlhfcafbddmgiahcphecmpfh"
     }
 
     /// The add-ons in a Firefox profile's `extensions.json` the user turned

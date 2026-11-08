@@ -225,6 +225,48 @@ struct StoreOffer: View {
 
     var body: some View {
         if #available(macOS 15.4, *), let tab = browser.active { OfferBubble(tab: tab, extensions: .shared) }
+        if #available(macOS 15.4, *) { LiteOffer(extensions: .shared) }
+    }
+}
+
+/// uBlock Origin for Firefox can't block in WebKit (it needs `webRequest`
+/// blocking) and keeps a background page running: its Lite version is
+/// offered in its place until it's taken or turned down.
+@available(macOS 15.4, *)
+private struct LiteOffer: View {
+    @ObservedObject var extensions: Extensions
+    @AppStorage("extensions.liteDeclined", store: Storage.settings) private var declined = false
+
+    private var old: Installed? {
+        extensions.installed.first { $0.firefox != nil && $0.name.caseInsensitiveCompare("uBlock Origin") == .orderedSame }
+    }
+
+    var body: some View {
+        if !declined, let old {
+            HStack(spacing: 12) {
+                Image(systemName: "puzzlepiece.extension").font(.system(size: 11, weight: .medium)).foregroundStyle(Palette.muted)
+                Text("uBlock Origin can't block ads here. Use its Lite version?").font(.system(size: 12.5)).foregroundStyle(Palette.ink)
+                if extensions.busy != nil {
+                    Ring(size: 10)
+                } else {
+                    Button("Not Now") { declined = true }.buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(Palette.muted)
+                    Button("Switch") { extensions.swap(old.id, for: AddOns.Found.liteBlocker) }
+                        .buttonStyle(.plain)
+                        .font(.system(size: 12))
+                        .foregroundStyle(Palette.ground)
+                        .padding(.horizontal, 11)
+                        .padding(.vertical, 5)
+                        .background(Palette.ink, in: Capsule())
+                }
+            }
+            .padding(.leading, 16)
+            .padding(.trailing, 10)
+            .padding(.vertical, 9)
+            .background(Palette.ground, in: Capsule())
+            .overlay(Capsule().strokeBorder(Palette.hairline, lineWidth: 1))
+            .shadow(color: .black.opacity(0.12), radius: 20, y: 6)
+            .transition(.move(edge: .bottom).combined(with: .opacity))
+        }
     }
 }
 
