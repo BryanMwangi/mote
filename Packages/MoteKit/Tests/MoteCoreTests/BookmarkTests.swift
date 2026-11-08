@@ -40,6 +40,17 @@ struct BookmarkTests {
         #expect(tree.roots.last?.title == "D")
     }
 
+    @Test("The same page kept twice, whatever its scheme, www. or last slash, is a duplicate; the first stays")
+    func duplicates() {
+        let again = Bookmark.site("A again", URL(string: "http://www.a.com/#top")!)
+        let other = Bookmark.site("A, elsewhere", URL(string: "https://a.com/other")!)
+        var tree = BookmarkTree([a, .folder("Old", [again, other]), .site("C", URL(string: "https://c.com/")!), work])
+        #expect(tree.duplicates().map { $0.map(\.title) } == [["A", "A again"], ["C", "C"]])
+        #expect(tree.removeDuplicates() == 2)
+        #expect(tree.duplicates().isEmpty)
+        #expect(BookmarkTree.urls(tree.roots).map(\.absoluteString) == ["https://a.com", "https://a.com/other", "https://c.com/", "https://b.com/x"])
+    }
+
     @Test("Removing reaches into folders")
     func removing() {
         var tree = tree

@@ -13,6 +13,8 @@ struct BookmarkOutline: View {
     @State private var expanded: Set<Bookmark.ID> = []
     @State private var dragging: Bookmark.ID?
     @State private var overTop = false
+    /// Later copies of a page, marked so they're easy to find.
+    @State private var duplicates: Set<Bookmark.ID> = []
 
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
@@ -22,6 +24,8 @@ struct BookmarkOutline: View {
         .background(overTop ? Palette.wash : .clear)
         // Dropped on the list itself: to the top level.
         .onDrop(of: [.text], isTargeted: $overTop) { drop($0, into: nil) }
+        // Worked out when the tree changes, not on every hover.
+        .task(id: bookmarks.roots) { duplicates = bookmarks.duplicates }
     }
 
     private func level(_ nodes: [Bookmark], depth: Int) -> AnyView {
@@ -46,6 +50,7 @@ struct BookmarkOutline: View {
     private func row(_ node: Bookmark, depth: Int) -> some View {
         BookmarkRow(
             node: node, depth: depth, expanded: expanded.contains(node.id), dragging: dragging == node.id,
+            duplicate: duplicates.contains(node.id),
             destinations: BookmarkTree.folders(bookmarks.roots).filter { !node.holds($0.node.id) },
             act: { action in
                 switch action {
@@ -103,6 +108,8 @@ private struct BookmarkRow: View {
     let depth: Int
     let expanded: Bool
     let dragging: Bool
+    /// A later copy of a page kept before it.
+    let duplicate: Bool
     /// Folders it can be moved into, with their depth.
     let destinations: [(node: Bookmark, depth: Int)]
     let act: (Action) -> Void
@@ -127,8 +134,19 @@ private struct BookmarkRow: View {
             }
             Text(node.title).font(.system(size: 12.5)).foregroundStyle(Palette.ink).lineLimit(1)
             Spacer(minLength: 8)
-            if node.isFolder, let inside = node.children, !inside.isEmpty {
-                Text("\(BookmarkTree.count(inside))").font(.system(size: 11)).foregroundStyle(Palette.faint)
+            if duplicate {
+                Text("Duplicate").font(.system(size: 11)).foregroundStyle(Palette.muted)
+            }
+            if hovering {
+                // Removing in one click, without the menu.
+                Button { act(.remove) } label: {
+                    Image(systemName: "trash").font(.system(size: 11)).foregroundStyle(Palette.muted).frame(width: 18, height: 18)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help(node.isFolder ? "Remove Folder and Its Bookmarks" : "Remove Bookmark")
+            } else if node.isFolder, let inside = node.children, !inside.isEmpty {
+                Text("\(BookmarkTree.count(inside))").font(.system(size: 11)).foregroundStyle(Palette.faint).frame(minWidth: 18)
             }
         }
         .padding(.leading, Self.indent(depth) + 10)

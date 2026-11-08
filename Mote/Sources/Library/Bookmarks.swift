@@ -19,6 +19,9 @@ final class Bookmarks: ObservableObject {
     func add(_ url: URL, title: String) { change { $0.add(url, title: title) } }
     func contains(_ url: URL) -> Bool { tree.contains(url) }
     func remove(_ id: Bookmark.ID) { change { $0.remove(id) } }
+    /// Later copies of a page kept more than once: the first of each stays.
+    var duplicates: Set<Bookmark.ID> { Set(tree.duplicates().flatMap { $0.dropFirst().map(\.id) }) }
+    func removeDuplicates() { change { $0.removeDuplicates() } }
     /// To the end of a folder, or of the top with none.
     func move(_ id: Bookmark.ID, into folder: Bookmark.ID?) { change { $0.move(id, into: folder) } }
     /// Another browser's bookmarks, in a folder named after it.

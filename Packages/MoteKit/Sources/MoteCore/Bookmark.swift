@@ -59,6 +59,42 @@ public struct BookmarkTree: Equatable, Sendable {
         nodes.filter(\.isFolder).flatMap { [($0, depth)] + folders($0.children ?? [], depth: depth + 1) }
     }
 
+    /// Bookmarks of the same page kept more than once, each group in tree
+    /// order (depth first), so the first is the one to keep. The same page
+    /// whatever its scheme, `www.`, trailing slash or fragment.
+    public func duplicates() -> [[Bookmark]] {
+        var groups: [String: [Bookmark]] = [:]
+        var order: [String] = []
+        func walk(_ nodes: [Bookmark]) {
+            for node in nodes {
+                if let children = node.children { walk(children) }
+                guard let key = node.url.flatMap(Self.samePage) else { continue }
+                if groups[key] == nil { order.append(key) }
+                groups[key, default: []].append(node)
+            }
+        }
+        walk(roots)
+        return order.compactMap { groups[$0] }.filter { $0.count > 1 }
+    }
+
+    /// Removes every duplicate but the first of each page; how many went.
+    @discardableResult
+    public mutating func removeDuplicates() -> Int {
+        let extra = duplicates().flatMap { $0.dropFirst() }
+        for node in extra { remove(node.id) }
+        return extra.count
+    }
+
+    /// An address as a page: host without `www.`, path without its last
+    /// slash, the query; no scheme or fragment.
+    static func samePage(_ address: String) -> String? {
+        guard let parts = URLComponents(string: address), var host = parts.host?.lowercased() else { return nil }
+        if host.hasPrefix("www.") { host.removeFirst(4) }
+        var path = parts.percentEncodedPath
+        while path.hasSuffix("/") { path.removeLast() }
+        return host + (parts.port.map { ":\($0)" } ?? "") + path + (parts.percentEncodedQuery.map { "?" + $0 } ?? "")
+    }
+
     public func contains(_ url: URL) -> Bool {
         func search(_ nodes: [Bookmark]) -> Bool {
             nodes.contains { $0.url == url.absoluteString || search($0.children ?? []) }

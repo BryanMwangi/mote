@@ -64,6 +64,10 @@ struct BookmarksPanel: View {
                     Pill(source.name) { browser.takeBookmarks(from: source) }
                 }
                 Spacer()
+                let duplicates = bookmarks.duplicates.count
+                if duplicates > 0 {
+                    Pill(duplicates == 1 ? "Remove 1 Duplicate" : "Remove \(duplicates) Duplicates") { bookmarks.removeDuplicates() }
+                }
                 Text(bookmarks.count == 1 ? "1 bookmark" : "\(bookmarks.count) bookmarks")
                     .font(.system(size: 12))
                     .foregroundStyle(Palette.muted)
