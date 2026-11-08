@@ -123,12 +123,15 @@ final class PageView: WKWebView {
     /// Not on every switch, which takes the page out of its window and back.
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
+        Self.windowMoves += 1
         guard let window, window !== barWindow else { return }
         if barWindow != nil { touchBar = nil }
         barWindow = window
     }
 
     private weak var barWindow: NSWindow?
+    /// Pages put in or taken out of a window, for the bench: each costs WebKit a wait.
+    static var windowMoves = 0
 
     /// The Touch Bar's full-screen button: the playing video (or the largest)
     /// in full screen, or out of it. Run from the app, which WebKit counts

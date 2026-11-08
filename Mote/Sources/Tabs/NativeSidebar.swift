@@ -26,6 +26,10 @@ struct NativeSidebar: NSViewControllerRepresentable {
         private let detail: NSHostingController<ChromeDetail>
         let sidebarItem: NSSplitViewItem
         private var collapsed: Bool
+        /// A fold is sliding. ⌃⌥S pressed again meanwhile waits for it: when
+        /// it ends, the sidebar slides once more to where the last press left
+        /// it. Changing the split view mid-slide stalled the window for a second.
+        private var sliding = false
         private var sidebarMode: Bool
         private var immersed: Bool
         /// The sidebar's pane is the split's last, on the right.
@@ -93,12 +97,21 @@ struct NativeSidebar: NSViewControllerRepresentable {
             let animate = view.window != nil && sidebarMode == prefs.sidebar && immersed == fullscreenPage
             sidebarMode = prefs.sidebar
             immersed = fullscreenPage
-            guard target != collapsed else { return }
+            guard target != collapsed, !(animate && sliding) else { return }
             collapsed = target
             if animate {
+                sliding = true
                 NSAnimationContext.runAnimationGroup { context in
-                    context.duration = Motion.foldResponse
+                    // Zen's quarter second, quick off the mark, as the floating sidebar's.
+                    context.duration = 0.25
+                    context.timingFunction = CAMediaTimingFunction(controlPoints: 0.2, 0.85, 0.25, 1)
                     sidebarItem.animator().isCollapsed = target
+                } completionHandler: { [weak self] in
+                    MainActor.assumeIsolated {
+                        self?.sliding = false
+                        // Pressed again while it slid.
+                        self?.update()
+                    }
                 }
             } else {
                 sidebarItem.isCollapsed = target

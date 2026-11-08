@@ -97,6 +97,8 @@ extension Bench {
         case "peek": browser.peek(true)
         case "unpeek": browser.peek(false)
         case "fold": browser.toggleFold()
+        // ⌃⌥S pressed again and again, as a person does, an even number of times.
+        case "foldspam": for n in 0..<6 { DispatchQueue.main.asyncAfter(deadline: .now() + Double(n) * 0.12) { browser.toggleFold() } }
         // The next tab, as ⌃Tab; the next space, round again after the last.
         case "tab": browser.step(1)
         case "space":

@@ -32,10 +32,11 @@ struct SidebarFold: View {
                     .background { Palette.frame.shadow(color: .black.opacity(0.16), radius: 20, y: 6) }
                     .transition(.move(edge: .top))
             }
-            // Kept built while folded, out past the window's edge: a peek only
-            // slides it in, rather than building every row each time.
-            if folding, prefs.sidebar {
-                SlidingPanel(out: browser.peeking, width: prefs.sideWidth + ChromeLayout.gap * 2, right: prefs.sideRight) {
+            // Kept built, out past the window's edge, as Zen keeps its sidebar:
+            // a peek only slides it in, and folding and unfolding (⌃⌥S, again
+            // and again) doesn't build every row and throw them away each time.
+            if prefs.sidebar {
+                SlidingPanel(out: folding && browser.peeking, width: prefs.sideWidth + ChromeLayout.gap * 2, right: prefs.sideRight) {
                     floatingSidebar.padding(ChromeLayout.gap)
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: prefs.sideRight ? .topTrailing : .topLeading)
                 }
