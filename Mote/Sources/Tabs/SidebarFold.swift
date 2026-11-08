@@ -259,9 +259,12 @@ private struct SlidingPanel: FillsRoom {
                 panel.isHidden = !now
                 return
             }
+            // Zen's timings: out in a quarter second, half of the way in the first
+            // fifth of it, so it's there as the pointer arrives; back in faster.
             NSAnimationContext.runAnimationGroup { context in
-                context.duration = Motion.foldResponse
-                context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                context.duration = now ? 0.25 : 0.15
+                context.timingFunction =
+                    now ? CAMediaTimingFunction(controlPoints: 0.2, 0.85, 0.25, 1) : CAMediaTimingFunction(name: .easeInEaseOut)
                 panel.animator().frame = place(now)
             } completionHandler: { [weak self] in
                 // Gone: nothing of it is drawn or tracked until it comes back.
