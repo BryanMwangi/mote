@@ -33,6 +33,9 @@ extension Bench {
             "editMenu": (NSApp.mainMenu?.items.first { $0.title == "Edit" }?.submenu?.items ?? []).filter { !$0.isSeparatorItem }.map {
                 "\($0.title) ⌘\($0.keyEquivalent) \($0.action.map(NSStringFromSelector) ?? "-")"
             },
+            "transfers": browser.downloads.transfers.map {
+                "\($0.name) \($0.state.rawValue) \($0.received)/\($0.total)\($0.resumeData == nil ? "" : " resumable")"
+            },
             "keysQuieted": PageView.quieted, "peek": browser.peekTab?.address?.absoluteString ?? "", "folded": browser.folded,
             "peeking": browser.peeking, "toolbarMode": browser.prefs.toolbarMode.rawValue, "peekClick": browser.prefs.peekClick.rawValue,
             "spaceIndex": browser.spaces.firstIndex { $0.id == browser.spaceID } ?? -1,
@@ -133,6 +136,14 @@ extension Bench {
         ]
         for (key, set) in switches { request.bool(key).map(set) }
         if let look = request.string("look").flatMap(Look.init) { prefs.look = look }
+        // The newest download under way or stopped: pause, resume or stop it.
+        if let what = request.string("download"), let transfer = browser.downloads.transfers.first {
+            switch what {
+            case "pause": browser.downloads.pause(transfer)
+            case "resume": browser.resume(transfer)
+            default: browser.downloads.cancel(transfer)
+            }
+        }
         // A notice as it would show (test runs): an update's, or a plain line.
         if Storage.testing, let notice = request.string("notice") {
             let release = AppRelease(

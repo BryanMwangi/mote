@@ -8,7 +8,17 @@ struct DownloadsPanel: View {
 
     var body: some View {
         Plate("Downloads", width: 560, close: { browser.showingDownloads = false }) {
-            if downloads.kept.isEmpty {
+            if !downloads.transfers.isEmpty {
+                Card {
+                    ForEach(Array(downloads.transfers.enumerated()), id: \.element.id) { index, transfer in
+                        if index > 0 { Rule() }
+                        TransferRow(transfer: transfer, browser: browser).padding(.horizontal, 14).padding(.vertical, 9)
+                    }
+                }
+            }
+            if downloads.kept.isEmpty, !downloads.transfers.isEmpty {
+                EmptyView()
+            } else if downloads.kept.isEmpty {
                 Card { EmptyState("Nothing downloaded yet.") }
             } else {
                 ScrollView(showsIndicators: false) {
@@ -75,5 +85,46 @@ private struct FileRow: View {
         .onTapGesture { if there { downloads.open(record) } }
         .onHover { hovering = $0 }
         .animation(Motion.quick, value: hovering)
+    }
+}
+
+/// A download under way, paused or failed: how far it's got, and pausing,
+/// going on or stopping it. In the Downloads panel and the sidebar's popover.
+struct TransferRow: View {
+    @ObservedObject var transfer: Transfer
+    let browser: Browser
+
+    private var status: String {
+        let size = { (bytes: Int64) in ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file) }
+        let got = transfer.total > 0 ? "\(size(transfer.received)) of \(size(transfer.total))" : size(transfer.received)
+        switch transfer.state {
+        case .running: return got
+        case .paused: return "Paused · " + got
+        case .failed: return transfer.resumeData == nil ? "Failed" : "Stopped · " + got
+        }
+    }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: transfer.state == .failed ? "exclamationmark.circle" : "arrow.down.circle")
+                .font(.system(size: 13))
+                .foregroundStyle(Palette.muted)
+                .frame(width: 18)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(transfer.name).font(.system(size: 13)).foregroundStyle(Palette.ink).lineLimit(1).truncationMode(.middle)
+                ProgressView(value: transfer.fraction ?? 0)
+                    .progressViewStyle(.linear)
+                    .controlSize(.mini)
+                    .opacity(transfer.state == .running ? 1 : 0.45)
+                Text(status).font(.system(size: 11.5)).foregroundStyle(Palette.muted).lineLimit(1)
+            }
+            Spacer(minLength: 8)
+            if transfer.state == .running {
+                Quick("Pause") { browser.downloads.pause(transfer) }
+            } else {
+                Quick(transfer.state == .failed ? "Try Again" : "Resume") { browser.resume(transfer) }
+            }
+            Quick(transfer.state == .running ? "Stop" : "Remove", tint: .red.opacity(0.75)) { browser.downloads.cancel(transfer) }
+        }
     }
 }

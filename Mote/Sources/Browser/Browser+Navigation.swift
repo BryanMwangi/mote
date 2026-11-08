@@ -237,6 +237,17 @@ extension Browser: WKDownloadDelegate {
     func keep(_ download: WKDownload) {
         download.delegate = self
         downloading.append(download)
+        downloads.began(download)
+    }
+
+    /// Pauses, or goes on with, a download from the Downloads list or popover.
+    func resume(_ transfer: Transfer) {
+        // In a page of this window, for its sign-ins; any page will do.
+        guard let page = active?.built ?? tabs.lazy.compactMap(\.built).first else { return announce("Open a tab to go on") }
+        downloads.resume(transfer, in: page) { [weak self] download in
+            download.delegate = self
+            self?.downloading.append(download)
+        }
     }
 
     func download(
@@ -249,9 +260,12 @@ extension Browser: WKDownloadDelegate {
         let name = asked ?? (suggestedFilename.isEmpty ? "download" : suggestedFilename)
         let folder = downloadsFolder
 
+        let transfer = downloads.transfer(for: download)
         guard prefs.asksWhereToSave else {
             let free = Clippings.freeName(name) { FileManager.default.fileExists(atPath: folder.appendingPathComponent($0).path) }
-            completionHandler(folder.appendingPathComponent(free))
+            let file = folder.appendingPathComponent(free)
+            transfer?.file = file
+            completionHandler(file)
             announce("Downloading \(free)")
             return
         }
@@ -259,22 +273,26 @@ extension Browser: WKDownloadDelegate {
         panel.nameFieldStringValue = name
         panel.directoryURL = folder
         panel.canCreateDirectories = true
-        guard panel.runModal() == .OK, let url = panel.url else { return completionHandler(nil) }
+        guard panel.runModal() == .OK, let url = panel.url else {
+            transfer.map(downloads.cancel)
+            return completionHandler(nil)
+        }
+        transfer?.file = url
         completionHandler(url)
         announce("Downloading \(url.lastPathComponent)")
     }
 
     func downloadDidFinish(_ download: WKDownload) {
         downloading.removeAll { $0 === download }
-        guard let file = download.progress.fileURL else { return announce("Download finished") }
-        downloads.add(
-            DownloadRecord(
-                name: file.lastPathComponent, from: download.originalRequest?.url?.host() ?? "", path: file.path, date: Date()))
-        announce("Saved \(file.lastPathComponent)")
+        guard let record = downloads.finished(download) else { return announce("Download finished") }
+        announce("Saved \(record.name)")
     }
 
     func download(_ download: WKDownload, didFailWithError error: Error, resumeData: Data?) {
         downloading.removeAll { $0 === download }
-        announce("Download failed")
+        // A pause stops it too, and says so itself.
+        guard downloads.transfer(for: download)?.state == .running else { return }
+        downloads.failed(download, resumeData: resumeData)
+        announce(resumeData == nil ? "Download failed" : "Download stopped; it can go on from the Downloads list")
     }
 }

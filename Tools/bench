@@ -184,7 +184,7 @@ def read_ui(args):
     if len(args) != 2:
         sys.exit(usage("ui"))
     key, value = args
-    return {key: value if key in ("look", "edittab", "peeklink", "sitecard", "notice", "device", "essential", "unessential", "newwindow", "source", "split", "home", "peekclick", "settingsquery", "shortcut", "screenshot", "inspect", "folder", "route", "theme", "profile", "boost", "pageinfo", "share", "zoomrow", "dockicon", "importrun") else value in ON}
+    return {key: value if key in ("look", "edittab", "peeklink", "sitecard", "notice", "device", "essential", "unessential", "newwindow", "source", "split", "home", "peekclick", "settingsquery", "shortcut", "screenshot", "inspect", "folder", "route", "theme", "profile", "boost", "pageinfo", "share", "zoomrow", "dockicon", "importrun", "download") else value in ON}
 
 
 def read_hit(args):

@@ -100,7 +100,13 @@ private struct SessionDownloads: View {
 
     var body: some View {
         let recent = downloads.kept.filter { $0.date >= launched }
-        SessionList(empty: recent.isEmpty ? "No downloads this session." : nil, more: "Show all downloads") {
+        SessionList(
+            empty: recent.isEmpty && downloads.transfers.isEmpty ? "No downloads this session." : nil, more: "Show all downloads"
+        ) {
+            // Those under way first, as Zen's panel has them.
+            ForEach(downloads.transfers) { transfer in
+                TransferRow(transfer: transfer, browser: browser).padding(.horizontal, 10).padding(.vertical, 6)
+            }
             ForEach(recent.prefix(8)) { record in
                 PopoverLine(record.name, symbol: record.stillThere ? "doc" : "doc.badge.ellipsis") {
                     if record.stillThere { downloads.open(record) }
