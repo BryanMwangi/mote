@@ -439,22 +439,37 @@ final class PageView: WKWebView {
 
     // MARK: - Keys the page didn't use
 
-    /// The last key given to the page. WebKit sends a key the page didn't
-    /// handle back up the responder chain, where nothing takes it and macOS
+    /// Keys given to the page that it hasn't answered yet. WebKit sends a key
+    /// the page didn't handle back up the responder chain, where the window
     /// beeps; editors that insert text themselves (Draft.js) get reported as
-    /// unhandled, so the second delivery is dropped, as Safari does.
-    private var handed: NSEvent?
+    /// unhandled, so the second delivery is dropped, as Safari does. A page
+    /// busy loading answers late, after more keys, so all those it hasn't
+    /// answered are kept, not only the last.
+    private var handed: [NSEvent] = []
     /// Keys dropped that way, for the bench.
     static var quieted = 0
 
     override func keyDown(with event: NSEvent) {
-        if let handed, Self.same(handed, event) {
-            self.handed = nil
+        if let back = handed.firstIndex(where: { Self.same($0, event) }) {
+            handed.remove(at: back)
             Self.quieted += 1
             return
         }
-        handed = event
+        hand(event)
         super.keyDown(with: event)
+    }
+
+    /// WebKit takes arrows (function keys) and key combinations here rather
+    /// than through keyDown, and gives back those the page didn't use the same way.
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        let took = super.performKeyEquivalent(with: event)
+        if took, event.type == .keyDown { hand(event) }
+        return took
+    }
+
+    /// Handled ones never come back: only the last few wait.
+    private func hand(_ event: NSEvent) {
+        handed = Array(handed.suffix(15)) + [event]
     }
 
     /// Whether two events are one key press. WebKit sends back the original

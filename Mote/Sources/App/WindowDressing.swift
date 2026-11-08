@@ -48,11 +48,12 @@ enum WindowDressing {
 
 }
 
-/// The end of a browser window's responder chain. A key the page used
-/// without saying so comes back up from WebKit as a command (`moveLeft:` for
-/// ←, which YouTube seeks with) or the key again; with nothing to take it,
-/// AppKit beeps. Safari stays quiet about those, and so does Mote. Keys
-/// meant for Mote are taken before the page sees them (KeyRouter, the menus).
+/// The end of a browser window's responder chain. A key nothing took gets
+/// here: one the page used without saying so, coming back up from WebKit as
+/// a command (`moveLeft:` for ←, which YouTube seeks with), or one pressed
+/// while a page is still opening and the keyboard hasn't reached it yet.
+/// AppKit would beep; Safari stays quiet, and so does Mote. Keys meant for
+/// Mote are taken before the page sees them (KeyRouter, the menus).
 final class PageKeySink: NSResponder {
     /// How many it kept quiet, for the bench.
     @MainActor static var caught = 0
@@ -70,7 +71,9 @@ final class PageKeySink: NSResponder {
         last.nextResponder = sink
     }
 
-    @MainActor private var fromPage: Bool { window?.firstResponder is PageView }
+    /// A key is being handled: what's left over from it is kept quiet. Other
+    /// actions are left as AppKit has them.
+    @MainActor private var fromPage: Bool { NSApp.currentEvent?.type == .keyDown }
 
     override func tryToPerform(_ action: Selector, with object: Any?) -> Bool {
         guard MainActor.assumeIsolated({ fromPage }) else { return super.tryToPerform(action, with: object) }

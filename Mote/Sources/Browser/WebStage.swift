@@ -62,6 +62,12 @@ final class StageView: NSView {
             wanted.needsDisplay = true
             wanted.layer?.setNeedsDisplay()
         }
+        // The page in front has the keyboard, as in Safari, unless a field or
+        // panel holds it: a key pressed with nobody holding it (after launch,
+        // say, while the page loads) made the window beep.
+        if let window, window.firstResponder === window || (window.firstResponder is PageView && window.firstResponder !== wanted) {
+            window.makeFirstResponder(wanted)
+        }
         // With the inspector docked, WebKit lays both out; a frame here would cover the inspector.
         if !(inspecting && subviews.contains(where: Self.isInspector)) { place(wanted) }
     }
