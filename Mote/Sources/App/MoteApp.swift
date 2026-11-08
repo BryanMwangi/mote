@@ -107,14 +107,7 @@ private struct MenuBar: Commands {
             Toggle(
                 "Show Bookmarks Bar",
                 isOn: Binding(
-                    get: { browser.prefs.bookmarksBar },
-                    set: { on in
-                        withAnimation(Motion.glide) {
-                            browser.prefs.bookmarksBar = on
-                            // Hidden from the menu is hidden on new tabs too.
-                            if !on { browser.prefs.bookmarksOnStart = false }
-                        }
-                    }))
+                    get: { browser.prefs.bookmarksBar }, set: { on in withAnimation(Motion.glide) { browser.prefs.bookmarksBar = on } }))
             // The bookmarks themselves are added by AppKit (see BookmarkMenu).
         }
         CommandMenu("History") { history }

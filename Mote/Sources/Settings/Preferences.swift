@@ -89,8 +89,6 @@ final class Preferences: ObservableObject {
     @Published var chatWidth: CGFloat
     @Published var glyph: Glyph
     @Published var bookmarksBar: Bool
-    /// The bookmarks bar on new tabs, which have no page for it to cover.
-    @Published var bookmarksOnStart: Bool
     /// The tab's reading bar.
     @Published var showsReading: Bool
     /// The toolbar shows the page's whole address; off, only its site.
@@ -198,7 +196,6 @@ final class Preferences: ObservableObject {
         welcomed = store.value("welcomed", or: false) || store.object(forKey: "glyph") != nil
         glyph = store.value("glyph", or: .letters)
         bookmarksBar = store.value("bookmarks.bar", or: false)
-        bookmarksOnStart = store.value("bookmarks.bar.start", or: true)
         showsReading = store.value("tabs.reading", or: true)
         showsFullAddress = store.value("address.full", or: true)
         engine = store.value("search.engine", or: .standard)
@@ -281,7 +278,6 @@ final class Preferences: ObservableObject {
         keep($chatWidth, "chat.width")
         keep($glyph, "glyph")
         keep($bookmarksBar, "bookmarks.bar")
-        keep($bookmarksOnStart, "bookmarks.bar.start")
         keep($showsReading, "tabs.reading")
         keep($showsFullAddress, "address.full")
         keep($engine, "search.engine")

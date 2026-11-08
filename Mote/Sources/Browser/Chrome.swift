@@ -25,12 +25,10 @@ extension Browser {
     /// Address and page chat belong to web pages, not the new-tab composer.
     var pageToolsShown: Bool { active?.isBlank == false }
 
-    /// Whether the bookmarks bar is on the card: on every page, or on new tabs
-    /// only, as Settings has it.
+    /// Whether the bookmarks bar is on the card: as Settings has it, on every
+    /// page and new tab alike.
     var bookmarksShown: Bool {
-        guard !bookmarks.isEmpty, active?.immersed != true else { return false }
-        // A private window's tabs start blank: there it's the setting alone.
-        return prefs.bookmarksBar || (prefs.bookmarksOnStart && active?.isStart != false && !isPrivate)
+        !bookmarks.isEmpty && active?.immersed != true && prefs.bookmarksBar
     }
 
     /// Whether the address field is being edited in the toolbar, over a page. A
