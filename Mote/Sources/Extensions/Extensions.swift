@@ -44,6 +44,14 @@ final class Extensions: NSObject, ObservableObject {
     var orders: [ObjectIdentifier: [Tab.ID]] = [:]
     var windows: [ObjectIdentifier: ExtensionWindow] = [:]
     var windowWatches: [ObjectIdentifier: [AnyCancellable]] = [:]
+    /// Each window's tabs as extensions see them, with each tab's place and
+    /// window, worked out once rather than for every question (see
+    /// Extensions+Tabs): WebKit asks every tab its place and window as tabs
+    /// change, and walking every space's tabs for each was quadratic, a
+    /// tenth of a second and more for a space switch with a hundred tabs.
+    var shownTabs: [ObjectIdentifier: (tabs: [Tab], places: [Tab.ID: Int])] = [:]
+    var holders: [Tab.ID: Browser]?
+    var forgetting = false
     /// Tabs announced as moved to another window, so that window doesn't announce them as new.
     var moved: Set<Tab.ID> = []
     var tabWatches: [Tab.ID: [AnyCancellable]] = [:]

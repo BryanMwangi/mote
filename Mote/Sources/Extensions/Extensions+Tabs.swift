@@ -29,17 +29,53 @@ extension Extensions {
 
     /// The window holding a tab now: tabs move between windows.
     func holder(of tab: Tab) -> Browser? {
-        Windows.shared.all.first { browser in browser.tabs.contains { $0 === tab } || browser.parkedTabs.contains { $0 === tab } }
+        if let holders { return holders[tab.id] }
+        var found: [Tab.ID: Browser] = [:]
+        for browser in Windows.shared.all {
+            for each in browser.tabs { found[each.id] = browser }
+            for each in browser.parkedTabs { found[each.id] = browser }
+        }
+        holders = found
+        forgetSoon()
+        return found[tab.id]
     }
 
     /// A window's tabs in every space, in the spaces' order: the showing
     /// space's, and the others' parked. Extensions see them all, as Firefox
     /// shows a workspace's hidden tabs, so switching spaces is just another tab
     /// in front, not every tab closing and opening.
-    func visibleTabs(in browser: Browser) -> [Tab] {
-        guard browser.usesSpaces else { return browser.tabs.filter(shows) }
-        return browser.spaces.flatMap { space in space.id == browser.spaceID ? browser.tabs : browser.parked[space.id]?.tabs ?? [] }
-            .filter(shows)
+    func visibleTabs(in browser: Browser) -> [Tab] { shown(in: browser).tabs }
+
+    /// A tab's place among them.
+    func place(of tab: Tab, in browser: Browser) -> Int? { shown(in: browser).places[tab.id] }
+
+    private func shown(in browser: Browser) -> (tabs: [Tab], places: [Tab.ID: Int]) {
+        let key = ObjectIdentifier(browser)
+        if let known = shownTabs[key] { return known }
+        let tabs =
+            browser.usesSpaces
+            ? browser.spaces.flatMap { space in space.id == browser.spaceID ? browser.tabs : browser.parked[space.id]?.tabs ?? [] }
+                .filter(shows)
+            : browser.tabs.filter(shows)
+        let made = (tabs: tabs, places: Dictionary(tabs.enumerated().map { ($1.id, $0) }) { first, _ in first })
+        shownTabs[key] = made
+        forgetSoon()
+        return made
+    }
+
+    /// Kept until tabs change, and no longer than this turn of the run loop.
+    func forgetShown() {
+        shownTabs = [:]
+        holders = nil
+    }
+
+    private func forgetSoon() {
+        guard !forgetting else { return }
+        forgetting = true
+        DispatchQueue.main.async { [weak self] in
+            self?.forgetting = false
+            self?.forgetShown()
+        }
     }
 
     /// Every window's, the main one first.
@@ -55,6 +91,9 @@ extension Extensions {
         guard windowWatches[key] == nil else { return }
         controller.didOpenWindow(window(for: browser))
         windowWatches[key] = [
+            // As tabs change, not after: nothing may see the old ones.
+            browser.$tabs.map { _ in () }.merge(with: browser.$parked.map { _ in () }, browser.$spaces.map { _ in () }, browser.$spaceID.map { _ in () })
+                .sink { [weak self] in self?.forgetShown() },
             // After the change has landed: a space switch moves both at once.
             browser.$tabs.map { _ in () }.merge(with: browser.$parked.map { _ in () })
                 .receive(on: DispatchQueue.main)
@@ -153,7 +192,7 @@ final class ExtensionTab: NSObject, WKWebExtensionTab {
 
     func indexInWindow(for context: WKWebExtensionContext) -> Int {
         guard let tab, let browser else { return NSNotFound }
-        return owner.visibleTabs(in: browser).firstIndex { $0.id == tab.id } ?? NSNotFound
+        return owner.place(of: tab, in: browser) ?? NSNotFound
     }
 
     func webView(for context: WKWebExtensionContext) -> WKWebView? { page }
