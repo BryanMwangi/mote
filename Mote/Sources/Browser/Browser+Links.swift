@@ -28,10 +28,10 @@ extension Browser {
 
     /// Says a link went to a tab behind this one, with the way to it.
     func openedBehind(_ tab: Tab) {
-        announce(
-            Announcement("Opened in a new tab", symbol: "plus.square.on.square", action: .init(title: "Show") { [weak self, weak tab] in
-                if let tab { self?.select(tab) }
-            }))
+        let show = Announcement.Action(title: "Show") { [weak self, weak tab] in
+            if let tab { self?.select(tab) }
+        }
+        announce(Announcement("Opened in a new tab", symbol: "plus.square.on.square", action: show))
     }
 
     /// A link sent somewhere other than a tab here. It opens afresh there, as
