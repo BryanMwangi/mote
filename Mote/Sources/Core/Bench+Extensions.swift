@@ -93,6 +93,7 @@ private enum BenchExtensions {
             "reported": extensions.errors[item.id] ?? [],
             "action": action?.label ?? "", "badge": action?.badgeText ?? "", "popup": action?.presentsPopup ?? false,
             "source": item.source ?? "",
+            "activeHere": extensions.buttons.first { $0.id == item.id }?.active ?? false,
         ]
     }
 

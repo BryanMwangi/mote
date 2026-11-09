@@ -33,7 +33,8 @@ struct ExtensionIcon: View {
         ZStack(alignment: .bottomTrailing) {
             picture
                 .frame(width: size + 4, height: size + 4)
-                .opacity(button.enabled ? 1 : 0.4)
+                .opacity(button.enabled && button.active ? 1 : 0.4)
+                .saturation(button.active ? 1 : 0)
             if !button.badge.isEmpty {
                 Text(button.badge)
                     .font(.system(size: 8, weight: .semibold))

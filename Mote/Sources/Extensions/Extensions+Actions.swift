@@ -14,6 +14,9 @@ extension Extensions {
         let icon: NSImage?
         let badge: String
         let enabled: Bool
+        /// It may read and change the page in front, as Zen shows: one
+        /// without access to this site shows faded.
+        let active: Bool
     }
 
     /// Where extensions' popups hang from: the page button (PagePanel.swift).
@@ -23,11 +26,13 @@ extension Extensions {
     var buttons: [Button] {
         _ = actionsChanged
         let tab = activeAdapter
+        let page = front?.active?.address
         return installed.compactMap { item in
-            guard let action = contexts[item.id]?.action(for: tab) else { return nil }
+            guard let context = contexts[item.id], let action = context.action(for: tab) else { return nil }
             return Button(
                 id: item.id, name: item.name, label: action.label.isEmpty ? item.name : action.label,
-                icon: action.icon(for: CGSize(width: 16, height: 16)), badge: action.badgeText, enabled: action.isEnabled)
+                icon: action.icon(for: CGSize(width: 16, height: 16)), badge: action.badgeText, enabled: action.isEnabled,
+                active: page.map { context.hasAccess(to: $0, in: tab) } ?? false)
         }
     }
 
