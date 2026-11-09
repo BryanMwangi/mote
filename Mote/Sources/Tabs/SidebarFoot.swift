@@ -63,6 +63,7 @@ private struct FootItem: View {
 
     private var icon: some View {
         FootIcon(symbol: button.symbol, help: button.title, act: press)
+            .overlay { if button == .downloads { DownloadGauge(downloads: browser.downloads) } }
             .menuPanel(isPresented: showing ? $open : .constant(false), edge: button == .chats ? .trailing : .top) { popover }
     }
 
@@ -85,6 +86,63 @@ private struct FootItem: View {
         case .bookmarks: BookmarksDropdown(browser: browser, bookmarks: browser.bookmarks) { open = false }
         case .history: SessionHistory(browser: browser) { open = false }
         default: EmptyView()
+        }
+    }
+}
+
+/// Round the downloads button's arrow: how far the newest download has got,
+/// spinning while its size is unknown, and a ripple as one finishes, as
+/// Zen's button shows. Only this watches the downloads, not the sidebar.
+private struct DownloadGauge: View {
+    @ObservedObject var downloads: Downloads
+    /// A ripple showing, and how far it has spread.
+    @State private var ripple = false
+    @State private var spread = false
+
+    var body: some View {
+        ZStack {
+            if let newest = downloads.transfers.first { TransferArc(transfer: newest) }
+            Circle()
+                .stroke(Palette.ink, lineWidth: 1.5)
+                .frame(width: 15, height: 15)
+                .scaleEffect(spread ? 1.6 : 1)
+                .opacity(ripple && !spread ? 0.8 : 0)
+        }
+        .frame(width: 26, height: 26)
+        .allowsHitTesting(false)
+        .onChange(of: downloads.kept.first?.id) { _, done in
+            guard done != nil else { return }
+            ripple = true
+            spread = false
+            withAnimation(.easeOut(duration: 0.5)) { spread = true }
+            Task {
+                try? await Task.sleep(for: .seconds(0.55))
+                ripple = false
+                spread = false
+            }
+        }
+    }
+}
+
+/// One download's arc; it redraws alone as the download moves.
+private struct TransferArc: View {
+    @ObservedObject var transfer: Transfer
+
+    var body: some View {
+        if transfer.state == .running {
+            if let done = transfer.fraction {
+                ZStack {
+                    Circle().stroke(Palette.muted.opacity(0.25), lineWidth: 1.5)
+                    Circle()
+                        .trim(from: 0, to: max(0.04, done))
+                        .stroke(Palette.ink, style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
+                        .rotationEffect(.degrees(-90))
+                        .animation(.easeOut(duration: 0.45), value: done)
+                }
+                .frame(width: 15, height: 15)
+            } else {
+                Ring(size: 15)
+            }
         }
     }
 }
