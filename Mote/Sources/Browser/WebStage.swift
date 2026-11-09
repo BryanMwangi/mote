@@ -12,11 +12,13 @@ struct WebStage: FillsRoom {
     /// it's scaled down to fit.
     var device: CGSize? = nil
     var fits = true
+    var held: CGFloat? = nil
 
     func makeNSView(context: Context) -> StageView { StageView() }
     func updateNSView(_ view: StageView, context: Context) {
         view.device = device
         view.fits = fits
+        view.held = held
         view.warm = warm
         view.show(page)
     }
@@ -33,6 +35,7 @@ final class StageView: NSView {
     var warm: [NSView] = []
     var device: CGSize?
     var fits = true
+    var held: CGFloat?
     /// Around a device, so its edges and handles show.
     static let margin: CGFloat = 24
 
@@ -110,7 +113,7 @@ final class StageView: NSView {
             page.frame = bounds
             return scale(page, 1)
         }
-        let placed = Devices.place(device, in: bounds.insetBy(dx: Self.margin, dy: Self.margin), fits: fits)
+        let placed = Devices.place(device, in: bounds.insetBy(dx: Self.margin, dy: Self.margin), fits: fits, held: held)
         // `place` measures from the top; this view, as AppKit's do, from the bottom.
         var frame = placed.frame
         frame.origin.y = bounds.height - frame.maxY
@@ -120,9 +123,9 @@ final class StageView: NSView {
 
     private func scale(_ page: NSView, _ scale: CGFloat) {
         guard let web = page as? WKWebView else { return }
-        // Laid out at its frame over the scale, the device's own size, as
-        // Safari's responsive mode does; at the frame alone, a device drawn at
-        // two thirds was laid out two thirds as wide, leaving a band beside it.
+        // Laid out at its frame over the scale, the device's own size: at the
+        // frame alone, a device drawn at two thirds was laid out two thirds as
+        // wide, leaving a band beside it.
         let mode = device == nil ? Self.layoutAtViewSize : Self.layoutFromViewScale
         if web.unpublishedWhole("_layoutMode") != mode { web.unpublished("_setLayoutMode:", whole: mode) }
         if web.unpublishedNumber("_viewScale") != scale { web.unpublished("_setViewScale:", scale) }

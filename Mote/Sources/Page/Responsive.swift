@@ -287,16 +287,19 @@ private struct NewDevice: View {
 /// grip on its corner to drag its size.
 struct DeviceFrame: View {
     @ObservedObject var tab: Tab
+    @ObservedObject var drag: DeviceDrag
     let device: Device
 
-    /// The size when a drag began.
-    @State private var start: CGSize?
+    /// The size and scale when a drag began: the scale held for the drag,
+    /// so the corner keeps up with the pointer as the fit changes.
+    @State private var start: (size: CGSize, scale: CGFloat)?
 
     var body: some View {
         GeometryReader { area in
             let placed = Devices.place(
-                device.size, in: CGRect(origin: .zero, size: area.size).insetBy(dx: StageView.margin, dy: StageView.margin),
-                fits: tab.deviceFits)
+                drag.size ?? device.size,
+                in: CGRect(origin: .zero, size: area.size).insetBy(dx: StageView.margin, dy: StageView.margin),
+                fits: tab.deviceFits, held: drag.held)
             let frame = placed.frame
             Rectangle().strokeBorder(Palette.ink.opacity(0.18))
                 .frame(width: frame.width + 2, height: frame.height + 2)
@@ -322,11 +325,60 @@ struct DeviceFrame: View {
     private func drag(_ scale: CGFloat) -> some Gesture {
         DragGesture(minimumDistance: 1)
             .onChanged { motion in
-                let from = start ?? device.size
+                let from = start ?? (device.size, scale)
                 if start == nil { start = from }
-                tab.device = device.sized(
-                    width: from.width + 2 * motion.translation.width / scale, height: from.height + motion.translation.height / scale)
+                tab.dragDevice(
+                    to: CGSize(
+                        width: from.size.width + 2 * motion.translation.width / from.scale,
+                        height: from.size.height + motion.translation.height / from.scale),
+                    holding: from.scale)
             }
-            .onEnded { _ in start = nil }
+            .onEnded { _ in
+                start = nil
+                tab.endDeviceDrag()
+            }
+    }
+}
+
+/// A device's size being dragged: the scale held, the size its outline
+/// shows, and the page's next resize.
+@MainActor
+final class DeviceDrag: ObservableObject {
+    @Published var size: CGSize?
+    var held: CGFloat?
+    var resizing: Task<Void, Never>?
+}
+
+extension Tab {
+    /// The device's size dragged: its outline follows at once, at the scale it
+    /// had, so the page grows under the pointer instead of being fitted, and
+    /// zoomed, anew; the page itself at most ten times a second, as each new
+    /// size lays it out and draws it again while the window waits.
+    func dragDevice(to size: CGSize, holding scale: CGFloat) {
+        if deviceDrag.held == nil { deviceDrag.held = scale }
+        deviceDrag.size = size
+        guard deviceDrag.resizing == nil else { return }
+        deviceDrag.resizing = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(100))
+            guard !Task.isCancelled else { return }
+            self?.deviceDrag.resizing = nil
+            self?.resizeToDragged()
+        }
+    }
+
+    /// The drag let go: the page takes its last size, and is fitted again.
+    func endDeviceDrag() {
+        deviceDrag.resizing?.cancel()
+        deviceDrag.resizing = nil
+        resizeToDragged()
+        deviceDrag.held = nil
+        deviceDrag.size = nil
+        // Fitted again at the size it ended at.
+        objectWillChange.send()
+    }
+
+    private func resizeToDragged() {
+        guard let size = deviceDrag.size, let device else { return }
+        self.device = device.sized(width: size.width, height: size.height)
     }
 }

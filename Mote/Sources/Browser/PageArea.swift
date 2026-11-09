@@ -27,8 +27,9 @@ struct Page: View {
             // one. A floating page is left out so its return is a change and the
             // stage takes it back.
             WebStage(
-                page: tab.isBlank || tab.asleep || tab.floating ? nil : tab.web, warm: warm, device: tab.device?.size, fits: tab.deviceFits)
-            if let device = tab.device { DeviceFrame(tab: tab, device: device) }
+                page: tab.isBlank || tab.asleep || tab.floating ? nil : tab.web, warm: warm, device: tab.device?.size, fits: tab.deviceFits,
+                held: tab.deviceDrag.held)
+            if let device = tab.device { DeviceFrame(tab: tab, drag: tab.deviceDrag, device: device) }
 
             if let cover = tab.cover {
                 // The snapshot while a sleeping page comes back; it never takes clicks.

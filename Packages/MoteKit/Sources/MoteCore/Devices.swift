@@ -72,9 +72,10 @@ public enum Devices {
     /// Where the page goes in `area`, centred: at its own size when that fits
     /// or `fits` is off, scaled down to fit otherwise. Never scaled up. At its
     /// own size it sits at the top when it's taller than the area, so the
-    /// page's start shows.
-    public static func place(_ size: CGSize, in area: CGRect, fits: Bool) -> (frame: CGRect, scale: CGFloat) {
-        let scale = fits ? min(1, area.width / size.width, area.height / size.height) : 1
+    /// page's start shows. `held`, a scale kept as it is (while its size is
+    /// dragged, so it grows under the pointer rather than fitting anew).
+    public static func place(_ size: CGSize, in area: CGRect, fits: Bool, held: CGFloat? = nil) -> (frame: CGRect, scale: CGFloat) {
+        let scale = held ?? (fits ? min(1, area.width / size.width, area.height / size.height) : 1)
         // Whole points, rounded up: WebKit lays the page out at the frame over
         // the scale, rounded down, so a fraction short would lose a pixel.
         let shown = CGSize(width: (size.width * scale).rounded(.up), height: (size.height * scale).rounded(.up))

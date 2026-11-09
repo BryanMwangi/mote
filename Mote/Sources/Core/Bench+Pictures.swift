@@ -148,6 +148,17 @@ extension Bench {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1 / 120) { step(left - 1) }
             }
             step(30)
+        // The device's corner dragged out, a frame at a time, as its grip does.
+        case "devicedrag":
+            guard let tab = browser.active, let device = tab.device else { return }
+            let scale = min(1, tab.web.bounds.width / device.size.width)
+            for n in 1...40 {
+                DispatchQueue.main.asyncAfter(deadline: .now() + Double(n) / 60) {
+                    let size = CGSize(width: device.size.width + CGFloat(n) * 6, height: device.size.height + CGFloat(n) * 3)
+                    tab.dragDevice(to: size, holding: scale)
+                    if n == 40 { tab.endDeviceDrag() }
+                }
+            }
         // The chat in front: its conversation, the largest scroll view in the window.
         case "chat", "chatdown":
             let window = AppDelegate.window?.contentView

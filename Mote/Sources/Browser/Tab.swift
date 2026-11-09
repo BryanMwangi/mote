@@ -71,9 +71,17 @@ final class Tab: ObservableObject, Identifiable {
     /// Responsive Design Mode: the screen the page is shown at, and whether
     /// it's scaled to fit the window (see Responsive.swift). Not saved.
     @Published var device: Device? {
-        didSet { if device != oldValue { emulate() } }
+        // Not on a size change alone, which a drag makes on every frame.
+        didSet {
+            if device?.scale != oldValue?.scale || device?.touch != oldValue?.touch || device?.userAgent != oldValue?.userAgent {
+                emulate()
+            }
+        }
     }
     @Published var deviceFits = true
+    /// The device's size being dragged (see `dragDevice`): its own object,
+    /// as `reading` is, so a drag's moves redraw only the device's outline.
+    let deviceDrag = DeviceDrag()
     /// The site the page is loading from just now, for the status at its foot.
     /// Its own object: it changes many times a second while a page loads, and
     /// only the status watches it.
