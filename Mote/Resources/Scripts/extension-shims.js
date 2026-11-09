@@ -1731,16 +1731,15 @@
 		};
 	}
 	/**
-	* Without `file://` address patterns, which WebKit refuses the whole entry
-	* for (TWP's "translate this PDF"); the others stay. One that had only those
-	* is left as it was.
+	* Only web address patterns: WebKit refuses the whole entry for a `file://`
+	* or `ftp://` one; the others stay. One that had none is left as it was.
 	*/
 	function withoutFilePatterns(props) {
 		const mended = { ...props };
 		for (const key of ["documentUrlPatterns", "targetUrlPatterns"]) {
 			const patterns = props[key];
 			if (!Array.isArray(patterns)) continue;
-			const kept = patterns.filter((p) => typeof p !== "string" || !p.startsWith("file:"));
+			const kept = patterns.filter((p) => typeof p !== "string" || p === "<all_urls>" || /^(\*|https?|wss?):/.test(p));
 			if (kept.length) mended[key] = kept;
 		}
 		return mended;

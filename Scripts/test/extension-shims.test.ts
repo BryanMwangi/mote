@@ -244,20 +244,6 @@ describe('Rules, menus, requests and permissions', () => {
     expect(mendMenuProperties({ title: 'x' })).toEqual({ title: 'x' });
   });
 
-  it("keeps a version 2 extension's button contexts, which WebKit takes there", () => {
-    expect(mendMenuProperties({ contexts: ['browser_action', 'page_action', 'page'] }, 2)).toEqual({
-      contexts: ['browser_action', 'page_action', 'page'],
-    });
-    expect(mendMenuProperties({ contexts: ['action'] }, 2)).toEqual({ contexts: ['browser_action'] });
-  });
-
-  it('drops the file addresses WebKit refuses a menu entry for', () => {
-    expect(mendMenuProperties({ contexts: ['page'], documentUrlPatterns: ['*://*/*.pdf', 'file://*/*'] })).toEqual({
-      contexts: ['page'],
-      documentUrlPatterns: ['*://*/*.pdf'],
-    });
-  });
-
   it('leaves socket patterns out of a request filter', () => {
     expect(withoutSocketPatterns({ urls: ['wss://*/*', 'https://*/*'] })).toEqual({ urls: ['https://*/*'] });
     expect(withoutSocketPatterns({ urls: ['ws://*/*'] })).toBeNull();

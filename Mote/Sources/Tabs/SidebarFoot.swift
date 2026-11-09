@@ -95,7 +95,7 @@ private struct FootItem: View {
     }
 }
 
-/// The downloads button, as Zen's: while one downloads, how far it has got
+/// The downloads button: while one downloads, how far it has got
 /// takes the arrow's place (a ring spinning while its size is unknown), and
 /// a ripple goes out as one finishes. Only this watches the downloads.
 private struct DownloadsButton: View {

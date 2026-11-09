@@ -12,7 +12,7 @@ import type { Shim } from './types';
  * or -1 for every tab (`action.popup`).
  */
 export function tellPopups({ chrome, put, native }: Shim): void {
-  // A version 2 extension's page button is `pageAction`, as TWP's is.
+  // A version 2 extension's page button is `pageAction`.
   for (const name of ['action', 'browserAction', 'pageAction']) {
     const action = chrome[name];
     if (!action || typeof action.setPopup !== 'function') continue;
@@ -37,9 +37,8 @@ export function fillAction(shim: Shim): void {
     setBadgeTextColor: resolved(undefined),
     getBadgeTextColor: resolved([255, 255, 255, 255]),
   });
-  // A page button shown or hidden for a tab is WebKit's enabled or not: a
-  // translator turns its on for pages in another language (TWP calls show on
-  // every page, and stopped with a TypeError on each).
+  // A page button shown or hidden for a tab is WebKit's enabled or not,
+  // which WebKit's pageAction has no show or hide for.
   const page = shim.chrome.pageAction;
   if (page) {
     const turn = (on: boolean) => (tabId: number, callback?: () => void) => {

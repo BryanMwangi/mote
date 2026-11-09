@@ -13,7 +13,7 @@ extension Browser {
     }
 
     /// The tabs heard, in any space, other than the one in front, the one
-    /// heard last first. As in Safari and Firefox only real media counts: what
+    /// heard last first. Only real media counts: what
     /// WebKit hears now, a site's own player (a media session), or something
     /// heard not long ago and paused. Muted backgrounds and GIF-like videos
     /// don't. A strip put away stays away until its tab starts playing again.

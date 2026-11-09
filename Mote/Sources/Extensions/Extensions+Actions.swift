@@ -14,16 +14,16 @@ extension Extensions {
         let icon: NSImage?
         let badge: String
         let enabled: Bool
-        /// It may read and change the page in front, as Zen shows: one
-        /// without access to this site shows faded.
+        /// It may read and change the page in front: one without access
+        /// to this site shows faded.
         let active: Bool
-        /// It's a page action, as Firefox calls them: a button for some
-        /// pages, which it turns on for those it has something for.
+        /// It's a page action: a button for some pages, which it turns on
+        /// for those it has something for.
         let pageAction: Bool
     }
 
-    /// The one extension with something for the page in front, for beside
-    /// the address: Firefox and Zen show page actions there while they're on.
+    /// The one extension with something for the page in front, shown
+    /// beside the address while its page action is on.
     var pageAction: Button? { buttons.first { $0.pageAction && $0.enabled && $0.active } }
 
     /// Where extensions' popups hang from: the page button (PagePanel.swift).

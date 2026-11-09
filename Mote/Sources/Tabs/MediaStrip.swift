@@ -1,8 +1,8 @@
 import SwiftUI
 
-/// At the foot of the sidebar while something plays in tabs you aren't on, as
-/// Zen has them: a strip for each, stacked behind the one heard last, that
-/// fan out when the pointer comes over them.
+/// At the foot of the sidebar while something plays in tabs you aren't on: a
+/// strip for each, stacked behind the one heard last, that fan out when the
+/// pointer comes over them.
 struct MediaStack: View {
     @ObservedObject var browser: Browser
     let players: [Tab]

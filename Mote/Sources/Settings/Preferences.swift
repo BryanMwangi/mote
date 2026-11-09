@@ -153,7 +153,7 @@ final class Preferences: ObservableObject {
     @Published var shielded: Bool
     /// Extensions in private tabs; they can watch pages, so off unless asked for.
     @Published var extensionsInPrivate: Bool
-    /// The extension showing its button for the page, beside the address, as Firefox's page actions.
+    /// The extension with something for the page shows its button beside the address.
     @Published var showsPageActions: Bool
     /// Sites are offered passkeys; off, they fall back to passwords, as builds
     /// without Apple's browser entitlement need.
