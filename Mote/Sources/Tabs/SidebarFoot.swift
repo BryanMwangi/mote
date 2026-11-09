@@ -170,6 +170,7 @@ private struct SessionDownloads: View {
                     if record.stillThere { downloads.open(record) }
                     close()
                 }
+                .contextMenu { FileMenu(record: record, there: record.stillThere, downloads: downloads) }
             }
         } showAll: {
             close()

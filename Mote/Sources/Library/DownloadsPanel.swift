@@ -83,6 +83,7 @@ private struct FileRow: View {
         .background(hovering ? Palette.hover : .clear)
         .contentShape(Rectangle())
         .onTapGesture { if there { downloads.open(record) } }
+        .contextMenu { FileMenu(record: record, there: there, downloads: downloads) }
         .onHover { hovering = $0 }
         .animation(Motion.quick, value: hovering)
     }
@@ -126,5 +127,40 @@ struct TransferRow: View {
             }
             Quick(transfer.state == .running ? "Stop" : "Remove", tint: .red.opacity(0.75)) { browser.downloads.cancel(transfer) }
         }
+        .contentShape(Rectangle())
+        .contextMenu { TransferMenu(transfer: transfer, browser: browser) }
+    }
+}
+
+/// A downloaded file's menu, wherever it's listed.
+struct FileMenu: View {
+    let record: DownloadRecord
+    let there: Bool
+    let downloads: Downloads
+
+    var body: some View {
+        Button("Open") { downloads.open(record) }.disabled(!there)
+        Button("Show in Finder") { downloads.reveal(record) }.disabled(!there)
+        if let source = record.source { Button("Copy Download Link") { Downloads.copy(source) } }
+        Divider()
+        Button("Remove from List") { downloads.forget(record) }
+        Button("Move to Trash") { downloads.trash(record) }.disabled(!there)
+    }
+}
+
+/// A download under way's menu.
+struct TransferMenu: View {
+    @ObservedObject var transfer: Transfer
+    let browser: Browser
+
+    var body: some View {
+        switch transfer.state {
+        case .running: Button("Pause") { browser.downloads.pause(transfer) }
+        case .paused: Button("Resume") { browser.resume(transfer) }
+        case .failed: Button("Try Again") { browser.resume(transfer) }
+        }
+        if let source = transfer.source { Button("Copy Download Link") { Downloads.copy(source) } }
+        Divider()
+        Button(transfer.state == .running ? "Cancel" : "Remove from List") { browser.downloads.cancel(transfer) }
     }
 }

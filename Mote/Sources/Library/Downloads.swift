@@ -33,6 +33,16 @@ final class Downloads: ObservableObject {
     func reveal(_ record: DownloadRecord) { NSWorkspace.shared.activateFileViewerSelecting([record.url]) }
     func open(_ record: DownloadRecord) { NSWorkspace.shared.open(record.url) }
 
+    /// The file to the Trash, and off the list.
+    func trash(_ record: DownloadRecord) {
+        NSWorkspace.shared.recycle([record.url]) { [weak self] _, _ in MainActor.assumeIsolated { self?.forget(record) } }
+    }
+
+    static func copy(_ link: URL) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(link.absoluteString, forType: .string)
+    }
+
     private func change(_ edit: (inout DownloadList) -> Void) {
         edit(&list)
         file.save(list.records)
@@ -55,7 +65,7 @@ final class Downloads: ObservableObject {
         guard let transfer = transfer(for: download) else { return nil }
         drop(transfer)
         guard let path = transfer.file?.path ?? download.progress.fileURL?.path else { return nil }
-        let record = DownloadRecord(name: transfer.name, from: transfer.from, path: path, date: Date())
+        let record = DownloadRecord(name: transfer.name, from: transfer.from, path: path, date: Date(), source: transfer.source)
         add(record)
         return record
     }

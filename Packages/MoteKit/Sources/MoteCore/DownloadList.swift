@@ -8,12 +8,15 @@ public struct DownloadRecord: Codable, Identifiable, Equatable, Sendable {
     public var from: String
     public var path: String
     public var date: Date
+    /// Where it was downloaded from; nil in lists saved before this was kept.
+    public var source: URL?
 
-    public init(name: String, from: String, path: String, date: Date) {
+    public init(name: String, from: String, path: String, date: Date, source: URL? = nil) {
         self.name = name
         self.from = from
         self.path = path
         self.date = date
+        self.source = source
     }
 
     public var id: String { path }
