@@ -17,7 +17,14 @@ extension Extensions {
         /// It may read and change the page in front, as Zen shows: one
         /// without access to this site shows faded.
         let active: Bool
+        /// It's a page action, as Firefox calls them: a button for some
+        /// pages, which it turns on for those it has something for.
+        let pageAction: Bool
     }
+
+    /// The one extension with something for the page in front, for beside
+    /// the address: Firefox and Zen show page actions there while they're on.
+    var pageAction: Button? { buttons.first { $0.pageAction && $0.enabled && $0.active } }
 
     /// Where extensions' popups hang from: the page button (PagePanel.swift).
     static let menuAnchor = "__menu"
@@ -32,7 +39,8 @@ extension Extensions {
             return Button(
                 id: item.id, name: item.name, label: action.label.isEmpty ? item.name : action.label,
                 icon: action.icon(for: CGSize(width: 16, height: 16)), badge: action.badgeText, enabled: action.isEnabled,
-                active: page.map { context.hasAccess(to: $0, in: tab) } ?? false)
+                active: page.map { context.hasAccess(to: $0, in: tab) } ?? false,
+                pageAction: context.webExtension.manifest["page_action"] != nil)
         }
     }
 

@@ -82,6 +82,13 @@ private struct InstalledList: View {
             ) {
                 Switch(on: Binding(get: { browser.prefs.extensionsInPrivate }, set: { browser.prefs.extensionsInPrivate = $0 }))
             }
+            RowRule()
+            SettingRow(
+                "Beside the address", "An extension with something for the page you're on shows there, as a translator does",
+                symbol: "rectangle.and.hand.point.up.left", tint: Tint.green, keywords: ["page action", "toolbar", "active"]
+            ) {
+                Switch(on: Binding(get: { browser.prefs.showsPageActions }, set: { browser.prefs.showsPageActions = $0 }))
+            }
         }
 
         SettingsSection("Your own", note: "Reload picks up what you've changed in the folder since.") {

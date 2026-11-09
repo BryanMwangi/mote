@@ -61,6 +61,28 @@ struct ExtensionIcon: View {
     }
 }
 
+/// Beside the address: the extension with something for this page, if any
+/// (see `Extensions.pageAction`), and its popup hangs from it.
+@available(macOS 15.4, *)
+struct PageActionButton: View {
+    @ObservedObject var extensions: Extensions
+
+    var body: some View {
+        if let button = extensions.pageAction {
+            Button { extensions.press(button.id) } label: {
+                ExtensionIcon(button: button, size: 14)
+                    .frame(width: Metrics.button, height: Metrics.button)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(Pressed())
+            .help(button.label)
+            .background { PopupAnchor(id: button.id) }
+                .contextMenu { ExtensionActions(id: button.id, name: button.name, extensions: extensions) }
+                .transition(.opacity)
+        }
+    }
+}
+
 /// An extension's context menu.
 @available(macOS 15.4, *)
 struct ExtensionActions: View {

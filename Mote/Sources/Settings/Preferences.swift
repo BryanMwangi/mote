@@ -153,6 +153,8 @@ final class Preferences: ObservableObject {
     @Published var shielded: Bool
     /// Extensions in private tabs; they can watch pages, so off unless asked for.
     @Published var extensionsInPrivate: Bool
+    /// The extension showing its button for the page, beside the address, as Firefox's page actions.
+    @Published var showsPageActions: Bool
     /// Sites are offered passkeys; off, they fall back to passwords, as builds
     /// without Apple's browser entitlement need.
     @Published var passkeys: Bool
@@ -231,6 +233,7 @@ final class Preferences: ObservableObject {
         floatsOnLeave = store.value("float.leave", or: true)
         shielded = store.value("shield", or: true)
         extensionsInPrivate = store.value("extensions.private", or: false)
+        showsPageActions = store.value("extensions.pageActions", or: true)
         savesPasswords = store.value("passwords.save", or: true)
         fillsPasswords = store.value("passwords.fill", or: true)
         asksWhereToSave = store.value("downloads.ask", or: false)
@@ -317,6 +320,7 @@ final class Preferences: ObservableObject {
         keep($revealDelay, "reveal.delay")
         keep($shielded, "shield")
         keep($extensionsInPrivate, "extensions.private")
+        keep($showsPageActions, "extensions.pageActions")
         keep($passkeys, "passkeys")
         keep($savesPasswords, "passwords.save")
         keep($fillsPasswords, "passwords.fill")

@@ -227,6 +227,7 @@ struct AddressPill: View {
                 Door(icon: "link", help: "Copy Address   ⇧⌘C", act: browser.copyAddress)
             }
             if !editing, let tab = browser.active { TranslateButton(browser: browser, tab: tab) }
+            if !editing, browser.prefs.showsPageActions, #available(macOS 15.4, *) { PageActionButton(extensions: .shared) }
             if !editing { PageButton(browser: browser) }
         }
         .padding(.trailing, 2)
