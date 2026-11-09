@@ -372,7 +372,8 @@ final class Browser: NSObject, ObservableObject {
         $activeID
             .map { [weak self] id -> AnyPublisher<Void, Never> in
                 guard let tab = id.flatMap({ self?.tab($0) }) else { return Just(()).eraseToAnyPublisher() }
-                return tab.$title.map { _ in () }.merge(with: tab.$name.map { _ in () }).eraseToAnyPublisher()
+                return tab.$title.map { _ in () }.merge(with: tab.$name.map { _ in () }, tab.$address.map { _ in () })
+                    .eraseToAnyPublisher()
             }
             .switchToLatest()
             // Once switching settles: the title isn't on screen, and setting it
@@ -386,6 +387,7 @@ final class Browser: NSObject, ObservableObject {
         guard let window else { return }
         // Another profile's windows say whose they are, in the Window menu too.
         let page = active.map { $0.isBlank ? "Mote" : $0.label } ?? "Mote"
+        Handoff.offer(active?.address, title: page, from: window, shy: isPrivate || active?.shy == true || active?.bench == true)
         let title = Storage.profile == nil ? page : "\(page) — \(Profiles.shared.current)"
         guard window.title != title else { return }
         window.title = title

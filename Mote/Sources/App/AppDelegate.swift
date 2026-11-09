@@ -56,6 +56,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    /// Handoff from another device (see Handoff.swift).
+    func application(_ application: NSApplication, willContinueUserActivityWithType type: String) -> Bool {
+        type == NSUserActivityTypeBrowsingWeb
+    }
+
+    func application(
+        _ application: NSApplication, continue activity: NSUserActivity,
+        restorationHandler: @escaping ([any NSUserActivityRestoring]) -> Void
+    ) -> Bool {
+        MainActor.assumeIsolated { Handoff.take(activity) }
+    }
+
     /// A click on the Dock icon brings the window back; a SwiftUI window with a
     /// hidden title bar doesn't by itself.
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows visible: Bool) -> Bool {

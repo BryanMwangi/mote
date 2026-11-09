@@ -73,6 +73,12 @@
 			</array>
 		</dict>
 	</array>
+	<!-- Handoff: pages from another device open here when Mote is the default
+	     browser (see Handoff.swift). -->
+	<key>NSUserActivityTypes</key>
+	<array>
+		<string>NSUserActivityTypeBrowsingWeb</string>
+	</array>
 	<!-- A browser goes wherever it is pointed, including plain http and localhost. -->
 	<key>NSAppTransportSecurity</key>
 	<dict>
