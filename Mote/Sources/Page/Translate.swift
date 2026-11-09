@@ -12,7 +12,15 @@ extension Browser {
         tab.translation = nil
         tab.pageLanguage = nil
         guard prefs.offersTranslation, !tab.shy, let web = tab.built else { return }
-        let sample = "(document.documentElement.lang || '') + '\\n' + (document.body ? document.body.innerText.slice(0, 2000) : '')"
+        // The start, middle and end: a page in your language can still hold a
+        // foreign article, past where its menus and headings end.
+        let sample = """
+            (() => {
+              const text = document.body ? document.body.innerText : '', n = 2000, mid = Math.floor(text.length / 2);
+              const parts = text.length <= 3 * n ? [text] : [text.slice(0, n), text.slice(mid - n / 2, mid + n / 2), text.slice(-n)];
+              return (document.documentElement.lang || '') + '\\n' + parts.join('\\n');
+            })()
+            """
         web.evaluateInAppWorld(sample) { [weak self, weak tab] value in
             guard let text = value as? String else { return }
             // Recognised off the main thread: it's a few milliseconds a page.
@@ -24,13 +32,38 @@ extension Browser {
         }
     }
 
-    /// The language a page's sample is in: what its text reads as, or what
-    /// its `lang` (the sample's first line) says.
+    /// The language a page's sample is in: one you don't read, when it's a
+    /// fair share of the text even if not most of it; else what its text
+    /// mostly reads as, or what its `lang` (the sample's first line) says.
     private nonisolated static func language(of sample: String) -> String? {
+        // Line by line, weighed by length: over the whole text, a few foreign
+        // paragraphs among many in your language read as yours alone.
         let recognizer = NLLanguageRecognizer()
-        recognizer.processString(String(sample.drop { $0 != "\n" }))
+        var shares: [String: Int] = [:]
+        let text = String(sample.drop { $0 != "\n" })
+        for line in text.split(separator: "\n") where line.count >= 30 {
+            recognizer.reset()
+            recognizer.processString(String(line))
+            if let code = recognizer.dominantLanguage?.rawValue { shares[code, default: 0] += line.count }
+        }
+        let total = shares.values.reduce(0, +)
+        if let foreign = shares.filter({ !reads($0.key) }).max(by: { $0.value < $1.value }), foreign.value * 5 >= total {
+            return foreign.key
+        }
+        recognizer.reset()
+        recognizer.processString(text)
         let code = recognizer.dominantLanguage?.rawValue ?? String(sample.prefix { $0 != "\n" }.prefix(2))
         return code.isEmpty ? nil : code
+    }
+
+    /// Whether a piece of text is surely in a language you read already, and
+    /// so stays as it is: a page partly in yours keeps that part.
+    private nonisolated static func alreadyRead(_ text: String) -> Bool {
+        guard text.count >= 16 else { return false }
+        let recognizer = NLLanguageRecognizer()
+        recognizer.processString(text)
+        guard let (language, sure) = recognizer.languageHypotheses(withMaximum: 1).first else { return false }
+        return sure >= 0.9 && reads(language.rawValue)
     }
 
     /// Whether `code` is one of the languages the Mac is set to read.
@@ -111,20 +144,26 @@ extension Browser {
             pending = [:]
             flushed = .now
         }
-        do {
-            while tab.translation == job, let (base, texts) = await Self.next(in: web) {
-                for try await (index, text) in Self.stream(texts, in: session) {
+        var translated = 0, failed = false
+        while tab.translation == job, let (base, texts) = await Self.next(in: web) {
+            // Only what's foreign to you, each keeping its place among them all.
+            let places = await Task.detached(priority: .userInitiated) { texts.indices.filter { !Self.alreadyRead(texts[$0]) } }.value
+            if places.isEmpty { continue }
+            do {
+                for try await (index, text) in Self.stream(places.map { texts[$0] }, in: session) {
                     guard tab.translation == job else { return }
-                    pending[String(base + index)] = text
+                    pending[String(base + places[index])] = text
+                    translated += 1
                     // Soon for the first lines, which are what's on screen; then in small groups.
                     if pending.count >= 24 || ContinuousClock.now - flushed > .milliseconds(80) { flush() }
                 }
-                flush()
+            } catch {
+                // A batch it can't take (a third language, say) is passed over, not the page.
+                failed = true
             }
-        } catch {
             flush()
-            announce("This page couldn't be translated")
         }
+        if failed, translated == 0 { announce("This page couldn't be translated") }
     }
 
     /// The page's next texts to translate, and the place of the first among
