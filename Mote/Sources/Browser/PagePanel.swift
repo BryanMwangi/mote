@@ -173,7 +173,7 @@ private struct ExtensionGrid: View {
                 }
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: Self.gap), count: Self.columns), spacing: Self.gap) {
                     ForEach(Array(buttons.enumerated()), id: \.element.id) { index, button in
-                        Tile(help: button.active ? button.label : "\(button.label): not active on this site", tapped: true) {
+                        Tile(help: button.label, tapped: true) {
                             // The panel closes first, so the popup hangs from the page button.
                             close()
                             let id = button.id
