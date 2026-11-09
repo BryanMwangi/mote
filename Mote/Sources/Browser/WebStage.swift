@@ -119,9 +119,17 @@ final class StageView: NSView {
     }
 
     private func scale(_ page: NSView, _ scale: CGFloat) {
-        guard let web = page as? WKWebView, web.unpublishedNumber("_viewScale") != scale else { return }
-        web.unpublished("_setViewScale:", scale)
+        guard let web = page as? WKWebView else { return }
+        // Laid out at its frame over the scale, the device's own size, as
+        // Safari's responsive mode does; at the frame alone, a device drawn at
+        // two thirds was laid out two thirds as wide, leaving a band beside it.
+        let mode = device == nil ? Self.layoutAtViewSize : Self.layoutFromViewScale
+        if web.unpublishedWhole("_layoutMode") != mode { web.unpublished("_setLayoutMode:", whole: mode) }
+        if web.unpublishedNumber("_viewScale") != scale { web.unpublished("_setViewScale:", scale) }
     }
+
+    /// WebKit's `_WKLayoutMode`: its view's size, or that over its view scale.
+    private static let layoutAtViewSize = 0, layoutFromViewScale = 2
 
     /// Whether the page's Web Inspector is open, through private WebKit
     /// calls checked before use (see Inspector.swift).

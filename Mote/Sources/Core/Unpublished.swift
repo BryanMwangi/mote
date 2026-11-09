@@ -67,6 +67,22 @@ extension NSObject {
         unsafeBitCast(method(for: selector), to: Call.self)(self, selector, value)
     }
 
+    /// A method taking a whole number (an NSInteger, as an enum's case).
+    func unpublished(_ name: String, whole value: Int) {
+        let selector = NSSelectorFromString(name)
+        guard responds(to: selector) else { return }
+        typealias Call = @convention(c) (AnyObject, Selector, Int) -> Void
+        unsafeBitCast(method(for: selector), to: Call.self)(self, selector, value)
+    }
+
+    /// A whole number a method gives back.
+    func unpublishedWhole(_ name: String) -> Int? {
+        let selector = NSSelectorFromString(name)
+        guard responds(to: selector) else { return nil }
+        typealias Call = @convention(c) (AnyObject, Selector) -> Int
+        return unsafeBitCast(method(for: selector), to: Call.self)(self, selector)
+    }
+
     /// A method taking a Bool.
     func unpublished(_ name: String, _ flag: Bool) {
         let selector = NSSelectorFromString(name)
