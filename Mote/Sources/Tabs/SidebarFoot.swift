@@ -116,8 +116,8 @@ private struct DownloadsButton: View {
         .overlay {
             Circle()
                 .stroke(Palette.ink, lineWidth: 1.5)
-                .frame(width: 15, height: 15)
-                .scaleEffect(spread ? 1.6 : 1)
+                .frame(width: Downloading.size, height: Downloading.size)
+                .scaleEffect(spread ? 1.8 : 1)
                 .opacity(ripple && !spread ? 0.8 : 0)
                 .allowsHitTesting(false)
         }
@@ -140,6 +140,9 @@ private struct Downloading: View {
     @ObservedObject var transfer: Transfer
     let act: () -> Void
 
+    /// The circle of an 11 pt symbol, as the foot's others are drawn.
+    static let size: CGFloat = 11.5
+
     var body: some View {
         let running = transfer.state == .running
         FootIcon(symbol: FootButton.downloads.symbol, help: FootButton.downloads.title, showsSymbol: !running, act: act)
@@ -147,17 +150,18 @@ private struct Downloading: View {
                 if running {
                     Group {
                         if let done = transfer.fraction {
+                            // The size of the other buttons' symbols, and their stroke.
                             ZStack {
-                                Circle().stroke(Palette.muted.opacity(0.25), lineWidth: 1.5)
+                                Circle().stroke(Palette.muted.opacity(0.3), lineWidth: 1.2)
                                 Circle()
                                     .trim(from: 0, to: max(0.04, done))
-                                    .stroke(Palette.ink, style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
+                                    .stroke(Palette.ink, style: StrokeStyle(lineWidth: 1.2, lineCap: .round))
                                     .rotationEffect(.degrees(-90))
                                     .animation(.easeOut(duration: 0.45), value: done)
                             }
-                            .frame(width: 13, height: 13)
+                            .frame(width: Self.size, height: Self.size)
                         } else {
-                            Ring(size: 13)
+                            Ring(size: Self.size)
                         }
                     }
                     .allowsHitTesting(false)
