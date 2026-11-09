@@ -29,6 +29,9 @@ enum Session {
         var active: Int
         /// Split views, by their tabs' places in `tabs`; nil in older files.
         var splits: [SplitLayout<Int>]? = nil
+        /// A window opened since the main one, with one of the space's
+        /// essentials or pinned tabs in front: its held id. Nil in older files.
+        var activeHeld: String? = nil
 
         static let empty = Saved(tabs: [], active: 0)
     }

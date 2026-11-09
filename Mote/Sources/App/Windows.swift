@@ -78,7 +78,10 @@ final class Windows {
     /// Before quitting: every window's tabs, now.
     func flush() {
         quitting = true
-        for closed in closedWindows { Session.erase(window: closed.record.id, spaces: closed.spaces) }
+        for closed in closedWindows {
+            Session.erase(window: closed.record.id, spaces: closed.spaces)
+            WindowPlace.forget(closed.record.id)
+        }
         closedWindows = []
         for browser in extra.values { browser.writeSession(now: true) }
         file.saveNow(records)
@@ -94,6 +97,7 @@ final class Windows {
         let spaces = browser.spaces.map(\.id)
         if browser.isPrivate {
             Session.erase(window: id, spaces: spaces)
+            WindowPlace.forget(id)
         } else {
             for space in spaces {
                 browser.writeSession(
@@ -104,6 +108,7 @@ final class Windows {
             if closedWindows.count > 5 {
                 let oldest = closedWindows.removeFirst()
                 Session.erase(window: oldest.record.id, spaces: oldest.spaces)
+                WindowPlace.forget(oldest.record.id)
             }
         }
         browser.tabs.forEach { $0.close() }

@@ -37,8 +37,7 @@ enum WindowDressing {
         // DragStrip owns window dragging; text selection and tab drags cannot move it.
         window.isMovableByWindowBackground = false
         window.isMovable = false
-        let name = Storage.world.map { "mote (\($0))" } ?? "mote"
-        window.setFrameAutosaveName(id.map { "\(name) \($0.uuidString)" } ?? name)
+        WindowPlace.keep(window, as: id.map { "window.\($0.uuidString)" } ?? "window.main")
         // macOS doesn't say how round it draws windows; AppKit knows.
         if window.responds(to: NSSelectorFromString("_cornerRadius")), let radius = window.value(forKey: "_cornerRadius") as? CGFloat {
             ChromeLayout.corner = ChromeLayout.corner(inside: radius)
@@ -46,6 +45,72 @@ enum WindowDressing {
         TrafficLights.refresh(in: window)
     }
 
+}
+
+/// Where a browser window was, on which display, how big, and whether it was
+/// full screen, so it comes back so at the next launch, as Zen's do. AppKit's
+/// frame autosave can't: SwiftUI's scenes size their windows after it.
+@MainActor
+final class WindowPlace: NSObject {
+    private static var kept: [ObjectIdentifier: WindowPlace] = [:]
+    private let key: String
+    private weak var window: NSWindow?
+
+    static func keep(_ window: NSWindow, as key: String) {
+        guard kept[ObjectIdentifier(window)] == nil else { return }
+        let place = WindowPlace(key: key, window: window)
+        kept[ObjectIdentifier(window)] = place
+        place.putBack()
+    }
+
+    /// A closed window's place goes with it, unless Mote is quitting.
+    static func forget(_ id: UUID) {
+        Storage.settings.removeObject(forKey: "window.\(id.uuidString)")
+        Storage.settings.removeObject(forKey: "window.\(id.uuidString).full")
+    }
+
+    private init(key: String, window: NSWindow) {
+        self.key = key
+        self.window = window
+        super.init()
+        let center = NotificationCenter.default
+        for name in [NSWindow.didMoveNotification, NSWindow.didEndLiveResizeNotification, NSWindow.didResizeNotification] {
+            center.addObserver(self, selector: #selector(moved), name: name, object: window)
+        }
+        center.addObserver(self, selector: #selector(fullChanged), name: NSWindow.didEnterFullScreenNotification, object: window)
+        center.addObserver(self, selector: #selector(fullChanged), name: NSWindow.didExitFullScreenNotification, object: window)
+        center.addObserver(self, selector: #selector(closing), name: NSWindow.willCloseNotification, object: window)
+    }
+
+    private var full: Bool { window?.styleMask.contains(.fullScreen) == true }
+
+    /// After SwiftUI has sized the window: its place, or where it was put.
+    private func putBack() {
+        guard let window, let saved = Storage.settings.string(forKey: key),
+            let frame = FloatGeometry.remembered(NSRectFromString(saved), on: NSScreen.screens.map(\.visibleFrame))
+        else { return moved() }
+        let wasFull = Storage.settings.bool(forKey: "\(key).full")
+        window.setFrame(frame, display: true)
+        // SwiftUI may size it once more as it shows; put it back once more.
+        DispatchQueue.main.async {
+            if window.frame != frame { window.setFrame(frame, display: true) }
+            if wasFull, !window.styleMask.contains(.fullScreen) { window.toggleFullScreen(nil) }
+        }
+    }
+
+    @objc private func moved() {
+        // Full screen's frame isn't a place; the one before it is kept.
+        guard let window, !full, window.isVisible || window.frame.width > 0 else { return }
+        Storage.settings.set(NSStringFromRect(window.frame), forKey: key)
+    }
+
+    @objc private func fullChanged(_ note: Notification) {
+        Storage.settings.set(full, forKey: "\(key).full")
+    }
+
+    @objc private func closing() {
+        if let window { Self.kept[ObjectIdentifier(window)] = nil }
+    }
 }
 
 /// The end of a browser window's responder chain. A key nothing took gets

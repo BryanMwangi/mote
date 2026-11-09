@@ -435,10 +435,12 @@ final class Browser: NSObject, ObservableObject {
         if extra {
             let parked = loadRow(spaceID)
             showRow(parked.tabs, active: parked.active)
+            // With none of its own, a new tab; in front unless one of the
+            // space's tabs was.
             if !tabs.contains(where: { !$0.held }) {
                 let blank = Tab()
                 adopt(blank)
-                activeID = blank.id
+                if parked.active == nil { activeID = blank.id }
             }
             active?.wake()
             return
@@ -580,15 +582,18 @@ final class Browser: NSObject, ObservableObject {
         if extra, let windowID {
             let loose = tabs.filter { !$0.held }
             let kept = loose.filter { entry(for: $0) != nil }
+            let front = tabs.first { $0.id == active }
             Session.write(
                 now: now, window: windowID, space: space,
-                .init(tabs: kept.compactMap(entry(for:)), active: loose.firstIndex { $0.id == active } ?? 0, splits: savedSplits(kept)))
+                .init(
+                    tabs: kept.compactMap(entry(for:)), active: kept.firstIndex { $0.id == active } ?? 0, splits: savedSplits(kept),
+                    activeHeld: front?.held == true ? front?.heldID?.uuidString : nil))
             return
         }
         let kept = tabs.filter { entry(for: $0) != nil }
         Session.write(
             now: now, space: space,
-            .init(tabs: kept.compactMap(entry(for:)), active: tabs.firstIndex { $0.id == active } ?? 0, splits: savedSplits(kept)))
+            .init(tabs: kept.compactMap(entry(for:)), active: kept.firstIndex { $0.id == active } ?? 0, splits: savedSplits(kept)))
     }
 
     /// A tab as the session keeps it: a page, or a kept chat. Private, bench
@@ -949,7 +954,10 @@ final class Browser: NSObject, ObservableObject {
             let loose = made.compactMap(\.self)
             restoreSplits(saved.splits, made)
             let held = heldTabs(of: space)
-            let active = loose.indices.contains(saved.active) ? loose[saved.active].id : loose.first?.id ?? held.first?.id
+            let front =
+                held.first { $0.heldID?.uuidString == saved.activeHeld && saved.activeHeld != nil }
+                ?? (loose.indices.contains(saved.active) ? loose[saved.active] : loose.first)
+            let active = front?.id
             return Parked(tabs: held + loose, active: active)
         }
         let saved = Session.read(space: space)
