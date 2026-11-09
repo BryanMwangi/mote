@@ -25,7 +25,7 @@ struct DownloadsPanel: View {
                     Card {
                         ForEach(Array(downloads.kept.enumerated()), id: \.element.id) { index, record in
                             if index > 0 { Rule() }
-                            FileRow(record: record, downloads: downloads)
+                            FileRow(record: record, there: downloads.isThere(record), downloads: downloads)
                         }
                     }
                     .padding(.bottom, 2)
@@ -44,18 +44,19 @@ struct DownloadsPanel: View {
                 if !downloads.kept.isEmpty { Pill("Clear list") { downloads.forgetAll() } }
             }
         }
+        .onAppear { downloads.lookAgain() }
     }
 }
 
 /// A downloaded file; one that has been moved or deleted shows faded.
 private struct FileRow: View {
     let record: DownloadRecord
+    let there: Bool
     let downloads: Downloads
 
     @State private var hovering = false
 
     var body: some View {
-        let there = record.stillThere
         HStack(spacing: 12) {
             Image(systemName: there ? "doc" : "doc.badge.ellipsis")
                 .font(.system(size: 13))
@@ -67,7 +68,7 @@ private struct FileRow: View {
                     .foregroundStyle(there ? Palette.ink : Palette.faint)
                     .lineLimit(1)
                     .truncationMode(.middle)
-                Text([record.from, When.said(record.date)].filter { !$0.isEmpty }.joined(separator: " · "))
+                Text([there ? "" : "Deleted", record.from, When.said(record.date)].filter { !$0.isEmpty }.joined(separator: " · "))
                     .font(.system(size: 11.5))
                     .foregroundStyle(Palette.muted)
                     .lineLimit(1)

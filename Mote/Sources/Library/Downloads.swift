@@ -19,11 +19,27 @@ final class Downloads: ObservableObject {
     private var ticker: Timer?
 
     var kept: [DownloadRecord] { list.records }
+    /// Kept files no longer where they were saved, by id: looked for again
+    /// whenever Mote comes forward, as they're deleted or moved in the
+    /// Finder, and when a list of them opens.
+    @Published private(set) var missing: Set<String> = []
+    private var comingForward: Any?
 
     init() {
         list = DownloadList(file.load() ?? [])
         transfers = (stopped.load() ?? []).map(Transfer.init(saved:))
+        lookAgain()
+        comingForward = NotificationCenter.default.addObserver(
+            forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main
+        ) { [weak self] _ in MainActor.assumeIsolated { self?.lookAgain() } }
     }
+
+    func lookAgain() {
+        let gone = Set(kept.filter { !$0.stillThere }.map(\.id))
+        if gone != missing { missing = gone }
+    }
+
+    func isThere(_ record: DownloadRecord) -> Bool { !missing.contains(record.id) }
 
     func add(_ record: DownloadRecord) { change { $0.add(record) } }
     func forget(_ record: DownloadRecord) { change { $0.remove(record.id) } }
@@ -46,6 +62,7 @@ final class Downloads: ObservableObject {
     private func change(_ edit: (inout DownloadList) -> Void) {
         edit(&list)
         file.save(list.records)
+        lookAgain()
     }
 
     // MARK: - Under way

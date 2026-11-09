@@ -166,16 +166,18 @@ private struct SessionDownloads: View {
                 TransferRow(transfer: transfer, browser: browser).padding(.horizontal, 10).padding(.vertical, 6)
             }
             ForEach(recent.prefix(8)) { record in
-                PopoverLine(record.name, symbol: record.stillThere ? "doc" : "doc.badge.ellipsis") {
-                    if record.stillThere { downloads.open(record) }
+                let there = downloads.isThere(record)
+                PopoverLine(record.name, symbol: there ? "doc" : "doc.badge.ellipsis") {
+                    if there { downloads.open(record) }
                     close()
                 }
-                .contextMenu { FileMenu(record: record, there: record.stillThere, downloads: downloads) }
+                .contextMenu { FileMenu(record: record, there: there, downloads: downloads) }
             }
         } showAll: {
             close()
             browser.showingDownloads = true
         }
+        .onAppear { downloads.lookAgain() }
     }
 }
 
