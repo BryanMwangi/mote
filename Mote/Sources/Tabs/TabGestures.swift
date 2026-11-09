@@ -65,7 +65,12 @@ struct Reorderable: ViewModifier {
     /// Where the pointer is, for a tab that may leave its list; a scripted
     /// drag stays in it.
     private var zone: DragZone {
-        guard let away, ScriptedDrag.shared.tab == nil else { return .list }
+        guard let away else { return .list }
+        // A scripted drag goes off its list only when it says where to.
+        if ScriptedDrag.shared.tab != nil {
+            guard let pointer = ScriptedDrag.shared.pointer else { return .list }
+            return away.browser.zone(dragging: away.tab, at: pointer)
+        }
         return away.browser.zone(dragging: away.tab, at: NSEvent.mouseLocation)
     }
 
@@ -73,6 +78,7 @@ struct Reorderable: ViewModifier {
         // A tab still easing home is done; one held elsewhere keeps the drag.
         if drag?.landed == true { drag = nil }
         if let drag, drag.id != id { return }
+        if drag == nil, let away { away.browser.beginDrag(away.tab) }
         var next = drag ?? ReorderDrag(id: id, start: index)
         // Over a folder's row, it would go in; the list makes room as ever.
         if let filing {
@@ -101,12 +107,15 @@ struct Reorderable: ViewModifier {
     private func ended() {
         TabGhost.hide()
         guard var landing = drag, landing.id == id, !landing.landed else { return }
+        defer { away?.browser.endDrag() }
         if let filing, filing.browser.folderHover != nil {
             withAnimation(Motion.settle) { drag = nil }
             return filing.browser.dropInFolder(filing.tab)
         }
         if let away, case let zone = zone, zone != .list {
             withAnimation(Motion.settle) { drag = nil }
+            // Once: another list showing the same tab may hear the same drag end.
+            guard away.browser.pageDrag?.tab == away.tab.id else { return away.browser.endDrag() }
             return zone == .page ? away.browser.dropOnPage(away.tab) : away.browser.drop(away.tab)
         }
         landing.land()
@@ -146,12 +155,16 @@ final class ScriptedDrag: ObservableObject {
     @Published private(set) var travel: CGSize?
 
     /// Drags `tab` by `distance` over `seconds`, then lets go.
-    func play(_ tab: Tab.ID, by distance: CGSize, over seconds: Double, then done: @escaping () -> Void) {
+    /// `along`: where the pointer is at each part of the way, on screen.
+    func play(
+        _ tab: Tab.ID, by distance: CGSize, over seconds: Double, along: ((CGFloat) -> NSPoint)? = nil, then done: @escaping () -> Void
+    ) {
         self.tab = tab
         let steps = max(2, Int(seconds * 120))
         for n in 0...steps {
             DispatchQueue.main.asyncAfter(deadline: .now() + seconds * Double(n) / Double(steps)) {
                 let part = CGFloat(n) / CGFloat(steps)
+                if let along { self.pointer = along(part) }
                 self.travel = CGSize(width: distance.width * part, height: distance.height * part)
                 guard n == steps else { return }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {

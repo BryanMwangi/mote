@@ -2,9 +2,21 @@ import MoteCore
 import SwiftUI
 
 /// Where a tab dragged over the page would split in: beside `target`, on `side`.
-struct SplitHover: Equatable {
+struct SplitHover: Hashable {
     let target: Tab.ID
     let side: SplitSide
+}
+
+/// A tab dragged from its list, as Zen's split view takes one: the press
+/// that started the drag picked it, so over the page the tab that was in
+/// front comes back, to split with. The tab that was already in front
+/// splits with a new tab, whose page is chosen after.
+struct PageDrag {
+    let tab: Tab.ID
+    /// The tab it splits with; nil, a new tab.
+    let partner: Tab.ID?
+    /// The partner was brought back to the front.
+    var switched = false
 }
 
 /// Where a tab dragged from its list is (see Reorderable): near the list,
@@ -70,10 +82,17 @@ extension Browser {
 
     /// The plus menu's New Split: a new tab beside the one in front.
     func newSplit() {
-        guard let active, splittable(active) else { return }
+        if let active { splitWithNew(beside: active) }
+    }
+
+    /// A new tab on `side` of `target`, and the field to say what it shows,
+    /// as ⌘T's. Tab menu › Split with New Tab, and a tab dropped on its own page.
+    func splitWithNew(beside target: Tab, side: SplitSide = .right) {
+        guard splittable(target) else { return }
+        if activeID != target.id { select(target) }
         let tab = Tab()
         insert(tab, at: placeForNew())
-        split(tab, beside: active, side: .right)
+        split(tab, beside: target, side: side)
         field.clear()
         editing = false
         field.askFocus()
@@ -168,6 +187,7 @@ extension Browser {
     func zone(dragging tab: Tab, at pointer: NSPoint) -> DragZone {
         guard let window, window.frame.contains(pointer) else {
             if splitHover != nil { splitHover = nil }
+            leavePage(tab)
             return .outside
         }
         guard let stage = stageView, let active, let content = window.contentView else { return .list }
@@ -185,24 +205,69 @@ extension Browser {
             prefs.sidebar ? (prefs.sideRight ? content.bounds.width - inWindow.x : inWindow.x) : content.bounds.height - inWindow.y
         guard stage.bounds.contains(point), along >= reach + slop else {
             if splitHover != nil { splitHover = nil }
+            leavePage(tab)
             return .list
         }
-        let frames = (shownSplit ?? SplitLayout(active.id)).frames(in: stage.bounds, gap: Browser.splitGap)
+        let front = enterPage(tab) ?? active
+        let frames = (shownSplit ?? SplitLayout(front.id)).frames(in: stage.bounds, gap: Browser.splitGap)
         let target = frames.first { $0.value.contains(point) }
         var hover: SplitHover?
-        if let target, target.key != tab.id, splittable(tab), let other = self.tab(target.key), splittable(other),
+        // Over its own page: in beside it goes a new tab.
+        let alone = pageDrag?.tab == tab.id && pageDrag?.partner == nil
+        if let target, target.key != tab.id || alone, splittable(tab), let other = self.tab(target.key), splittable(other),
             let side = SplitLayout<Tab.ID>.dropSide(at: point, in: target.value)
         {
             hover = SplitHover(target: target.key, side: side)
         }
-        if splitHover != hover { splitHover = hover }
+        if splitHover != hover {
+            if splitHover == nil, hover != nil { NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now) }
+            splitHover = hover
+        }
         return .page
     }
 
-    /// Let go over the page: in beside the page under it, if it said where.
+    /// A drag from the list starts: the tab it'll split with is the one in
+    /// front before the press picked this one, if it did; else a new tab.
+    func beginDrag(_ tab: Tab) {
+        let picked = activeID == tab.id && Date().timeIntervalSince(selectedAt) < 1
+        let partner = picked ? lastOpened.flatMap(self.tab).flatMap { $0.id != tab.id && splittable($0) ? $0.id : nil } : nil
+        pageDrag = PageDrag(tab: tab.id, partner: partner)
+    }
+
+    /// Done dragging, wherever it went.
+    func endDrag() {
+        pageDrag = nil
+        if splitHover != nil { splitHover = nil }
+    }
+
+    /// Over the page: the partner comes back to the front, without animation.
+    /// Returns the tab whose page shows.
+    private func enterPage(_ tab: Tab) -> Tab? {
+        guard var drag = pageDrag, drag.tab == tab.id, !drag.switched, let partner = drag.partner.flatMap(self.tab) else { return nil }
+        drag.switched = true
+        pageDrag = drag
+        var still = Transaction()
+        still.disablesAnimations = true
+        withTransaction(still) { select(partner) }
+        return partner
+    }
+
+    /// Back off the page: the dragged tab is in front again.
+    private func leavePage(_ tab: Tab) {
+        guard var drag = pageDrag, drag.tab == tab.id, drag.switched else { return }
+        drag.switched = false
+        pageDrag = drag
+        var still = Transaction()
+        still.disablesAnimations = true
+        withTransaction(still) { select(tab) }
+    }
+
+    /// Let go over the page: in beside the page under it, if it said where;
+    /// over its own page, a new tab beside it.
     func dropOnPage(_ tab: Tab) {
-        defer { if splitHover != nil { splitHover = nil } }
+        defer { endDrag() }
         guard let hover = splitHover, let target = self.tab(hover.target) else { return }
+        if target.id == tab.id { return splitWithNew(beside: tab, side: hover.side) }
         split(tab, beside: target, side: hover.side)
     }
 

@@ -187,6 +187,12 @@ final class Browser: NSObject, ObservableObject {
     private(set) var splitOf: [Tab.ID: UUID] = [:]
     /// Where a tab dragged over the page would split in.
     @Published var splitHover: SplitHover?
+    /// A tab being dragged from its list, which may split in (Browser+Split).
+    var pageDrag: PageDrag?
+    /// The tab in front before the one in front now, and when that changed:
+    /// a tab dragged to the page splits with it (Zen's `_lastOpenedTab`).
+    private(set) var lastOpened: Tab.ID?
+    private(set) var selectedAt = Date.distantPast
     /// The page area, where a dragged tab's place is measured (see SplitStage).
     weak var stageView: NSView?
 
@@ -881,6 +887,8 @@ final class Browser: NSObject, ObservableObject {
         defer { switching.endInterval("Select tab", interval) }
         if floating == tab.id { land() }
         floatActiveVideo()
+        if let left, !left.isBlank { lastOpened = left.id }
+        selectedAt = Date()
         activeID = tab.id
         tab.touch()
         // Load a waiting tab now; only when there was nothing to wake, check

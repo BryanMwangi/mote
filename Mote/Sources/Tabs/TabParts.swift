@@ -172,6 +172,7 @@ struct SplitItems: View {
         } else if !tab.held {
             Button("Split with Current Tab") { browser.splitWithActive(tab) }
                 .disabled(tab.id == browser.activeID || browser.active.map(browser.splittable) != true)
+            Button("Split with New Tab") { browser.splitWithNew(beside: tab) }
         }
     }
 }

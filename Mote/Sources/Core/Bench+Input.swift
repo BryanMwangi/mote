@@ -13,6 +13,7 @@ extension Bench {
             "press": Self.press, "key": Self.key, "keyeq": Self.keyEquivalent, "hit": Self.hit, "field": Self.field,
             "bookmark": Self.bookmark, "menu": Self.menu, "pull": Self.pull, "resize": Self.resize, "move": Self.move,
             "tabdrag": Self.tabDrag,
+            "pagedrag": Self.pageDrag,
         ]
     }
 
@@ -400,6 +401,36 @@ extension Bench {
         // Along a row or a column, whichever the tab is in.
         ScriptedDrag.shared.play(tab.id, by: CGSize(width: distance, height: distance), over: seconds) {
             call.answer(["order": call.browser.tabs.map { BenchWire.short($0.id) }])
+        }
+    }
+
+    /// A tab dragged from its list onto the page, to X, Y from the window's
+    /// top left, and let go there: where it splits in, as a pointer's would.
+    private static func pageDrag(_ call: BenchCall) {
+        guard call.testRun("it would split your tabs") else { return }
+        guard let tab = call.tab(), let x = call.request.double("x"), let y = call.request.double("y"), let window = call.browser.window,
+            let content = window.contentView
+        else { return call.fail("pagedrag needs a tab and a place") }
+        let screen = { (x: CGFloat, y: CGFloat) in window.convertPoint(toScreen: NSPoint(x: x, y: content.bounds.height - y)) }
+        let from = screen(40, y), to = screen(x, y)
+        let seconds = max(0.05, (call.request.double("ms") ?? 700) / 1000)
+        var shown = ""
+        ScriptedDrag.shared.play(
+            tab.id, by: CGSize(width: 0, height: 8), over: seconds,
+            along: { part in
+                if let hover = call.browser.splitHover { shown = "\(hover.side) of \(BenchWire.short(hover.target))" }
+                return NSPoint(x: from.x + (to.x - from.x) * part, y: from.y + (to.y - from.y) * part)
+            }
+        ) {
+            ScriptedDrag.shared.pointer = nil
+            let group = call.browser.group(of: tab.id).flatMap { call.browser.splits[$0] }
+            call.answer([
+                "active": call.browser.active.map { BenchWire.short($0.id) } ?? "",
+                "split": group?.ids.map { id in call.browser.tab(id).map { $0.isBlank ? "new" : BenchWire.short(id) } ?? "?" } ?? [],
+                "fieldAsked": call.browser.field.focusRequest,
+                // Where the page said it would go, last.
+                "shown": shown,
+            ])
         }
     }
 

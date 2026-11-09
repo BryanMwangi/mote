@@ -63,16 +63,16 @@ struct SplitStage<Pane: View>: View {
                 }
                 if let hover = browser.splitHover, let target = frames[hover.target] {
                     let shown = SplitLayout<Tab.ID>.preview(of: target, side: hover.side).insetBy(dx: 4, dy: 4)
-                    RoundedRectangle(cornerRadius: Self.corner, style: .continuous)
-                        .fill(Color.accentColor.opacity(0.16))
-                        .strokeBorder(Color.accentColor.opacity(0.6), lineWidth: 1.5)
+                    // As Zen's: the room the tab would take grows in from that edge.
+                    SplitPlaceholder(fresh: hover.target == browser.pageDrag?.tab)
                         .frame(width: shown.width, height: shown.height)
                         .offset(x: shown.minX, y: shown.minY)
                         .allowsHitTesting(false)
-                        .transition(.opacity)
+                        .id(hover)
+                        .transition(.grow(from: hover.side))
                 }
             }
-            .animation(Motion.quick, value: browser.splitHover)
+            .animation(.easeOut(duration: 0.1), value: browser.splitHover)
         }
         .background(StageAnchor(browser: browser))
         .animation(Motion.hover, value: hovered)
@@ -117,6 +117,51 @@ struct SplitStage<Pane: View>: View {
         .background(.black.opacity(0.45), in: UnevenRoundedRectangle(bottomLeadingRadius: 6, bottomTrailingRadius: 6, style: .continuous))
         .transition(.opacity)
     }
+}
+
+/// Where a dragged tab would go; `fresh`, a new tab, whose page is chosen after.
+private struct SplitPlaceholder: View {
+    let fresh: Bool
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: 10, style: .continuous)
+            .fill(Palette.frame.opacity(0.92))
+            .overlay {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .strokeBorder(Palette.edge, style: StrokeStyle(lineWidth: 1.5, dash: [6, 5]))
+            }
+            .overlay {
+                if fresh {
+                    Label("New Tab", systemImage: "plus").font(.system(size: 13, weight: .medium)).foregroundStyle(Palette.muted)
+                }
+            }
+            .shadow(color: .black.opacity(0.12), radius: 12, y: 4)
+    }
+}
+
+extension AnyTransition {
+    /// Grows from nothing at `side`'s edge.
+    fileprivate static func grow(from side: SplitSide) -> AnyTransition {
+        let anchor: UnitPoint =
+            switch side {
+            case .left: .leading
+            case .right: .trailing
+            case .top: .top
+            case .bottom: .bottom
+            }
+        let across = side == .left || side == .right
+        return .modifier(
+            active: Grown(x: across ? 0.001 : 1, y: across ? 1 : 0.001, anchor: anchor), identity: Grown(x: 1, y: 1, anchor: anchor)
+        ).combined(with: .opacity)
+    }
+}
+
+private struct Grown: ViewModifier {
+    let x: CGFloat
+    let y: CGFloat
+    let anchor: UnitPoint
+
+    func body(content: Content) -> some View { content.scaleEffect(x: x, y: y, anchor: anchor) }
 }
 
 /// Six dots, two rows of three: something to take hold of.
