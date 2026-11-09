@@ -75,8 +75,10 @@ private struct FileRow: View {
             }
             Spacer(minLength: 8)
             if hovering {
-                if there { Quick("Show in Finder") { downloads.reveal(record) } }
-                Quick("Remove", tint: .red.opacity(0.75)) { downloads.forget(record) }
+                HStack(spacing: 2) {
+                    if there { Door(icon: "magnifyingglass", help: "Show in Finder") { downloads.reveal(record) } }
+                    Door(icon: "xmark", help: "Remove from List") { downloads.forget(record) }
+                }
             }
         }
         .padding(.horizontal, 14)
@@ -121,12 +123,14 @@ struct TransferRow: View {
                 Text(status).font(.system(size: 11.5)).foregroundStyle(Palette.muted).lineLimit(1)
             }
             Spacer(minLength: 8)
-            if transfer.state == .running {
-                Quick("Pause") { browser.downloads.pause(transfer) }
-            } else {
-                Quick(transfer.state == .failed ? "Try Again" : "Resume") { browser.resume(transfer) }
+            HStack(spacing: 2) {
+                switch transfer.state {
+                case .running: Door(icon: "pause.fill", help: "Pause") { browser.downloads.pause(transfer) }
+                case .paused: Door(icon: "play.fill", help: "Resume") { browser.resume(transfer) }
+                case .failed: Door(icon: "arrow.clockwise", help: "Try Again") { browser.resume(transfer) }
+                }
+                Door(icon: "xmark", help: transfer.state == .running ? "Stop" : "Remove from List") { browser.downloads.cancel(transfer) }
             }
-            Quick(transfer.state == .running ? "Stop" : "Remove", tint: .red.opacity(0.75)) { browser.downloads.cancel(transfer) }
         }
         .contentShape(Rectangle())
         .contextMenu { TransferMenu(transfer: transfer, browser: browser) }
