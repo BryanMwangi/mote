@@ -17,6 +17,9 @@ final class Downloads: ObservableObject {
     private let stopped = JSONFile<[Transfer.Saved]>("downloads-stopped.json")
     /// Reads how far the running ones have got, a few times a second.
     private var ticker: Timer?
+    /// How far all those running have got together, for the sidebar's button;
+    /// nil while none runs, and 0 while none knows its size.
+    @Published private(set) var running: Double?
 
     var kept: [DownloadRecord] { list.records }
     /// Kept files no longer where they were saved, by id: looked for again
@@ -74,6 +77,7 @@ final class Downloads: ObservableObject {
         let transfer = resuming ?? Transfer(source: download.originalRequest?.url)
         transfer.follow(download)
         if resuming == nil { transfers.insert(transfer, at: 0) }
+        noteRunning()
         tick()
     }
 
@@ -81,6 +85,7 @@ final class Downloads: ObservableObject {
     func finished(_ download: WKDownload) -> DownloadRecord? {
         guard let transfer = transfer(for: download) else { return nil }
         drop(transfer)
+        noteRunning()
         guard let path = transfer.file?.path ?? download.progress.fileURL?.path else { return nil }
         let record = DownloadRecord(name: transfer.name, from: transfer.from, path: path, date: Date(), source: transfer.source)
         add(record)
@@ -128,6 +133,16 @@ final class Downloads: ObservableObject {
         save()
     }
 
+    /// Works out `running` again, published only as it moves a little.
+    func noteRunning() {
+        let running = transfers.filter { $0.state == .running }
+        let sized = running.filter { $0.total > 0 }
+        let done = Double(sized.map(\.received).reduce(0, +)) / Double(max(1, sized.map(\.total).reduce(0, +)))
+        let now: Double? = running.isEmpty ? nil : done
+        if let now, let was = self.running, abs(now - was) < 0.005 { return }
+        if now != self.running { self.running = now }
+    }
+
     private func drop(_ transfer: Transfer) {
         transfers.removeAll { $0 === transfer }
         transfer.forgetResumeData()
@@ -135,6 +150,7 @@ final class Downloads: ObservableObject {
 
     private func save() {
         stopped.save(transfers.filter { $0.state != .running }.map(\.saved))
+        noteRunning()
     }
 
     /// Progress isn't published as it comes, which can be thousands of times
@@ -146,6 +162,7 @@ final class Downloads: ObservableObject {
                 guard let self else { return }
                 let running = self.transfers.filter { $0.state == .running }
                 running.forEach { $0.read() }
+                self.noteRunning()
                 if running.isEmpty {
                     self.ticker?.invalidate()
                     self.ticker = nil
@@ -179,6 +196,9 @@ final class Transfer: ObservableObject, Identifiable {
     @Published var state: State = .running
     @Published private(set) var received: Int64 = 0
     @Published private(set) var total: Int64 = 0
+    /// Bytes a second lately, smoothed; 0 until there are two readings.
+    @Published private(set) var rate: Double = 0
+    private var lastRead: (at: Date, received: Int64)?
     private(set) weak var download: WKDownload?
     /// WebKit's, to go on from where it stopped.
     private(set) var resumeData: Data?
@@ -215,12 +235,20 @@ final class Transfer: ObservableObject, Identifiable {
 
     func read() {
         guard let progress = download?.progress else { return }
-        if received != progress.completedUnitCount { received = progress.completedUnitCount }
+        let now = Date(), got = progress.completedUnitCount
+        if let last = lastRead, now.timeIntervalSince(last.at) > 0.2 {
+            let lately = Double(got - last.received) / now.timeIntervalSince(last.at)
+            rate = rate == 0 ? lately : rate * 0.7 + lately * 0.3
+        }
+        if lastRead == nil || now.timeIntervalSince(lastRead!.at) > 0.2 { lastRead = (now, got) }
+        if received != got { received = got }
         if total != progress.totalUnitCount { total = max(0, progress.totalUnitCount) }
     }
 
     func stop(_ state: State, resumeData: Data?) {
         read()
+        rate = 0
+        lastRead = nil
         self.state = state
         self.resumeData = resumeData
         download = nil

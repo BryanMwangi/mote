@@ -1,5 +1,7 @@
+import AppKit
 import MoteCore
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// The Downloads panel: recent files, to open, find in Finder or forget.
 struct DownloadsPanel: View {
@@ -58,10 +60,10 @@ private struct FileRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            Image(systemName: there ? "doc" : "doc.badge.ellipsis")
-                .font(.system(size: 13))
-                .foregroundStyle(there ? Palette.muted : Palette.faint)
-                .frame(width: 18)
+            Image(nsImage: FileKind.icon(of: record, there: there))
+                .resizable()
+                .frame(width: 26, height: 26)
+                .opacity(there ? 1 : 0.4)
             VStack(alignment: .leading, spacing: 2) {
                 Text(record.name)
                     .font(.system(size: 13))
@@ -92,8 +94,9 @@ private struct FileRow: View {
     }
 }
 
-/// A download under way, paused or failed: how far it's got, and pausing,
-/// going on or stopping it. In the Downloads panel and the sidebar's popover.
+/// A download under way, paused or failed: its kind of file, how far it's
+/// got and how fast, and pausing, going on or stopping it. In the Downloads
+/// panel and the sidebar's popover.
 struct TransferRow: View {
     @ObservedObject var transfer: Transfer
     let browser: Browser
@@ -102,28 +105,44 @@ struct TransferRow: View {
         let size = { (bytes: Int64) in ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file) }
         let got = transfer.total > 0 ? "\(size(transfer.received)) of \(size(transfer.total))" : size(transfer.received)
         switch transfer.state {
-        case .running: return got
-        case .paused: return "Paused · " + got
-        case .failed: return transfer.resumeData == nil ? "Failed" : "Stopped · " + got
+        case .running:
+            let speed = transfer.rate > 0 ? " (\(size(Int64(transfer.rate)))/s)" : ""
+            return "\(timeLeft) — \(got)\(speed)"
+        case .paused: return "Paused — " + got
+        case .failed: return transfer.resumeData == nil ? "Failed" : "Stopped — " + got
         }
     }
 
+    private var timeLeft: String {
+        guard transfer.total > 0, transfer.rate > 0 else { return "Unknown time left" }
+        let seconds = Double(transfer.total - transfer.received) / transfer.rate
+        return (Self.left.string(from: max(1, seconds)) ?? "") + " left"
+    }
+
+    private static let left: DateComponentsFormatter = {
+        let format = DateComponentsFormatter()
+        format.allowedUnits = [.hour, .minute, .second]
+        format.unitsStyle = .short
+        format.maximumUnitCount = 1
+        return format
+    }()
+
     var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: transfer.state == .failed ? "exclamationmark.circle" : "arrow.down.circle")
-                .font(.system(size: 13))
-                .foregroundStyle(Palette.muted)
-                .frame(width: 18)
-            VStack(alignment: .leading, spacing: 4) {
-                Text(transfer.name).font(.system(size: 13)).foregroundStyle(Palette.ink).lineLimit(1).truncationMode(.middle)
+        HStack(spacing: 10) {
+            Image(nsImage: FileKind.icon(named: transfer.name))
+                .resizable()
+                .frame(width: 30, height: 30)
+                .opacity(transfer.state == .failed ? 0.5 : 1)
+            VStack(alignment: .leading, spacing: 5) {
+                Text(transfer.name).font(.system(size: 13, weight: .medium)).foregroundStyle(Palette.ink).lineLimit(1)
+                    .truncationMode(.middle)
                 ProgressView(value: transfer.fraction ?? 0)
                     .progressViewStyle(.linear)
-                    .controlSize(.mini)
-                    .opacity(transfer.state == .running ? 1 : 0.45)
-                Text(status).font(.system(size: 11.5)).foregroundStyle(Palette.muted).lineLimit(1)
+                    .controlSize(.small)
+                    .tint(transfer.state == .running ? nil : Palette.muted)
+                Text(status).font(.system(size: 11)).foregroundStyle(Palette.muted).lineLimit(1).truncationMode(.middle)
             }
-            Spacer(minLength: 8)
-            HStack(spacing: 2) {
+            HStack(spacing: 0) {
                 switch transfer.state {
                 case .running: Door(icon: "pause.fill", help: "Pause") { browser.downloads.pause(transfer) }
                 case .paused: Door(icon: "play.fill", help: "Resume") { browser.resume(transfer) }
@@ -134,6 +153,19 @@ struct TransferRow: View {
         }
         .contentShape(Rectangle())
         .contextMenu { TransferMenu(transfer: transfer, browser: browser) }
+    }
+}
+
+/// The icon macOS shows for a kind of file, by its name's extension; a
+/// file that's there, by itself.
+enum FileKind {
+    static func icon(named name: String) -> NSImage {
+        let kind = UTType(filenameExtension: (name as NSString).pathExtension) ?? .data
+        return NSWorkspace.shared.icon(for: kind)
+    }
+
+    static func icon(of record: DownloadRecord, there: Bool) -> NSImage {
+        there ? NSWorkspace.shared.icon(forFile: record.path) : icon(named: record.name)
     }
 }
 

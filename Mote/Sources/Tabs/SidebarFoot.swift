@@ -95,9 +95,9 @@ private struct FootItem: View {
     }
 }
 
-/// The downloads button: while one downloads, how far it has got
-/// takes the arrow's place (a ring spinning while its size is unknown), and
-/// a ripple goes out as one finishes. Only this watches the downloads.
+/// The downloads button: while any download runs, how far they've all got
+/// together takes the arrow's place (a ring spinning while none knows its
+/// size), and a ripple goes out as one finishes. Only this watches them.
 private struct DownloadsButton: View {
     @ObservedObject var downloads: Downloads
     let act: () -> Void
@@ -105,66 +105,44 @@ private struct DownloadsButton: View {
     @State private var ripple = false
     @State private var spread = false
 
-    var body: some View {
-        Group {
-            if let newest = downloads.transfers.first {
-                Downloading(transfer: newest, act: act)
-            } else {
-                FootIcon(symbol: FootButton.downloads.symbol, help: FootButton.downloads.title, act: act)
-            }
-        }
-        .overlay {
-            Circle()
-                .stroke(Palette.ink, lineWidth: 1.5)
-                .frame(width: Downloading.size, height: Downloading.size)
-                .scaleEffect(spread ? 1.8 : 1)
-                .opacity(ripple && !spread ? 0.8 : 0)
-                .allowsHitTesting(false)
-        }
-        .onChange(of: downloads.kept.first?.id) { _, done in
-            guard done != nil else { return }
-            ripple = true
-            spread = false
-            withAnimation(.easeOut(duration: 0.5)) { spread = true }
-            Task {
-                try? await Task.sleep(for: .seconds(0.55))
-                ripple = false
-                spread = false
-            }
-        }
-    }
-}
-
-/// The button while a download is the newest: it redraws alone as it moves.
-private struct Downloading: View {
-    @ObservedObject var transfer: Transfer
-    let act: () -> Void
-
     /// The circle of an 11 pt symbol, as the foot's others are drawn.
-    static let size: CGFloat = 11.5
+    private static let size: CGFloat = 11.5
 
     var body: some View {
-        let running = transfer.state == .running
-        FootIcon(symbol: FootButton.downloads.symbol, help: FootButton.downloads.title, showsSymbol: !running, act: act)
+        let running = downloads.running
+        FootIcon(symbol: FootButton.downloads.symbol, help: FootButton.downloads.title, showsSymbol: running == nil, act: act)
             .overlay {
-                if running {
-                    Group {
-                        if let done = transfer.fraction {
-                            // The size of the other buttons' symbols, and their stroke.
-                            ZStack {
-                                Circle().stroke(Palette.muted.opacity(0.3), lineWidth: 1.2)
-                                Circle()
-                                    .trim(from: 0, to: max(0.04, done))
-                                    .stroke(Palette.ink, style: StrokeStyle(lineWidth: 1.2, lineCap: .round))
-                                    .rotationEffect(.degrees(-90))
-                                    .animation(.easeOut(duration: 0.45), value: done)
-                            }
-                            .frame(width: Self.size, height: Self.size)
-                        } else {
-                            Ring(size: Self.size)
+                Group {
+                    if let running, running > 0 {
+                        ZStack {
+                            Circle().stroke(Palette.muted.opacity(0.3), lineWidth: 1.2)
+                            Circle()
+                                .trim(from: 0, to: max(0.04, running))
+                                .stroke(Palette.ink, style: StrokeStyle(lineWidth: 1.2, lineCap: .round))
+                                .rotationEffect(.degrees(-90))
+                                .animation(.easeOut(duration: 0.45), value: running)
                         }
+                        .frame(width: Self.size, height: Self.size)
+                    } else if running != nil {
+                        Ring(size: Self.size)
                     }
-                    .allowsHitTesting(false)
+                    Circle()
+                        .stroke(Palette.ink, lineWidth: 1.5)
+                        .frame(width: Self.size, height: Self.size)
+                        .scaleEffect(spread ? 1.8 : 1)
+                        .opacity(ripple && !spread ? 0.8 : 0)
+                }
+                .allowsHitTesting(false)
+            }
+            .onChange(of: downloads.kept.first?.id) { _, done in
+                guard done != nil else { return }
+                ripple = true
+                spread = false
+                withAnimation(.easeOut(duration: 0.5)) { spread = true }
+                Task {
+                    try? await Task.sleep(for: .seconds(0.55))
+                    ripple = false
+                    spread = false
                 }
             }
     }
@@ -184,18 +162,26 @@ private struct SessionDownloads: View {
         SessionList(
             empty: recent.isEmpty && downloads.transfers.isEmpty ? "No downloads this session." : nil, more: "Show all downloads"
         ) {
-            // Those under way first, as Zen's panel has them.
-            ForEach(downloads.transfers) { transfer in
-                TransferRow(transfer: transfer, browser: browser).padding(.horizontal, 10).padding(.vertical, 6)
-            }
-            ForEach(recent.prefix(8)) { record in
-                let there = downloads.isThere(record)
-                PopoverLine(record.name, symbol: there ? "doc" : "doc.badge.ellipsis") {
-                    if there { downloads.open(record) }
-                    close()
+            // Those under way first, then this session's files, scrolling
+            // past a few rather than running off the screen.
+            ScrollView {
+                VStack(alignment: .leading, spacing: 1) {
+                    ForEach(downloads.transfers) { transfer in
+                        TransferRow(transfer: transfer, browser: browser).padding(.horizontal, 10).padding(.vertical, 8)
+                    }
+                    ForEach(recent.prefix(20)) { record in
+                        let there = downloads.isThere(record)
+                        PopoverLine(record.name, image: FileKind.icon(of: record, there: there)) {
+                            if there { downloads.open(record) }
+                            close()
+                        }
+                        .opacity(there ? 1 : 0.5)
+                        .contextMenu { FileMenu(record: record, there: there, downloads: downloads) }
+                    }
                 }
-                .contextMenu { FileMenu(record: record, there: there, downloads: downloads) }
             }
+            .scrollIndicators(.automatic)
+            .frame(height: min(360, CGFloat(downloads.transfers.count) * 62 + CGFloat(min(recent.count, 20)) * 29))
         } showAll: {
             close()
             browser.showingDownloads = true
@@ -239,6 +225,6 @@ private struct SessionList<Rows: View>: View {
             PopoverLine(more, act: showAll)
         }
         .padding(6)
-        .frame(width: 300)
+        .frame(width: 340)
     }
 }

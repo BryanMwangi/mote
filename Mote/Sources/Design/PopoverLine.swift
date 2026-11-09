@@ -6,12 +6,15 @@ import SwiftUI
 struct PopoverLine: View {
     let title: String
     var symbol: String?
+    /// A picture in the symbol's place: a file's icon.
+    var image: NSImage?
     let act: () -> Void
     @State private var hovering = false
 
-    init(_ title: String, symbol: String? = nil, act: @escaping () -> Void) {
+    init(_ title: String, symbol: String? = nil, image: NSImage? = nil, act: @escaping () -> Void) {
         self.title = title
         self.symbol = symbol
+        self.image = image
         self.act = act
     }
 
@@ -20,7 +23,11 @@ struct PopoverLine: View {
             // An empty Group with a frame would collapse; the clear colour keeps the room.
             ZStack {
                 Color.clear
-                if let symbol { Image(systemName: symbol).font(.system(size: 11)).foregroundStyle(Palette.muted) }
+                if let image {
+                    Image(nsImage: image).resizable().frame(width: 16, height: 16)
+                } else if let symbol {
+                    Image(systemName: symbol).font(.system(size: 11)).foregroundStyle(Palette.muted)
+                }
             }
             .frame(width: 14, height: 14)
             Text(title).font(.system(size: 12.5)).foregroundStyle(Palette.ink)
