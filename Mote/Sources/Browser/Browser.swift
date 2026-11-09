@@ -150,6 +150,9 @@ final class Browser: NSObject, ObservableObject {
         let url: URL
         let title: String
         let index: Int
+        var state: Any?
+
+        static func == (a: Ghost, b: Ghost) -> Bool { a.id == b.id }
 
         var label: String { title.isEmpty ? Address.displayString(for: url) : title }
     }
@@ -1043,14 +1046,15 @@ final class Browser: NSObject, ObservableObject {
         if let ghost = closed.last { reopen(ghost) }
     }
 
-    /// Reopens a closed tab where it was.
+    /// Reopens a closed tab where it was, with its history.
     func reopen(_ ghost: Ghost) {
         closed.remove(ghost.id)
         let tab = Tab()
         prepare(tab)
         reorder { $0.insert(tab, at: ghost.index) }
+        tab.restore(url: ghost.url, title: ghost.title, state: ghost.state)
         bringForward(tab)
-        tab.go(to: ghost.url)
+        tab.wake()
     }
 
     /// The tab used last: awake ones first,
@@ -1062,7 +1066,7 @@ final class Browser: NSObject, ObservableObject {
 
     private func remember(_ tab: Tab, at index: Int) {
         guard !tab.shy, let url = tab.address else { return }
-        closed.push(Ghost(url: url, title: tab.title, index: index))
+        closed.push(Ghost(url: url, title: tab.title, index: index, state: tab.history))
     }
 
     /// Replaces a tab when it crosses between the web and extension pages

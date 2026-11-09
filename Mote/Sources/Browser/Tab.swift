@@ -319,11 +319,12 @@ final class Tab: ObservableObject, Identifiable {
     }
 
     /// A tab from the saved session, not loaded until it is opened.
-    func restore(url: URL, title: String, name: String? = nil) {
+    /// `state`: a closed tab's history and scroll, for ⌘⇧T.
+    func restore(url: URL, title: String, name: String? = nil, state: Any? = nil) {
         address = url
         self.title = title
         self.name = name
-        rested = Rested(url: url)
+        rested = Rested(url: url, state: state)
         takeCachedIcon()
     }
 
@@ -666,6 +667,10 @@ final class Tab: ObservableObject, Identifiable {
     }
 
     private var rested: Rested?
+
+    /// Its history and scroll, however it is: awake, asleep, or a page that
+    /// ended. Kept with a closed tab, for ⌘⇧T.
+    var history: Any? { built?.url != nil ? built?.interactionState : rested?.state ?? place }
 
     var asleep: Bool { rested != nil }
     /// The address a resting tab comes back to.
