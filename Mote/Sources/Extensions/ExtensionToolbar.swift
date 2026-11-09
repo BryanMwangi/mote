@@ -69,7 +69,9 @@ struct PageActionButton: View {
 
     var body: some View {
         if let button = extensions.pageAction {
-            Button { extensions.press(button.id) } label: {
+            Button {
+                extensions.press(button.id)
+            } label: {
                 ExtensionIcon(button: button, size: 14)
                     .frame(width: Metrics.button, height: Metrics.button)
                     .contentShape(Rectangle())
@@ -77,8 +79,8 @@ struct PageActionButton: View {
             .buttonStyle(Pressed())
             .help(button.label)
             .background { PopupAnchor(id: button.id) }
-                .contextMenu { ExtensionActions(id: button.id, name: button.name, extensions: extensions) }
-                .transition(.opacity)
+            .contextMenu { ExtensionActions(id: button.id, name: button.name, extensions: extensions) }
+            .transition(.opacity)
         }
     }
 }
