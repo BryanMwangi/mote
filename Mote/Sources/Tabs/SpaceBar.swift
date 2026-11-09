@@ -169,6 +169,8 @@ struct AddMenuButton: View {
 struct FootIcon: View {
     let symbol: String
     let help: String
+    /// Off while something else takes the symbol's place (a download's progress).
+    var showsSymbol = true
     let act: () -> Void
 
     @State private var hovering = false
@@ -178,6 +180,7 @@ struct FootIcon: View {
             Image(systemName: symbol)
                 .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(hovering ? Palette.ink : Palette.muted)
+                .opacity(showsSymbol ? 1 : 0)
                 .frame(width: 26, height: 26)
                 .background { if hovering { Tinted(shape: Rounded.row, fill: Palette.hover) } }
                 .contentShape(Rectangle())

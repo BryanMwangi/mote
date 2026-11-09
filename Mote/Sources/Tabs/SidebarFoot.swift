@@ -62,9 +62,14 @@ private struct FootItem: View {
     }
 
     private var icon: some View {
-        FootIcon(symbol: button.symbol, help: button.title, act: press)
-            .overlay { if button == .downloads { DownloadGauge(downloads: browser.downloads) } }
-            .menuPanel(isPresented: showing ? $open : .constant(false), edge: button == .chats ? .trailing : .top) { popover }
+        Group {
+            if button == .downloads {
+                DownloadsButton(downloads: browser.downloads, act: press)
+            } else {
+                FootIcon(symbol: button.symbol, help: button.title, act: press)
+            }
+        }
+        .menuPanel(isPresented: showing ? $open : .constant(false), edge: button == .chats ? .trailing : .top) { popover }
     }
 
     private func press() {
@@ -90,26 +95,32 @@ private struct FootItem: View {
     }
 }
 
-/// Round the downloads button's arrow: how far the newest download has got,
-/// spinning while its size is unknown, and a ripple as one finishes, as
-/// Zen's button shows. Only this watches the downloads, not the sidebar.
-private struct DownloadGauge: View {
+/// The downloads button, as Zen's: while one downloads, how far it has got
+/// takes the arrow's place (a ring spinning while its size is unknown), and
+/// a ripple goes out as one finishes. Only this watches the downloads.
+private struct DownloadsButton: View {
     @ObservedObject var downloads: Downloads
+    let act: () -> Void
     /// A ripple showing, and how far it has spread.
     @State private var ripple = false
     @State private var spread = false
 
     var body: some View {
-        ZStack {
-            if let newest = downloads.transfers.first { TransferArc(transfer: newest) }
+        Group {
+            if let newest = downloads.transfers.first {
+                Downloading(transfer: newest, act: act)
+            } else {
+                FootIcon(symbol: FootButton.downloads.symbol, help: FootButton.downloads.title, act: act)
+            }
+        }
+        .overlay {
             Circle()
                 .stroke(Palette.ink, lineWidth: 1.5)
                 .frame(width: 15, height: 15)
                 .scaleEffect(spread ? 1.6 : 1)
                 .opacity(ripple && !spread ? 0.8 : 0)
+                .allowsHitTesting(false)
         }
-        .frame(width: 26, height: 26)
-        .allowsHitTesting(false)
         .onChange(of: downloads.kept.first?.id) { _, done in
             guard done != nil else { return }
             ripple = true
@@ -124,26 +135,34 @@ private struct DownloadGauge: View {
     }
 }
 
-/// One download's arc; it redraws alone as the download moves.
-private struct TransferArc: View {
+/// The button while a download is the newest: it redraws alone as it moves.
+private struct Downloading: View {
     @ObservedObject var transfer: Transfer
+    let act: () -> Void
 
     var body: some View {
-        if transfer.state == .running {
-            if let done = transfer.fraction {
-                ZStack {
-                    Circle().stroke(Palette.muted.opacity(0.25), lineWidth: 1.5)
-                    Circle()
-                        .trim(from: 0, to: max(0.04, done))
-                        .stroke(Palette.ink, style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
-                        .rotationEffect(.degrees(-90))
-                        .animation(.easeOut(duration: 0.45), value: done)
+        let running = transfer.state == .running
+        FootIcon(symbol: FootButton.downloads.symbol, help: FootButton.downloads.title, showsSymbol: !running, act: act)
+            .overlay {
+                if running {
+                    Group {
+                        if let done = transfer.fraction {
+                            ZStack {
+                                Circle().stroke(Palette.muted.opacity(0.25), lineWidth: 1.5)
+                                Circle()
+                                    .trim(from: 0, to: max(0.04, done))
+                                    .stroke(Palette.ink, style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
+                                    .rotationEffect(.degrees(-90))
+                                    .animation(.easeOut(duration: 0.45), value: done)
+                            }
+                            .frame(width: 13, height: 13)
+                        } else {
+                            Ring(size: 13)
+                        }
+                    }
+                    .allowsHitTesting(false)
                 }
-                .frame(width: 15, height: 15)
-            } else {
-                Ring(size: 15)
             }
-        }
     }
 }
 
