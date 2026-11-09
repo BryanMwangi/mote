@@ -76,6 +76,27 @@ if (handler && !window.__moteMedia) {
     document.addEventListener(kind, soon, true);
   }
 
+  // How far it has played, for the strip's fill: apart from the report, and
+  // at most once a second, so the strip itself isn't redrawn as it plays.
+  let shown = -1;
+  let told = 0;
+  const progress = (): void => {
+    const media = currentMedia(document);
+    if (!media || !Number.isFinite(media.duration) || media.duration <= 0) return;
+    const now = Date.now();
+    const done = Math.round((media.currentTime / media.duration) * 1000) / 1000;
+    if (done === shown || now - told < 1000) return;
+    shown = done;
+    told = now;
+    // oxlint-disable-next-line unicorn/require-post-message-target-origin
+    handler.postMessage(JSON.stringify({ progress: done }));
+  };
+  document.addEventListener('timeupdate', progress, true);
+  document.addEventListener('seeked', () => {
+    told = 0;
+    progress();
+  }, true);
+
   /** Runs the site's own handler for `action`, if it gave one. */
   const call = (action: MediaSessionAction): boolean => {
     const act = handlers.get(action);

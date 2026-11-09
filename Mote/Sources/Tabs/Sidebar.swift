@@ -44,12 +44,12 @@ struct Sidebar: View {
                 Spacer(minLength: 0)
             }
             .padding(.horizontal, 10)
-            .padding(.bottom, Self.footHeight + (browser.playing == nil ? 0 : MediaStrip.height + MediaStrip.gap))
+            .padding(.bottom, Self.footHeight + (browser.players.isEmpty ? 0 : MediaStack.height(browser.players.count) + MediaStrip.gap))
 
             VStack(spacing: 0) {
                 Spacer()
-                if let tab = browser.playing {
-                    MediaStrip(browser: browser, tab: tab)
+                if !browser.players.isEmpty {
+                    MediaStack(browser: browser, players: browser.players)
                         .padding(.horizontal, 10)
                         .padding(.bottom, MediaStrip.gap)
                         .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -95,7 +95,7 @@ struct Sidebar: View {
         .animation(Motion.settle, value: browser.tabs.map(\.id))
         .animation(Motion.settle, value: browser.pinnedCount)
         .animation(Motion.settle, value: browser.keptCount)
-        .animation(Motion.settle, value: browser.playing?.id)
+        .animation(Motion.settle, value: browser.players.map(\.id))
         .environment(\.sidebarShowing, showing)
     }
 
@@ -211,7 +211,7 @@ private struct SpacePages: View {
                     // places, which only a swipe or a switch's slide moves.
                     .animation(Motion.glide, value: browser.editingTab)
                     .animation(Motion.settle, value: rows(of: space, live: live))
-                    .animation(Motion.settle, value: browser.playing?.id)
+                    .animation(Motion.settle, value: browser.players.map(\.id))
                     .padding(.horizontal, 10)
                     .frame(width: width, alignment: .topLeading)
                     .offset(x: CGFloat(place) * width)

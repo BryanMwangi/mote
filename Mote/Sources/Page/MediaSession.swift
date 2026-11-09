@@ -34,12 +34,20 @@ final class MediaRelay: NSObject, WKScriptMessageHandler, TabRelay {
 
     weak var tab: Tab?
 
+    /// How far it has played, sent apart from the rest, at most once a second.
+    private struct Progress: Decodable { let progress: Double }
+
     func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
         guard let text = message.body as? String, text.utf8.count < 4096 else { return }
-        let state = try? JSONDecoder().decode(MediaState?.self, from: Data(text.utf8))
+        let progress = try? JSONDecoder().decode(Progress.self, from: Data(text.utf8))
+        let state = progress == nil ? try? JSONDecoder().decode(MediaState?.self, from: Data(text.utf8)) : nil
         MainActor.assumeIsolated {
             guard let tab, message.webView === tab.built, message.frameInfo.isMainFrame else { return }
-            tab.mediaChanged(state)
+            if let progress {
+                tab.mediaProgress.fraction = min(max(progress.progress, 0), 1)
+            } else {
+                tab.mediaChanged(state)
+            }
         }
     }
 }
@@ -52,6 +60,7 @@ enum MediaCommand: String {
 extension Tab {
     func mediaChanged(_ state: MediaState?) {
         if media != state { media = state }
+        if state == nil, mediaProgress.fraction != 0 { mediaProgress.fraction = 0 }
     }
 
     /// Sends a button press to the page, in its own world where the script listens.

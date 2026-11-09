@@ -88,6 +88,23 @@
 			"loadedmetadata",
 			"volumechange"
 		]) document.addEventListener(kind, soon, true);
+		let shown = -1;
+		let told = 0;
+		const progress = () => {
+			const media = currentMedia(document);
+			if (!media || !Number.isFinite(media.duration) || media.duration <= 0) return;
+			const now = Date.now();
+			const done = Math.round(media.currentTime / media.duration * 1e3) / 1e3;
+			if (done === shown || now - told < 1e3) return;
+			shown = done;
+			told = now;
+			handler.postMessage(JSON.stringify({ progress: done }));
+		};
+		document.addEventListener("timeupdate", progress, true);
+		document.addEventListener("seeked", () => {
+			told = 0;
+			progress();
+		}, true);
 		/** Runs the site's own handler for `action`, if it gave one. */
 		const call = (action) => {
 			const act = handlers.get(action);

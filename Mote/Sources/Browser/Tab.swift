@@ -50,6 +50,8 @@ final class Tab: ObservableObject, Identifiable {
     /// published from the tab it redrew and laid out every view on the tab
     /// mid-scroll, which made the page's frames reach the screen unevenly.
     let reading = Reading()
+    /// How far what it plays has got, for its media strip: apart, as `reading` is.
+    let mediaProgress = Reading()
     @Published private(set) var reader = false
     /// The site's icon: from the cache once the address is known, then from the page.
     @Published var icon: NSImage?

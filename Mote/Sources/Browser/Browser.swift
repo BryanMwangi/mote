@@ -108,8 +108,12 @@ final class Browser: NSObject, ObservableObject {
     /// The tab whose row the site card hangs beside (see SiteCardPanel).
     @Published var siteCardRow: Tab.ID?
     var folderSpots: [UUID: WeakView] = [:]
-    /// The tab the media strip shows (see Browser+Media.swift).
-    @Published var playing: Tab?
+    /// The tabs the media strips show, the one heard last first (see Browser+Media.swift).
+    @Published var players: [Tab] = []
+    var playing: Tab? { players.first }
+    /// Strips put away while their tab plays on, until it starts again.
+    var putAway: Set<Tab.ID> = []
+    var wasPlaying: Set<Tab.ID> = []
     /// A picture of the page laid over it while the chrome around it changes
     /// size (see `dissolvingPage`).
     @Published var pageVeil: NSImage?
