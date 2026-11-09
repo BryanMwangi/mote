@@ -10,7 +10,11 @@
 import AppKit
 import SwiftUI
 
-let arguments = CommandLine.arguments
+// Swift 6.2's script runner passes its own compiler flags first, then the
+// script's arguments after a "--".
+let arguments =
+    CommandLine.arguments.firstIndex(of: "--").map { ["art.swift"] + CommandLine.arguments[($0 + 1)...] }
+    ?? CommandLine.arguments
 guard arguments.count == 3 else {
     FileHandle.standardError.write("usage: swift art.swift <Mote.app> <out dir>\n".data(using: .utf8)!)
     exit(1)

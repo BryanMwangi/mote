@@ -6,7 +6,7 @@
 #   make dev        Debug build, opened in the test world
 #   make fresh      Release build, opened in a wiped test world (WORLD=name for another)
 #   make reopen     open the test world as it was left
-#   make dmg        build/Mote.dmg, unsigned
+#   make dmg        build/Mote.dmg (Apple silicon) and build/Mote-Intel.dmg, unsigned
 #   make scripts    build the injected TypeScript (Scripts/) into Mote/Resources/Scripts
 #   make test       unit, script and integration tests
 #   make test-ui    end-to-end tests (the first run asks for Accessibility access)
@@ -22,6 +22,8 @@ APP       := $(BUILD_DIR)/Mote.app
 # Extra build settings, e.g. XCODEBUILD_FLAGS="MARKETING_VERSION=1.0.0 CURRENT_PROJECT_VERSION=42".
 XCODEBUILD_FLAGS ?=
 XCODEBUILD = xcodebuild -project $(PROJECT) -scheme $(SCHEME) -destination 'platform=macOS,arch=$(shell uname -m)' -derivedDataPath $(DERIVED) $(XCODEBUILD_FLAGS)
+# For a chip other than this Mac's (the disk images).
+XCODEBUILD_ANY = xcodebuild -project $(PROJECT) -scheme $(SCHEME) -destination 'generic/platform=macOS' -derivedDataPath $(DERIVED) $(XCODEBUILD_FLAGS)
 
 # Test worlds keep their own folder, settings and WebKit store (see Store.swift),
 # so nothing here can touch the Mote you use every day.
@@ -58,12 +60,26 @@ reopen: ## Open the test world as it was left (WORLD=name for another)
 	@test -d $(APP) || $(MAKE) build
 	open -n --env MOTE_PROBE=$(WORLD_NAME) $(APP)
 
-dmg: build ## build/Mote.dmg, unsigned (needs uv: https://docs.astral.sh/uv)
-	@rm -rf $(BUILD_DIR)/dmg-art $(BUILD_DIR)/Mote.dmg
-	swift Tools/dmg/art.swift $(APP) $(BUILD_DIR)/dmg-art
-	tiffutil -cathidpicheck $(BUILD_DIR)/dmg-art/background.png $(BUILD_DIR)/dmg-art/background@2x.png -out $(BUILD_DIR)/dmg-art/background.tiff
-	iconutil -c icns $(BUILD_DIR)/dmg-art/VolumeIcon.iconset -o $(BUILD_DIR)/dmg-art/VolumeIcon.icns
-	uvx 'dmgbuild>=1.6.7' -s Tools/dmg/settings.py -D app=$(APP) -D art=$(BUILD_DIR)/dmg-art Mote $(BUILD_DIR)/Mote.dmg
+# Each chip gets a build of its own, and a disk image: no universal one.
+# Apple silicon's keeps the names the site and older copies' updates use.
+CHIPS := AppleSilicon:arm64:Mote Intel:x86_64:Mote-Intel
+
+dmg: ## build/Mote.dmg (Apple silicon) and build/Mote-Intel.dmg, each its own build, unsigned (needs uv: https://docs.astral.sh/uv)
+	@rm -rf $(BUILD_DIR)/dmg-art $(BUILD_DIR)/Mote.dmg $(BUILD_DIR)/Mote-Intel.dmg
+	@for chip in $(CHIPS); do \
+		name=$${chip%%:*}; rest=$${chip#*:}; arch=$${rest%%:*}; file=$${rest#*:}; \
+		$(XCODEBUILD_ANY) -configuration Release ARCHS=$$arch ONLY_ACTIVE_ARCH=NO build || exit 1; \
+		rm -rf $(BUILD_DIR)/$$name && mkdir -p $(BUILD_DIR)/$$name || exit 1; \
+		ditto $(DERIVED)/Build/Products/Release/Mote.app $(BUILD_DIR)/$$name/Mote.app || exit 1; \
+		ditto $(DERIVED)/Build/Products/Release/Mote.app.dSYM $(BUILD_DIR)/$$name/Mote.app.dSYM || exit 1; \
+		if [ ! -d $(BUILD_DIR)/dmg-art ]; then \
+			swift Tools/dmg/art.swift $(BUILD_DIR)/$$name/Mote.app $(BUILD_DIR)/dmg-art || exit 1; \
+			tiffutil -cathidpicheck $(BUILD_DIR)/dmg-art/background.png $(BUILD_DIR)/dmg-art/background@2x.png -out $(BUILD_DIR)/dmg-art/background.tiff || exit 1; \
+			iconutil -c icns $(BUILD_DIR)/dmg-art/VolumeIcon.iconset -o $(BUILD_DIR)/dmg-art/VolumeIcon.icns || exit 1; \
+		fi; \
+		uvx 'dmgbuild>=1.6.7' -s Tools/dmg/settings.py -D app=$(BUILD_DIR)/$$name/Mote.app -D art=$(BUILD_DIR)/dmg-art Mote $(BUILD_DIR)/$$file.dmg || exit 1; \
+		echo "built: $(BUILD_DIR)/$$file.dmg"; \
+	done
 	@rm -rf $(BUILD_DIR)/dmg-art
 
 PNPM = pnpm --dir Scripts

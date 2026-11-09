@@ -36,10 +36,21 @@ public struct AppRelease: Equatable, Sendable {
         self.minimumSystemVersion = minimumSystemVersion
     }
 
-    /// Parses a feed. Download links must be https (or http when
-    /// `allowsHTTP`, for local test feeds) and on the feed's own host, so a
-    /// tampered feed can't point people at another site.
-    public init?(appcast data: Data, feed: URL, allowsHTTP: Bool = false) {
+    /// Whether this copy of Mote is the Intel build. Each chip has a build
+    /// of its own; the feed names Apple Silicon's at its top level (as
+    /// before there were two) and Intel's under `intel`.
+    public static var onIntel: Bool {
+        #if arch(x86_64)
+        return true
+        #else
+        return false
+        #endif
+    }
+
+    /// Parses a feed, for `intel`'s build or Apple Silicon's. Download links
+    /// must be https (or http when `allowsHTTP`, for local test feeds) and on
+    /// the feed's own host, so a tampered feed can't point people at another site.
+    public init?(appcast data: Data, feed: URL, allowsHTTP: Bool = false, intel: Bool = AppRelease.onIntel) {
         func link(_ value: Any?) -> URL? {
             guard let url = (value as? String).flatMap(URL.init(string:)),
                 url.scheme == "https" || (allowsHTTP && url.scheme == "http"),
@@ -50,13 +61,16 @@ public struct AppRelease: Equatable, Sendable {
 
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
             let version = json["version"] as? String,
-            let build = (json["build"] as? Int) ?? Int(json["build"] as? String ?? ""),
-            let archive = link(json["url"]),
-            let diskImage = link(json["dmg"])
+            let build = (json["build"] as? Int) ?? Int(json["build"] as? String ?? "")
+        else { return nil }
+        // This chip's build: an Intel Mote takes nothing from a feed without one.
+        guard let own = intel ? json["intel"] as? [String: Any] : json,
+            let archive = link(own["url"]),
+            let diskImage = link(own["dmg"])
         else { return nil }
 
-        func text(_ key: String) -> String? {
-            let value = (json[key] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+        func text(_ key: String, in fields: [String: Any] = json) -> String? {
+            let value = (fields[key] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
             return value?.isEmpty == false ? value : nil
         }
 
@@ -65,8 +79,8 @@ public struct AppRelease: Equatable, Sendable {
             build: build,
             archive: archive,
             diskImage: diskImage,
-            sha256: text("sha256")?.lowercased(),
-            signature: text("signature"),
+            sha256: text("sha256", in: own)?.lowercased(),
+            signature: text("signature", in: own),
             notes: text("notes"),
             minimumSystemVersion: json["minimumSystemVersion"] as? String
         )

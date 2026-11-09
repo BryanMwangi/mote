@@ -1,4 +1,4 @@
-# dmgbuild settings for Mote.dmg, used by `make dmg`:
+# dmgbuild settings for Mote.dmg and Mote-Intel.dmg, used by `make dmg`:
 #
 #   uvx 'dmgbuild>=1.6.7' -s Tools/dmg/settings.py -D app=build/Mote.app -D art=build/dmg-art Mote build/Mote.dmg
 #
@@ -15,7 +15,7 @@ files = [app]
 symlinks = {"Applications": "/Applications"}
 hide_extensions = [os.path.basename(app)]
 
-format = "ULFO"  # lzfse: fast to open, and supported since macOS 10.11
+format = "ULMO"  # lzma: about a fifth smaller than lzfse, opens in a moment; macOS 10.15 and later
 filesystem = "HFS+"
 icon = os.path.join(art, "VolumeIcon.icns")
 background = os.path.join(art, "background.tiff")

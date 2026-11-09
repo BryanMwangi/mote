@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
 """Writes a release's appcast.json and its notes, from the CHANGELOG.
 
-    Tools/release/appcast VERSION BUILD SIGNATURE SHA256 OUT_DIR [REPO]
+    Tools/release/appcast VERSION BUILD SIGNATURE SHA256 INTEL_SIGNATURE INTEL_SHA256 OUT_DIR [REPO]
+
+Each chip has a build of its own: Apple silicon's Mote.zip and Mote.dmg
+are the feed's top level (as before there were two, so older copies
+update as they did), Intel's Mote-Intel ones under "intel".
 
 The CHANGELOG section headed "## VERSION" (with or without a date after it)
 becomes the GitHub Release's notes (OUT_DIR/notes.md); its first line of
@@ -39,10 +43,10 @@ def summary(body):
 
 
 def main(argv):
-    if len(argv) not in (5, 6):
+    if len(argv) not in (7, 8):
         sys.exit(__doc__.strip())
-    version, build, signature, sha256, out = argv[:5]
-    repo = argv[5] if len(argv) == 6 else "mote-browser/mote"
+    version, build, signature, sha256, intel_signature, intel_sha256, out = argv[:7]
+    repo = argv[7] if len(argv) == 8 else "mote-browser/mote"
     root = os.path.join(os.path.dirname(__file__), "..", "..")
     with open(os.path.join(root, "CHANGELOG.md"), encoding="utf-8") as f:
         body = section(f.read(), version)
@@ -56,6 +60,12 @@ def main(argv):
         "dmg": f"{base}/Mote.dmg",
         "sha256": sha256,
         "signature": signature,
+        "intel": {
+            "url": f"{base}/Mote-Intel.zip",
+            "dmg": f"{base}/Mote-Intel.dmg",
+            "sha256": intel_sha256,
+            "signature": intel_signature,
+        },
         "minimumSystemVersion": "14.0",
     }
     if note := summary(body):

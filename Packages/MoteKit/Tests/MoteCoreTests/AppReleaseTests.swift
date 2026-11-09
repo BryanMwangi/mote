@@ -26,7 +26,7 @@ struct AppReleaseTests {
 
     @Test("A valid feed is parsed")
     func parsesValidFeed() throws {
-        let release = try #require(AppRelease(appcast: try appcast(valid), feed: feed))
+        let release = try #require(AppRelease(appcast: try appcast(valid), feed: feed, intel: false))
         #expect(release.version == "1.2.0")
         #expect(release.build == 202609270900)
         #expect(release.archive.lastPathComponent == "Mote.zip")
@@ -35,31 +35,49 @@ struct AppReleaseTests {
         #expect(release.notes == nil)
     }
 
+    @Test("Each chip takes its own build: Apple Silicon's at the top, Intel's under intel; none for Intel in an older feed")
+    func eachChip() throws {
+        var fields = valid
+        fields["intel"] = [
+            "url": "https://mote.example.com/Mote-Intel.zip", "dmg": "https://mote.example.com/Mote-Intel.dmg",
+            "sha256": "1234", "signature": "aW50ZWw=",
+        ]
+        let apple = try #require(AppRelease(appcast: try appcast(fields), feed: feed, intel: false))
+        #expect(apple.archive.lastPathComponent == "Mote.zip")
+        #expect(apple.signature == "c2lnbmVk")
+        let intel = try #require(AppRelease(appcast: try appcast(fields), feed: feed, intel: true))
+        #expect(intel.archive.lastPathComponent == "Mote-Intel.zip")
+        #expect(intel.diskImage.lastPathComponent == "Mote-Intel.dmg")
+        #expect(intel.sha256 == "1234" && intel.signature == "aW50ZWw=")
+        #expect(intel.version == "1.2.0" && intel.notes == nil)
+        #expect(AppRelease(appcast: try appcast(valid), feed: feed, intel: true) == nil)
+    }
+
     @Test("The build number may be a string")
     func buildAsString() throws {
         var fields = valid
         fields["build"] = "42"
-        #expect(AppRelease(appcast: try appcast(fields), feed: feed)?.build == 42)
+        #expect(AppRelease(appcast: try appcast(fields), feed: feed, intel: false)?.build == 42)
     }
 
     @Test("Links to another host are refused")
     func refusesOtherHost() throws {
         var fields = valid
         fields["dmg"] = "https://evil.example.net/Mote.dmg"
-        #expect(AppRelease(appcast: try appcast(fields), feed: feed) == nil)
+        #expect(AppRelease(appcast: try appcast(fields), feed: feed, intel: false) == nil)
     }
 
     @Test("Plain http is refused unless allowed")
     func refusesHTTP() throws {
         var fields = valid
         fields["url"] = "http://mote.example.com/Mote.zip"
-        #expect(AppRelease(appcast: try appcast(fields), feed: feed) == nil)
-        #expect(AppRelease(appcast: try appcast(fields), feed: feed, allowsHTTP: true) != nil)
+        #expect(AppRelease(appcast: try appcast(fields), feed: feed, intel: false) == nil)
+        #expect(AppRelease(appcast: try appcast(fields), feed: feed, allowsHTTP: true, intel: false) != nil)
     }
 
     @Test("Garbage is not a release")
     func refusesGarbage() {
-        #expect(AppRelease(appcast: Data("not json".utf8), feed: feed) == nil)
+        #expect(AppRelease(appcast: Data("not json".utf8), feed: feed, intel: false) == nil)
     }
 
     @Test(

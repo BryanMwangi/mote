@@ -1,6 +1,7 @@
-# A version tag (v<version>) becomes a GitHub Release: Mote.dmg for new people,
-# Mote.zip for the updater, and appcast.json, the feed every copy of Mote
-# reads at releases/latest/download/appcast.json.
+# A version tag (v<version>) becomes a GitHub Release: Apple silicon's build
+# as Mote.dmg for new people and Mote.zip for the updater, Intel's as
+# Mote-Intel.dmg and Mote-Intel.zip, and appcast.json, the feed every copy
+# of Mote reads at releases/latest/download/appcast.json.
 #
 # Before tagging: MARKETING_VERSION in Configs/Version.xcconfig is the tag's
 # number, and CHANGELOG.md has its "## <version>" section (Tools/release/appcast).
@@ -73,14 +74,19 @@ jobs:
         env:
           MOTE_UPDATE_PRIVATE_KEY: ${{ secrets.MOTE_UPDATE_PRIVATE_KEY }}
         run: |
-          ditto -c -k --keepParent build/Mote.app build/Mote.zip
+          ditto -c -k --keepParent build/AppleSilicon/Mote.app build/Mote.zip
+          ditto -c -k --keepParent build/Intel/Mote.app build/Mote-Intel.zip
           signature=$(Tools/release/sign build/Mote.zip)
           sha=$(shasum -a 256 build/Mote.zip | cut -d' ' -f1)
-          Tools/release/appcast "${{ steps.version.outputs.number }}" "$BUILD_NUMBER" "$signature" "$sha" build/release "${{ github.repository }}"
+          intel_signature=$(Tools/release/sign build/Mote-Intel.zip)
+          intel_sha=$(shasum -a 256 build/Mote-Intel.zip | cut -d' ' -f1)
+          Tools/release/appcast "${{ steps.version.outputs.number }}" "$BUILD_NUMBER" "$signature" "$sha" \
+            "$intel_signature" "$intel_sha" build/release "${{ github.repository }}"
 
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}
         run: >
-          gh release create "$GITHUB_REF_NAME" build/Mote.dmg build/Mote.zip build/release/appcast.json
+          gh release create "$GITHUB_REF_NAME" build/Mote.dmg build/Mote.zip
+          build/Mote-Intel.dmg build/Mote-Intel.zip build/release/appcast.json
           --title "Mote ${{ steps.version.outputs.number }}" --notes-file build/release/notes.md
