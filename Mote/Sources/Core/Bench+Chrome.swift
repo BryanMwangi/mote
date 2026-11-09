@@ -44,6 +44,8 @@ extension Bench {
             "profiles": Profiles.shared.list.map(\.id), "sharedAt": Browser.sharedAt, "endedPages": Browser.endedPages,
             "pagePID": browser.active?.built?.unpublishedPID("_webProcessIdentifier") ?? 0, "pageWindowMoves": PageView.windowMoves,
             "tabListAt": tabList(of: browser).map { Int($0.contentView.bounds.minY) } ?? -1, "beepsSpared": PageKeySink.caught,
+            // The link preview's scale as drawn, mid-opening.
+            "glanceScale": GlanceView.current?.host.layer?.presentation().map { Double($0.transform.m11) } ?? -1,
             "pageTracking": (browser.active?.built?.trackingAreas ?? []).map {
                 "\($0.owner.map { String(describing: type(of: $0)) } ?? "nil") \($0.options.rawValue)"
             }, "sharing": Browser.sharing,

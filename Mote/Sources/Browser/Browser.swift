@@ -178,6 +178,10 @@ final class Browser: NSObject, ObservableObject {
     @Published var spaceStep = 1
     /// A link preview over the page (see LinkPeek.swift).
     @Published var peekTab: Tab?
+    /// Where on screen the link previewed was clicked, for the preview to grow from.
+    var peekOrigin: NSPoint?
+    /// The preview is going back into its link (see LinkPeek.swift).
+    @Published var peekLeaving = false
     /// Split views, every space's, each by its own id (see Browser+Split.swift).
     @Published var splits: [UUID: SplitLayout<Tab.ID>] = [:] {
         didSet { splitOf = splits.reduce(into: [:]) { found, group in for id in group.value.ids { found[id] = group.key } } }
