@@ -44,7 +44,8 @@ extension Browser: WKNavigationDelegate, WKUIDelegate {
             decisionHandler(.cancel)
             if let from { Task { self.peek(url, from: from) } }
         case .openTab(let foreground):
-            open(url, foreground: foreground, from: from)
+            let tab = open(url, foreground: foreground, from: from)
+            if !foreground { openedBehind(tab) }
             decisionHandler(.cancel)
         case .handOff:
             decisionHandler(.cancel)
@@ -117,7 +118,7 @@ extension Browser: WKNavigationDelegate, WKUIDelegate {
             let tab = Tab(shy: opener?.shy ?? isPrivate, configuration: configuration)
             adopt(tab)
             tab.opener = opener?.id ?? activeID
-            if !background { activeID = tab.id }
+            if !background { activeID = tab.id } else { openedBehind(tab) }
             tab.setAddressOptimistically(url)
             return tab.web
         }

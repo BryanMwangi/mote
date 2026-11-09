@@ -1393,7 +1393,7 @@ extension Browser: TabOwner {
 
     var searchEngineName: String? { prefs.engine.name(custom: prefs.customEngine) }
     func tabAddsFromStore(_ tab: Tab) { addFromStore(tab) }
-    func tab(_ tab: Tab, middleClicked link: URL) { open(link, foreground: false, from: tab) }
+    func tab(_ tab: Tab, middleClicked link: URL) { openedBehind(open(link, foreground: false, from: tab)) }
     func tabPressed(_ tab: Tab) { if tab.id != activeID, shownSplit?.contains(tab.id) == true { select(tab) } }
     func tab(_ tab: Tab, crosses url: URL) { replace(tab, going: url) }
 }

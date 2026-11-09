@@ -26,19 +26,29 @@ extension Browser {
         Tab(shy: true, configuration: Web.configuration(shy: true, store: privateStore))
     }
 
+    /// Says a link went to a tab behind this one, with the way to it.
+    func openedBehind(_ tab: Tab) {
+        announce(
+            Announcement("Opened in a new tab", symbol: "plus.square.on.square", action: .init(title: "Show") { [weak self, weak tab] in
+                if let tab { self?.select(tab) }
+            }))
+    }
+
     /// A link sent somewhere other than a tab here. It opens afresh there, as
     /// Firefox does: the page it came from doesn't follow it to another
     /// store.
     func open(_ url: URL, as opening: LinkOpening, from opener: Tab?) {
         switch opening {
         case .tab(let background):
-            open(url, foreground: !background, from: opener)
+            let tab = open(url, foreground: !background, from: opener)
+            if background { openedBehind(tab) }
         case .window(let isPrivate):
             let window = Windows.shared.open(space: spaceID, private: isPrivate)
             // The new window's blank tab makes way for the link.
             let blank = window.active
             window.open(url, foreground: true)
             if let blank, blank.isBlank { window.close(blank) }
+            window.announce(isPrivate ? "Opened in a new private window" : "Opened in a new window")
         case .space(let id):
             guard let space = spaces.first(where: { $0.id == id }) else { return }
             if id == spaceID { return open(url, as: .tab(background: true), from: opener) }
