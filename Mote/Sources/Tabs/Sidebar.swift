@@ -191,7 +191,9 @@ private struct SpacePages: View {
                     // leaving sits right beside it, as the one sliding out.
                     let leaving = shown.leaving.map { $0 == space.id }
                     let slot = leaving == true ? (index > here ? 1 : -1) : index - here
-                    let seen = live || (swiping && (leaving ?? (abs(slot) == 1)))
+                    // The pages either side are drawn all along, out of sight past
+                    // the sidebar's edge, so a swipe starting draws nothing new.
+                    let seen = live || abs(slot) == 1 || (swiping && leaving == true)
                     SpacePage(
                         browser: browser, prefs: prefs, space: space, live: live, room: room.size.height, drag: $drag, keptDrag: $keptDrag
                     )
