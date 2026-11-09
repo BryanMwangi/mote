@@ -8,8 +8,20 @@ import WebKit
 
 @available(macOS 15.4, *)
 enum NativeMessaging {
+    /// Hosts found, by name and extension: some extensions message theirs
+    /// every few seconds, and finding it reads manifests on the main thread.
+    private static var found: [String: URL] = [:]
+
     /// The program for host `name`, if it's registered and lets this extension in.
     private static func program(_ name: String, for extensionID: String) throws -> URL {
+        let key = name + " " + extensionID
+        if let known = found[key], FileManager.default.isExecutableFile(atPath: known.path) { return known }
+        let program = try lookUp(name, for: extensionID)
+        found[key] = program
+        return program
+    }
+
+    private static func lookUp(_ name: String, for extensionID: String) throws -> URL {
         guard NativeHosts.isValidName(name) else { throw NativeHosts.Refusal.badName }
         let home = FileManager.default.homeDirectoryForCurrentUser.path
         for path in NativeHosts.folders {
