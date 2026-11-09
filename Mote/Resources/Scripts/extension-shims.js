@@ -240,7 +240,11 @@
 	* or -1 for every tab (`action.popup`).
 	*/
 	function tellPopups({ chrome, put, native }) {
-		for (const name of ["action", "browserAction"]) {
+		for (const name of [
+			"action",
+			"browserAction",
+			"pageAction"
+		]) {
 			const action = chrome[name];
 			if (!action || typeof action.setPopup !== "function") continue;
 			const setPopup = action.setPopup.bind(action);
@@ -264,6 +268,18 @@
 				255
 			])
 		});
+		const page = shim.chrome.pageAction;
+		if (page) {
+			const turn = (on) => (tabId, callback) => {
+				const act = on ? page.enable : page.disable;
+				const done = typeof act === "function" ? Promise.resolve(act.call(page, tabId)).catch(() => {}) : Promise.resolve();
+				return typeof callback === "function" ? void done.then(() => callback()) : done;
+			};
+			fill(shim, "pageAction", {
+				show: turn(true),
+				hide: turn(false)
+			});
+		}
 	}
 
 //#endregion
@@ -1697,27 +1713,54 @@
 		});
 	}
 	/**
-	* Context menu entries for places Mote has no menu for — the old
-	* toolbar button contexts are the button's menu now, and there is no
-	* app launcher at all.
+	* Context menu entries in the names WebKit takes for the extension's
+	* manifest version: a version 3 one's button is `action`; a version 2
+	* one's `browser_action` or `page_action`, and WebKit refuses the whole
+	* entry for one it doesn't know. There is no app launcher at all.
 	*/
-	function mendMenuProperties(props) {
+	function mendMenuProperties(props, version = 3) {
 		if (!props || !Array.isArray(props.contexts)) return props;
-		const contexts = [...new Set(props.contexts.map((c) => c === "browser_action" || c === "page_action" ? "action" : c).filter((c) => c !== "launcher"))];
+		const button = (c) => {
+			if (version >= 3) return c === "browser_action" || c === "page_action" ? "action" : c;
+			return c === "action" ? "browser_action" : c;
+		};
+		const contexts = [...new Set(props.contexts.map(button).filter((c) => c !== "launcher"))];
 		return {
-			...props,
+			...withoutFilePatterns(props),
 			contexts: contexts.length ? contexts : ["page"]
 		};
 	}
-	function mendMenus({ chrome, put }) {
+	/**
+	* Without `file://` address patterns, which WebKit refuses the whole entry
+	* for (TWP's "translate this PDF"); the others stay. One that had only those
+	* is left as it was.
+	*/
+	function withoutFilePatterns(props) {
+		const mended = { ...props };
+		for (const key of ["documentUrlPatterns", "targetUrlPatterns"]) {
+			const patterns = props[key];
+			if (!Array.isArray(patterns)) continue;
+			const kept = patterns.filter((p) => typeof p !== "string" || !p.startsWith("file:"));
+			if (kept.length) mended[key] = kept;
+		}
+		return mended;
+	}
+	function mendMenus({ chrome, put, runtime }) {
+		const version = (() => {
+			try {
+				return Number(runtime.getManifest().manifest_version) || 3;
+			} catch {
+				return 3;
+			}
+		})();
 		for (const name of ["contextMenus", "menus"]) {
 			const menus = chrome[name];
 			if (!menus || typeof menus.create !== "function") continue;
 			const create = menus.create.bind(menus);
-			put(menus, "create", (props, callback) => create(mendMenuProperties(props), callback));
+			put(menus, "create", (props, callback) => create(mendMenuProperties(props, version), callback));
 			if (typeof menus.update !== "function") continue;
 			const update = menus.update.bind(menus);
-			put(menus, "update", (id, props, callback) => update(id, mendMenuProperties(props), callback));
+			put(menus, "update", (id, props, callback) => update(id, mendMenuProperties(props, version), callback));
 		}
 	}
 
