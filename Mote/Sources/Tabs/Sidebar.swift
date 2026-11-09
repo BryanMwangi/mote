@@ -163,8 +163,12 @@ private struct SpacePages: View {
     @Binding var drag: ReorderDrag<Tab.ID>?
     @Binding var keptDrag: ReorderDrag<Tab.ID>?
     @Binding var dropping: Bool
-    /// Passed into the pages' own hosting view, which starts without it.
-    @Environment(\.self) private var environment
+    /// Passed into the pages' own hosting view, which starts without them:
+    /// only what the rows read. The whole environment, new on every redraw
+    /// of the sidebar, went through every row of every page each time.
+    @Environment(\.colorScheme) private var scheme
+    @Environment(\.spaceTint) private var tint
+    @Environment(\.sidebarShowing) private var showing
 
     /// This space's place; the spaces' count while the new-space card shows.
     private var spaceIndex: Int {
@@ -173,7 +177,8 @@ private struct SpacePages: View {
 
     var body: some View {
         let _ = SpaceSwipe.pagesDrawn += 1
-        SwipeTrack(swipe: browser.swipeOffset, content: AnyView(pages.environment(\.self, environment)))
+        let content = pages.environment(\.colorScheme, scheme).environment(\.spaceTint, tint).environment(\.sidebarShowing, showing)
+        SwipeTrack(swipe: browser.swipeOffset, content: AnyView(content), here: spaceIndex, count: browser.spaces.count + 1)
             // Pages span the whole sidebar and keep their own margins.
             .padding(.horizontal, -10)
             .frame(maxHeight: .infinity, alignment: .top)
@@ -190,10 +195,15 @@ private struct SpacePages: View {
                     // Its place from the page in front: the space a switch is
                     // leaving sits right beside it, as the one sliding out.
                     let leaving = shown.leaving.map { $0 == space.id }
-                    let slot = leaving == true ? (index > here ? 1 : -1) : index - here
+                    // Each page keeps its place along the track, which moves
+                    // whole (SwipeTrack): moved one by one, every row of every
+                    // page was placed again on each switch. Only a space
+                    // left from afar comes to sit beside this one.
+                    let place = leaving == true ? here + (index > here ? 1 : -1) : index
+                    let slot = place - here
                     // The pages either side are drawn all along, out of sight past
                     // the sidebar's edge, so a swipe starting draws nothing new.
-                    let seen = live || abs(slot) == 1 || (swiping && leaving == true)
+                    let seen = live || (shown.leaving == nil ? abs(slot) == 1 : leaving == true)
                     SpacePage(
                         browser: browser, prefs: prefs, space: space, live: live, room: room.size.height, drag: $drag, keptDrag: $keptDrag
                     )
@@ -204,7 +214,7 @@ private struct SpacePages: View {
                     .animation(Motion.settle, value: browser.playing?.id)
                     .padding(.horizontal, 10)
                     .frame(width: width, alignment: .topLeading)
-                    .offset(x: CGFloat(slot) * width)
+                    .offset(x: CGFloat(place) * width)
                     // Built and laid out, but only drawn when it can be seen.
                     .opacity(seen ? 1 : 0)
                     .allowsHitTesting(live)
@@ -220,7 +230,7 @@ private struct SpacePages: View {
                     .frame(maxHeight: .infinity)
                     .padding(.horizontal, 10)
                     .frame(width: width, alignment: .topLeading)
-                    .offset(x: CGFloat(browser.spaces.count - here) * width)
+                    .offset(x: CGFloat(browser.spaces.count) * width)
                     .allowsHitTesting(browser.makingSpace)
                 }
             }

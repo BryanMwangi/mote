@@ -122,16 +122,19 @@ final class SpaceSwipe {
     func slide(_ browser: Browser, to target: Int, from here: Int) {
         // A page: the sidebar's width, or the strip's height.
         let page = browser.prefs.sidebar ? browser.prefs.sideWidth : ChromeLayout.strip
-        let forward = target > here
-        browser.spaceStep = forward ? 1 : -1
+        let forward = target > here, card = target == browser.spaces.count
         pager.switched(at: Date())
         // The space switches now, as ⌃1–9 does; the sidebar's pages are put
         // back where they were in the same update, then ease the rest of the way.
+        // Only what changes is set: each change in a transaction draws the
+        // sidebar again first, a quarter of a second with a hundred tabs.
         var instant = Transaction()
         instant.disablesAnimations = true
         withTransaction(instant) {
-            browser.makingSpace = target == browser.spaces.count
-            if !browser.makingSpace { browser.switchSpace(to: browser.spaces[target].id, gliding: false) }
+            if browser.makingSpace != card { browser.makingSpace = card }
+            // Which way the space's icon slides; a switch sets it itself.
+            if card { browser.spaceStep = forward ? 1 : -1 }
+            if !card { browser.switchSpace(to: browser.spaces[target].id, gliding: false) }
             browser.spaceSwipe += (forward ? 1 : -1) * page
         }
         browser.swipeOffset.ease()
@@ -309,10 +312,17 @@ final class SwipeShown: ObservableObject {
 struct SwipeTrack: FillsRoom {
     let swipe: SwipeOffset
     let content: AnyView
+    /// The page in front, and how many there are: every space's side by side,
+    /// and the new-space card's.
+    let here: Int
+    let count: Int
 
     func makeNSView(context: Context) -> Holder { Holder(swipe: swipe, content: content) }
 
-    func updateNSView(_ holder: Holder, context: Context) { holder.host.rootView = content }
+    func updateNSView(_ holder: Holder, context: Context) {
+        holder.host.rootView = content
+        holder.place(here: here, count: count)
+    }
 
     final class Holder: NSView {
         let host: NSHostingView<AnyView>
@@ -336,9 +346,25 @@ struct SwipeTrack: FillsRoom {
 
         override var isFlipped: Bool { true }
 
+        private var here = 0
+        private var count = 1
+
         override func layout() {
             super.layout()
-            host.frame = bounds
+            place(here: here, count: count)
+        }
+
+        /// The pages laid side by side once, the one in front over this view:
+        /// a switch moves only the track, which is a scroll, not a layout.
+        func place(here: Int, count: Int) {
+            self.here = here
+            self.count = count
+            let frame = NSRect(x: -CGFloat(here) * bounds.width, y: 0, width: bounds.width * CGFloat(max(count, 1)), height: bounds.height)
+            guard host.frame != frame else { return }
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            host.frame = frame
+            CATransaction.commit()
         }
 
         private func move(to x: CGFloat) {

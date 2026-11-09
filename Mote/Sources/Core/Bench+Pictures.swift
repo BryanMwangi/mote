@@ -87,9 +87,13 @@ extension Bench {
                 ]) { a, _ in a })
         }
         let action = call.request.string("action") ?? "fold"
-        animate(action, in: call.browser)
-        if action == "tab", let page = call.browser.active?.built {
-            afterPresentation(page) { shown = (CACurrentMediaTime() - start) * 1000 }
+        // A few frames in, so a stall as it starts is counted too: started at
+        // once, a switch's whole first update came before the first frame.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+            animate(action, in: call.browser)
+            if action == "tab", let page = call.browser.active?.built {
+                afterPresentation(page) { shown = (CACurrentMediaTime() - start) * 1000 }
+            }
         }
     }
 
