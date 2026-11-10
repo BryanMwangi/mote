@@ -155,6 +155,9 @@ final class Browser: NSObject, ObservableObject {
         let title: String
         let index: Int
         var state: Any?
+        /// An essential or pinned tab's id: it stays in the row when closed,
+        /// so reopening brings that tab back to the front.
+        var heldID: UUID?
 
         static func == (a: Ghost, b: Ghost) -> Bool { a.id == b.id }
 
@@ -997,6 +1000,7 @@ final class Browser: NSObject, ObservableObject {
         if floating == tab.id { land() }
 
         if tab.held {
+            remember(tab, at: index)
             tab.rest()
             // Prefer the most recent loose tab, so ⌘W doesn't bounce between pins.
             let awake = tabs.filter { $0.id != tab.id && !$0.asleep }
@@ -1075,6 +1079,8 @@ final class Browser: NSObject, ObservableObject {
     /// Reopens a closed tab where it was, with its history.
     func reopen(_ ghost: Ghost) {
         closed.remove(ghost.id)
+        // Through select(), which wakes it with its history.
+        if let held = ghost.heldID, let tab = tabs.first(where: { $0.heldID == held }) { return select(tab) }
         let tab = Tab()
         prepare(tab)
         reorder { $0.insert(tab, at: ghost.index) }
@@ -1092,7 +1098,7 @@ final class Browser: NSObject, ObservableObject {
 
     private func remember(_ tab: Tab, at index: Int) {
         guard !tab.shy, let url = tab.address else { return }
-        closed.push(Ghost(url: url, title: tab.title, index: index, state: tab.history))
+        closed.push(Ghost(url: url, title: tab.title, index: index, state: tab.history, heldID: tab.held ? tab.heldID : nil))
     }
 
     /// Replaces a tab when it crosses between the web and extension pages

@@ -694,7 +694,8 @@ final class Tab: ObservableObject, Identifiable {
     /// ⌘W on a pinned tab: keeps its place and address, lets the page go.
     func rest() {
         guard let url = address else { return }
-        rested = Rested(url: url)
+        // With its history, so it goes back as far as it did.
+        rested = Rested(url: url, state: history)
         reading.fraction = 0
         noisy = false
         // Loading about:blank isn't enough: WebKit keeps the old document in its
