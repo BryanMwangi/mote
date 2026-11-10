@@ -13,6 +13,8 @@ struct Sidebar: View {
     var showing = true
 
     @State private var dropping = false
+    /// The media strips fanned out, with the tabs making room.
+    @State private var mediaOpen = false
     /// A tab being dragged to a new place in the list.
     @State private var drag: ReorderDrag<Tab.ID>?
     @State private var keptDrag: ReorderDrag<Tab.ID>?
@@ -44,14 +46,12 @@ struct Sidebar: View {
                 Spacer(minLength: 0)
             }
             .padding(.horizontal, 10)
-            .padding(.bottom, Self.footHeight + (browser.players.isEmpty ? 0 : MediaStack.height(browser.players.count) + MediaStrip.gap))
+            .padding(.bottom, Self.footHeight + MediaStack.height(browser.players.count, open: mediaOpen))
 
             VStack(spacing: 0) {
                 Spacer()
                 if !browser.players.isEmpty {
-                    MediaStack(browser: browser, players: browser.players)
-                        .padding(.horizontal, 10)
-                        .padding(.bottom, MediaStrip.gap)
+                    MediaStack(browser: browser, players: browser.players, open: $mediaOpen)
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
                 foot
@@ -96,6 +96,7 @@ struct Sidebar: View {
         .animation(Motion.settle, value: browser.pinnedCount)
         .animation(Motion.settle, value: browser.keptCount)
         .animation(Motion.settle, value: browser.players.map(\.id))
+        .animation(Motion.settle, value: mediaOpen)
         .environment(\.sidebarShowing, showing)
     }
 

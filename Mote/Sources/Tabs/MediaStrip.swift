@@ -3,60 +3,105 @@ import SwiftUI
 /// At the foot of the sidebar while something plays in tabs you aren't on: a
 /// strip for each, stacked behind the one heard last, that fan out when the
 /// pointer comes over them.
+///
+/// Open, the tabs above make room rather than lie under them: the tabs are an
+/// AppKit view, which would take the pointer before the strips over it.
 struct MediaStack: View {
-    @ObservedObject var browser: Browser
+    let browser: Browser
     let players: [Tab]
+    @Binding var open: Bool
 
-    @State private var open = false
-    /// The strips under the pointer; open while there's one, and a moment
-    /// longer, so crossing the gap between two doesn't fold them.
-    @State private var over: Set<Tab.ID> = []
+    /// The room the strips take: folded, or fanned out over the tabs.
+    static func height(_ count: Int, open: Bool) -> CGFloat {
+        let shown = CGFloat(min(count, tallest))
+        let stack =
+            open
+            ? shown * MediaStrip.openHeight + (shown - 1) * StripStack.gap
+            : MediaStrip.height + CGFloat(min(count - 1, StripStack.behind)) * StripStack.peek
+        return count == 0 ? 0 : stack + MediaStrip.gap
+    }
+
+    /// The strips open at once; more scroll, so they don't take the sidebar.
+    static let tallest = 3
+
     @State private var folding: Task<Void, Never>?
 
-    /// How far each strip behind peeks out above the one in front.
-    private static let peek: CGFloat = 5
-    /// Those behind that show while folded.
-    private static let behind = 2
-
-    /// The room it takes in the sidebar, folded: open, it rises over the tabs.
-    static func height(_ count: Int) -> CGFloat {
-        count == 0 ? 0 : MediaStrip.height + CGFloat(min(count - 1, behind)) * peek
-    }
-
     var body: some View {
-        let shown = Array(players.prefix(open ? 6 : Self.behind + 1).enumerated())
-        Color.clear
-            .frame(height: Self.height(players.count))
-            .overlay(alignment: .bottom) {
-                VStack(spacing: 6) {
-                    ForEach(shown.reversed(), id: \.element.id) { index, tab in
-                        MediaStrip(browser: browser, tab: tab, open: open)
-                            // Folded, those behind sit a little higher, smaller, under the first.
-                            .scaleEffect(open ? 1 : 1 - CGFloat(index) * 0.05, anchor: .top)
-                            .offset(y: open ? 0 : CGFloat(index) * (MediaStrip.height + 6) - CGFloat(index) * Self.peek)
-                            .zIndex(Double(-index))
-                            .allowsHitTesting(open || index == 0)
-                            .onHover { hover(tab.id, $0) }
-                    }
-                }
-                .fixedSize(horizontal: false, vertical: true)
+        let shown = Array((open ? players : Array(players.prefix(StripStack.behind + 1))).enumerated())
+        let stack = StripStack(open: open) {
+            ForEach(shown, id: \.element.id) { index, tab in
+                MediaStrip(browser: browser, tab: tab, open: open)
+                    // Folded, those behind are a little smaller, under the first.
+                    .scaleEffect(open ? 1 : 1 - CGFloat(index) * 0.05, anchor: .top)
+                    .zIndex(Double(-index))
+                    .allowsHitTesting(open || index == 0)
             }
-            .animation(Motion.settle, value: open)
-            .animation(Motion.settle, value: players.map(\.id))
+        }
+        Group {
+            if open, players.count > Self.tallest {
+                // The one heard last, at the foot, in view first.
+                ScrollView { stack }
+                    .scrollIndicators(.never)
+                    .defaultScrollAnchor(.bottom)
+                    .frame(height: Self.height(players.count, open: true) - MediaStrip.gap)
+            } else {
+                stack
+            }
+        }
+        // Opens with the pointer on the stack as drawn, gaps included, and
+        // folds a moment after it leaves.
+        .contentShape(Rectangle())
+        .onHover(perform: hover)
+        .padding(.horizontal, 10)
+        .padding(.bottom, MediaStrip.gap)
+        .animation(Motion.settle, value: open)
+        .animation(Motion.settle, value: players.map(\.id))
+        .onDisappear { open = false }
     }
 
-    private func hover(_ id: Tab.ID, _ on: Bool) {
+    private func hover(_ on: Bool) {
         folding?.cancel()
-        if on {
-            over.insert(id)
-            open = true
-            return
-        }
-        over.remove(id)
-        guard over.isEmpty else { return }
+        if on { return show(true) }
         folding = Task {
             try? await Task.sleep(for: .milliseconds(250))
-            if !Task.isCancelled, over.isEmpty { open = false }
+            if !Task.isCancelled { show(false) }
+        }
+    }
+
+    /// Opens or folds them.
+    private func show(_ on: Bool) {
+        if on != open { open = on }
+    }
+}
+
+/// The strips from the bottom up, the first lowest: open, one above another;
+/// folded, those behind peeking out above it. Placed, not offset, so the
+/// pointer finds each strip where it's drawn.
+struct StripStack: Layout {
+    var open: Bool
+
+    /// How far each strip behind peeks out above the one in front.
+    static let peek: CGFloat = 5
+    /// Those behind that show while folded.
+    static let behind = 2
+    static let gap: CGFloat = 6
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let width = proposal.width ?? 240
+        let heights = subviews.map { $0.sizeThatFits(ProposedViewSize(width: width, height: nil)).height }
+        guard let first = heights.first else { return CGSize(width: width, height: 0) }
+        let rest = CGFloat(heights.count - 1)
+        return CGSize(width: width, height: open ? heights.reduce(0, +) + rest * Self.gap : first + rest * Self.peek)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var bottom = bounds.maxY
+        for (index, subview) in subviews.enumerated() {
+            let size = ProposedViewSize(
+                width: bounds.width, height: subview.sizeThatFits(ProposedViewSize(width: bounds.width, height: nil)).height)
+            let top = open ? bottom - (size.height ?? 0) : bounds.maxY - (size.height ?? 0) - CGFloat(index) * Self.peek
+            subview.place(at: CGPoint(x: bounds.minX, y: top), proposal: size)
+            bottom = top - Self.gap
         }
     }
 }
@@ -66,11 +111,13 @@ struct MediaStack: View {
 /// leaves it playing. How far it has played fills it from the left, as a
 /// tab's row fills with how far it's read.
 struct MediaStrip: View {
-    @ObservedObject var browser: Browser
+    let browser: Browser
     @ObservedObject var tab: Tab
     var open = false
 
     static let height: CGFloat = 36
+    /// Open, with what's playing above the buttons.
+    static let openHeight: CGFloat = 68
     /// Between it and the foot.
     static let gap: CGFloat = 6
 
@@ -103,6 +150,7 @@ struct MediaStrip: View {
                         Control(symbol: "xmark", help: "Hide; it keeps playing") { browser.putAway(tab) }
                     }
                     .padding(.leading, 10)
+                    .frame(height: Self.openHeight - Self.height - 6)
                     .padding(.top, 6)
                     .transition(.opacity)
                 }
@@ -121,7 +169,7 @@ struct MediaStrip: View {
                     Control(symbol: media.playing ? "pause.fill" : "play.fill", help: media.playing ? "Pause" : "Play") {
                         tab.send(.toggle)
                     }
-                    if media.hasNext { Control(symbol: "forward.fill", help: "Next") { tab.send(.next) } }
+                    Control(symbol: "forward.fill", help: "Next") { tab.send(.next) }
                     Control(symbol: tab.muted ? "speaker.slash.fill" : "speaker.wave.2.fill", help: tab.muted ? "Unmute" : "Mute") {
                         tab.toggleMute()
                     }
@@ -129,7 +177,9 @@ struct MediaStrip: View {
                 .padding(.trailing, 4)
                 .frame(height: Self.height)
             }
-            .background { MediaFill(reading: tab.mediaProgress, icon: tab.icon).clipShape(shape) }
+            // Clipping doesn't stop the icon, drawn wider than the strip,
+            // taking the pointer over the strips above.
+            .background { MediaFill(reading: tab.mediaProgress, icon: tab.icon).clipShape(shape).allowsHitTesting(false) }
             .background { Tinted(shape: shape, fill: hovering ? Palette.hover : Palette.wash) }
             .background { if open { shape.fill(Palette.frame) } }
             .onHover { hovering = $0 }

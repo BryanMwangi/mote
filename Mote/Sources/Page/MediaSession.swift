@@ -14,8 +14,6 @@ struct MediaState: Equatable, Decodable {
     var actions: [String]
     /// The site describes what plays or handles its controls: a player.
     var session: Bool?
-
-    var hasNext: Bool { actions.contains("nexttrack") }
 }
 
 /// Hears a page's media reports. The script runs in the page's own world, so

@@ -121,7 +121,7 @@
 					} else if (!call("play")) media?.play().catch(() => {});
 					break;
 				case "next":
-					call("nexttrack");
+					if (!call("nexttrack") && media) media.currentTime = Math.min(media.duration || Infinity, media.currentTime + 10);
 					break;
 				case "previous": if (!call("previoustrack") && media) media.currentTime = 0;
 			}

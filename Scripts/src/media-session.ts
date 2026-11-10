@@ -116,7 +116,8 @@ if (handler && !window.__moteMedia) {
         }
         break;
       case 'next':
-        call('nexttrack');
+        // With no next track, ten seconds on.
+        if (!call('nexttrack') && media) media.currentTime = Math.min(media.duration || Infinity, media.currentTime + 10);
         break;
       case 'previous':
         if (!call('previoustrack') && media) media.currentTime = 0;
