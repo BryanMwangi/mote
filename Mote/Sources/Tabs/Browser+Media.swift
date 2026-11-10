@@ -12,8 +12,8 @@ extension Browser {
         Task { @MainActor [weak self] in self?.notePlaying() }
     }
 
-    /// The tabs heard, in any space, other than the one in front, the one
-    /// heard last first. Only real media counts: what
+    /// The tabs heard, in any space, other than the one in front, newest to
+    /// the stack first. Only real media counts: what
     /// WebKit hears now, a site's own player (a media session), or something
     /// heard not long ago and paused. Muted backgrounds and GIF-like videos
     /// don't. A strip put away stays away until its tab starts playing again.
@@ -29,7 +29,11 @@ extension Browser {
         let sounding = Set(heard.filter { $0.media?.playing == true }.map(\.id))
         putAway.subtract(sounding.subtracting(wasPlaying))
         wasPlaying = sounding
-        let shown = heard.filter { !putAway.contains($0.id) }
+        let heardNow = heard.filter { !putAway.contains($0.id) }
+        // Strips keep their places as they pause and play; one new to the
+        // stack comes in at the front.
+        let kept = players.filter { tab in heardNow.contains { $0 === tab } }
+        let shown = heardNow.filter { tab in !kept.contains { $0 === tab } } + kept
         if shown.map(\.id) != players.map(\.id) { players = shown }
     }
 
