@@ -40,7 +40,7 @@ extension Bench {
     /// The whole window as a PNG, pages drawn in from WebKit's snapshots.
     private static func picture(_ call: BenchCall) {
         guard call.testRun() else { return }
-        guard let window = AppDelegate.window, let frame = window.contentView?.superview, let path = call.request.string("path"),
+        guard let window = call.browser.window ?? AppDelegate.window, let frame = window.contentView?.superview, let path = call.request.string("path"),
             !path.isEmpty
         else {
             return call.fail("picture needs a path")
