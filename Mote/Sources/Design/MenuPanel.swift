@@ -58,8 +58,9 @@ final class MenuPanel {
     var dismissed: () -> Void = {}
 
     private var panel: Panel?
-    private var host: NSHostingView<AnyView>?
+    private var host: Host?
     private weak var anchor: NSView?
+    private var edge = Edge.top
     private var monitors: [Any] = []
     /// Set while the menu closes. Closing the panel makes SwiftUI update the
     /// view that owns it, which may still ask for the menu; it isn't reopened.
@@ -118,13 +119,16 @@ final class MenuPanel {
         }
         // A panel that is no longer on screen is replaced, never left behind.
         close()
-        guard let window = anchor.window, let screen = window.screen ?? NSScreen.main else { return }
+        guard let window = anchor.window else { return }
         self.anchor = anchor
+        self.edge = edge
 
-        let host = NSHostingView(rootView: card)
-        let size = host.fittingSize
+        let host = Host(rootView: card)
+        // Content that settles its size after opening is placed again, so it
+        // stays beside the control and on the screen.
+        host.resized = { [weak self] in self?.place() }
         let panel = Panel(
-            contentRect: NSRect(origin: .zero, size: size), styleMask: [.borderless, .nonactivatingPanel],
+            contentRect: NSRect(origin: .zero, size: host.fittingSize), styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered, defer: false)
         panel.isOpaque = false
         panel.backgroundColor = .clear
@@ -137,14 +141,21 @@ final class MenuPanel {
         panel.contentView = host
         panel.onEscape = { [weak self] in self?.dismiss() }
 
-        let anchorOnScreen = window.convertToScreen(anchor.convert(anchor.bounds, to: nil))
-        panel.setFrame(MenuPanel.frame(size: size, anchor: anchorOnScreen, edge: edge, within: screen.visibleFrame), display: true)
-        if keyboard { panel.makeKeyAndOrderFront(nil) } else { panel.orderFront(nil) }
-
         self.panel = panel
         self.host = host
+        place()
+        if keyboard { panel.makeKeyAndOrderFront(nil) } else { panel.orderFront(nil) }
+
         Self.open += 1
         watch(window)
+    }
+
+    /// Sizes the panel to its content, beside the control.
+    private func place() {
+        guard let panel, let host, let anchor, let window = anchor.window, let screen = window.screen ?? NSScreen.main else { return }
+        let anchorOnScreen = window.convertToScreen(anchor.convert(anchor.bounds, to: nil))
+        let frame = MenuPanel.frame(size: host.fittingSize, anchor: anchorOnScreen, edge: edge, within: screen.visibleFrame)
+        if frame != panel.frame { panel.setFrame(frame, display: true) }
     }
 
     /// Closes the menu without telling the caller, which already knows.
@@ -221,6 +232,16 @@ final class MenuPanel {
             if anchor.bounds.contains(point) { return }
         }
         dismiss()
+    }
+
+    private final class Host: NSHostingView<AnyView> {
+        var resized: () -> Void = {}
+
+        override func invalidateIntrinsicContentSize() {
+            super.invalidateIntrinsicContentSize()
+            // After the layout under way, which a new frame mustn't interrupt.
+            DispatchQueue.main.async { [weak self] in self?.resized() }
+        }
     }
 
     /// A borderless panel that can take key status, so the menu's own controls
