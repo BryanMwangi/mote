@@ -24,13 +24,25 @@ struct IconPicker: View {
     var body: some View {
         VStack(spacing: 10) {
             Segmented(options: [(Kind.symbols, "Symbols"), (.emoji, "Emoji")], selection: $kind, wide: true)
-            if kind == .symbols { symbols } else { emoji }
+            // Both as tall, and swapped without animating: the popover
+            // resizing while the search field left it made AppKit's layout
+            // loop until it gave up, taking Mote with it.
+            Group { if kind == .symbols { symbols } else { emoji } }
+                .frame(height: Self.room, alignment: .top)
+                .transaction { $0.animation = nil }
         }
         .padding(10)
         .frame(width: 280)
     }
 
+    /// Under the switch: the search field and the emoji grid.
+    private static let room: CGFloat = 266
+
     private var symbols: some View {
+        ScrollView(.vertical) { symbolGrid }.scrollIndicators(.never)
+    }
+
+    private var symbolGrid: some View {
         LazyVGrid(columns: Array(repeating: GridItem(.fixed(32), spacing: 6), count: 7), spacing: 6) {
             ForEach(Space.icons, id: \.symbol) { symbol, name in
                 cell(on: symbol == current) {
