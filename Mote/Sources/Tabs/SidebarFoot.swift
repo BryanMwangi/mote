@@ -162,14 +162,17 @@ private struct SessionDownloads: View {
         SessionList(
             empty: recent.isEmpty && downloads.transfers.isEmpty ? "No downloads this session." : nil, more: "Show all downloads"
         ) {
-            // Those under way first, then this session's files, scrolling
-            // past a few rather than running off the screen.
+            // Those under way first, then this session's files: as tall as
+            // the first three, scrolling past them, without a scroll bar.
+            let files = Array(recent.prefix(20))
+            let last = min(downloads.transfers.count + files.count, Self.shown) - 1
             ScrollView {
                 VStack(alignment: .leading, spacing: 1) {
-                    ForEach(downloads.transfers) { transfer in
+                    ForEach(Array(downloads.transfers.enumerated()), id: \.element.id) { index, transfer in
                         TransferRow(transfer: transfer, browser: browser).padding(.horizontal, 10).padding(.vertical, 8)
+                            .modifier(Bottom(measured: index == last, height: $height))
                     }
-                    ForEach(recent.prefix(20)) { record in
+                    ForEach(Array(files.enumerated()), id: \.element.id) { index, record in
                         let there = downloads.isThere(record)
                         PopoverLine(record.name, image: FileKind.icon(of: record, there: there)) {
                             if there { downloads.open(record) }
@@ -177,16 +180,41 @@ private struct SessionDownloads: View {
                         }
                         .opacity(there ? 1 : 0.5)
                         .contextMenu { FileMenu(record: record, there: there, downloads: downloads) }
+                        .modifier(Bottom(measured: downloads.transfers.count + index == last, height: $height))
                     }
                 }
+                .coordinateSpace(.named(Bottom.rows))
             }
-            .scrollIndicators(.automatic)
-            .frame(height: min(360, CGFloat(downloads.transfers.count) * 62 + CGFloat(min(recent.count, 20)) * 29))
+            .scrollIndicators(.never)
+            .frame(height: height)
         } showAll: {
             close()
             browser.showingDownloads = true
         }
         .onAppear { downloads.lookAgain() }
+    }
+
+    /// Rows the popover grows to before it scrolls.
+    private static let shown = 3
+    @State private var height: CGFloat = 0
+
+    /// Where the last row shown in full ends, which the list is as tall as.
+    private struct Bottom: ViewModifier {
+        static let rows = "rows"
+        let measured: Bool
+        @Binding var height: CGFloat
+
+        func body(content: Content) -> some View {
+            if measured {
+                content.onGeometryChange(for: CGFloat.self) {
+                    $0.frame(in: .named(Self.rows)).maxY
+                } action: {
+                    height = $0
+                }
+            } else {
+                content
+            }
+        }
     }
 }
 
