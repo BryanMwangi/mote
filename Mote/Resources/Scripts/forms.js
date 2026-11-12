@@ -70,6 +70,21 @@
 			password: fields.password.value
 		};
 	}
+	/**
+	* A new password, into `field` and the empty password fields after it in its
+	* form, which ask for it again (one before it is the current password). A
+	* field that takes fewer characters gets it without its hyphens, cut short.
+	* What went in, or null when the field is gone.
+	*/
+	function fillNewPassword(field, password) {
+		if (!field || !field.isConnected) return null;
+		const room = field.maxLength;
+		const fitted = room > 0 && password.length > room ? password.replaceAll("-", "").slice(0, room) : password;
+		setFieldValue(field, fitted);
+		const fields = [...(field.form ?? document).querySelectorAll("input[type=\"password\"]")];
+		for (const other of fields.slice(fields.indexOf(field) + 1)) if (!other.value && !other.readOnly && !other.disabled) setFieldValue(other, fitted);
+		return fitted;
+	}
 
 //#endregion
 //#region src/forms/typing.ts
@@ -238,8 +253,19 @@
 		window.__moteForms = {
 			unsaved: () => typed.unsaved(),
 			fill: (user, password) => fillSignIn(findSignIn(), user, password),
-			hasPassword: () => !!findSignIn()
+			hasPassword: () => !!findSignIn(),
+			suggest: (password) => fillNewPassword(menuField, password)
 		};
+		let menuField = null;
+		document.addEventListener("contextmenu", (event) => {
+			const target = event.composedPath()[0];
+			const editable = target instanceof HTMLInputElement && target.type === "password" && !target.readOnly && !target.disabled;
+			menuField = editable ? target : null;
+			post({
+				kind: "menu",
+				password: editable
+			});
+		}, true);
 		document.addEventListener("submit", offer, true);
 		document.addEventListener("keydown", (event) => {
 			if (event.key !== "Enter") return;

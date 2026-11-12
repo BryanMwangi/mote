@@ -102,11 +102,34 @@ struct FormEventTests {
                 == .focus(typing: true, field: CGRect(x: 1, y: 2, width: 3, height: 4)))
         #expect(FormEvent(["kind": "focus", "rect": ["x": 1.0]]) == .focus(typing: false, field: nil))
         #expect(FormEvent(["kind": "fullscreen", "on": true]) == .fullscreen(true))
+        #expect(FormEvent(["kind": "menu", "password": true]) == .menu(password: true))
+        #expect(FormEvent(["kind": "menu"]) == .menu(password: false))
     }
 
     @Test("Anything else is ignored")
     func unknown() {
         #expect(FormEvent(["kind": "form"]) == nil)
         #expect(FormEvent("nonsense") == nil)
+    }
+}
+
+@Suite("Strong passwords")
+struct StrongPasswordTests {
+    @Test("Three groups of six, with one capital and one digit")
+    func shape() {
+        for _ in 0..<200 {
+            let made = StrongPassword.make()
+            let groups = made.split(separator: "-")
+            #expect(groups.count == 3 && groups.allSatisfy { $0.count == 6 })
+            let characters = made.filter { $0 != "-" }
+            #expect(characters.filter(\.isUppercase).count == 1)
+            #expect(characters.filter(\.isNumber).count == 1)
+            #expect(!characters.contains { "lIoO01".contains($0) })
+        }
+    }
+
+    @Test("Never the same twice")
+    func fresh() {
+        #expect(Set((0..<100).map { _ in StrongPassword.make() }).count == 100)
     }
 }

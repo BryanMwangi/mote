@@ -11,6 +11,8 @@ public enum FormEvent: Equatable, Sendable {
     case focus(typing: Bool, field: CGRect?)
     /// The page's own word on full screen.
     case fullscreen(Bool)
+    /// A menu is opening on the page, on a password field or not.
+    case menu(password: Bool)
 
     /// Reads a message body; nil for anything unknown.
     public init?(_ body: Any) {
@@ -29,6 +31,8 @@ public enum FormEvent: Equatable, Sendable {
             self = .focus(typing: body["typing"] as? Bool ?? false, field: field)
         case "fullscreen":
             self = .fullscreen(body["on"] as? Bool ?? false)
+        case "menu":
+            self = .menu(password: body["password"] as? Bool ?? false)
         default:
             return nil
         }

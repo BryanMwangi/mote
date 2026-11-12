@@ -20,7 +20,7 @@ final class BookmarkMenu: NSObject, NSMenuDelegate {
 
     private weak var browser: Browser?
     private var observers: [Any] = []
-    private let relay = Relay()
+    private let relay = MenuRelay()
     /// What each folder's submenu holds, made when it opens.
     private var folders: [ObjectIdentifier: [Bookmark]] = [:]
 
@@ -33,6 +33,7 @@ final class BookmarkMenu: NSObject, NSMenuDelegate {
         guard self.browser == nil else { return }
         self.browser = browser
         relay.after = { [weak self] in self?.fill($0) }
+        relay.ownTag = Self.tag
         let center = NotificationCenter.default
         observers = [
             center.addObserver(forName: NSApplication.didUpdateNotification, object: nil, queue: nil) { [weak self] _ in
@@ -156,31 +157,34 @@ final class BookmarkMenu: NSObject, NSMenuDelegate {
         icon.size = iconSize
         return icon
     }
+}
 
-    /// Stands in for SwiftUI's menu delegate: passes everything on, and adds
-    /// the bookmarks after SwiftUI's update.
-    private final class Relay: NSObject, NSMenuDelegate {
-        // Set on the main thread, then read by AppKit there too, including
-        // through the nonisolated overrides below.
-        nonisolated(unsafe) weak var inner: NSMenuDelegate?
-        var after: ((NSMenu) -> Void)?
+/// Stands in for SwiftUI's delegate of a menu-bar menu: passes everything on,
+/// and runs `after` once SwiftUI has updated it, to add what SwiftUI can't
+/// (AppKit items, icons).
+final class MenuRelay: NSObject, NSMenuDelegate {
+    // Set on the main thread, then read by AppKit there too, including
+    // through the nonisolated overrides below.
+    nonisolated(unsafe) weak var inner: NSMenuDelegate?
+    var after: ((NSMenu) -> Void)?
+    /// Items tagged so are the adder's, not SwiftUI's.
+    var ownTag: Int?
 
-        func menuNeedsUpdate(_ menu: NSMenu) {
-            inner?.menuNeedsUpdate?(menu)
-            MainActor.assumeIsolated { after?(menu) }
-        }
-
-        func menuDidClose(_ menu: NSMenu) { inner?.menuDidClose?(menu) }
-
-        /// Only SwiftUI's own items are its business.
-        func menu(_ menu: NSMenu, willHighlight item: NSMenuItem?) {
-            if item?.tag != BookmarkMenu.tag { inner?.menu?(menu, willHighlight: item) }
-        }
-
-        nonisolated override func responds(to selector: Selector!) -> Bool {
-            super.responds(to: selector) || (inner?.responds(to: selector) ?? false)
-        }
-
-        nonisolated override func forwardingTarget(for selector: Selector!) -> Any? { inner }
+    func menuNeedsUpdate(_ menu: NSMenu) {
+        inner?.menuNeedsUpdate?(menu)
+        MainActor.assumeIsolated { after?(menu) }
     }
+
+    func menuDidClose(_ menu: NSMenu) { inner?.menuDidClose?(menu) }
+
+    /// Only SwiftUI's own items are its business.
+    func menu(_ menu: NSMenu, willHighlight item: NSMenuItem?) {
+        if ownTag == nil || item?.tag != ownTag { inner?.menu?(menu, willHighlight: item) }
+    }
+
+    nonisolated override func responds(to selector: Selector!) -> Bool {
+        super.responds(to: selector) || (inner?.responds(to: selector) ?? false)
+    }
+
+    nonisolated override func forwardingTarget(for selector: Selector!) -> Any? { inner }
 }

@@ -6,7 +6,7 @@
 // world, so pages can't reach `window.__moteForms` or the message handler.
 // Swift calls `window.__moteForms` there (Tab.swift).
 
-import { fillSignIn, signInFields, submittedCredentials } from './forms/sign-in';
+import { fillNewPassword, fillSignIn, signInFields, submittedCredentials } from './forms/sign-in';
 import { acceptsTyping, fieldFrame, TypedFields } from './forms/typing';
 
 /** What Swift can ask the page, from Mote's world. */
@@ -20,6 +20,12 @@ interface FormsAPI {
    * out, to tell a sign-in that took from one refused.
    */
   hasPassword(): boolean;
+  /**
+   * Puts a new password in the password field last right-clicked, and in the
+   * empty ones after it that ask for it again; what went in (fitted to the
+   * field), or null when that field is gone.
+   */
+  suggest(password: string): string | null;
 }
 
 type FormMessage =
@@ -27,7 +33,8 @@ type FormMessage =
   | { kind: 'submit'; user: string; password: string }
   | { kind: 'settled' }
   | { kind: 'focus'; typing: boolean; rect: { x: number; y: number; w: number; h: number } | null }
-  | { kind: 'fullscreen'; on: boolean };
+  | { kind: 'fullscreen'; on: boolean }
+  | { kind: 'menu'; password: boolean };
 
 declare global {
   interface Window {
@@ -98,7 +105,26 @@ function installForms(): void {
     unsaved: () => typed.unsaved(),
     fill: (user, password) => fillSignIn(findSignIn(), user, password),
     hasPassword: () => !!findSignIn(),
+    suggest: (password) => fillNewPassword(menuField, password),
   };
+
+  // The password field a menu opens on, for Mote's strong password. Told
+  // before WebKit shows the menu, which comes after the page has seen this.
+  let menuField: HTMLInputElement | null = null;
+  document.addEventListener(
+    'contextmenu',
+    (event) => {
+      const target = event.composedPath()[0];
+      const editable =
+        target instanceof HTMLInputElement &&
+        target.type === 'password' &&
+        !target.readOnly &&
+        !target.disabled;
+      menuField = editable ? target : null;
+      post({ kind: 'menu', password: editable });
+    },
+    true,
+  );
 
   document.addEventListener('submit', offer, true);
   document.addEventListener(

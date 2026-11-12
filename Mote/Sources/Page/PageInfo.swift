@@ -144,8 +144,12 @@ private struct PageInfoView: View {
     private var permissions: some View {
         Form {
             Section("Permissions for \(host)") {
-                capture("Use the camera", .camera)
-                capture("Use the microphone", .microphone)
+                permission("Use the camera", .capture(.camera))
+                permission("Use the microphone", .capture(.microphone))
+                permission("Send notifications", .notifications)
+                permission("Know your location", .location)
+                permission("Share the screen", .screen)
+                permission("Recognize speech", .speech)
                 Toggle(
                     "Block ads and trackers",
                     isOn: Binding(get: { !AdBlocker.shared.isPaused(on: host) }, set: { AdBlocker.shared.pause(host, !$0) }))
@@ -160,12 +164,12 @@ private struct PageInfoView: View {
         .formStyle(.grouped)
     }
 
-    private func capture(_ title: String, _ type: WKMediaCaptureType) -> some View {
+    private func permission(_ title: String, _ kind: SitePermissions.Kind) -> some View {
         Picker(
             title,
             selection: Binding(
-                get: { CaptureRequests.remembered(host, type).map { $0 ? 1 : 2 } ?? 0 },
-                set: { CaptureRequests.remember(host, type, $0 == 0 ? nil : $0 == 1) })
+                get: { SitePermissions.remembered(host, kind).map { $0 ? 1 : 2 } ?? 0 },
+                set: { SitePermissions.remember(host, kind, $0 == 0 ? nil : $0 == 1) })
         ) {
             Text("Always Ask").tag(0)
             Text("Allow").tag(1)
@@ -202,7 +206,7 @@ private struct PageInfoView: View {
                         Button("Clear", action: clearData).disabled(storedData.isEmpty)
                     }
                 }
-                LabeledContent("Saved passwords", value: "\(PasswordStore.logins(for: host).count)")
+                LabeledContent("Saved passwords", value: "\(PasswordStore.accounts().filter { $0.host == host }.count)")
             }
         }
         .formStyle(.grouped)

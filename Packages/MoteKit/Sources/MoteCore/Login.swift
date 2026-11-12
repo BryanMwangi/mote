@@ -1,7 +1,7 @@
 import Foundation
 
 /// A saved sign-in for a site.
-public struct Login: Identifiable, Equatable, Hashable, Sendable {
+public struct Login: Identifiable, Equatable, Hashable, Codable, Sendable {
     public var host: String
     public var user: String
     public var password: String

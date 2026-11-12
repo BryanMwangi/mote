@@ -90,6 +90,12 @@
 	<string>Websites you visit can ask to use your camera. Mote asks you the first time each site does and keeps your answer; Settings › Privacy forgets them.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Websites you visit can ask to use your microphone. Mote asks you the first time each site does and keeps your answer; Settings › Privacy forgets them.</string>
+	<key>NSLocationUsageDescription</key>
+	<string>Websites you visit can ask where you are. Mote asks you the first time each site does and keeps your answer; Settings › Privacy changes it.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Websites you visit can ask where you are. Mote asks you the first time each site does and keeps your answer; Settings › Privacy changes it.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Websites you visit can ask to turn what you say into text. Mote asks you the first time each site does and keeps your answer; Settings › Privacy changes it.</string>
 	<key>NSDownloadsFolderUsageDescription</key>
 	<string>Files you download are saved to your Downloads folder.</string>
 </dict>

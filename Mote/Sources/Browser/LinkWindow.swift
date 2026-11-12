@@ -1,9 +1,14 @@
 import MoteCore
 import SwiftUI
+import WebKit
 
 // Links from other apps can open in a small window of their own, with the
 // site's name and an Open in Mote button (Settings › General). The page is an
 // ordinary tab that moves into the browser when kept.
+//
+// A page's pop-up (`window.open` with a size, or without toolbars: sign-ins,
+// verifications) opens in one too, as browsers give pop-ups a window with
+// nothing but the page and its site: no tabs, sidebar or address field.
 
 @MainActor
 final class LinkWindow: NSObject, NSWindowDelegate {
@@ -14,6 +19,8 @@ final class LinkWindow: NSObject, NSWindowDelegate {
     private weak var browser: Browser?
     private let window: NSWindow
     private var kept = false
+    /// A page's pop-up: it stays a window, closed by the page or ⌘W.
+    let popup: Bool
 
     /// `front: false` makes it without showing it, for the bench.
     static func show(_ url: URL, for browser: Browser, front: Bool = true) {
@@ -28,23 +35,53 @@ final class LinkWindow: NSObject, NSWindowDelegate {
         NSApp.activate()
     }
 
+    /// A pop-up's window for `tab`, whose page WebKit is about to load: the
+    /// size the page asked for, where it asked, else over the window it came
+    /// from.
+    static func popUp(_ tab: Tab, for browser: Browser, features: WKWindowFeatures, over opener: NSWindow?) {
+        browser.prepare(tab)
+        let size = NSSize(
+            width: features.width.map { CGFloat($0.doubleValue) } ?? 500,
+            height: features.height.map { CGFloat($0.doubleValue) } ?? 600)
+        let little = LinkWindow(tab: tab, browser: browser, popup: true, size: size)
+        all.append(little)
+        let window = little.window
+        if let screen = opener?.screen ?? NSScreen.main, let x = features.x, let y = features.y {
+            // The page measures from the screen's top left.
+            let top = screen.frame.maxY - CGFloat(y.doubleValue)
+            window.setFrameTopLeftPoint(NSPoint(x: screen.frame.minX + CGFloat(x.doubleValue), y: top))
+        } else if let opener {
+            window.setFrameOrigin(NSPoint(x: opener.frame.midX - window.frame.width / 2, y: opener.frame.midY - window.frame.height / 2))
+        } else {
+            window.center()
+        }
+        window.makeKeyAndOrderFront(nil)
+    }
+
     static func owning(_ window: NSWindow?) -> LinkWindow? {
         all.first { $0.window === window }
     }
 
-    private init(tab: Tab, browser: Browser) {
+    /// The pop-up showing `webView`, if one does.
+    static func showing(_ webView: WKWebView) -> LinkWindow? {
+        all.first { $0.tab.built === webView }
+    }
+
+    private init(tab: Tab, browser: Browser, popup: Bool = false, size: NSSize = NSSize(width: 900, height: 640)) {
         self.tab = tab
         self.browser = browser
+        self.popup = popup
         window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 900, height: 640),
+            contentRect: NSRect(origin: .zero, size: NSSize(width: size.width, height: size.height + LinkWindowView.barHeight)),
             styleMask: [.titled, .closable, .resizable, .miniaturizable, .fullSizeContentView], backing: .buffered, defer: false)
         super.init()
         window.titlebarAppearsTransparent = true
         window.titleVisibility = .hidden
         window.isReleasedWhenClosed = false
-        window.minSize = NSSize(width: 420, height: 320)
+        window.minSize = popup ? NSSize(width: 240, height: 200) : NSSize(width: 420, height: 320)
         window.delegate = self
-        window.contentView = NSHostingView(rootView: LinkWindowView(tab: tab, keep: { [weak self] in self?.keep() }))
+        window.contentView = NSHostingView(
+            rootView: LinkWindowView(tab: tab, keep: popup ? nil : { [weak self] in self?.keep() }))
     }
 
     /// As the close button does.
@@ -57,9 +94,10 @@ final class LinkWindow: NSObject, NSWindowDelegate {
             key: event.charactersIgnoringModifiers ?? "", code: event.keyCode, command: flags.contains(.command),
             shift: flags.contains(.shift), option: flags.contains(.option), control: flags.contains(.control))
         switch KeyMap.linkWindow(press) {
-        case .keep: keep()
-        case .close: close()
-        case nil: return false
+        // A pop-up's page may want Escape, and isn't a tab to keep.
+        case .keep where !popup: keep()
+        case .close where !popup || press.command: close()
+        default: return false
         }
         return true
     }
@@ -85,7 +123,10 @@ final class LinkWindow: NSObject, NSWindowDelegate {
 /// The site's bar over the page.
 private struct LinkWindowView: View {
     @ObservedObject var tab: Tab
-    let keep: () -> Void
+    /// None for a pop-up.
+    let keep: (() -> Void)?
+
+    static let barHeight: CGFloat = 34
 
     /// The traffic lights sit on the bar.
     private static let lightsRoom: CGFloat = 64
@@ -95,15 +136,24 @@ private struct LinkWindowView: View {
             HStack(spacing: 10) {
                 Color.clear.frame(width: Self.lightsRoom)
                 Spacer(minLength: 0)
-                Text(tab.address.map(Address.siteName) ?? "")
+                // A pop-up's opener names it, so the site shows instead: where
+                // a password is being typed.
+                if keep == nil, tab.address?.scheme == "https" {
+                    Image(systemName: "lock.fill").font(.system(size: 9, weight: .semibold)).foregroundStyle(Palette.muted)
+                }
+                Text(tab.address.map { keep == nil ? $0.host() ?? "" : Address.siteName(for: $0) } ?? "")
                     .font(.system(size: 12.5, weight: .medium))
                     .foregroundStyle(Palette.muted)
                     .lineLimit(1)
                 Spacer(minLength: 0)
-                Pill("Open in Mote", action: keep).help("Open in Mote   ⌘O")
+                if let keep {
+                    Pill("Open in Mote", action: keep).help("Open in Mote   ⌘O")
+                } else {
+                    Color.clear.frame(width: Self.lightsRoom)
+                }
             }
             .padding(.horizontal, 10)
-            .frame(height: 34)
+            .frame(height: Self.barHeight)
             WebStage(page: tab.built ?? tab.web)
         }
         .background(Palette.ground)

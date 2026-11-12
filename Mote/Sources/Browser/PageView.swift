@@ -21,6 +21,18 @@ final class PageView: WKWebView {
     /// A click, not a scroll.
     var onPress: (() -> Void)?
 
+    /// A Responsive Design Mode handle is being dragged: the page is told it's
+    /// in a live resize, as a window drag tells it, so WebKit keeps its layout
+    /// and drawing in step with each new size.
+    var resizingByHand = false {
+        didSet {
+            guard resizingByHand != oldValue else { return }
+            if resizingByHand { viewWillStartLiveResize() } else { viewDidEndLiveResize() }
+        }
+    }
+
+    override var inLiveResize: Bool { resizingByHand || super.inLiveResize }
+
     /// WebKit does the sampling in its renderer, including fixed/sticky headers.
     /// These optional SPI are guarded so older engines keep the page background.
     // ponytail: native heuristics can reject complex imagery; add custom sampling only if needed.
@@ -193,6 +205,7 @@ final class PageView: WKWebView {
         }
         linkItems(in: menu)
         pageItems(in: menu)
+        passwordItems(in: menu)
         // Extensions' items go last.
         guard #available(macOS 15.4, *), let tab = Extensions.shared.browser?.tab(for: self) else { return }
         let items = Extensions.shared.menuItems(for: tab)
@@ -237,6 +250,26 @@ final class PageView: WKWebView {
             accessibility.toolTip = "Opens the Web Inspector on this element: accessibility is in its Node panel"
             menu.insertItem(accessibility, at: spot)
         }
+    }
+
+    /// On a password field: a strong one, made up for a new account. The
+    /// page offers to save it when the sign-up goes, as with any password.
+    private func passwordItems(in menu: NSMenu) {
+        guard let browser = Windows.shared.all.first(where: { $0.tab(for: self) != nil }), let tab = browser.tab(for: self),
+            tab.menuOnPassword
+        else { return }
+        let item = ActionItem("Suggest Strong Password") {
+            tab.suggestPassword { made in
+                guard let made else { return browser.announce("Couldn't find the password field anymore") }
+                browser.announce(
+                    Announcement(
+                        "Strong password filled", detail: "Mote offers to save it once you sign up.", symbol: "key.fill",
+                        action: .init(title: "Copy") { Logins.copyConcealed(made) }))
+            }
+        }
+        item.image = NSImage(systemSymbolName: "key", accessibilityDescription: nil)
+        menu.insertItem(item, at: 0)
+        menu.insertItem(.separator(), at: 1)
     }
 
     /// On a link: WebKit's "Open Link in New Window" knows the link, so Mote's
@@ -317,7 +350,17 @@ final class PageView: WKWebView {
 
     // MARK: - Mouse
 
+    /// When the person last clicked or typed in the page, for its pop-ups.
+    private var used = Date.distantPast
+
+    /// Whether a pop-up the page opens now follows something the person did.
+    /// Five seconds after a click or a key: sign-ins and verifications
+    /// often ask their server first and open the window after; WebKit's own
+    /// second dropped those without a word.
+    var mayOpenWindow: Bool { Date().timeIntervalSince(used) < 5 }
+
     override func mouseDown(with event: NSEvent) {
+        used = Date()
         onTouch?()
         onPress?()
         // A touch device: held until it's known whether it's a tap or a drag.
@@ -450,6 +493,7 @@ final class PageView: WKWebView {
     static var quieted = 0
 
     override func keyDown(with event: NSEvent) {
+        used = Date()
         if let back = handed.firstIndex(where: { Self.same($0, event) }) {
             handed.remove(at: back)
             Self.quieted += 1

@@ -17,7 +17,7 @@ enum Web {
     @MainActor private static var handlers: [(String, WKContentWorld)] {
         [
             ScrollRelay.name, ElementHiderRelay.name, FormRelay.name, ImageRelay.name, WebStoreBridge.name, PasskeyRelay.name,
-            MiddleRelay.name, MediaRelay.name, LoadRelay.name,
+            MiddleRelay.name, MediaRelay.name, LoadRelay.name, NotificationRelay.name,
         ]
         .flatMap { [($0, world), ($0, .page)] } + [(HoveredLink.name, .defaultClient)]
     }
@@ -35,7 +35,7 @@ enum Web {
     /// sites send code the engine can't run.
     static let userAgentName = SafariVersion.userAgentName(version: installedSafari)
 
-    private static var installedSafari: String {
+    static var installedSafari: String {
         let bundles = ["/System/Cryptexes/App/System/Applications/Safari.app", "/Applications/Safari.app"]
         return bundles.lazy.compactMap { Bundle(path: $0)?.infoDictionary?["CFBundleShortVersionString"] as? String }.first
             ?? SafariVersion.shipped(withMacOS: ProcessInfo.processInfo.operatingSystemVersion.majorVersion)
@@ -59,8 +59,9 @@ enum Web {
         config.allowsAirPlayForMediaPlayback = true
         // Off by default on macOS, which makes video fullscreen buttons do nothing.
         config.preferences.isElementFullscreenEnabled = true
-        // `window.open` only from a click, as Safari blocks pop-ups.
-        config.preferences.javaScriptCanOpenWindowsAutomatically = false
+        // Every `window.open` reaches Mote, which lets it through after a
+        // click or a key (see PageView.mayOpenWindow).
+        config.preferences.javaScriptCanOpenWindowsAutomatically = true
         config.mediaTypesRequiringUserActionForPlayback = .audio
         if Storage.testing, !Storage.measuring { config.preferences.inactiveSchedulingPolicy = .none }
         inspector(config.preferences)

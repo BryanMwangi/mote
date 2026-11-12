@@ -1,6 +1,7 @@
 import AuthenticationServices
 import MoteCore
 import SwiftUI
+import WebKit
 
 // What each Settings page holds.
 
@@ -36,6 +37,10 @@ struct GeneralSettings: View {
             SettingRow(
                 "Show the whole address", "The full web address in the toolbar. Off, it shows only the site", symbol: "link",
                 tint: Tint.teal, on: $prefs.showsFullAddress)
+            RowRule()
+            SettingRow(
+                "Show Develop menu", "In the menu bar: open the page in another browser, change the user agent, the Web Inspector and more",
+                symbol: "hammer", tint: Tint.indigo, keywords: ["developer", "inspector", "user agent"], on: $prefs.developerMenu)
         }
 
         SettingsSection("Coming from another browser") {
@@ -495,10 +500,11 @@ private struct SpaceRows: View {
 struct PasswordSettings: View {
     let browser: Browser
     @ObservedObject var prefs: Preferences
+    @State private var touchToFill = PasswordStore.provesFilling
 
     var body: some View {
         SettingsSection("Your passwords") {
-            SettingRow("Saved passwords", "In the Mac's keychain, behind Touch ID", symbol: "key", tint: Tint.yellow) {
+            SettingRow("Saved passwords", "Sealed on this Mac with a key in its keychain", symbol: "key", tint: Tint.yellow) {
                 Pill("Show…", action: openPasswords)
             }
             RowRule()
@@ -516,6 +522,16 @@ struct PasswordSettings: View {
             SettingRow(
                 "Suggest your accounts", "Click a sign-in field to see what you've saved for the site", symbol: "person.crop.circle",
                 tint: Tint.teal, on: $prefs.fillsPasswords)
+            RowRule()
+            SettingRow(
+                "Touch ID to fill", "Once, before the first password goes into a page, then until the Mac locks", symbol: "touchid",
+                tint: Tint.red,
+                on: Binding(
+                    get: { touchToFill },
+                    set: {
+                        touchToFill = $0
+                        PasswordStore.provesFilling = $0
+                    }))
             RowRule()
             SettingRow("Passkeys", passkeyDetail, symbol: "touchid", tint: Tint.pink, on: $prefs.passkeys)
             if !PasswordStore.never.isEmpty {
@@ -553,6 +569,17 @@ struct PrivacySettings: View {
     let browser: Browser
     @ObservedObject var prefs: Preferences
     @ObservedObject private var blocker = AdBlocker.shared
+    /// The permission whose sites are being managed.
+    @State private var managing: SitePermissions.Kind?
+
+    private static let permissions: [(kind: SitePermissions.Kind, detail: String, symbol: String, tint: Color)] = [
+        (.capture(.camera), "Websites that asked to use your camera", "video", Tint.green),
+        (.capture(.microphone), "Websites that asked to use your microphone", "mic", Tint.orange),
+        (.notifications, "Websites that asked to send you notifications", "bell.badge", Tint.red),
+        (.location, "Websites that asked where you are", "location", Tint.blue),
+        (.screen, "Websites that asked to share your screen", "rectangle.on.rectangle", Tint.teal),
+        (.speech, "Websites that asked to recognize your speech", "waveform", Tint.pink),
+    ]
 
     var body: some View {
         SettingsSection("Blocking") {
@@ -579,11 +606,19 @@ struct PrivacySettings: View {
             }
         }
 
-        SettingsSection("Camera and microphone") {
-            SettingRow("Remembered answers", "What you told each site that asked", symbol: "video", tint: Tint.green) {
-                Pill("Forget") { browser.forgetCaptureChoices() }
+        SettingsSection("Site permissions", note: "What websites may use, site by site.") {
+            ForEach(Array(Self.permissions.enumerated()), id: \.offset) { index, item in
+                if index > 0 { RowRule() }
+                SettingRow(item.kind.title, item.detail, symbol: item.symbol, tint: item.tint) {
+                    Pill("Manage…") { managing = item.kind }
+                }
+            }
+            RowRule()
+            SettingRow("Every answer", "Forget what you told each site; they ask again", symbol: "hand.raised", tint: Tint.gray) {
+                Pill("Forget") { browser.forgetSitePermissions() }
             }
         }
+        .sheet(item: $managing) { SitePermissionsSheet(kind: $0) }
 
         SettingsSection("Clearing up", note: "Each of these happens straight away.") {
             SettingRow("History", "Every page you've been to", symbol: "clock.arrow.circlepath", tint: Tint.blue) {
@@ -707,7 +742,8 @@ private struct ProfileRows: View {
     var body: some View {
         SettingsSection(
             "Profiles",
-            note: "Each profile is its own Mote: its own tabs, history, passwords, sign-ins and extensions. A new one starts with these settings."
+            note:
+                "Each profile is its own Mote: its own tabs, history, passwords, sign-ins and extensions. A new one starts with these settings."
         ) {
             ProfileRow(id: nil, editing: { editing = Editing(id: nil, making: false) })
             ForEach(profiles.list) { profile in

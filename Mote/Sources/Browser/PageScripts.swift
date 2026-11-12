@@ -42,6 +42,8 @@ enum PageScripts {
         scripts.append(mote(LoadRelay.script, at: .atDocumentStart))
         // In the page's world, the only one that sees the site's media session.
         scripts.append(WKUserScript(source: MediaRelay.script, injectionTime: .atDocumentStart, forMainFrameOnly: true, in: .page))
+        // Notifications, which WebKit shows apps no way to give the page.
+        scripts.append(WKUserScript(source: NotificationRelay.script, injectionTime: .atDocumentStart, forMainFrameOnly: true, in: .page))
         if !hiding.selectors.isEmpty { scripts.append(mote(ElementPicker.hiding(hiding), at: .atDocumentStart)) }
         // The site's boost (see Boosts.swift), from the first paint.
         if !boost.isEmpty { scripts.append(mote(boost, at: .atDocumentStart)) }

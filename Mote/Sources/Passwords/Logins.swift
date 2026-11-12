@@ -5,7 +5,7 @@ import UniformTypeIdentifiers
 
 /// Saved passwords as the window sees them: the offer to save one after a
 /// sign-in, the accounts listed under a focused sign-in field, and the
-/// Passwords panel's list. The keychain itself is PasswordStore.
+/// Passwords panel's list. Where they are kept is PasswordStore.
 @MainActor
 @Observable
 final class Logins {
@@ -39,7 +39,25 @@ final class Logins {
 
     /// Whether the Passwords panel is shown.
     var managing = false {
-        didSet { if managing { reload() } }
+        didSet {
+            if managing { reload() }
+            proven = false
+        }
+    }
+
+    /// Proven while the panel is open: Touch ID once, then every password in
+    /// it shows, copies and edits until it closes.
+    @ObservationIgnored private var proven = false
+
+    /// Asks for Touch ID the first time the open panel needs a password.
+    func prove(_ reason: String, _ done: @escaping (Bool) -> Void) {
+        guard !proven else { return done(true) }
+        PasswordStore.prove(reason) { ok in
+            Task { @MainActor [weak self] in
+                if ok, self?.managing == true { self?.proven = true }
+                done(ok)
+            }
+        }
     }
     /// The accounts, without their passwords (see PasswordStore.accounts).
     private(set) var saved: [Login] = []
@@ -91,7 +109,7 @@ final class Logins {
         guard let login = offer?.login, let changed = offer?.changed else { return }
         offer = nil
         guard PasswordStore.save(host: login.host, user: login.user, password: login.password, used: Date(), clear: login.clear)
-        else { return say("The keychain refused it") }
+        else { return say("The keychain kept back the key to your passwords") }
         reload()
         say(changed ? "Password updated for \(login.host)" : "Password saved for \(login.host)")
     }
@@ -125,7 +143,7 @@ final class Logins {
         // A plain-HTTP page may have been changed in transit, so it only sees
         // logins saved from HTTP pages, never the HTTPS site's.
         let clear = tab.address?.scheme?.lowercased() == "http"
-        let known = PasswordStore.logins(matching: host).filter { !clear || $0.clear }.prefix(5)
+        let known = PasswordStore.accounts(matching: host).filter { !clear || $0.clear }.prefix(5)
         choices = known.isEmpty ? nil : Choices(tab: tab.id, spot: spot, logins: Array(known), host: host, clear: clear)
     }
 
@@ -137,10 +155,15 @@ final class Logins {
         guard Address.siteHost(of: tab.address) == list.host, (tab.address?.scheme?.lowercased() == "http") == list.clear
         else { return }
         filled = tab.id
-        tab.fill(user: login.user, password: login.password) { [weak self] worked in
-            if !worked { self?.say("Couldn't find the sign-in fields anymore") }
+        PasswordStore.proveToFill(list.host) { [weak self] ok in
+            guard ok, let password = PasswordStore.password(for: login),
+                Address.siteHost(of: tab.address) == list.host
+            else { return }
+            tab.fill(user: login.user, password: password) { worked in
+                if !worked { self?.say("Couldn't find the sign-in fields anymore") }
+            }
+            PasswordStore.touch(Login(host: login.host, user: login.user, password: password, clear: login.clear))
         }
-        PasswordStore.touch(login)
     }
 
     func dropChoices() { choices = nil }
@@ -155,14 +178,16 @@ final class Logins {
         var next = login
         next.user = user
         next.password = password
-        guard PasswordStore.save(next) else { return say("The keychain refused it") }
+        guard PasswordStore.save(next) else { return say("The keychain kept back the key to your passwords") }
         if user != login.user { PasswordStore.forget(host: login.host, user: login.user) }
         reload()
         say("Saved for \(login.host)")
     }
 
     func add(host: String, user: String, password: String) {
-        guard PasswordStore.save(host: host, user: user, password: password) else { return say("The keychain refused it") }
+        guard PasswordStore.save(host: host, user: user, password: password) else {
+            return say("The keychain kept back the key to your passwords")
+        }
         reload()
         say("Kept for \(host)")
     }
@@ -177,19 +202,24 @@ final class Logins {
     /// transient so clipboard managers skip it, and is cleared after 90
     /// seconds unless something else was copied.
     func copy(_ login: Login) {
-        PasswordStore.prove("copy the password for \(login.host)") { [weak self] ok in
+        prove("copy the password for \(login.host)") { [weak self] ok in
             guard ok, let password = PasswordStore.password(for: login) else { return }
-            let board = NSPasteboard.general
-            board.prepareForNewContents(with: .currentHostOnly)
-            board.setString(password, forType: .string)
-            board.setData(Data(), forType: NSPasteboard.PasteboardType("org.nspasteboard.ConcealedType"))
-            board.setData(Data(), forType: NSPasteboard.PasteboardType("org.nspasteboard.TransientType"))
-            let copied = board.changeCount
-            Task {
-                try? await Task.sleep(for: .seconds(90))
-                if board.changeCount == copied { board.clearContents() }
-            }
+            Self.copyConcealed(password)
             self?.say("Password copied")
+        }
+    }
+
+    /// A password on the pasteboard, for a while and out of clipboard managers' sight.
+    static func copyConcealed(_ password: String) {
+        let board = NSPasteboard.general
+        board.prepareForNewContents(with: .currentHostOnly)
+        board.setString(password, forType: .string)
+        board.setData(Data(), forType: NSPasteboard.PasteboardType("org.nspasteboard.ConcealedType"))
+        board.setData(Data(), forType: NSPasteboard.PasteboardType("org.nspasteboard.TransientType"))
+        let copied = board.changeCount
+        Task {
+            try? await Task.sleep(for: .seconds(90))
+            if board.changeCount == copied { board.clearContents() }
         }
     }
 
@@ -202,7 +232,7 @@ final class Logins {
     }
 
     /// Reads another browser's passwords off the main actor and saves them to
-    /// the keychain. Returns how many were kept.
+    /// Mote's own. Returns how many were kept.
     func bring(from source: ChromiumImporter.Source) async -> Result<Int, ImportTrouble> {
         let outcome = await Task.detached(priority: .userInitiated) { Result { try ChromiumImporter.read(source) } }.value
         switch outcome {
@@ -241,6 +271,6 @@ final class Logins {
         guard let text = try? String(contentsOf: url, encoding: .utf8) else { return say("Couldn't read that file as text") }
         let result = PasswordStore.take(csv: text)
         reload()
-        say(result.skipped == 0 ? "\(result.kept) passwords in the keychain" : "\(result.kept) in the keychain, \(result.skipped) skipped")
+        say(result.skipped == 0 ? "\(result.kept) passwords saved" : "\(result.kept) saved, \(result.skipped) skipped")
     }
 }

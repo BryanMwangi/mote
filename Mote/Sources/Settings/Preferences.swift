@@ -89,6 +89,8 @@ final class Preferences: ObservableObject {
     @Published var chatWidth: CGFloat
     @Published var glyph: Glyph
     @Published var bookmarksBar: Bool
+    /// The Develop menu in the menu bar, with the inspector's commands from View.
+    @Published var developerMenu: Bool
     /// The tab's reading bar.
     @Published var showsReading: Bool
     /// The toolbar shows the page's whole address; off, only its site.
@@ -198,6 +200,7 @@ final class Preferences: ObservableObject {
         welcomed = store.value("welcomed", or: false) || store.object(forKey: "glyph") != nil
         glyph = store.value("glyph", or: .letters)
         bookmarksBar = store.value("bookmarks.bar", or: false)
+        developerMenu = store.value("develop.menu", or: false)
         showsReading = store.value("tabs.reading", or: true)
         showsFullAddress = store.value("address.full", or: true)
         engine = store.value("search.engine", or: .standard)
@@ -281,6 +284,7 @@ final class Preferences: ObservableObject {
         keep($chatWidth, "chat.width")
         keep($glyph, "glyph")
         keep($bookmarksBar, "bookmarks.bar")
+        keep($developerMenu, "develop.menu")
         keep($showsReading, "tabs.reading")
         keep($showsFullAddress, "address.full")
         keep($engine, "search.engine")

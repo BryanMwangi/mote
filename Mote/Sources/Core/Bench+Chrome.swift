@@ -40,7 +40,16 @@ extension Bench {
             "peeking": browser.peeking, "toolbarMode": browser.prefs.toolbarMode.rawValue, "peekClick": browser.prefs.peekClick.rawValue,
             "spaceIndex": browser.spaces.firstIndex { $0.id == browser.spaceID } ?? -1,
             "settingsQuery": SettingsSearch.shared.query, "settingsFocusAsked": SettingsSearch.shared.focusAsked,
-            "finding": browser.finder.showing, "asking": browser.field.asksAssistant, "profile": Storage.profile ?? "",
+            "finding": browser.finder.showing, "asking": browser.field.asksAssistant,
+            // The popovers showing, by their content's size.
+            "popovers": NSApp.windows.filter { $0.isVisible && String(describing: type(of: $0)).contains("Popover") }.map {
+                "\(Int($0.frame.width))x\(Int($0.frame.height))"
+            },
+            "passwordOffer": browser.logins.offer.map { "\($0.login.user)@\($0.login.host)" } ?? "",
+            // The Passwords panel's list as last loaded: reading the store asks the
+            // keychain, and a new build waits on macOS's question.
+            "savedAccounts": browser.logins.saved.map { "\($0.user)@\($0.host)" },
+            "permissionAsks": browser.permissions.asks.map { "\($0.host) \($0.kind.what)" }, "profile": Storage.profile ?? "",
             "profiles": Profiles.shared.list.map(\.id), "sharedAt": Browser.sharedAt, "endedPages": Browser.endedPages,
             "pagePID": browser.active?.built?.unpublishedPID("_webProcessIdentifier") ?? 0, "pageWindowMoves": PageView.windowMoves,
             "tabListAt": tabList(of: browser).map { Int($0.contentView.bounds.minY) } ?? -1, "beepsSpared": PageKeySink.caught,
@@ -180,6 +189,14 @@ extension Bench {
             browser.tabDraft = text
         }
         if request.flag("finishedit") { browser.finishTabEdit() }
+        // The offer to save a password: keep or drop.
+        if let what = request.string("passwordoffer") {
+            if what == "keep" { browser.logins.keepOffer() } else { browser.logins.dropOffer() }
+        }
+        // The site's question over the tab in front: allow, block, or once (allow, not kept).
+        if let what = request.string("permission"), let tab = browser.active, let ask = browser.permissions.first(for: tab.id) {
+            browser.permissions.answer(ask, allow: what != "block", remember: what != "once")
+        }
         // A tab of the front window made an essential, or not (test runs).
         let tab = { (id: String) in browser.tabs.first { $0.id.uuidString.lowercased().hasPrefix(id.lowercased()) } }
         if Storage.testing, let id = request.string("essential"), let found = tab(id) { browser.pin(found) }

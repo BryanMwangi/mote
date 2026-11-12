@@ -11,7 +11,8 @@ extension Bench {
     var inputCommands: [String: Command] {
         [
             "press": Self.press, "key": Self.key, "keyeq": Self.keyEquivalent, "hit": Self.hit, "field": Self.field,
-            "bookmark": Self.bookmark, "menu": Self.menu, "pull": Self.pull, "resize": Self.resize, "move": Self.move,
+            "bookmark": Self.bookmark, "menu": Self.menu,
+            "menubar": Self.menuBar, "pull": Self.pull, "resize": Self.resize, "move": Self.move,
             "tabdrag": Self.tabDrag,
             "pagedrag": Self.pageDrag,
         ]
@@ -143,7 +144,8 @@ extension Bench {
         if call.request.flag("drag") {
             guard call.testRun() else { return }
             let browser = call.browser, before = browser.tabs.map(\.id)
-            let steps: [(NSEvent.EventType, CGFloat)] = [(.leftMouseDown, 0)] + (1...12).map { (.leftMouseDragged, CGFloat($0) * 60 / 12) } + [(.leftMouseUp, 60)]
+            let steps: [(NSEvent.EventType, CGFloat)] =
+                [(.leftMouseDown, 0)] + (1...12).map { (.leftMouseDragged, CGFloat($0) * 60 / 12) } + [(.leftMouseUp, 60)]
             for (n, (kind, dy)) in steps.enumerated() {
                 DispatchQueue.main.asyncAfter(deadline: .now() + Double(n) / 60) {
                     let at = NSPoint(x: point.x, y: point.y - dy)
@@ -158,12 +160,12 @@ extension Bench {
             }
             return
         }
-        if call.request.flag("double") {
+        if call.request.flag("double") || call.request.flag("click") {
             guard call.testRun() else { return }
             let before = window.frame
             // Through the window, as a person's clicks come, so event monitors
             // see them too; `direct` hands them to the view underneath.
-            for clicks in [1, 2] {
+            for clicks in call.request.flag("click") ? [1] : [1, 2] {
                 for kind in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
                     guard let event = BenchInput.mouse(kind, at: point, in: window, clicks: clicks) else { continue }
                     if call.request.flag("direct") {
@@ -207,12 +209,16 @@ extension Bench {
                 menus.append((menu, stamp(), nil))
                 // The right click's menu only, not the ones it opens.
                 guard menus.count == 1 else { return }
-                guard let index = menu.items.firstIndex(where: { $0.title.hasPrefix(pick) }) else { return picked = "no \(pick)" }
-                picked = menu.items[index].title
                 // As a person takes a moment to pick; a run loop timer, as the
-                // main queue waits while a menu tracks.
+                // main queue waits while a menu tracks. Looked for then: the
+                // page's items go in after tracking begins.
                 let timer = Timer(timeInterval: 0.25, repeats: false) { _ in
                     MainActor.assumeIsolated {
+                        guard let index = menu.items.firstIndex(where: { $0.title.hasPrefix(pick) }) else {
+                            picked = "no \(pick)"
+                            return menu.cancelTracking()
+                        }
+                        picked = menu.items[index].title
                         menu.cancelTracking()
                         menu.performActionForItem(at: index)
                     }
@@ -348,6 +354,36 @@ extension Bench {
             "ours": BookmarkMenu.shared.count, "fillMs": filled, "titles": menu.items.prefix(8).map { $0.isSeparatorItem ? "—" : name($0) },
             "firstFolder": folder?.items.prefix(4).map(name) ?? [], "active": call.browser.active?.address?.absoluteString ?? "",
         ])
+    }
+
+    /// A menu of the menu bar by title: its items, and each submenu's. `pick`,
+    /// a path such as "User Agent>Firefox — macOS", chooses that item.
+    private static func menuBar(_ call: BenchCall) {
+        guard call.testRun() else { return }
+        let title = call.request.string("title") ?? ""
+        guard let main = NSApp.mainMenu, let menu = main.items.first(where: { $0.title == title })?.submenu else {
+            return call.fail("no \(title) menu")
+        }
+        NotificationCenter.default.post(name: NSMenu.didBeginTrackingNotification, object: main)
+        menu.update()
+        let list = { (menu: NSMenu) in
+            menu.items.map { item in
+                guard !item.isSeparatorItem else { return "—" }
+                let marks = (item.state == .on ? "✓ " : "") + (item.image == nil ? "" : "▣ ")
+                return marks + name(item) + (item.isEnabled ? "" : " (off)")
+            }
+        }
+        var subs: [String: [String]] = [:]
+        for item in menu.items { if let sub = item.submenu { sub.delegate?.menuNeedsUpdate?(sub); subs[name(item)] = list(sub) } }
+        if let pick = call.request.string("pick"), !pick.isEmpty {
+            var at = menu
+            let steps = pick.split(separator: ">").map(String.init)
+            for (index, step) in steps.enumerated() {
+                guard let found = at.items.firstIndex(where: { name($0) == step }) else { return call.fail("no item \(step)") }
+                if index == steps.count - 1 { at.performActionForItem(at: found) } else if let sub = at.items[found].submenu { at = sub }
+            }
+        }
+        call.answer(["items": list(menu), "submenus": subs])
     }
 
     /// An item's title without the icon leading it (BookmarkMenu.title).

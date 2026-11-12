@@ -165,8 +165,8 @@ extension Browser {
         announce("History cleared")
     }
 
-    func forgetCaptureChoices() {
-        capture.forgetAll()
-        announce("Camera and microphone choices forgotten")
+    func forgetSitePermissions() {
+        permissions.forgetAll()
+        announce("Camera, microphone and notification choices forgotten")
     }
 }

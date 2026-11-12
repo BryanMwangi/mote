@@ -8,22 +8,30 @@ import WebKit
 // becomes a sheet on the page's window.
 
 extension Browser {
+    // Named for Objective-C outright, as WKUIDelegate's methods are found
+    // through it. Alert and confirm are the async forms: WebKit offers each
+    // with a completion handler too, under the same name, and a Release
+    // build matched neither, left them out, and WebKit dismissed every alert.
+
     // MARK: - alert, confirm, prompt
 
-    func webView(
-        _ webView: WKWebView, runJavaScriptAlertPanelWithMessage message: String, initiatedByFrame frame: WKFrameInfo,
-        completionHandler: @escaping @MainActor @Sendable () -> Void
-    ) {
-        Dialogs.ask(Dialogs.fromPage(frame, message, buttons: ["OK"]), over: webView) { _ in completionHandler() }
+    func webView(_ webView: WKWebView, runJavaScriptAlertPanelWithMessage message: String, initiatedByFrame frame: WKFrameInfo) async {
+        await withCheckedContinuation { (done: CheckedContinuation<Void, Never>) in
+            Dialogs.ask(Dialogs.fromPage(frame, message, buttons: ["OK"]), over: webView) { _ in done.resume() }
+        }
     }
 
     func webView(
-        _ webView: WKWebView, runJavaScriptConfirmPanelWithMessage message: String, initiatedByFrame frame: WKFrameInfo,
-        completionHandler: @escaping @MainActor @Sendable (Bool) -> Void
-    ) {
-        Dialogs.ask(Dialogs.fromPage(frame, message, buttons: ["OK", "Cancel"]), over: webView, then: completionHandler)
+        _ webView: WKWebView, runJavaScriptConfirmPanelWithMessage message: String, initiatedByFrame frame: WKFrameInfo
+    ) async
+        -> Bool
+    {
+        await withCheckedContinuation { done in
+            Dialogs.ask(Dialogs.fromPage(frame, message, buttons: ["OK", "Cancel"]), over: webView) { done.resume(returning: $0) }
+        }
     }
 
+    @objc(webView:runJavaScriptTextInputPanelWithPrompt:defaultText:initiatedByFrame:completionHandler:)
     func webView(
         _ webView: WKWebView, runJavaScriptTextInputPanelWithPrompt prompt: String, defaultText: String?,
         initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping @MainActor @Sendable (String?) -> Void
@@ -37,6 +45,7 @@ extension Browser {
 
     // MARK: - Choosing files
 
+    @objc(webView:runOpenPanelWithParameters:initiatedByFrame:completionHandler:)
     func webView(
         _ webView: WKWebView, runOpenPanelWith parameters: WKOpenPanelParameters, initiatedByFrame frame: WKFrameInfo,
         completionHandler: @escaping @MainActor @Sendable ([URL]?) -> Void
@@ -56,6 +65,7 @@ extension Browser {
 
     // MARK: - Certificates and sign-in
 
+    @objc(webView:didReceiveAuthenticationChallenge:completionHandler:)
     func webView(
         _ webView: WKWebView, didReceive challenge: URLAuthenticationChallenge,
         completionHandler: @escaping @MainActor @Sendable (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
@@ -139,6 +149,7 @@ extension Browser {
 
     /// The system can end a page's process when memory runs short, leaving
     /// the tab blank. The tab in front loads again now, others when picked.
+    @objc(webViewWebContentProcessDidTerminate:)
     func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
         guard let tab = tab(for: webView) else { return }
         if tab.id == activeID, !tab.isBlank {

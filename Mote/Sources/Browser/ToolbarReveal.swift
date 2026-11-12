@@ -94,6 +94,8 @@ struct ToolbarReveal: View {
 
     private func hide() {
         timers.hideAfter(Self.grace) {
+            // Not while a menu or a site's question hangs from it.
+            if MenuPanel.open > 0 { return hide() }
             if !browser.editingInBar { browser.toolbarRevealed = false }
         }
     }

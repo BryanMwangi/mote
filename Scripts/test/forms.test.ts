@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { fillSignIn, signInFields, submittedCredentials } from '../src/forms/sign-in';
+import { fillNewPassword, fillSignIn, signInFields, submittedCredentials } from '../src/forms/sign-in';
 import {
   acceptsTyping,
   fieldFrame,
@@ -204,5 +204,31 @@ describe('fieldFrame', () => {
     document.body.innerHTML = '<input id="shown"><input id="hidden" data-hidden>';
     expect(fieldFrame(byId('shown'))).toEqual({ x: 10, y: 20, w: 200, h: 30 });
     expect(fieldFrame(byId('hidden'))).toBeNull();
+  });
+});
+
+describe('fillNewPassword', () => {
+  it('fills the field and the empty ones after it, not the current password before it', () => {
+    document.body.innerHTML = `<form>
+      <input type="password" id="now">
+      <input type="password" id="new">
+      <input type="password" id="again">
+    </form>`;
+    expect(fillNewPassword(byId('new'), 'abcdef-ghijkm-npqrsT')).toBe('abcdef-ghijkm-npqrsT');
+    expect(byId('now').value).toBe('');
+    expect(byId('new').value).toBe('abcdef-ghijkm-npqrsT');
+    expect(byId('again').value).toBe('abcdef-ghijkm-npqrsT');
+  });
+
+  it('fits a field that takes fewer characters', () => {
+    document.body.innerHTML = '<input type="password" id="short" maxlength="12">';
+    expect(fillNewPassword(byId('short'), 'abcdef-ghijkm-npqrsT')).toBe('abcdefghijkm');
+    expect(byId('short').value).toBe('abcdefghijkm');
+  });
+
+  it('gives up on a field that is gone', () => {
+    const field = document.createElement('input');
+    expect(fillNewPassword(field, 'x')).toBeNull();
+    expect(fillNewPassword(null, 'x')).toBeNull();
   });
 });

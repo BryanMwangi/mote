@@ -122,12 +122,23 @@ extension Browser: WKNavigationDelegate, WKUIDelegate {
             tab.setAddressOptimistically(url)
             return tab.web
         }
+        // A pop-up nobody asked for is held back, with the way to it.
+        if action.navigationType != .linkActivated, (webView as? PageView)?.mayOpenWindow == false {
+            blockedPopUp(action.request.url, from: opener)
+            return nil
+        }
         // WebKit's copy still points at the opener's content controller; sharing it
         // would let the new tab remove the opener's message handlers when it closes.
         configuration.userContentController = WKUserContentController()
         let tab = Tab(shy: opener?.shy ?? false, configuration: configuration)
         tab.popup =
             windowFeatures.width != nil || windowFeatures.height != nil || windowFeatures.toolbarsVisibility?.boolValue == false
+        // Asked for as a window of its own: one, with only the page.
+        if tab.popup {
+            if let url = action.request.url { tab.setAddressOptimistically(url) }
+            LinkWindow.popUp(tab, for: self, features: windowFeatures, over: webView.window)
+            return tab.web
+        }
         adopt(tab)
         tab.opener = opener?.id ?? activeID
         activeID = tab.id
@@ -135,6 +146,14 @@ extension Browser: WKNavigationDelegate, WKUIDelegate {
         // Returning the view makes it the target; WebKit loads the request into it.
         if let url = action.request.url { tab.setAddressOptimistically(url) }
         return tab.web
+    }
+
+    private func blockedPopUp(_ url: URL?, from opener: Tab?) {
+        let open = url.flatMap { url in
+            url.scheme == "http" || url.scheme == "https"
+                ? Announcement.Action(title: "Open") { [weak self] in _ = self?.open(url, foreground: true, from: opener) } : nil
+        }
+        announce(Announcement("Pop-up blocked", symbol: "macwindow.badge.plus", action: open))
     }
 
     /// Responses the page can't show are downloaded (see NavigationPolicy.downloads).
@@ -166,13 +185,61 @@ extension Browser: WKNavigationDelegate, WKUIDelegate {
         type: WKMediaCaptureType,
         decisionHandler: @escaping @MainActor @Sendable (WKPermissionDecision) -> Void
     ) {
-        let host = origin.host.isEmpty ? (tab(for: webView)?.address?.host() ?? "This page") : origin.host
-        capture.request(host: host, type: type, answer: decisionHandler)
+        guard let tab = tab(for: webView) else { return decisionHandler(.deny) }
+        let host = origin.host.isEmpty ? (tab.address?.host() ?? "This page") : origin.host
+        permissions.ask(.capture(type), host: host, tab: tab.id) { decisionHandler($0 ? .grant : .deny) }
+        bringOutQuestion(for: tab)
+    }
+
+    /// Where you are, through a private WebKit delegate call: WebKit asks it
+    /// before Core Location, and without it turns every site down.
+    @objc(_webView:requestGeolocationPermissionForOrigin:initiatedByFrame:decisionHandler:)
+    func webView(
+        _ webView: WKWebView, requestGeolocationPermissionFor origin: WKSecurityOrigin, initiatedBy frame: WKFrameInfo,
+        decisionHandler: @escaping (Bool) -> Void
+    ) {
+        guard let tab = tab(for: webView), !origin.host.isEmpty else { return decisionHandler(false) }
+        permissions.ask(.location, host: origin.host, tab: tab.id, answer: decisionHandler)
+        bringOutQuestion(for: tab)
+    }
+
+    /// Sharing the screen or a window (`getDisplayMedia`), privately as for
+    /// location. Allowed, macOS's own picker asks what to share.
+    @objc(_webView:requestDisplayCapturePermissionForOrigin:initiatedByFrame:withSystemAudio:decisionHandler:)
+    func webView(
+        _ webView: WKWebView, requestDisplayCapturePermissionFor origin: WKSecurityOrigin, initiatedBy frame: WKFrameInfo,
+        withSystemAudio: Bool, decisionHandler: @escaping (Int) -> Void
+    ) {
+        // WebKit's `_WKDisplayCapturePermissionDecision`: deny, or the screen picker.
+        let (deny, screen) = (0, 1)
+        guard let tab = tab(for: webView), !origin.host.isEmpty else { return decisionHandler(deny) }
+        permissions.ask(.screen, host: origin.host, tab: tab.id) { decisionHandler($0 ? screen : deny) }
+        bringOutQuestion(for: tab)
+    }
+
+    /// The page's speech recognition (`SpeechRecognition`), privately as for location.
+    @objc(_webView:requestSpeechRecognitionPermissionForOrigin:decisionHandler:)
+    func webView(_ webView: WKWebView, requestSpeechRecognitionPermissionFor origin: WKSecurityOrigin, decisionHandler: @escaping (Bool) -> Void) {
+        guard let tab = tab(for: webView), !origin.host.isEmpty else { return decisionHandler(false) }
+        permissions.ask(.speech, host: origin.host, tab: tab.id, answer: decisionHandler)
+        bringOutQuestion(for: tab)
+    }
+
+    /// A site's question hangs from the page button: a folded sidebar slides
+    /// out for it, and a hidden toolbar comes down.
+    func bringOutQuestion(for tab: Tab) {
+        guard tab.id == activeID, permissions.first(for: tab.id) != nil else { return }
+        if navInSidebar {
+            if folded, !peeking { peek(true) }
+        } else if !toolbarDocked, !toolbarRevealed {
+            toolbarRevealed = true
+        }
     }
 
     /// `window.close()`. Sign-in pop-ups close themselves when done; the tab
     /// goes and its opener, where the sign-in started, comes back.
     func webViewDidClose(_ webView: WKWebView) {
+        if let popUp = LinkWindow.showing(webView) { return popUp.close() }
         guard let tab = tab(for: webView) else { return }
         if let home = tab.opener.flatMap(self.tab) { select(home) }
         tab.pin = nil
@@ -182,6 +249,8 @@ extension Browser: WKNavigationDelegate, WKUIDelegate {
 
     func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
         guard let tab = tab(for: webView) else { return }
+        // What the last page asked goes with it.
+        permissions.drop(tab: tab.id)
         if tab.id == activeID { linkStatus.dismiss() }
         tab.failure = nil
         tab.typing = false

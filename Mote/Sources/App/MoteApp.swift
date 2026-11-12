@@ -18,7 +18,7 @@ struct MoteApp: App {
         // there by its tab in front (Browser.followTitle), and the Dock brings
         // the main one back.
         .commandsRemoved()
-        .commands { MenuBar(main: browser, visits: browser.history) }
+        .commands { MenuBar(main: browser, visits: browser.history, prefs: browser.prefs) }
 
         // Windows opened since the main one (⌘N, a link), each with its own
         // browser (Windows.swift). They come back at launch through the
@@ -42,6 +42,8 @@ private struct MenuBar: Commands {
     @FocusedObject private var focused: Browser?
     /// For Recently Visited; the browser doesn't pass on its changes.
     @ObservedObject var visits: History
+    /// For Show Develop menu.
+    @ObservedObject var prefs: Preferences
 
     private var browser: Browser { focused ?? main }
 
@@ -100,17 +102,28 @@ private struct MenuBar: Commands {
                 .disabled(!browser.finder.showing)
         }
         CommandGroup(replacing: .toolbar) { view }
-        CommandMenu("Tabs") { tabs }
-        CommandMenu("Bookmarks") {
-            Button("Add This Page", action: browser.bookmarkCurrent).keyboardShortcut(keys(.bookmark)).disabled(blank)
-            Button("Show Bookmarks…") { browser.bookmarking = true }
-            Toggle(
-                "Show Bookmarks Bar",
-                isOn: Binding(
-                    get: { browser.prefs.bookmarksBar }, set: { on in withAnimation(Motion.glide) { browser.prefs.bookmarksBar = on } }))
-            // The bookmarks themselves are added by AppKit (see BookmarkMenu).
+        Group {
+            CommandMenu("Tabs") { tabs }
+            CommandMenu("Bookmarks") {
+                Button("Add This Page", action: browser.bookmarkCurrent).keyboardShortcut(keys(.bookmark)).disabled(blank)
+                Button("Show Bookmarks…") { browser.bookmarking = true }
+                Toggle(
+                    "Show Bookmarks Bar",
+                    isOn: Binding(
+                        get: { browser.prefs.bookmarksBar }, set: { on in withAnimation(Motion.glide) { browser.prefs.bookmarksBar = on } })
+                )
+                // The bookmarks themselves are added by AppKit (see BookmarkMenu).
+            }
+            CommandMenu("History") { history }
+            if prefs.developerMenu {
+                CommandMenu("Develop") {
+                    DevelopItems(browser: browser)
+                    InspectorItems(browser: browser, keys: keys)
+                    Divider()
+                    Button("Empty Caches", action: browser.emptyCaches)
+                }
+            }
         }
-        CommandMenu("History") { history }
         CommandGroup(after: .appSettings) {
             Button("Settings…") { browser.tuning = true }.keyboardShortcut(keys(.settings))
             Button("Welcome…") { browser.welcoming = true }
@@ -173,20 +186,10 @@ private struct MenuBar: Commands {
         Button("Zoom In") { browser.zoom(by: 1.1) }.keyboardShortcut(keys(.zoomIn))
         Button("Zoom Out") { browser.zoom(by: 1 / 1.1) }.keyboardShortcut(keys(.zoomOut))
         Button("Actual Size", action: browser.resetZoom).keyboardShortcut(keys(.actualSize))
-        Divider()
-        // Chrome's shortcuts (see Inspector.swift).
-        Button("Web Inspector", action: browser.toggleInspector).keyboardShortcut(keys(.inspector))
-        Button("JavaScript Console", action: browser.showConsole).keyboardShortcut(keys(.console))
-        Button("Inspect Element", action: browser.inspectElement).keyboardShortcut(keys(.inspectElement))
-        Button("Network") { browser.showInspector(.network) }.keyboardShortcut(keys(.inspectNetwork)).disabled(blank)
-        Button("Sources") { browser.showInspector(.sources) }.keyboardShortcut(keys(.inspectSources)).disabled(blank)
-        Button("Storage") { browser.showInspector(.storage) }.keyboardShortcut(keys(.inspectStorage)).disabled(blank)
-        Button("Switch Text Direction", action: browser.switchTextDirection).keyboardShortcut(keys(.textDirection)).disabled(blank)
-        Button("About Processes…") { browser.showingProcesses = true }.keyboardShortcut(keys(.processes))
-        Button("View Page Source") { if let tab = browser.active { browser.viewSource(of: tab) } }
-            .keyboardShortcut(keys(.viewSource)).disabled(blank)
-        Button("Responsive Design Mode", action: browser.toggleResponsive).keyboardShortcut(keys(.responsive))
-            .disabled(blank)
+        if !prefs.developerMenu {
+            Divider()
+            InspectorItems(browser: browser, keys: keys)
+        }
     }
 
     @ViewBuilder

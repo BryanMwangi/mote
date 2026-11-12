@@ -70,3 +70,21 @@ export function submittedCredentials(fields: SignInFields | null): { user: strin
   if (!fields || !fields.password.value) return null;
   return { user: fields.user ? fields.user.value : '', password: fields.password.value };
 }
+
+/**
+ * A new password, into `field` and the empty password fields after it in its
+ * form, which ask for it again (one before it is the current password). A
+ * field that takes fewer characters gets it without its hyphens, cut short.
+ * What went in, or null when the field is gone.
+ */
+export function fillNewPassword(field: HTMLInputElement | null, password: string): string | null {
+  if (!field || !field.isConnected) return null;
+  const room = field.maxLength;
+  const fitted = room > 0 && password.length > room ? password.replaceAll('-', '').slice(0, room) : password;
+  setFieldValue(field, fitted);
+  const fields = [...(field.form ?? document).querySelectorAll<HTMLInputElement>('input[type="password"]')];
+  for (const other of fields.slice(fields.indexOf(field) + 1)) {
+    if (!other.value && !other.readOnly && !other.disabled) setFieldValue(other, fitted);
+  }
+  return fitted;
+}

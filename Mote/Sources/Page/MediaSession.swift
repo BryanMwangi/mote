@@ -74,7 +74,7 @@ extension Tab {
         }
     }
 
-    private static func jsonString(_ text: String) -> String {
+    static func jsonString(_ text: String) -> String {
         (try? String(decoding: JSONEncoder().encode(text), as: UTF8.self)) ?? "\"\""
     }
 }

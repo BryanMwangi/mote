@@ -9,6 +9,8 @@ struct PageButton: View {
     let browser: Browser
     /// Where the panel opens from.
     var edge: Edge = .bottom
+    /// The window's one page button that sites' questions hang from.
+    var asks = false
 
     @State private var open = false
 
@@ -21,7 +23,40 @@ struct PageButton: View {
                 if #available(macOS 15.4, *) { PopupAnchor(id: Extensions.menuAnchor) }
             }
             .menuPanel(isPresented: $open, edge: edge) { PagePanel(browser: browser) { open = false } }
+            .background { if asks { SiteQuestion(browser: browser, edge: edge) } }
             .onReceive(NotificationCenter.default.publisher(for: Self.ask)) { note in open = note.object as? Bool ?? true }
+    }
+}
+
+/// A site's question about the camera, the microphone or notifications,
+/// hung from the page button, where the site's settings are found again
+/// (see Browser.bringOutQuestion).
+private struct SiteQuestion: View {
+    @ObservedObject var browser: Browser
+    let edge: Edge
+    /// The question whose button is in place.
+    @State private var ready: SitePermissions.Ask.ID?
+
+    private var ask: SitePermissions.Ask? { browser.active.flatMap { browser.permissions.first(for: $0.id) } }
+
+    var body: some View {
+        Color.clear
+            .menuPanel(
+                isPresented: Binding(
+                    get: { ask != nil && ask?.id == ready },
+                    set: { if !$0, let ask { browser.permissions.answer(ask, allow: false, remember: false) } }),
+                edge: edge, stays: true
+            ) {
+                if let ask, let tab = browser.active { PermissionCard(ask: ask, permissions: browser.permissions, tab: tab).id(ask.id) }
+            }
+            .onChange(of: ask?.id, initial: true) { _, id in
+                guard let id else { return ready = nil }
+                // Once the sidebar or toolbar it may have brought out is in place.
+                Task {
+                    try? await Task.sleep(for: .seconds(Motion.foldResponse))
+                    ready = id
+                }
+            }
     }
 }
 
@@ -238,16 +273,20 @@ private struct ExtensionGrid: View {
     }
 }
 
-/// What this site may do: ads and trackers, and the camera and microphone
-/// when it has asked; its boost, when it has one.
+/// What this site may do: ads and trackers, and the camera, microphone,
+/// notifications and location once it has asked, each changed or forgotten from its
+/// right-click menu; its boost, when it has one.
 private struct SiteSettings: View {
     let browser: Browser
     @ObservedObject var tab: Tab
     let host: String
     @ObservedObject private var boosts = Boosts.shared
     @State private var blocking = true
+    /// Bumped when an answer kept for the site changes: they're settings, not published.
+    @State private var changed = 0
 
     var body: some View {
+        let _ = changed
         VStack(alignment: .leading, spacing: 6) {
             Text("Settings").font(TextStyle.caption.font.weight(.semibold)).foregroundStyle(Palette.muted)
             SettingLine(
@@ -258,12 +297,32 @@ private struct SiteSettings: View {
                 AdBlocker.shared.pause(host, !blocking)
                 tab.built?.reload()
             }
-            ForEach([(WKMediaCaptureType.camera, "camera", "Camera"), (.microphone, "mic", "Microphone")], id: \.1) { type, symbol, title in
-                if let allowed = CaptureRequests.remembered(host, type) {
+            .contextMenu {
+                Button(blocking ? "Turn Off for This Site" : "Turn On for This Site") {
+                    blocking.toggle()
+                    AdBlocker.shared.pause(host, !blocking)
+                    tab.built?.reload()
+                }
+            }
+            ForEach(
+                [
+                    (SitePermissions.Kind.capture(.camera), "video", "Camera"), (.capture(.microphone), "mic", "Microphone"),
+                    (.notifications, "bell", "Notifications"),
+                    (.location, "location", "Location"),
+                    (.screen, "rectangle.on.rectangle", "Screen Sharing"), (.speech, "waveform", "Speech Recognition"),
+                ], id: \.1
+            ) { kind, symbol, title in
+                if let allowed = SitePermissions.remembered(host, kind) {
                     SettingLine(
                         symbol: allowed ? symbol : "\(symbol).slash", title: title, state: allowed ? "Allowed" : "Blocked", on: allowed
                     ) {
-                        CaptureRequests.remember(host, type, !allowed)
+                        keep(kind, !allowed)
+                    }
+                    .contextMenu {
+                        Button("Allow") { keep(kind, true) }.disabled(allowed)
+                        Button("Block") { keep(kind, false) }.disabled(!allowed)
+                        Divider()
+                        Button("Ask Next Time") { keep(kind, nil) }
                     }
                 }
             }
@@ -272,6 +331,12 @@ private struct SiteSettings: View {
             }
         }
         .onAppear { blocking = !AdBlocker.shared.isPaused(on: host) }
+    }
+
+    /// Keeps an answer for the site, or forgets it (nil): it asks again.
+    private func keep(_ kind: SitePermissions.Kind, _ allowed: Bool?) {
+        SitePermissions.remember(host, kind, allowed)
+        changed += 1
     }
 }
 

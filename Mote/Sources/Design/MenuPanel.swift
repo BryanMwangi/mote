@@ -2,18 +2,20 @@ import AppKit
 import SwiftUI
 
 extension View {
-    /// Shows `content` as a menu beside this view while `isPresented` is true:
-    /// a rounded card in a panel of its own, on the given `edge` of the view.
-    ///
-    /// Used instead of a popover because a popover's arrow can't be removed,
-    /// and when the button sits at the bottom of the screen the arrow is pushed
-    /// into the popover's rounded corner, which then loses its shape.
-    /// - Parameter keyboard: the panel takes the keyboard when it opens.
-    ///   False leaves it where it is, for suggestions under a field.
+    /// Shows `content` as a menu beside this view while `isPresented` is true,
+    /// on the given `edge` of the view: a system popover, its arrow on the
+    /// control, so its material, edges and text are the system's and stay
+    /// clear over any page.
+    /// - Parameter keyboard: the menu takes the keyboard when it opens.
+    ///   False leaves it where it is, for suggestions under a field: those
+    ///   are a rounded card in a panel of its own, as a popover takes the keyboard.
+    /// - Parameter stays: open until answered or Escape, not closed by a
+    ///   click elsewhere, for a site's question.
     func menuPanel<Content: View>(
-        isPresented: Binding<Bool>, edge: Edge, keyboard: Bool = true, @ViewBuilder content: @escaping () -> Content
+        isPresented: Binding<Bool>, edge: Edge, keyboard: Bool = true, stays: Bool = false,
+        @ViewBuilder content: @escaping () -> Content
     ) -> some View {
-        background(MenuPanelAnchor(isPresented: isPresented, edge: edge, keyboard: keyboard, content: content))
+        background(MenuPanelAnchor(isPresented: isPresented, edge: edge, keyboard: keyboard, stays: stays, content: content))
     }
 }
 
@@ -22,6 +24,7 @@ private struct MenuPanelAnchor<Content: View>: FillsRoom {
     @Binding var isPresented: Bool
     let edge: Edge
     let keyboard: Bool
+    let stays: Bool
     let content: () -> Content
 
     func makeCoordinator() -> MenuPanel { MenuPanel() }
@@ -32,7 +35,11 @@ private struct MenuPanelAnchor<Content: View>: FillsRoom {
         let menu = context.coordinator
         menu.dismissed = { isPresented = false }
         if isPresented {
-            menu.show(AnyView(content()), from: anchor, edge: edge, keyboard: keyboard)
+            if keyboard {
+                menu.pop(AnyView(content()), from: anchor, edge: edge, stays: stays)
+            } else {
+                menu.show(AnyView(content()), from: anchor, edge: edge, keyboard: false)
+            }
         } else {
             menu.close()
         }
@@ -43,11 +50,12 @@ private struct MenuPanelAnchor<Content: View>: FillsRoom {
     }
 }
 
-/// A menu in a borderless panel beside the control that opened it. It closes
+/// A menu beside the control that opened it: a system popover, or a
+/// borderless panel for one that leaves the keyboard where it is. It closes
 /// on a click anywhere else, on Escape, when Mote stops being the active app,
 /// and when the window it belongs to closes.
 @MainActor
-final class MenuPanel {
+final class MenuPanel: NSObject, NSPopoverDelegate {
     /// Space between the control and the menu, in points.
     static let gap: CGFloat = 6
     /// Closest the menu comes to the screen's edges, in points.
@@ -67,7 +75,13 @@ final class MenuPanel {
     private var closing = false
     private var observers: [NSObjectProtocol] = []
 
-    var isShown: Bool { panel?.isVisible == true }
+    var isShown: Bool { panel?.isVisible == true || popover?.isShown == true }
+
+    private var popover: NSPopover?
+    private var popoverHost: NSHostingController<AnyView>?
+    /// When a popover last closed by itself, and over which control: a click
+    /// on that control closes it, then the control's own toggle opens it again.
+    private var lastClosed: (at: Date, anchor: ObjectIdentifier)?
 
     /// How many menus are open, in every window: a folded sidebar stays out
     /// while one it opened is.
@@ -99,6 +113,52 @@ final class MenuPanel {
         origin.x = min(max(origin.x, bounds.minX), bounds.maxX - size.width)
         origin.y = min(max(origin.y, bounds.minY), bounds.maxY - size.height)
         return NSRect(origin: origin, size: size)
+    }
+
+    /// Opens the popover, or gives the open one its new content.
+    func pop(_ content: AnyView, from anchor: NSView, edge: Edge, stays: Bool) {
+        guard !closing else { return }
+        if let popoverHost, popover?.isShown == true {
+            popoverHost.rootView = content
+            return
+        }
+        if let last = lastClosed, last.anchor == ObjectIdentifier(anchor), Date().timeIntervalSince(last.at) < 0.3 {
+            lastClosed = nil
+            // After the update under way, which must not change its own state.
+            DispatchQueue.main.async { [weak self] in self?.dismissed() }
+            return
+        }
+        guard anchor.window != nil else { return }
+        let host = NSHostingController(rootView: content)
+        host.sizingOptions = .preferredContentSize
+        let popover = NSPopover()
+        popover.contentViewController = host
+        popover.behavior = stays ? .applicationDefined : .transient
+        popover.delegate = self
+        self.anchor = anchor
+        self.popover = popover
+        popoverHost = host
+        Self.open += 1
+        popover.show(relativeTo: anchor.bounds, of: anchor, preferredEdge: Self.side(edge, flipped: anchor.isFlipped))
+    }
+
+    /// `edge` as AppKit names it in the anchor's own coordinates.
+    private static func side(_ edge: Edge, flipped: Bool) -> NSRectEdge {
+        switch edge {
+        case .top: flipped ? .minY : .maxY
+        case .bottom: flipped ? .maxY : .minY
+        case .leading: .minX
+        case .trailing: .maxX
+        }
+    }
+
+    func popoverDidClose(_ notification: Notification) {
+        guard let shown = popover, notification.object as? NSPopover === shown else { return }
+        popover = nil
+        popoverHost = nil
+        Self.open -= 1
+        if let anchor { lastClosed = (Date(), ObjectIdentifier(anchor)) }
+        dismissed()
     }
 
     func show(_ content: AnyView, from anchor: NSView, edge: Edge, keyboard: Bool = true) {
@@ -174,6 +234,13 @@ final class MenuPanel {
         host = nil
         if closed != nil { Self.open -= 1 }
         closed?.orderOut(nil)
+        // Let go of it first, so its closing isn't taken for the user's.
+        if let shown = popover {
+            popover = nil
+            popoverHost = nil
+            Self.open -= 1
+            shown.close()
+        }
     }
 
     /// Closes the menu because of something the user did outside it.

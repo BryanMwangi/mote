@@ -55,7 +55,7 @@ struct Toolbar: View {
                     Spacer(minLength: 0)
                 }
                 if prefs.showsPageActions, #available(macOS 15.4, *) { PageActionButton(extensions: .shared) }
-                PageButton(browser: browser)
+                PageButton(browser: browser, asks: !browser.navInSidebar)
                 // Beside a sidebar, bookmarks live at its foot instead (see Sidebar).
                 if !prefs.sidebar {
                     Door(icon: "bookmark", help: "Bookmarks") { browser.bookmarksOpen.toggle() }

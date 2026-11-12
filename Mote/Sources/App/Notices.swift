@@ -2,17 +2,14 @@ import Combine
 import MoteCore
 import SwiftUI
 
-/// What rises from the bottom of the window: a short message, the camera
-/// and microphone question, the offer to save a password, the Web Store's
-/// "Add to Mote", and the reminder while picking things to hide.
+/// What rises from the bottom of the window: a short message, the offer to
+/// save a password, the Web Store's "Add to Mote", and the reminder while
+/// picking things to hide.
 struct Notices: View {
     @ObservedObject var browser: Browser
 
     var body: some View {
         VStack(spacing: 8) {
-            if let ask = browser.capture.asking {
-                CaptureQuestion(ask: ask, capture: browser.capture).transition(.move(edge: .bottom).combined(with: .opacity))
-            }
             if let offer = browser.logins.offer {
                 SaveQuestion(offer: offer, logins: browser.logins).transition(.move(edge: .bottom).combined(with: .opacity))
             }
@@ -30,7 +27,6 @@ struct Notices: View {
         }
         .padding(.bottom, 30)
         .animation(Motion.settle, value: browser.pickingElement)
-        .animation(Motion.settle, value: browser.capture.asking)
         .animation(Motion.settle, value: browser.logins.offer)
     }
 }
@@ -195,24 +191,6 @@ private struct AnnouncementCard: View {
             withAnimation(Motion.hover) { hovering = inside }
             browser.holdAnnouncement(inside)
         }
-    }
-}
-
-/// A site asking for the camera or microphone. The answer is remembered.
-private struct CaptureQuestion: View {
-    let ask: CaptureRequests.Ask
-    let capture: CaptureRequests
-
-    var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: ask.wants == "microphone" ? "mic" : "video").font(.system(size: 11, weight: .medium)).foregroundStyle(
-                Palette.muted)
-            Text("\(ask.host) would like to use your \(ask.wants)").textStyle(.row)
-            BubbleButton("Allow", filled: true, act: capture.allow)
-            BubbleButton("Don't Allow", act: capture.deny)
-        }
-        .padding(EdgeInsets(top: 9, leading: 16, bottom: 9, trailing: 10))
-        .bubble()
     }
 }
 

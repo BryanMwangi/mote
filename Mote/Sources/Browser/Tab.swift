@@ -57,6 +57,8 @@ final class Tab: ObservableObject, Identifiable {
     @Published var icon: NSImage?
     /// Focus is in something editable on the page.
     @Published var typing = false
+    /// The menu opening on the page is on a password field (see FormRelay).
+    var menuOnPassword = false
     /// The page is fullscreen.
     @Published var immersed = false
     /// The page is in the floating video window.
@@ -70,6 +72,16 @@ final class Tab: ObservableObject, Identifiable {
     }
     /// Responsive Design Mode: the screen the page is shown at, and whether
     /// it's scaled to fit the window (see Responsive.swift). Not saved.
+    /// Develop › User Agent's choice for this tab, nil for Mote's own. Not
+    /// kept across launches; the page loads again with it.
+    @Published var userAgent: String? {
+        didSet {
+            guard userAgent != oldValue else { return }
+            emulate()
+            if !isBlank { reload() }
+        }
+    }
+
     @Published var device: Device? {
         // Not on a size change alone, which a drag makes on every frame.
         didSet {
@@ -199,6 +211,7 @@ final class Tab: ObservableObject, Identifiable {
     private let passkeys = PasskeyRelay()
     private let hovered = HoveredLink()
     private let mediaRelay = MediaRelay()
+    private let notifications = NotificationRelay()
     private let loadRelay = LoadRelay()
     private let sound = AudioWatch()
     private var watches: [NSKeyValueObservation] = []
@@ -247,13 +260,15 @@ final class Tab: ObservableObject, Identifiable {
         controller.addScriptMessageHandler(passkeys, contentWorld: Web.world, name: PasskeyRelay.name)
         controller.add(hovered, contentWorld: .defaultClient, name: HoveredLink.name)
         controller.add(mediaRelay, contentWorld: .page, name: MediaRelay.name)
+        controller.addScriptMessageHandler(notifications, contentWorld: .page, name: NotificationRelay.name)
         AdBlocker.shared.protect(controller)
 
         built = web
-        if device != nil { emulate() }
+        if device != nil || userAgent != nil { emulate() }
         // After `built`: the form relay starts watching full screen on the view
         // it finds there.
-        for relay in [scroll, hider, forms, images, store_, middle, hovered, mediaRelay, loadRelay] as [TabRelay] { relay.tab = self }
+        let relays: [TabRelay] = [scroll, hider, forms, images, store_, middle, hovered, mediaRelay, loadRelay, notifications]
+        for relay in relays { relay.tab = self }
         if muted { PageAudio.mute(true, web) }
         arm(hiding: hiding)
         watches = observe(web)
@@ -661,6 +676,14 @@ final class Tab: ObservableObject, Identifiable {
     func fill(user: String, password: String, done: ((Bool) -> Void)? = nil) {
         web.callInAppWorld("return window.__moteForms?.fill(user, password) ?? false", arguments: ["user": user, "password": password]) {
             done?(($0 as? Bool) ?? false)
+        }
+    }
+
+    /// A strong password into the password field the menu opened on, and the
+    /// fields after it that ask for it again; `done` hears what went in.
+    func suggestPassword(done: @escaping (String?) -> Void) {
+        web.callInAppWorld("return window.__moteForms?.suggest(password) ?? null", arguments: ["password": StrongPassword.make()]) {
+            done($0 as? String)
         }
     }
 

@@ -51,6 +51,7 @@ final class FormRelay: NSObject, WKScriptMessageHandler {
                 tab.fieldFocused(field)
             // The page's word comes after the web view's (see watchFullscreen).
             case .fullscreen(let on): tab.immersed = on
+            case .menu(let password): tab.menuOnPassword = password
             }
         }
     }

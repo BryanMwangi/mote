@@ -81,7 +81,7 @@ struct PasswordsPanel: View {
                 }
             }
             Text(
-                "macOS asks once for that browser's keychain key. Nothing is changed there; everything lands in your own keychain, under Mote."
+                "macOS asks once for that browser's keychain key. Nothing is changed there; everything is sealed on this Mac, with a key in your keychain."
             )
             .font(.system(size: 11.5))
             .foregroundStyle(Palette.faint)
@@ -216,7 +216,7 @@ private struct AccountRow: View {
     }
 
     private func show() {
-        PasswordStore.prove("show the password for \(login.host)") { ok in
+        logins.prove("show the password for \(login.host)") { ok in
             guard ok, let password = PasswordStore.password(for: login) else { return }
             secret = password
             hiding?.cancel()
@@ -233,7 +233,7 @@ private struct AccountRow: View {
     }
 
     private func edit() {
-        PasswordStore.prove("edit the password for \(login.host)") { ok in
+        logins.prove("edit the password for \(login.host)") { ok in
             guard ok, let password = PasswordStore.password(for: login) else { return }
             hide()
             draft = (login.user, password)

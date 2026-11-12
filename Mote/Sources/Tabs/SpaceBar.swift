@@ -228,7 +228,7 @@ struct AddressPill: View {
             }
             if !editing, let tab = browser.active { TranslateButton(browser: browser, tab: tab) }
             if !editing, browser.prefs.showsPageActions, #available(macOS 15.4, *) { PageActionButton(extensions: .shared) }
-            if !editing { PageButton(browser: browser) }
+            if !editing { PageButton(browser: browser, asks: browser.navInSidebar) }
         }
         .padding(.trailing, 2)
         .frame(height: Self.height)

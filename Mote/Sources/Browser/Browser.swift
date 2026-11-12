@@ -44,7 +44,7 @@ final class Browser: NSObject, ObservableObject {
 
     let field = AddressEntry()
     let finder = PageFinder()
-    let capture = CaptureRequests()
+    let permissions = SitePermissions()
     private(set) lazy var logins = Logins(say: { [weak self] in self?.announce($0) }, tab: { [weak self] in self?.tab($0) })
 
     /// The address field is up over the page (⌘L). Blank tabs always show it.
@@ -998,6 +998,7 @@ final class Browser: NSObject, ObservableObject {
     func close(_ tab: Tab) {
         guard let index = row.index(of: tab.id) else { return }
         if floating == tab.id { land() }
+        permissions.drop(tab: tab.id)
 
         if tab.held {
             remember(tab, at: index)
