@@ -69,6 +69,16 @@ describe('signInFields', () => {
     expect(signInFields(document)?.user).toBe(byId('name'));
   });
 
+  it('still counts a password field the site turned into text to show it', () => {
+    document.body.innerHTML = '<form><input type="text" id="u"><input type="password" id="p"></form>';
+    expect(signInFields(document)?.password).toBe(byId('p'));
+    byId('p').type = 'text';
+    const fields = signInFields(document);
+    expect(fields?.password).toBe(byId('p'));
+    expect(fields?.user).toBe(byId('u'));
+    expect(fillNewPassword(byId('p'), 'abc')).toBe('abc');
+  });
+
   it('is null without a shown password field', () => {
     document.body.innerHTML = '<form><input type="text"><input type="password" data-hidden></form>';
     expect(signInFields(document)).toBeNull();

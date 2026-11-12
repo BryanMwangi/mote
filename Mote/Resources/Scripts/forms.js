@@ -17,6 +17,22 @@
 		const rect = element.getBoundingClientRect();
 		return rect.width > 0 && rect.height > 0;
 	}
+	/** Fields seen as password fields. */
+	const passwords = /* @__PURE__ */ new WeakSet();
+	/**
+	* Whether a field is a password field, or was one when last seen: a site
+	* that shows the password turns its field into a text field, and it is still
+	* the password.
+	*/
+	function isPassword(input) {
+		if (inputType(input) !== "password") return passwords.has(input);
+		passwords.add(input);
+		return true;
+	}
+	/** Whether a field could hold the account's name. */
+	function takesName(input) {
+		return USERNAME_TYPES.has(inputType(input)) && !isPassword(input);
+	}
 	/**
 	* The page's sign-in, or null when it has none: the first password field that
 	* is shown, and the last field before it (in its form, or the document) that
@@ -24,7 +40,7 @@
 	*/
 	function signInFields(document) {
 		let password = null;
-		for (const field of document.querySelectorAll("input[type=\"password\"]")) if (hasSize(field)) {
+		for (const field of document.querySelectorAll("input")) if (isPassword(field) && hasSize(field)) {
 			password = field;
 			break;
 		}
@@ -33,7 +49,7 @@
 		let user = null;
 		for (const input of scope.querySelectorAll("input")) {
 			if (input === password) break;
-			if (USERNAME_TYPES.has(inputType(input))) user = input;
+			if (takesName(input)) user = input;
 		}
 		return {
 			user,
@@ -81,7 +97,7 @@
 		const room = field.maxLength;
 		const fitted = room > 0 && password.length > room ? password.replaceAll("-", "").slice(0, room) : password;
 		setFieldValue(field, fitted);
-		const fields = [...(field.form ?? document).querySelectorAll("input[type=\"password\"]")];
+		const fields = [...(field.form ?? document).querySelectorAll("input")].filter(isPassword);
 		for (const other of fields.slice(fields.indexOf(field) + 1)) if (!other.value && !other.readOnly && !other.disabled) setFieldValue(other, fitted);
 		return fitted;
 	}
@@ -259,7 +275,7 @@
 		let menuField = null;
 		document.addEventListener("contextmenu", (event) => {
 			const target = event.composedPath()[0];
-			const editable = target instanceof HTMLInputElement && target.type === "password" && !target.readOnly && !target.disabled;
+			const editable = target instanceof HTMLInputElement && isPassword(target) && !target.readOnly && !target.disabled;
 			menuField = editable ? target : null;
 			post({
 				kind: "menu",

@@ -18,6 +18,25 @@ export function hasSize(element: Element): boolean {
   return rect.width > 0 && rect.height > 0;
 }
 
+/** Fields seen as password fields. */
+const passwords = new WeakSet<HTMLInputElement>();
+
+/**
+ * Whether a field is a password field, or was one when last seen: a site
+ * that shows the password turns its field into a text field, and it is still
+ * the password.
+ */
+export function isPassword(input: HTMLInputElement): boolean {
+  if (inputType(input) !== 'password') return passwords.has(input);
+  passwords.add(input);
+  return true;
+}
+
+/** Whether a field could hold the account's name. */
+function takesName(input: HTMLInputElement): boolean {
+  return USERNAME_TYPES.has(inputType(input)) && !isPassword(input);
+}
+
 /**
  * The page's sign-in, or null when it has none: the first password field that
  * is shown, and the last field before it (in its form, or the document) that
@@ -25,8 +44,8 @@ export function hasSize(element: Element): boolean {
  */
 export function signInFields(document: Document): SignInFields | null {
   let password: HTMLInputElement | null = null;
-  for (const field of document.querySelectorAll<HTMLInputElement>('input[type="password"]')) {
-    if (hasSize(field)) {
+  for (const field of document.querySelectorAll('input')) {
+    if (isPassword(field) && hasSize(field)) {
       password = field;
       break;
     }
@@ -36,7 +55,7 @@ export function signInFields(document: Document): SignInFields | null {
   let user: HTMLInputElement | null = null;
   for (const input of scope.querySelectorAll('input')) {
     if (input === password) break;
-    if (USERNAME_TYPES.has(inputType(input))) user = input;
+    if (takesName(input)) user = input;
   }
   return { user, password };
 }
@@ -82,7 +101,7 @@ export function fillNewPassword(field: HTMLInputElement | null, password: string
   const room = field.maxLength;
   const fitted = room > 0 && password.length > room ? password.replaceAll('-', '').slice(0, room) : password;
   setFieldValue(field, fitted);
-  const fields = [...(field.form ?? document).querySelectorAll<HTMLInputElement>('input[type="password"]')];
+  const fields = [...(field.form ?? document).querySelectorAll('input')].filter(isPassword);
   for (const other of fields.slice(fields.indexOf(field) + 1)) {
     if (!other.value && !other.readOnly && !other.disabled) setFieldValue(other, fitted);
   }

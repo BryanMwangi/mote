@@ -6,7 +6,7 @@
 // world, so pages can't reach `window.__moteForms` or the message handler.
 // Swift calls `window.__moteForms` there (Tab.swift).
 
-import { fillNewPassword, fillSignIn, signInFields, submittedCredentials } from './forms/sign-in';
+import { fillNewPassword, fillSignIn, isPassword, signInFields, submittedCredentials } from './forms/sign-in';
 import { acceptsTyping, fieldFrame, TypedFields } from './forms/typing';
 
 /** What Swift can ask the page, from Mote's world. */
@@ -116,10 +116,7 @@ function installForms(): void {
     (event) => {
       const target = event.composedPath()[0];
       const editable =
-        target instanceof HTMLInputElement &&
-        target.type === 'password' &&
-        !target.readOnly &&
-        !target.disabled;
+        target instanceof HTMLInputElement && isPassword(target) && !target.readOnly && !target.disabled;
       menuField = editable ? target : null;
       post({ kind: 'menu', password: editable });
     },
