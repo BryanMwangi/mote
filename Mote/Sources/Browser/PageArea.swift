@@ -15,7 +15,7 @@ struct Page: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            if let device = tab.device { DeviceBar(tab: tab, device: device) }
+            if let device = tab.device { DeviceBar(tab: tab, drag: tab.deviceDrag, device: device) }
             // The device sits on the window's frame colour, as Firefox's on its dark ground.
             content.background(tab.device == nil ? Color.clear : Palette.frame)
         }
@@ -26,9 +26,8 @@ struct Page: View {
             // Blank and sleeping tabs have no page, and asking would make an empty
             // one. A floating page is left out so its return is a change and the
             // stage takes it back.
-            WebStage(
-                page: tab.isBlank || tab.asleep || tab.floating ? nil : tab.web, warm: warm, device: tab.device?.size, fits: tab.deviceFits,
-                held: tab.deviceDrag.held)
+            DeviceStage(
+                tab: tab, drag: tab.deviceDrag, page: tab.isBlank || tab.asleep || tab.floating ? nil : tab.web, warm: warm)
             if let device = tab.device { DeviceFrame(tab: tab, drag: tab.deviceDrag, device: device) }
 
             if let cover = tab.cover {
@@ -94,5 +93,18 @@ private struct Disc: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: pull.back ? .leading : .trailing)
         .allowsHitTesting(false)
         .animation(.easeOut(duration: 0.22), value: pull.going)
+    }
+}
+
+/// The page's stage, following a device's size as its handles drag it: only
+/// this redraws on each step, not the tab around it.
+private struct DeviceStage: View {
+    @ObservedObject var tab: Tab
+    @ObservedObject var drag: DeviceDrag
+    let page: NSView?
+    let warm: [NSView]
+
+    var body: some View {
+        WebStage(page: page, warm: warm, device: drag.size ?? tab.device?.size, fits: tab.deviceFits, held: drag.held)
     }
 }

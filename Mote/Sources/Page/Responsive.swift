@@ -88,7 +88,7 @@ extension Tab {
         guard let web = built else { return }
         web.unpublished("_setOverrideDeviceScaleFactor:", device?.scale ?? 0)
         web.touchScrolls = device?.touch == true
-        web.customUserAgent = device?.userAgent ?? ""
+        web.customUserAgent = device.flatMap { $0.userAgent.isEmpty ? nil : $0.userAgent } ?? userAgent ?? ""
     }
 }
 
@@ -97,6 +97,8 @@ extension Tab {
 /// a screenshot and leaving at the end.
 struct DeviceBar: View {
     @ObservedObject var tab: Tab
+    /// The size as a handle drags it, shown as it changes.
+    @ObservedObject var drag: DeviceDrag
     let device: Device
     @ObservedObject private var list = DeviceList.shared
     @State private var editing = false
@@ -114,9 +116,9 @@ struct DeviceBar: View {
                 Label(device.name, systemImage: icon(device))
             }
             .fixedSize()
-            side(device.width) { tab.device = device.sized(width: $0, height: device.height) }
+            side(drag.size?.width ?? device.width) { tab.device = device.sized(width: $0, height: device.height) }
             Text("×").foregroundStyle(Palette.muted)
-            side(device.height) { tab.device = device.sized(width: device.width, height: $0) }
+            side(drag.size?.height ?? device.height) { tab.device = device.sized(width: device.width, height: $0) }
             Door(icon: "rotate.right", help: "Rotate") { tab.device = device.rotated }
             divider
             Menu("DPR: \(device.scale.formatted())") {
@@ -283,15 +285,18 @@ private struct NewDevice: View {
     }
 }
 
-/// Around the device, where the stage puts it (WebStage): its outline, and a
-/// grip on its corner to drag its size.
+/// Which way a device's handle drags.
+private enum Side { case leading, trailing, bottom }
+
+/// Around the device's page: its outline, and handles on its sides and
+/// foot, as Safari's, each dragging the size its way.
 struct DeviceFrame: View {
     @ObservedObject var tab: Tab
     @ObservedObject var drag: DeviceDrag
     let device: Device
 
     /// The size and scale when a drag began: the scale held for the drag,
-    /// so the corner keeps up with the pointer as the fit changes.
+    /// so the handle keeps up with the pointer as the fit changes.
     @State private var start: (size: CGSize, scale: CGFloat)?
 
     var body: some View {
@@ -305,33 +310,47 @@ struct DeviceFrame: View {
                 .frame(width: frame.width + 2, height: frame.height + 2)
                 .position(x: frame.midX, y: frame.midY)
                 .allowsHitTesting(false)
-            Image(systemName: "arrow.up.left.and.arrow.down.right")
-                .font(.system(size: 9, weight: .semibold))
-                .rotationEffect(.degrees(90))
-                .foregroundStyle(Palette.muted)
-                .frame(width: 18, height: 18)
-                .contentShape(Rectangle())
-                .gesture(drag(placed.scale))
-                .onHover { inside in (inside ? NSCursor.crosshair : NSCursor.arrow).set() }
-                .help("Drag to resize")
-                // Last: placed views fill the area, and the grip's drag mustn't
-                // cover the page, or it takes the page's scrolls and clicks.
-                .position(x: frame.maxX + 10, y: min(frame.maxY + 10, area.size.height - 9))
+            // Last: placed views fill the area, and a handle's drag mustn't
+            // cover the page, or it takes the page's scrolls and clicks.
+            handle(.leading, placed.scale).position(x: frame.minX - 9, y: frame.midY)
+            handle(.trailing, placed.scale).position(x: frame.maxX + 9, y: frame.midY)
+            handle(.bottom, placed.scale).position(x: frame.midX, y: min(frame.maxY + 9, area.size.height - 7))
         }
+        .coordinateSpace(name: Self.area)
     }
 
-    /// The page is centred across, so its width grows twice what the corner
-    /// moves; down, as it moves.
-    private func drag(_ scale: CGFloat) -> some Gesture {
-        DragGesture(minimumDistance: 1)
+    /// The drag is measured here, not on the handle: the handle moves with
+    /// each step, and measured from it the pointer's travel is lost and the
+    /// size swings back and forth.
+    private static let area = "deviceArea"
+
+    private func handle(_ side: Side, _ scale: CGFloat) -> some View {
+        let across = side == .bottom
+        return Capsule()
+            .fill(Palette.muted.opacity(0.6))
+            .frame(width: across ? 44 : 5, height: across ? 5 : 44)
+            .frame(width: across ? 72 : 16, height: across ? 16 : 72)
+            .contentShape(Rectangle())
+            .gesture(drag(side, scale))
+            .modifier(ResizePointer(side: side))
+            .help(across ? "Drag to change the height" : "Drag to change the width")
+    }
+
+    /// The page is centred across, so its width changes twice what a side
+    /// handle moves; its height, as the foot's moves.
+    private func drag(_ side: Side, _ scale: CGFloat) -> some Gesture {
+        DragGesture(minimumDistance: 1, coordinateSpace: .named(Self.area))
             .onChanged { motion in
                 let from = start ?? (device.size, scale)
                 if start == nil { start = from }
+                var size = from.size
+                switch side {
+                case .leading: size.width -= 2 * motion.translation.width / from.scale
+                case .trailing: size.width += 2 * motion.translation.width / from.scale
+                case .bottom: size.height += motion.translation.height / from.scale
+                }
                 tab.dragDevice(
-                    to: CGSize(
-                        width: from.size.width + 2 * motion.translation.width / from.scale,
-                        height: from.size.height + motion.translation.height / from.scale),
-                    holding: from.scale)
+                    to: CGSize(width: max(Devices.smallest, size.width), height: max(Devices.smallest, size.height)), holding: from.scale)
             }
             .onEnded { _ in
                 start = nil
@@ -346,31 +365,27 @@ struct DeviceFrame: View {
 final class DeviceDrag: ObservableObject {
     @Published var size: CGSize?
     var held: CGFloat?
-    var resizing: Task<Void, Never>?
 }
 
 extension Tab {
-    /// The device's size dragged: its outline follows at once, at the scale it
-    /// had, so the page grows under the pointer instead of being fitted, and
-    /// zoomed, anew; the page itself at most ten times a second, as each new
-    /// size lays it out and draws it again while the window waits.
+    /// The device's size dragged: the page and its outline follow at once, at
+    /// the scale they had, so the page grows under the pointer instead of being
+    /// fitted, and zoomed, anew. Only the stage and the outline redraw; the
+    /// tab's device changes when the drag ends.
     func dragDevice(to size: CGSize, holding scale: CGFloat) {
-        if deviceDrag.held == nil { deviceDrag.held = scale }
-        deviceDrag.size = size
-        guard deviceDrag.resizing == nil else { return }
-        deviceDrag.resizing = Task { [weak self] in
-            try? await Task.sleep(for: .milliseconds(100))
-            guard !Task.isCancelled else { return }
-            self?.deviceDrag.resizing = nil
-            self?.resizeToDragged()
+        if deviceDrag.held == nil {
+            deviceDrag.held = scale
+            built?.resizingByHand = true
         }
+        // Whole points: a page laid out at fractions of one shifts as it grows.
+        let rounded = CGSize(width: size.width.rounded(), height: size.height.rounded())
+        if deviceDrag.size != rounded { deviceDrag.size = rounded }
     }
 
     /// The drag let go: the page takes its last size, and is fitted again.
     func endDeviceDrag() {
-        deviceDrag.resizing?.cancel()
-        deviceDrag.resizing = nil
         resizeToDragged()
+        built?.resizingByHand = false
         deviceDrag.held = nil
         deviceDrag.size = nil
         // Fitted again at the size it ended at.
@@ -380,5 +395,21 @@ extension Tab {
     private func resizeToDragged() {
         guard let size = deviceDrag.size, let device else { return }
         self.device = device.sized(width: size.width, height: size.height)
+    }
+}
+
+/// A resize pointer over a handle. macOS 15 keeps it through the drag; before,
+/// it's set on hover.
+private struct ResizePointer: ViewModifier {
+    let side: Side
+
+    func body(content: Content) -> some View {
+        if #available(macOS 15, *) {
+            content.pointerStyle(.frameResize(position: side == .leading ? .leading : side == .trailing ? .trailing : .bottom))
+        } else {
+            content.onHover { inside in
+                (inside ? (side == .bottom ? NSCursor.resizeUpDown : NSCursor.resizeLeftRight) : NSCursor.arrow).set()
+            }
+        }
     }
 }
