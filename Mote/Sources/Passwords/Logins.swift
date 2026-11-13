@@ -139,27 +139,36 @@ final class Logins {
             }
             return
         }
-        guard listing, filled != tab.id, let host = Address.siteHost(of: tab.address) else { return }
+        guard listing, filled != tab.id, let site = accounts(for: tab) else { return }
+        let known = site.logins.prefix(5)
+        choices = known.isEmpty ? nil : Choices(tab: tab.id, spot: spot, logins: Array(known), host: site.host, clear: site.clear)
+    }
+
+    /// The accounts saved for the page in `tab`, without their passwords.
+    func accounts(for tab: Tab) -> (host: String, clear: Bool, logins: [Login])? {
+        guard let host = Address.siteHost(of: tab.address) else { return nil }
         // A plain-HTTP page may have been changed in transit, so it only sees
         // logins saved from HTTP pages, never the HTTPS site's.
         let clear = tab.address?.scheme?.lowercased() == "http"
-        let known = PasswordStore.accounts(matching: host).filter { !clear || $0.clear }.prefix(5)
-        choices = known.isEmpty ? nil : Choices(tab: tab.id, spot: spot, logins: Array(known), host: host, clear: clear)
+        return (host, clear, PasswordStore.accounts(matching: host).filter { !clear || $0.clear })
     }
 
     func choose(_ login: Login) {
         hiding?.cancel()
         guard let list = choices, let tab = tab(list.tab) else { return }
         choices = nil
-        // The page may have moved on while the list was up; never fill another site.
-        guard Address.siteHost(of: tab.address) == list.host, (tab.address?.scheme?.lowercased() == "http") == list.clear
-        else { return }
         filled = tab.id
-        PasswordStore.proveToFill(list.host) { [weak self] ok in
-            guard ok, let password = PasswordStore.password(for: login),
-                Address.siteHost(of: tab.address) == list.host
-            else { return }
-            tab.fill(user: login.user, password: password) { worked in
+        fill(login, in: tab, host: list.host, clear: list.clear)
+    }
+
+    /// Fills an account listed for `host` into `tab`: its sign-in, or
+    /// (`atMenu`) from the field its menu opened on.
+    func fill(_ login: Login, in tab: Tab, host: String, clear: Bool, atMenu: Bool = false) {
+        // The page may have moved on since it was listed; never fill another site.
+        guard Address.siteHost(of: tab.address) == host, (tab.address?.scheme?.lowercased() == "http") == clear else { return }
+        PasswordStore.proveToFill(host) { [weak self] ok in
+            guard ok, let password = PasswordStore.password(for: login), Address.siteHost(of: tab.address) == host else { return }
+            tab.fill(user: login.user, password: password, atMenu: atMenu) { worked in
                 if !worked { self?.say("Couldn't find the sign-in fields anymore") }
             }
             PasswordStore.touch(Login(host: login.host, user: login.user, password: password, clear: login.clear))

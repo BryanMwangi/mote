@@ -252,24 +252,42 @@ final class PageView: WKWebView {
         }
     }
 
-    /// On a password field: a strong one, made up for a new account. The
-    /// page offers to save it when the sign-up goes, as with any password.
+    /// On a sign-in field, whatever else is in the menu: the accounts saved
+    /// for the site, to fill from that field, and the Passwords panel; on a
+    /// password field also a strong one, made up for a new account, which
+    /// the page offers to save when the sign-up goes, as with any password.
     private func passwordItems(in menu: NSMenu) {
         guard let browser = Windows.shared.all.first(where: { $0.tab(for: self) != nil }), let tab = browser.tab(for: self),
-            tab.menuOnPassword
+            let field = tab.menuField
         else { return }
-        let item = ActionItem("Suggest Strong Password") {
-            tab.suggestPassword { made in
-                guard let made else { return browser.announce("Couldn't find the password field anymore") }
-                browser.announce(
-                    Announcement(
-                        "Strong password filled", detail: "Mote offers to save it once you sign up.", symbol: "key.fill",
-                        action: .init(title: "Copy") { Logins.copyConcealed(made) }))
+        let saved = NSMenuItem(title: "Use Saved Password", action: nil, keyEquivalent: "")
+        saved.submenu = NSMenu()
+        if let site = browser.logins.accounts(for: tab), !site.logins.isEmpty {
+            for login in site.logins {
+                saved.submenu?.addItem(
+                    ActionItem(login.user.isEmpty ? "No Username" : login.user) {
+                        browser.logins.fill(login, in: tab, host: site.host, clear: site.clear, atMenu: true)
+                    })
             }
+        } else {
+            saved.submenu?.addItem(withTitle: "No Saved Passwords", action: nil, keyEquivalent: "")
         }
-        item.image = NSImage(systemSymbolName: "key", accessibilityDescription: nil)
-        menu.insertItem(item, at: 0)
-        menu.insertItem(.separator(), at: 1)
+        var items = [saved]
+        if field == .password {
+            items.append(
+                ActionItem("Suggest Strong Password…") {
+                    tab.suggestPassword { made in
+                        guard let made else { return browser.announce("Couldn't find the password field anymore") }
+                        browser.announce(
+                            Announcement(
+                                "Strong password filled", detail: "Mote offers to save it once you sign up.", symbol: "key.fill",
+                                action: .init(title: "Copy") { Logins.copyConcealed(made) }))
+                    }
+                })
+        }
+        items.append(ActionItem("Manage Passwords") { browser.perform(.passwords) })
+        items.append(.separator())
+        for (at, item) in items.enumerated() { menu.insertItem(item, at: at) }
     }
 
     /// On a link: WebKit's "Open Link in New Window" knows the link, so Mote's

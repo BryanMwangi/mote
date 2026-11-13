@@ -6,15 +6,26 @@
 // world, so pages can't reach `window.__moteForms` or the message handler.
 // Swift calls `window.__moteForms` there (Tab.swift).
 
-import { fillNewPassword, fillSignIn, isPassword, signInFields, submittedCredentials } from './forms/sign-in';
+import {
+  fillAround,
+  fillNewPassword,
+  fillSignIn,
+  isNameField,
+  isPassword,
+  signInFields,
+  submittedCredentials,
+} from './forms/sign-in';
 import { acceptsTyping, fieldFrame, TypedFields } from './forms/typing';
 
 /** What Swift can ask the page, from Mote's world. */
 interface FormsAPI {
   /** Whether a field typed into by hand holds text that wasn't sent. */
   unsaved(): boolean;
-  /** Fills the account the user picked; false when the sign-in fields are gone. */
-  fill(user: string, password: string): boolean;
+  /**
+   * Fills the account the user picked, into the page's sign-in or (`menu`)
+   * from the field last right-clicked; false when the fields are gone.
+   */
+  fill(user: string, password: string, menu?: boolean): boolean;
   /**
    * Whether there is still a sign-in on the page. Asked after a password went
    * out, to tell a sign-in that took from one refused.
@@ -34,7 +45,7 @@ type FormMessage =
   | { kind: 'settled' }
   | { kind: 'focus'; typing: boolean; rect: { x: number; y: number; w: number; h: number } | null }
   | { kind: 'fullscreen'; on: boolean }
-  | { kind: 'menu'; password: boolean };
+  | { kind: 'menu'; field: 'password' | 'user' | null };
 
 declare global {
   interface Window {
@@ -103,22 +114,29 @@ function installForms(): void {
 
   window.__moteForms = {
     unsaved: () => typed.unsaved(),
-    fill: (user, password) => fillSignIn(findSignIn(), user, password),
+    fill: (user, password, menu) =>
+      menu ? fillAround(menuField, user, password) !== null : fillSignIn(findSignIn(), user, password),
     hasPassword: () => !!findSignIn(),
     suggest: (password) => fillNewPassword(menuField, password),
   };
 
-  // The password field a menu opens on, for Mote's strong password. Told
-  // before WebKit shows the menu, which comes after the page has seen this.
+  // The sign-in field a menu opens on, for Mote's saved and strong passwords.
+  // Told before WebKit shows the menu, which comes after the page has seen this.
   let menuField: HTMLInputElement | null = null;
   document.addEventListener(
     'contextmenu',
     (event) => {
       const target = event.composedPath()[0];
-      const editable =
-        target instanceof HTMLInputElement && isPassword(target) && !target.readOnly && !target.disabled;
-      menuField = editable ? target : null;
-      post({ kind: 'menu', password: editable });
+      menuField = target instanceof HTMLInputElement && !target.readOnly && !target.disabled ? target : null;
+      const field = !menuField
+        ? null
+        : isPassword(menuField)
+          ? 'password'
+          : isNameField(menuField) || menuField === findSignIn()?.user
+            ? 'user'
+            : null;
+      if (!field) menuField = null;
+      post({ kind: 'menu', field });
     },
     true,
   );

@@ -1,5 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { fillNewPassword, fillSignIn, signInFields, submittedCredentials } from '../src/forms/sign-in';
+import {
+  fillAround,
+  fillNewPassword,
+  fillSignIn,
+  isNameField,
+  signInFields,
+  submittedCredentials,
+} from '../src/forms/sign-in';
 import {
   acceptsTyping,
   fieldFrame,
@@ -111,6 +118,45 @@ describe('fillSignIn', () => {
     document.body.innerHTML = '<input id="name" type="text">';
     expect(fillSignIn(signInFields(document), 'ada', 'secret')).toBe(false);
     expect(byId('name').value).toBe('');
+  });
+});
+
+describe('fillAround', () => {
+  it('fills from a password field: the password, and the empty name before it', () => {
+    document.body.innerHTML = `<form><input id="other" type="password"></form>
+      <form><input id="u"><input id="p" type="password"></form>`;
+    expect(fillAround(byId('p'), 'me', 'pw')).toBe('all');
+    expect([byId('u').value, byId('p').value, byId('other').value]).toEqual(['me', 'pw', '']);
+  });
+
+  it('fills from a name field: the name over what is there, and the password after it', () => {
+    document.body.innerHTML = '<form><input id="u" value="old"><input id="p" type="password"></form>';
+    expect(fillAround(byId('u'), 'me', 'pw')).toBe('all');
+    expect([byId('u').value, byId('p').value]).toEqual(['me', 'pw']);
+  });
+
+  it('fills only the name where there is no password field yet', () => {
+    document.body.innerHTML = '<form><input id="u" type="email"></form>';
+    expect(fillAround(byId('u'), 'me@example.com', 'pw')).toBe('name');
+    expect(byId('u').value).toBe('me@example.com');
+  });
+
+  it('gives up on a field that is gone', () => {
+    expect(fillAround(document.createElement('input'), 'me', 'pw')).toBeNull();
+  });
+});
+
+describe('isNameField', () => {
+  it('goes by the type, and what the field is called', () => {
+    document.body.innerHTML = `<input id="a" type="email"><input id="b" autocomplete="username">
+      <input id="c" name="login"><input id="search" name="q"><input id="d" type="password" name="user">`;
+    expect(['a', 'b', 'c', 'search', 'd'].map((id) => isNameField(byId(id)))).toEqual([
+      true,
+      true,
+      true,
+      false,
+      false,
+    ]);
   });
 });
 

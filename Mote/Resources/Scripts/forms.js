@@ -33,6 +33,11 @@
 	function takesName(input) {
 		return USERNAME_TYPES.has(inputType(input)) && !isPassword(input);
 	}
+	/** Whether a field looks like the one an account's name goes in, with or without a password field by it. */
+	function isNameField(input) {
+		if (!takesName(input)) return false;
+		return inputType(input) === "email" || /user|login|email/i.test(`${input.autocomplete} ${input.name} ${input.id}`);
+	}
 	/**
 	* The page's sign-in, or null when it has none: the first password field that
 	* is shown, and the last field before it (in its form, or the document) that
@@ -77,6 +82,29 @@
 		if (fields.user && !fields.user.value) setFieldValue(fields.user, user);
 		setFieldValue(fields.password, password);
 		return true;
+	}
+	/**
+	* Fills a saved account from the field its menu opened on: a password field
+	* takes the password, and the empty name field before it the name; a name
+	* field takes the name, and the password field after it the password. Within
+	* the field's form, or the document. Null when the field is gone, `name` when
+	* there was no password field to fill.
+	*/
+	function fillAround(field, user, password) {
+		if (!field || !field.isConnected) return null;
+		const inputs = [...(field.form || field.closest("form") || document).querySelectorAll("input")];
+		const at = inputs.indexOf(field);
+		if (isPassword(field)) {
+			const name = inputs.slice(0, at).findLast(takesName);
+			if (name && !name.value) setFieldValue(name, user);
+			setFieldValue(field, password);
+			return "all";
+		}
+		setFieldValue(field, user);
+		const next = inputs.slice(at + 1).find((input) => isPassword(input) && hasSize(input));
+		if (!next) return "name";
+		setFieldValue(next, password);
+		return "all";
 	}
 	/** What a sign-in is about to send, or null while its password is empty. */
 	function submittedCredentials(fields) {
@@ -268,18 +296,19 @@
 		document.addEventListener("input", (event) => typed.record(event), true);
 		window.__moteForms = {
 			unsaved: () => typed.unsaved(),
-			fill: (user, password) => fillSignIn(findSignIn(), user, password),
+			fill: (user, password, menu) => menu ? fillAround(menuField, user, password) !== null : fillSignIn(findSignIn(), user, password),
 			hasPassword: () => !!findSignIn(),
 			suggest: (password) => fillNewPassword(menuField, password)
 		};
 		let menuField = null;
 		document.addEventListener("contextmenu", (event) => {
 			const target = event.composedPath()[0];
-			const editable = target instanceof HTMLInputElement && isPassword(target) && !target.readOnly && !target.disabled;
-			menuField = editable ? target : null;
+			menuField = target instanceof HTMLInputElement && !target.readOnly && !target.disabled ? target : null;
+			const field = !menuField ? null : isPassword(menuField) ? "password" : isNameField(menuField) || menuField === findSignIn()?.user ? "user" : null;
+			if (!field) menuField = null;
 			post({
 				kind: "menu",
-				password: editable
+				field
 			});
 		}, true);
 		document.addEventListener("submit", offer, true);

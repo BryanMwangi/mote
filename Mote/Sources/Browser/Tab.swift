@@ -57,8 +57,8 @@ final class Tab: ObservableObject, Identifiable {
     @Published var icon: NSImage?
     /// Focus is in something editable on the page.
     @Published var typing = false
-    /// The menu opening on the page is on a password field (see FormRelay).
-    var menuOnPassword = false
+    /// The sign-in field the menu opening on the page is on (see FormRelay).
+    var menuField: FormEvent.Field?
     /// The page is fullscreen.
     @Published var immersed = false
     /// The page is in the floating video window.
@@ -671,10 +671,13 @@ final class Tab: ObservableObject, Identifiable {
         }
     }
 
-    /// Fills a saved account into the page's sign-in fields; `done` hears
-    /// false when the fields that were there are gone.
-    func fill(user: String, password: String, done: ((Bool) -> Void)? = nil) {
-        web.callInAppWorld("return window.__moteForms?.fill(user, password) ?? false", arguments: ["user": user, "password": password]) {
+    /// Fills a saved account into the page's sign-in fields, or (`atMenu`)
+    /// from the field the menu opened on; `done` hears false when the fields
+    /// that were there are gone.
+    func fill(user: String, password: String, atMenu: Bool = false, done: ((Bool) -> Void)? = nil) {
+        web.callInAppWorld(
+            "return window.__moteForms?.fill(user, password, menu) ?? false", arguments: ["user": user, "password": password, "menu": atMenu]
+        ) {
             done?(($0 as? Bool) ?? false)
         }
     }

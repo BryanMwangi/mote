@@ -102,8 +102,10 @@ struct FormEventTests {
                 == .focus(typing: true, field: CGRect(x: 1, y: 2, width: 3, height: 4)))
         #expect(FormEvent(["kind": "focus", "rect": ["x": 1.0]]) == .focus(typing: false, field: nil))
         #expect(FormEvent(["kind": "fullscreen", "on": true]) == .fullscreen(true))
-        #expect(FormEvent(["kind": "menu", "password": true]) == .menu(password: true))
-        #expect(FormEvent(["kind": "menu"]) == .menu(password: false))
+        #expect(FormEvent(["kind": "menu", "field": "password"]) == .menu(.password))
+        #expect(FormEvent(["kind": "menu", "field": "user"]) == .menu(.user))
+        #expect(FormEvent(["kind": "menu", "field": "other"]) == .menu(nil))
+        #expect(FormEvent(["kind": "menu"]) == .menu(nil))
     }
 
     @Test("Anything else is ignored")

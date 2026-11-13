@@ -11,8 +11,13 @@ public enum FormEvent: Equatable, Sendable {
     case focus(typing: Bool, field: CGRect?)
     /// The page's own word on full screen.
     case fullscreen(Bool)
-    /// A menu is opening on the page, on a password field or not.
-    case menu(password: Bool)
+    /// A menu is opening on the page: on a sign-in field, or elsewhere (nil).
+    case menu(Field?)
+
+    /// A sign-in field: the password's, or the account's name.
+    public enum Field: String, Sendable {
+        case password, user
+    }
 
     /// Reads a message body; nil for anything unknown.
     public init?(_ body: Any) {
@@ -32,7 +37,7 @@ public enum FormEvent: Equatable, Sendable {
         case "fullscreen":
             self = .fullscreen(body["on"] as? Bool ?? false)
         case "menu":
-            self = .menu(password: body["password"] as? Bool ?? false)
+            self = .menu((body["field"] as? String).flatMap(Field.init))
         default:
             return nil
         }
