@@ -61,6 +61,12 @@ public struct SpacePager: Sendable {
 
     public var isClaimed: Bool { claimed == true }
 
+    /// The swipe has gone far enough that letting go switches.
+    public var armed: Bool {
+        guard claimed == true, abs(along) >= enough else { return false }
+        return (0...count).contains(here + (along < 0 ? 1 : -1))
+    }
+
     /// Where letting go leads: back (negative travel) is the next space.
     /// nil means stay.
     public func end(cancelled: Bool) -> Int? {

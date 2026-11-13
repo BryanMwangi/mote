@@ -95,4 +95,18 @@ struct SpacePagerTests {
         for _ in 0..<12 { _ = slow.move(along: -2, aside: 0) }
         #expect(slow.end(cancelled: false) == nil)
     }
+
+    @Test("Armed once far enough toward a space or the new-space card, not past the first")
+    func armed() {
+        var pager = SpacePager(count: 2, here: 1, enough: 50)
+        _ = pager.begin(at: .distantFuture)
+        _ = pager.move(along: -30, aside: 0)
+        #expect(!pager.armed)
+        _ = pager.move(along: -30, aside: 0)
+        #expect(pager.armed)
+        var first = SpacePager(count: 2, here: 0, enough: 50)
+        _ = first.begin(at: .distantFuture)
+        _ = first.move(along: 80, aside: 0)
+        #expect(!first.armed)
+    }
 }

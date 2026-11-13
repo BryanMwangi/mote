@@ -69,7 +69,12 @@ final class SpaceSwipe {
     private func wheel(_ event: NSEvent, in browser: Browser) -> Bool {
         guard !browser.prefs.sidebar, event.scrollingDeltaY != 0, overTabs(event, in: browser) else { return false }
         refresh(browser)
-        if let target = pager.click(down: event.scrollingDeltaY < 0, at: Date()) { slide(browser, to: target, from: pager.here) }
+        let down = event.scrollingDeltaY < 0
+        if let target = pager.click(down: down, at: Date()) {
+            slide(browser, to: target, from: pager.here)
+        } else if (down && pager.here == pager.count) || (!down && pager.here == 0) {
+            bounce(browser, forward: down)
+        }
         return true
     }
 
@@ -97,7 +102,10 @@ final class SpaceSwipe {
     func moved(dx: CGFloat, dy: CGFloat) -> Bool {
         guard gate.tracking, let browser else { return false }
         let (along, aside) = browser.prefs.sidebar ? (dx, dy) : (dy, dx)
+        let wasArmed = pager.armed
         guard let offset = pager.move(along: along, aside: aside) else { return false }
+        // A tick as it becomes far enough to switch, and as it stops being.
+        if pager.armed != wasArmed { Haptic.tick() }
         browser.spaceSwipe = offset
         return true
     }
@@ -117,6 +125,16 @@ final class SpaceSwipe {
         } else {
             browser.swipeOffset.ease()
         }
+    }
+
+    /// Past the first or last space: the page gives a little that way and
+    /// springs back, so it's seen there's nothing further.
+    func bounce(_ browser: Browser, forward: Bool) {
+        guard !Glow.stillness, browser.spaceSwipe == 0 else { return }
+        var instant = Transaction()
+        instant.disablesAnimations = true
+        withTransaction(instant) { browser.spaceSwipe = (forward ? -1 : 1) * 22 }
+        DispatchQueue.main.async { browser.swipeOffset.ease() }
     }
 
     /// Slides a whole page over, then switches with animation off so the
@@ -369,8 +387,48 @@ struct SwipeTrack: FillsRoom {
             CATransaction.commit()
         }
 
+        /// The new-space card's "+" ring, filling as the last space is pulled
+        /// toward it.
+        private lazy var ring: CAShapeLayer = {
+            let ring = CAShapeLayer()
+            ring.path = CGPath(ellipseIn: CGRect(x: -14, y: -14, width: 28, height: 28), transform: nil)
+            ring.fillColor = nil
+            ring.strokeColor = NSColor.labelColor.withAlphaComponent(0.55).cgColor
+            ring.lineWidth = 2
+            ring.lineCap = .round
+            ring.strokeEnd = 0
+            ring.zPosition = 10
+            let plus = CAShapeLayer()
+            let cross = CGMutablePath()
+            cross.move(to: CGPoint(x: -6, y: 0))
+            cross.addLine(to: CGPoint(x: 6, y: 0))
+            cross.move(to: CGPoint(x: 0, y: -6))
+            cross.addLine(to: CGPoint(x: 0, y: 6))
+            plus.path = cross
+            plus.strokeColor = ring.strokeColor
+            plus.lineWidth = 2
+            plus.lineCap = .round
+            ring.addSublayer(plus)
+            layer?.addSublayer(ring)
+            return ring
+        }()
+
+        private func showRing(at x: CGFloat) {
+            let pulling = here == count - 2 && x < 0 && !swipe.easing
+            guard pulling || layer?.sublayers?.contains(where: { $0 === ring }) == true else { return }
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            ring.isHidden = !pulling
+            if pulling {
+                ring.position = CGPoint(x: bounds.width + x / 2, y: bounds.midY)
+                ring.strokeEnd = min(1, -x / 50)
+            }
+            CATransaction.commit()
+        }
+
         private func move(to x: CGFloat) {
             guard let layer = host.layer else { return }
+            showRing(at: x)
             if x != 0, !swipe.shown.swiping { swipe.shown.swiping = true }
             // From where it shows, mid-ease, or where it was put.
             let was = layer.animation(forKey: "swipe") == nil ? layer.transform : layer.presentation()?.transform ?? layer.transform
