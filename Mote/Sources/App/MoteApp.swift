@@ -26,6 +26,10 @@ struct MoteApp: App {
         WindowGroup(id: "window", for: UUID.self) { $id in
             if let id, let browser = Windows.shared.browser(for: id) {
                 ContentView(browser: browser).frame(minWidth: 640, minHeight: 420)
+                    // Not macOS's to bring back: after a crash it did, before
+                    // the session could, and opening the window for its id
+                    // then found the one being closed, and lost it.
+                    .background(WindowSetup { $0.isRestorable = false })
             } else {
                 // One macOS brought back from a past launch, with no browser behind it.
                 WindowSetup { $0.close() }
