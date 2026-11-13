@@ -57,13 +57,17 @@ private struct FileRow: View {
     let downloads: Downloads
 
     @State private var hovering = false
+    /// Opened, for the icon's ripple.
+    @State private var opened = 0
 
     var body: some View {
         HStack(spacing: 12) {
-            Image(nsImage: FileKind.icon(of: record, there: there))
+            let icon = FileKind.icon(of: record, there: there)
+            Image(nsImage: icon)
                 .resizable()
                 .frame(width: 26, height: 26)
                 .opacity(there ? 1 : 0.4)
+                .ripple(opened) { Image(nsImage: icon).resizable().frame(width: 26, height: 26) }
             VStack(alignment: .leading, spacing: 2) {
                 Text(record.name)
                     .font(.system(size: 13))
@@ -87,7 +91,16 @@ private struct FileRow: View {
         .padding(.vertical, 9)
         .background(hovering ? Palette.hover : .clear)
         .contentShape(Rectangle())
-        .onTapGesture { if there { downloads.open(record) } }
+        .onTapGesture {
+            guard there else { return }
+            opened += 1
+            // Opened a moment later, so the ripple is seen.
+            Task {
+                try? await Task.sleep(for: .seconds(0.12))
+                downloads.open(record)
+            }
+        }
+        .fileDrag(record, there: there)
         .contextMenu { FileMenu(record: record, there: there, downloads: downloads) }
         .onHover { hovering = $0 }
         .animation(Motion.quick, value: hovering)
@@ -199,5 +212,23 @@ struct TransferMenu: View {
         if let source = transfer.source { Button("Copy Download Link") { Downloads.copy(source) } }
         Divider()
         Button(transfer.state == .running ? "Cancel" : "Remove from List") { browser.downloads.cancel(transfer) }
+    }
+}
+
+extension View {
+    /// Drags a downloaded file itself, into the Finder or another app; a
+    /// file that's gone doesn't drag.
+    @ViewBuilder
+    func fileDrag(_ record: DownloadRecord, there: Bool) -> some View {
+        if there {
+            onDrag {
+                Haptic.tick()
+                return NSItemProvider(contentsOf: record.url) ?? NSItemProvider()
+            } preview: {
+                Image(nsImage: FileKind.icon(of: record, there: true)).resizable().frame(width: 48, height: 48)
+            }
+        } else {
+            self
+        }
     }
 }

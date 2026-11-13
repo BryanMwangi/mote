@@ -101,9 +101,9 @@ private struct FootItem: View {
 private struct DownloadsButton: View {
     @ObservedObject var downloads: Downloads
     let act: () -> Void
-    /// A ripple showing, and how far it has spread.
-    @State private var ripple = false
-    @State private var spread = false
+    @ObservedObject private var landings = DownloadDrop.landed
+    /// Ripples: a download finished, or one dropped in.
+    @State private var rings = 0
 
     /// The circle of an 11 pt symbol, as the foot's others are drawn.
     private static let size: CGFloat = 11.5
@@ -126,25 +126,13 @@ private struct DownloadsButton: View {
                     } else if running != nil {
                         Ring(size: Self.size)
                     }
-                    Circle()
-                        .stroke(Palette.ink, lineWidth: 1.5)
-                        .frame(width: Self.size, height: Self.size)
-                        .scaleEffect(spread ? 1.8 : 1)
-                        .opacity(ripple && !spread ? 0.8 : 0)
                 }
                 .allowsHitTesting(false)
             }
-            .onChange(of: downloads.kept.first?.id) { _, done in
-                guard done != nil else { return }
-                ripple = true
-                spread = false
-                withAnimation(.easeOut(duration: 0.5)) { spread = true }
-                Task {
-                    try? await Task.sleep(for: .seconds(0.55))
-                    ripple = false
-                    spread = false
-                }
-            }
+            .ripple(rings) { Circle().stroke(Palette.ink, lineWidth: 1.5).frame(width: Self.size, height: Self.size) }
+            .background { DownloadDropTarget() }
+            .onChange(of: downloads.kept.first?.id) { _, done in if done != nil { rings += 1 } }
+            .onChange(of: landings.count) { rings += 1 }
     }
 }
 
@@ -174,11 +162,18 @@ private struct SessionDownloads: View {
                     }
                     ForEach(Array(files.enumerated()), id: \.element.id) { index, record in
                         let there = downloads.isThere(record)
-                        PopoverLine(record.name, image: FileKind.icon(of: record, there: there)) {
-                            if there { downloads.open(record) }
-                            close()
+                        PopoverLine(record.name, image: FileKind.icon(of: record, there: there), bump: opened[record.id] ?? 0) {
+                            guard there else { return close() }
+                            opened[record.id, default: 0] += 1
+                            // Opened a moment later, so the ripple is seen.
+                            Task {
+                                try? await Task.sleep(for: .seconds(0.12))
+                                downloads.open(record)
+                                close()
+                            }
                         }
                         .opacity(there ? 1 : 0.5)
+                        .fileDrag(record, there: there)
                         .contextMenu { FileMenu(record: record, there: there, downloads: downloads) }
                         .modifier(Bottom(measured: downloads.transfers.count + index == last, height: $height))
                     }
@@ -196,6 +191,8 @@ private struct SessionDownloads: View {
 
     /// Rows the popover grows to before it scrolls.
     private static let shown = 3
+    /// Files opened from here, for their icons' ripple.
+    @State private var opened: [String: Int] = [:]
     @State private var height: CGFloat = 0
 
     /// Where the last row shown in full ends, which the list is as tall as.

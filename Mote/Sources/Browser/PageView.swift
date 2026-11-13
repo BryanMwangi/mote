@@ -181,6 +181,8 @@ final class PageView: WKWebView {
         // link's own box, as Safari hangs its share picker from it.
         let click = convert(event.locationInWindow, from: nil)
         menuSpot = NSRect(origin: click, size: .zero).insetBy(dx: -2, dy: -2)
+        // A link saved from the menu falls from where it was right-clicked.
+        DownloadDrop.pressed = (NSEvent.mouseLocation, Date())
         findLinkBox(at: click)
         // No Services: macOS's list does nothing useful for what's under the pointer.
         menu.allowsContextMenuPlugIns = false
@@ -379,6 +381,7 @@ final class PageView: WKWebView {
 
     override func mouseDown(with event: NSEvent) {
         used = Date()
+        DownloadDrop.pressed = (NSEvent.mouseLocation, Date())
         onTouch?()
         onPress?()
         // A touch device: held until it's known whether it's a tap or a drag.

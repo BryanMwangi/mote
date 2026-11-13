@@ -8,13 +8,16 @@ struct PopoverLine: View {
     var symbol: String?
     /// A picture in the symbol's place: a file's icon.
     var image: NSImage?
+    /// Goes up to ripple the image out (a file opening).
+    var bump = 0
     let act: () -> Void
     @State private var hovering = false
 
-    init(_ title: String, symbol: String? = nil, image: NSImage? = nil, act: @escaping () -> Void) {
+    init(_ title: String, symbol: String? = nil, image: NSImage? = nil, bump: Int = 0, act: @escaping () -> Void) {
         self.title = title
         self.symbol = symbol
         self.image = image
+        self.bump = bump
         self.act = act
     }
 
@@ -25,6 +28,7 @@ struct PopoverLine: View {
                 Color.clear
                 if let image {
                     Image(nsImage: image).resizable().frame(width: 16, height: 16)
+                        .ripple(bump) { Image(nsImage: image).resizable().frame(width: 16, height: 16) }
                 } else if let symbol {
                     Image(systemName: symbol).font(.system(size: 11)).foregroundStyle(Palette.muted)
                 }

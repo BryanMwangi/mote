@@ -338,6 +338,7 @@ extension Browser: WKDownloadDelegate {
             let file = folder.appendingPathComponent(free)
             transfer?.file = file
             completionHandler(file)
+            DownloadDrop.fly(FileKind.icon(named: free), in: window)
             announce("Downloading \(free)")
             return
         }
@@ -351,6 +352,7 @@ extension Browser: WKDownloadDelegate {
         }
         transfer?.file = url
         completionHandler(url)
+        DownloadDrop.fly(FileKind.icon(named: url.lastPathComponent), in: window, within: 120)
         announce("Downloading \(url.lastPathComponent)")
     }
 
