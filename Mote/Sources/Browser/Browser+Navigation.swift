@@ -368,7 +368,12 @@ extension Browser: WKDownloadDelegate {
     func downloadDidFinish(_ download: WKDownload) {
         downloading.removeAll { $0 === download }
         guard let record = downloads.finished(download) else { return announce("Download finished") }
-        announce("Saved \(record.name)")
+        // What this kind of file does once it's here (Settings › General › Files).
+        switch OpenFiles.of(record.url)?.after {
+        case .mote: open(record.url, foreground: true)
+        case .app: NSWorkspace.shared.open(record.url)
+        default: announce("Saved \(record.name)")
+        }
     }
 
     func download(_ download: WKDownload, didFailWithError error: Error, resumeData: Data?) {

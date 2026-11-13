@@ -153,6 +153,8 @@ struct GeneralSettings: View {
                 on: $prefs.asksWhereToSave)
         }
 
+        FilesSettings()
+
         SettingsSection("Under the hood") {
             SettingRow(
                 "Pages at 120 Hz", "Smoother on ProMotion displays, at some cost to the battery. Open tabs follow once reloaded",
