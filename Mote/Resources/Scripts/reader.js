@@ -34,10 +34,13 @@ Object.defineProperty(exports, Symbol.toStringTag, { value: 'Module' });
 		return letters / (1 + links * 14);
 	}
 	/** The element with the most prose, or null when nothing reads like an article. */
+	/** Dialogs and banners over the page (a cookie notice), never its article. */
+	const OVERLAYS = "dialog, [role=\"dialog\"], [role=\"alertdialog\"], [aria-modal=\"true\"], [id*=\"cookie\" i], [class*=\"cookie\" i], [id*=\"consent\" i], [class*=\"consent\" i], [id*=\"onetrust\" i]";
 	function findArticle(document) {
 		let best = null;
 		let bestScore = 0;
 		for (const candidate of document.querySelectorAll(CANDIDATES)) {
+			if (candidate.closest("dialog, [role=\"dialog\"], [role=\"alertdialog\"], [aria-modal=\"true\"], [id*=\"cookie\" i], [class*=\"cookie\" i], [id*=\"consent\" i], [class*=\"consent\" i], [id*=\"onetrust\" i]")) continue;
 			const score = proseScore(candidate);
 			if (score > bestScore) {
 				bestScore = score;
@@ -145,10 +148,21 @@ html, body { background: #fff !important; margin: 0 !important; padding: 0 !impo
 	*/
 	function text() {
 		const article = findArticle(document);
-		if (!article) return (document.body?.innerText ?? "").trim();
-		const copy = article.cloneNode(true);
-		cleanArticle(copy);
-		return (copy.textContent ?? "").replace(/[ \t]+/g, " ").replace(/(\n\s*){3,}/g, "\n\n").trim();
+		let read = "";
+		if (article) {
+			const copy = article.cloneNode(true);
+			cleanArticle(copy);
+			read = tidy(copy.textContent ?? "");
+		}
+		if (read.length >= 200 || !document.body) return read;
+		const page = document.body.cloneNode(true);
+		for (const overlay of page.querySelectorAll(OVERLAYS)) overlay.remove();
+		for (const noise of page.querySelectorAll("script, style, noscript, template")) noise.remove();
+		const whole = tidy(page.innerText || page.textContent || "");
+		return whole.length > read.length ? whole : read;
+	}
+	function tidy(words) {
+		return words.replace(/[ \t]+/g, " ").replace(/(\n\s*){3,}/g, "\n\n").trim();
 	}
 
 //#endregion

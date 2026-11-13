@@ -122,3 +122,14 @@ describe('text', () => {
     expect(text()).toContain('Home');
   });
 });
+
+describe('text past a cookie notice', () => {
+  it('reads the page, not the dialog over it', () => {
+    document.body.innerHTML = `
+      <div id="onetrust-banner" role="dialog"><p>${'We use cookies to improve your experience and for marketing. '.repeat(8)}</p></div>
+      <main><h1>Hotel California</h1><p>Eagles · 1976</p><ol><li>Hotel California</li><li>New Kid in Town</li><li>Life in the Fast Lane</li></ol></main>`;
+    const read = text();
+    expect(read).toContain('New Kid in Town');
+    expect(read).not.toContain('We use cookies');
+  });
+});

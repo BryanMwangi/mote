@@ -36,10 +36,15 @@ export function proseScore(element: Element): number {
 }
 
 /** The element with the most prose, or null when nothing reads like an article. */
+/** Dialogs and banners over the page (a cookie notice), never its article. */
+export const OVERLAYS =
+  'dialog, [role="dialog"], [role="alertdialog"], [aria-modal="true"], [id*="cookie" i], [class*="cookie" i], [id*="consent" i], [class*="consent" i], [id*="onetrust" i]';
+
 export function findArticle(document: Document): Element | null {
   let best: Element | null = null;
   let bestScore = 0;
   for (const candidate of document.querySelectorAll(CANDIDATES)) {
+    if (candidate.closest(OVERLAYS)) continue;
     const score = proseScore(candidate);
     if (score > bestScore) {
       bestScore = score;

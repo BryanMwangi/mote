@@ -1,7 +1,7 @@
 // Reading mode: replaces the page with its main article.
 // Called from Swift (Reader.swift), which reads the returned value.
 
-import { articleTitle, cleanArticle, findArticle, resolveImages, siteName } from './reader/article';
+import { articleTitle, cleanArticle, findArticle, OVERLAYS, resolveImages, siteName } from './reader/article';
 import { READER_ID, READER_STYLE } from './reader/style';
 
 export type ReaderResult = 'read' | 'none';
@@ -42,11 +42,23 @@ export function run(): ReaderResult {
  */
 export function text(): string {
   const article = findArticle(document);
-  if (!article) return (document.body?.innerText ?? '').trim();
+  let read = '';
+  if (article) {
+    const copy = article.cloneNode(true) as Element;
+    cleanArticle(copy);
+    read = tidy(copy.textContent ?? '');
+  }
+  // An app's page reads as little prose: then all of it, without what's over it.
+  if (read.length >= 200 || !document.body) return read;
+  const page = document.body.cloneNode(true) as HTMLElement;
+  for (const overlay of page.querySelectorAll(OVERLAYS)) overlay.remove();
+  for (const noise of page.querySelectorAll('script, style, noscript, template')) noise.remove();
+  const whole = tidy(page.innerText || page.textContent || '');
+  return whole.length > read.length ? whole : read;
+}
 
-  const copy = article.cloneNode(true) as Element;
-  cleanArticle(copy);
-  return (copy.textContent ?? '')
+function tidy(words: string): string {
+  return words
     .replace(/[ \t]+/g, ' ')
     .replace(/(\n\s*){3,}/g, '\n\n')
     .trim();
