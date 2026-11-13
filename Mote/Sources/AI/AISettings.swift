@@ -49,6 +49,20 @@ struct AISettings: View {
         .id(provider.id)
 
         SettingsSection(
+            "Tools", note: "The assistant asks before every action unless you allow a site for that chat. Never in private tabs, never passwords."
+        ) {
+            SettingRow(
+                "Read your tabs and the web", "Open tabs, pages it looks up, your history and bookmarks", symbol: "doc.text.magnifyingglass",
+                tint: Tint.blue, on: $prefs.aiReads)
+            if prefs.aiReads {
+                RowRule()
+                SettingRow(
+                    "Act in pages", "Open tabs, click and type for you, asking first", symbol: "cursorarrow.click.2", tint: Tint.orange,
+                    on: $prefs.aiActs)
+            }
+        }
+
+        SettingsSection(
             "Chat sidebar",
             note: "A site stays as you move between tabs, signed in as it is in the space it opened in. ⇧⌘A opens and closes it."
         ) {

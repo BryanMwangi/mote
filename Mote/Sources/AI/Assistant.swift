@@ -279,7 +279,7 @@ final class Assistant {
 
     /// A route to the chosen provider, or why there isn't one. A provider with
     /// no model chosen and no default gets the first it lists.
-    func route(to provider: Provider? = nil) async throws -> Conversation.Route {
+    func route(to provider: Provider? = nil, chat: UUID? = nil) async throws -> Conversation.Route {
         let provider = provider ?? self.provider
         if provider.agent != nil { await lookAround() }
         // Whatever failed before (a server not yet started) is tried again.
@@ -297,7 +297,12 @@ final class Assistant {
         var service = try connector.service(for: provider, setup: setup(for: provider), key: secrets.key(for: provider.id), search: search)
         // Research runs many replies of the provider's: a plan, researchers
         // that search, a writer that doesn't. Only researchers get the search method.
-        if mode == .research { service = Research(service: service) }
+        if mode == .research {
+            service = Research(service: service)
+        } else if let tools = AssistantTools.current(chat: chat) {
+            // Mote's own tools: the model asks, Mote does it, the model goes on.
+            service = ToolLoop(service: service, tools: tools.list, describe: AssistantTools.describe) { call in await tools.run(call) }
+        }
         let author = model.isEmpty ? provider.name : "\(provider.name) · \(modelName(for: provider))"
         return Conversation.Route(
             provider: provider.id, model: model, author: author, service: service,
@@ -323,11 +328,11 @@ final class Assistant {
 
     /// Sends `text` in `conversation` to the chosen provider.
     func ask(_ text: String, in conversation: Conversation) {
-        conversation.send(text, routing: { [self] in try await route() })
+        conversation.send(text, routing: { [self] in try await route(chat: conversation.id) })
     }
 
     /// Asks again for the last reply, through whatever provider is chosen now.
     func retry(in conversation: Conversation) {
-        conversation.retry(routing: { [self] in try await route() })
+        conversation.retry(routing: { [self] in try await route(chat: conversation.id) })
     }
 }

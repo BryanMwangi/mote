@@ -118,7 +118,7 @@ public struct Research: ChatService {
         for try await event in service.reply(to: writing) {
             switch event {
             case .text, .reasoning, .usage: emit(event)
-            case .session, .activity, .source: break
+            case .session, .activity, .source, .toolCall: break
             }
         }
         emit(.activity(Activity(id: "write", title: "Writing the report", done: true, kind: .phase)))
@@ -171,7 +171,7 @@ public struct Research: ChatService {
                 case .activity(var activity):
                     activity.id = "\(id)-\(activity.id)"
                     emit(.activity(activity))
-                case .session, .reasoning, .usage: break
+                case .session, .reasoning, .usage, .toolCall: break
                 }
             }
         }

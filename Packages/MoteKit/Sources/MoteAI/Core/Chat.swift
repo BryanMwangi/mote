@@ -53,6 +53,10 @@ public struct ChatRequest: Equatable, Sendable {
     public var resume: String?
     /// Search the web for the answer, with the provider's own search.
     public var search: Bool
+    /// Tools the model may ask the app to use (see ToolLoop).
+    public var tools: [Tool] = []
+    /// The tools asked for in this reply so far, and their results.
+    public var exchanges: [ToolExchange] = []
 
     public init(model: String, messages: [Message], instructions: String? = nil, resume: String? = nil, search: Bool = false) {
         self.model = model
@@ -81,6 +85,8 @@ public enum ChatEvent: Equatable, Sendable {
     case usage(Usage)
     /// A page the provider found or read on the way.
     case source(Source)
+    /// The model asks for a tool (see ToolLoop).
+    case toolCall(ToolCall)
 }
 
 public struct Activity: Equatable, Codable, Sendable {

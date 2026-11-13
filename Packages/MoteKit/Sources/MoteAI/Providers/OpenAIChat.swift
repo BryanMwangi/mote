@@ -29,15 +29,28 @@ public struct OpenAIChatService: ChatService {
     }
 
     func request(for chat: ChatRequest) -> URLRequest {
-        var messages: [[String: String]] = []
+        var messages: [[String: Any]] = []
         if let instructions = chat.instructions, !instructions.isEmpty { messages.append(["role": "system", "content": instructions]) }
         messages += chat.messages.filter { !$0.text.isEmpty }.map { ["role": $0.role.rawValue, "content": $0.text] }
+        for exchange in chat.exchanges {
+            let call: [String: Any] = [
+                "id": exchange.call.id, "type": "function", "function": ["name": exchange.call.name, "arguments": exchange.call.input.encoded],
+            ]
+            messages.append(["role": "assistant", "content": exchange.said.isEmpty ? NSNull() : exchange.said, "tool_calls": [call]])
+            messages.append(["role": "tool", "tool_call_id": exchange.call.id, "content": exchange.result])
+        }
         var request = authorized(URLRequest(url: base.appending(path: "chat/completions")))
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
         let model = online && chat.search && !chat.model.hasSuffix(":online") ? chat.model + ":online" : chat.model
-        request.httpBody = Data(JSON.encode(["model": model, "messages": messages, "stream": true]).utf8)
+        var body: [String: Any] = ["model": model, "messages": messages, "stream": true]
+        if !chat.tools.isEmpty {
+            body["tools"] = chat.tools.map {
+                ["type": "function", "function": ["name": $0.name, "description": $0.description, "parameters": $0.parameters.plain]]
+            }
+        }
+        request.httpBody = Data(JSON.encode(body).utf8)
         return request
     }
 
@@ -72,7 +85,19 @@ public struct OpenAIChatService: ChatService {
 }
 
 public struct OpenAIChatDecoder: LineDecoder {
+    /// Tool calls arriving in pieces, by their index in the reply.
+    private var calls: [Int: (id: String, name: String, arguments: String)] = [:]
+
     public init() {}
+
+    /// The tool calls, whole, once the reply has ended.
+    public mutating func finish() throws -> [ChatEvent] {
+        defer { calls = [:] }
+        return calls.keys.sorted().compactMap { index in
+            guard let call = calls[index], !call.name.isEmpty else { return nil }
+            return .toolCall(ToolCall(id: call.id, name: call.name, input: JSON(parsing: call.arguments) ?? .object([:])))
+        }
+    }
 
     public mutating func read(_ line: String) throws -> [ChatEvent] {
         guard let data = ServerSentEvents.data(in: line), data != "[DONE]", let json = JSON(parsing: data) else { return [] }
@@ -86,6 +111,14 @@ public struct OpenAIChatDecoder: LineDecoder {
                 if let text = delta[key]?.string, !text.isEmpty { events.append(.reasoning(text)) }
             }
             if let text = delta["content"]?.string, !text.isEmpty { events.append(.text(text)) }
+            for call in delta["tool_calls"]?.array ?? [] {
+                let index = call["index"]?.int ?? 0
+                var whole = calls[index] ?? ("", "", "")
+                if let id = call["id"]?.string { whole.id = id }
+                if let name = call["function"]?["name"]?.string { whole.name += name }
+                whole.arguments += call["function"]?["arguments"]?.string ?? ""
+                calls[index] = whole
+            }
             // Gateways that search (OpenRouter) cite their pages alongside.
             for annotation in delta["annotations"]?.array ?? [] {
                 let citation = annotation["url_citation"] ?? annotation

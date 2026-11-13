@@ -21,16 +21,25 @@ public struct ResponsesService: ChatService {
     }
 
     func request(for chat: ChatRequest) -> URLRequest {
-        var body: [String: Any] = [
-            "model": chat.model, "stream": true,
-            "input": chat.messages.filter { !$0.text.isEmpty }.map { ["role": $0.role.rawValue, "content": $0.text] },
-        ]
+        var input: [Any] = chat.messages.filter { !$0.text.isEmpty }.map { ["role": $0.role.rawValue, "content": $0.text] }
+        for exchange in chat.exchanges {
+            if !exchange.said.isEmpty { input.append(["role": "assistant", "content": exchange.said]) }
+            input.append([
+                "type": "function_call", "call_id": exchange.call.id, "name": exchange.call.name, "arguments": exchange.call.input.encoded,
+            ])
+            input.append(["type": "function_call_output", "call_id": exchange.call.id, "output": exchange.result])
+        }
+        var body: [String: Any] = ["model": chat.model, "stream": true, "input": input]
         if let instructions = chat.instructions, !instructions.isEmpty { body["instructions"] = instructions }
+        var tools: [Any] = chat.tools.map {
+            ["type": "function", "name": $0.name, "description": $0.description, "parameters": $0.parameters.plain]
+        }
         if chat.search {
-            body["tools"] = [["type": "web_search"]]
+            tools.append(["type": "web_search"])
             // Every page searched, not only those cited.
             body["include"] = ["web_search_call.action.sources"]
         }
+        if !tools.isEmpty { body["tools"] = tools }
         var request = URLRequest(url: base.appending(path: "responses"))
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -55,6 +64,11 @@ public struct ResponsesDecoder: LineDecoder {
             guard let item = json["item"], item["type"]?.string == "web_search_call", let id = item["id"]?.string else { return [] }
             return [.activity(.search(id, item["action"]?["query"]?.string))]
         case "response.output_item.done":
+            if let item = json["item"], item["type"]?.string == "function_call", let id = item["call_id"]?.string,
+                let name = item["name"]?.string
+            {
+                return [.toolCall(ToolCall(id: id, name: name, input: JSON(parsing: item["arguments"]?.string ?? "") ?? .object([:])))]
+            }
             guard let item = json["item"], item["type"]?.string == "web_search_call", let id = item["id"]?.string else { return [] }
             let action = item["action"]
             let found: [ChatEvent] =

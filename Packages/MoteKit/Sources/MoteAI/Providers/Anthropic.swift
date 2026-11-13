@@ -53,11 +53,19 @@ public struct AnthropicService: ChatService {
     /// has said so far, as the API's own blocks.
     func request(for chat: ChatRequest, saying said: [JSON] = []) -> URLRequest {
         var messages: [Any] = chat.messages.filter { !$0.text.isEmpty }.map { ["role": $0.role.rawValue, "content": $0.text] }
+        for exchange in chat.exchanges {
+            var asked: [Any] = exchange.said.isEmpty ? [] : [["type": "text", "text": exchange.said]]
+            asked.append(["type": "tool_use", "id": exchange.call.id, "name": exchange.call.name, "input": exchange.call.input.plain])
+            messages.append(["role": "assistant", "content": asked])
+            messages.append(["role": "user", "content": [["type": "tool_result", "tool_use_id": exchange.call.id, "content": exchange.result]]])
+        }
         if !said.isEmpty { messages.append(["role": "assistant", "content": said.map(\.plain)]) }
         var body: [String: Any] = ["model": chat.model, "max_tokens": Self.replyLimit, "stream": true, "messages": messages]
         if let instructions = chat.instructions, !instructions.isEmpty { body["system"] = instructions }
         // Anthropic's own search, run on its servers; the reply cites what it found.
-        if chat.search { body["tools"] = [["type": "web_search_20250305", "name": "web_search", "max_uses": Self.searchLimit]] }
+        var tools: [Any] = chat.search ? [["type": "web_search_20250305", "name": "web_search", "max_uses": Self.searchLimit]] : []
+        tools += chat.tools.map { ["name": $0.name, "description": $0.description, "input_schema": $0.parameters.plain] }
+        if !tools.isEmpty { body["tools"] = tools }
         var request = authorized(URLRequest(url: base.appending(path: "v1/messages")))
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -94,6 +102,8 @@ public struct AnthropicDecoder: LineDecoder {
 
     /// The blocks of the reply so far, in order.
     public var blocks: [JSON] { sent.keys.sorted().compactMap { sent[$0] } }
+    /// Tools the model asks the app for, by block index.
+    private var calls: [Int: (id: String, name: String)] = [:]
     /// Server searches under way by block index: their id and the query as it streams in.
     private var searches: [Int: (id: String, query: String)] = [:]
     private var finished: [String: Activity] = [:]
@@ -157,6 +167,9 @@ public struct AnthropicDecoder: LineDecoder {
         case "text":
             blockStarted = true
             return []
+        case "tool_use":
+            if let id = block?["id"]?.string, let name = block?["name"]?.string { calls[index] = (id, name) }
+            return []
         case "server_tool_use":
             guard let id = block?["id"]?.string, block?["name"]?.string == "web_search" else { return [] }
             searches[index] = (id, "")
@@ -202,6 +215,9 @@ public struct AnthropicDecoder: LineDecoder {
     /// A search's query is whole once its block ends; a cited text block ends
     /// with links to what it cites, the way the chat shows citations.
     private mutating func stopped(at index: Int) -> [ChatEvent] {
+        if let call = calls.removeValue(forKey: index) {
+            return [.toolCall(ToolCall(id: call.id, name: call.name, input: sent[index]?["input"] ?? .object([:])))]
+        }
         if let search = searches.removeValue(forKey: index) {
             let query = JSON(parsing: search.query)?["query"]?.string
             let activity = Activity.search(search.id, query)

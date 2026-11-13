@@ -347,6 +347,9 @@ public final class Conversation: Identifiable {
             usage = spent
         case .source(let source):
             if !messages[last].sources.contains(where: { $0.id == source.id }) { messages[last].sources.append(source) }
+        case .toolCall:
+            // Carried out by the tool loop, which shows it as a step.
+            break
         }
     }
 
