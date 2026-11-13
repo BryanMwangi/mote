@@ -112,6 +112,8 @@ final class Browser: NSObject, ObservableObject {
     /// The tab whose row the site card hangs beside (see SiteCardPanel).
     @Published var siteCardRow: Tab.ID?
     var folderSpots: [UUID: WeakView] = [:]
+    /// The open tabs' list in the sidebar, for a tab dragged out of a folder.
+    var looseSpot: WeakView?
     /// The tabs the media strips show, the one heard last first (see Browser+Media.swift).
     @Published var players: [Tab] = []
     var playing: Tab? { players.first }
@@ -1017,7 +1019,7 @@ final class Browser: NSObject, ObservableObject {
 
         if tab.held {
             remember(tab, at: index)
-            tab.rest()
+            tab.rest(home: tab.wandered)
             // Prefer the most recent loose tab, so ⌘W doesn't bounce between pins.
             let awake = tabs.filter { $0.id != tab.id && !$0.asleep }
             let loose = awake.filter { !$0.held }

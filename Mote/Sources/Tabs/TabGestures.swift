@@ -123,6 +123,12 @@ struct Reorderable: ViewModifier {
             withAnimation(Motion.settle) { drag = nil }
             return filing.browser.dropInFolder(filing.tab)
         }
+        // A tab of a folder let go over the open tabs leaves the folder for there.
+        if let filing, filing.tab.folder != nil, let place = filing.browser.loosePlace(at: NSEvent.mouseLocation) {
+            withAnimation(Motion.settle) { drag = nil }
+            Haptic.tick()
+            return withAnimation(Motion.settle) { filing.browser.unfile(filing.tab, at: place) }
+        }
         if let away, case let zone = zone, zone != .list {
             withAnimation(Motion.settle) { drag = nil }
             // Once: another list showing the same tab may hear the same drag end.

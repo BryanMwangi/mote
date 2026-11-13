@@ -744,11 +744,12 @@ final class Tab: ObservableObject, Identifiable {
     /// An essential or pinned tab: closing it only lets its page go.
     var held: Bool { pin != nil || kept }
 
-    /// ⌘W on a pinned tab: keeps its place and address, lets the page go.
-    func rest() {
-        guard let url = address else { return }
-        // With its history, so it goes back as far as it did.
-        rested = Rested(url: url, state: history)
+    /// ⌘W or – on a pinned tab: keeps its place, lets the page go. One that
+    /// browsed away from its pinned page (`home`) goes back to it, afresh.
+    func rest(home: Bool = false) {
+        guard let url = home ? self.home ?? address : address else { return }
+        // With its history, so it goes back as far as it did; from home, none.
+        rested = Rested(url: url, state: home ? nil : history)
         reading.fraction = 0
         noisy = false
         // Loading about:blank isn't enough: WebKit keeps the old document in its

@@ -150,7 +150,7 @@ struct TabHoldItems: View {
                 if !browser.folderChoices.isEmpty { Divider() }
                 Button("New Folder…") { browser.newFolder(with: tab) }
             }
-            if tab.folder != nil { Button("Remove from Folder") { browser.move(tab, toFolder: nil) } }
+            if tab.folder != nil { Button("Remove from Folder") { browser.unfile(tab) } }
         }
         if tab.wandered {
             Button("Back to Pinned Page") { browser.goHome(tab) }

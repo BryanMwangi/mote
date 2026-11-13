@@ -417,7 +417,7 @@ private struct SpacePage: View {
                                                 browser.move(tab, to: place + browser.essentialCount)
                                             })
                                 } else if let home = tab.folder, case let siblings = kept.filter({ $0.folder == home }),
-                                    let index = siblings.firstIndex(where: { $0.id == id }), siblings.count > 1
+                                    let index = siblings.firstIndex(where: { $0.id == id })
                                 {
                                     // Among its folder's own tabs, which sit together.
                                     row(tab)
@@ -489,6 +489,8 @@ private struct SpacePage: View {
                 }
             }
             .overlay { closing(loose.map { $0 }) }
+            // Where a tab dragged out of a folder would land.
+            .background { if live { LooseSpot(browser: browser) } }
             // Drags are measured in the list's space (see Reorderable).
             .coordinateSpace(name: "rows")
             Quiet(icon: "plus", title: "New tab", height: Self.row) { browser.newTab() }.padding(.top, Self.gap)
@@ -629,6 +631,22 @@ private struct PinSquare: View {
                 }
             )
             .rowHover { hovering = $0 }
+            // – lets the page go, keeping the essential.
+            .overlay(alignment: .topTrailing) {
+                if hovering, !tab.asleep, !lettering {
+                    Image(systemName: "minus")
+                        .font(.system(size: 7, weight: .bold))
+                        .foregroundStyle(Palette.muted)
+                        .frame(width: 14, height: 14)
+                        .background(Palette.ground, in: Circle())
+                        .overlay(Circle().strokeBorder(Palette.hairline))
+                        .contentShape(Circle())
+                        .onTapGesture { browser.close(tab) }
+                        .help("Unload Tab, keeping it   ⌘W")
+                        .offset(x: 4, y: -4)
+                        .transition(.opacity)
+                }
+            }
             .contextMenu { TabMenu(browser: browser, tab: tab) { browser.close(tab) } }
             .help(tab.label)
             .animation(Motion.hover, value: hovering)
@@ -690,7 +708,7 @@ private struct SideRow: View {
                 InlineField.rename(browser).frame(height: 16)
             } else {
                 if icons, !tab.isBlank || tab.isStart {
-                    Mark(icon: tab.icon, letter: tab.monogram, size: 16, mote: tab.isStart)
+                    Mark(icon: tab.icon, letter: tab.monogram, size: 16, dim: tab.asleep && tab.held, mote: tab.isStart)
                 }
                 TabMarks(tab: tab, colour: colour)
                 Text(tab.label).font(TextStyle.body.font).lineLimit(1).truncationMode(.tail).foregroundStyle(colour)
@@ -734,7 +752,9 @@ private struct SideRow: View {
         // double-click interval of the tab you're on before closing it.
         .overlay(alignment: .trailing) {
             if !renaming {
-                let home = tab.wandered
+                // An essential's or pinned tab's – lets its page go (back to its
+                // pinned page, if it went elsewhere); Back to Pinned Page is in its menu.
+                let home = tab.wandered && !tab.held
                 Shut(shown: hovering, home: home, rests: tab.held, act: home ? { browser.goHome(tab) } : close)
                     .padding(.trailing, preview == nil ? 7 : 30)
             }
@@ -995,5 +1015,17 @@ extension EnvironmentValues {
     fileprivate var sidebarShowing: Bool {
         get { self[SidebarShowing.self] }
         set { self[SidebarShowing.self] = newValue }
+    }
+}
+
+/// Marks the open tabs' list for a tab dragged out of a folder (Browser.loosePlace).
+private struct LooseSpot: FillsRoom {
+    let browser: Browser
+
+    func makeNSView(context: Context) -> NSView { Spot() }
+    func updateNSView(_ view: NSView, context: Context) { browser.looseSpot = WeakView(view) }
+
+    private final class Spot: NSView {
+        override func hitTest(_ point: NSPoint) -> NSView? { nil }
     }
 }

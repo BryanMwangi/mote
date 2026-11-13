@@ -48,6 +48,24 @@ extension Browser {
         writeSession(now: true)
     }
 
+    /// Out of its folder, back among the open tabs: at `place` in them (a drop
+    /// there), else first.
+    func unfile(_ tab: Tab, at place: Int? = nil) {
+        unkeep(tab)
+        let loose = tabs.filter { !$0.held && $0.id != tab.id }
+        move(tab, to: pinnedCount + min(max(place ?? 0, 0), loose.count))
+    }
+
+    /// Where among the open tabs a tab let go at `pointer` (on screen) goes,
+    /// if it's over their list in the sidebar.
+    func loosePlace(at pointer: NSPoint) -> Int? {
+        guard let view = looseSpot?.view, let window = view.window, window === self.window else { return nil }
+        let frame = window.convertToScreen(view.convert(view.bounds, to: nil))
+        guard frame.insetBy(dx: 0, dy: -Metrics.row).contains(pointer) else { return nil }
+        // Rows go down from the top; the screen's y goes up.
+        return Int((frame.maxY - pointer.y) / (Metrics.row + 2))
+    }
+
     /// The folder a tab dragged to `pointer` (on screen) would drop into,
     /// noted for its row to light up. Live folders keep to their feeds.
     @discardableResult
