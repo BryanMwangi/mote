@@ -10,6 +10,13 @@ import WebKit
 // verifications) opens in one too, as browsers give pop-ups a window with
 // nothing but the page and its site: no tabs, sidebar or address field.
 
+/// Where links from other apps open (Settings › General).
+enum LinkSpace {
+    static let current = ""
+    /// A tab that keeps nothing, as a private window's.
+    static let none = "private"
+}
+
 @MainActor
 final class LinkWindow: NSObject, NSWindowDelegate {
     /// Every one open, oldest first, until closed or kept.
@@ -19,15 +26,23 @@ final class LinkWindow: NSObject, NSWindowDelegate {
     private weak var browser: Browser?
     private let window: NSWindow
     private var kept = false
+    /// The space it opens in when kept; nil for the one showing.
+    private var space: UUID?
     /// A page's pop-up: it stays a window, closed by the page or ⌘W.
     let popup: Bool
 
     /// `front: false` makes it without showing it, for the bench.
     static func show(_ url: URL, for browser: Browser, front: Bool = true) {
-        let tab = Tab()
+        let chosen = browser.prefs.linksSpace
+        // A space that's gone counts as the one showing.
+        let space = browser.usesSpaces ? browser.spaces.first { $0.id.uuidString == chosen }?.id : nil
+        let tab =
+            chosen == LinkSpace.none
+            ? Tab(shy: true) : space.map { Tab(configuration: Web.configuration(space: $0)) } ?? Tab()
         browser.prepare(tab)
         tab.go(to: url)
         let little = LinkWindow(tab: tab, browser: browser)
+        little.space = space
         all.append(little)
         little.window.center()
         guard front else { return }
@@ -107,9 +122,19 @@ final class LinkWindow: NSObject, NSWindowDelegate {
     func keep() {
         guard let browser else { return }
         kept = true
+        window.close()
+        // One that keeps nothing goes to a private window.
+        if tab.shy, !browser.isPrivate {
+            let hidden = Windows.shared.open(private: true)
+            let blank = hidden.active
+            hidden.adopt(tab)
+            hidden.activeID = tab.id
+            if let blank, blank.isBlank { hidden.close(blank) }
+            return
+        }
+        if let space, space != browser.spaceID { browser.switchSpace(to: space) }
         browser.insert(tab, at: browser.placeForNew())
         browser.select(tab)
-        window.close()
         let main = AppDelegate.window ?? NSApp.windows.first { $0.contentView != nil && !($0 is NSPanel) && $0 !== window }
         main?.makeKeyAndOrderFront(nil)
     }

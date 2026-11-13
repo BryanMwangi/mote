@@ -91,7 +91,24 @@ struct GeneralSettings: View {
             RowRule()
             SettingRow(
                 "Links from other apps in a small window", "Handy for a quick look. ⌘O moves it into your tabs",
-                symbol: "macwindow.on.rectangle", tint: Tint.green, on: $prefs.littleLinks)
+                symbol: "macwindow.on.rectangle", tint: Tint.green, keywords: ["space", "private"]
+            ) {
+                HStack(spacing: 10) {
+                    if prefs.littleLinks, browser.usesSpaces || prefs.linksSpace == LinkSpace.none {
+                        Picker("", selection: $prefs.linksSpace) {
+                            Text("Current Space").tag(LinkSpace.current)
+                            ForEach(browser.spaces) { Text($0.name).tag($0.id.uuidString) }
+                            Divider()
+                            Text("None (Private)").tag(LinkSpace.none)
+                        }
+                        .labelsHidden()
+                        .pickerStyle(.menu)
+                        .fixedSize()
+                        .help("The space links open in; None keeps nothing, as a private window")
+                    }
+                    Switch(on: $prefs.littleLinks)
+                }
+            }
             RowRule()
             SettingRow(
                 "Show where links go", "The address under the pointer, at the bottom of the page", symbol: "link", tint: Tint.blue,

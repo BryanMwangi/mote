@@ -126,6 +126,9 @@ final class Preferences: ObservableObject {
     @Published var shortcuts: Shortcuts
     /// Links from other apps open in a small window (see LinkWindow.swift).
     @Published var littleLinks: Bool
+    /// The space those links open in: a space's id, `LinkSpace.current` for
+    /// whichever is showing, or `LinkSpace.none` for a tab that keeps nothing.
+    @Published var linksSpace: String
     /// The hovered link's address at the bottom of the page (see StatusLine.swift).
     @Published var showsLinks: Bool
 
@@ -223,6 +226,7 @@ final class Preferences: ObservableObject {
         extensionStore = store.value("extensions.store", or: "chrome")
         shortcuts = store.value("keys.custom", or: Shortcuts())
         littleLinks = store.value("links.little", or: false)
+        linksSpace = store.value("links.space", or: LinkSpace.current)
         showsLinks = store.value("links.show", or: false)
         sleepsTabs = store.value("tabs.sleep", or: true)
         sideRight = store.value("sidebar.right", or: false)
@@ -308,6 +312,7 @@ final class Preferences: ObservableObject {
             }
         }
         keep($littleLinks, "links.little")
+        keep($linksSpace, "links.space")
         keep($showsLinks, "links.show") { HoveredLink.on = $0 }
         keep($sleepsTabs, "tabs.sleep")
         keep($sideRight, "sidebar.right")
