@@ -213,19 +213,30 @@ struct OneClick: ViewModifier {
     @State private var pressed = false
     @State private var width: CGFloat = 0
 
+    /// Held down without moving: the tab gives a little, as a button does.
+    @State private var giving = false
+
     func body(content: Content) -> some View {
         content
+            .scaleEffect(giving ? 0.98 : 1)
+            .animation(Motion.press, value: giving)
             .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
             .simultaneousGesture(
                 DragGesture(minimumDistance: 0)
                     .onChanged { press in
+                        // A drag takes the tab away instead.
+                        let still = hypot(press.translation.width, press.translation.height) < 5
+                        if giving != still { giving = still }
                         guard !pressed else { return }
                         pressed = true
                         // A control-click is the tab's menu.
                         guard press.startLocation.x < width - spare, !NSEvent.modifierFlags.contains(.control) else { return }
                         pressedDown()
                     }
-                    .onEnded { _ in pressed = false })
+                    .onEnded { _ in
+                        pressed = false
+                        giving = false
+                    })
     }
 
     private func pressedDown() {
