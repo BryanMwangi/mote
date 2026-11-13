@@ -51,6 +51,9 @@ final class AddressEntry {
         }
     }
 
+    /// A question asked from the floating search, answered in it (see AskCard).
+    var askCard: Conversation?
+
     /// The floating search opens a private tab (⇧⌘N from a normal window).
     var launchingPrivate = false
 
@@ -95,6 +98,7 @@ final class AddressEntry {
 
     /// Empties the field and leaves switcher mode.
     func clear() {
+        askCard = nil
         input.switching = false
         launching = false
         launchingPrivate = false

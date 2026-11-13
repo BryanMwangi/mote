@@ -1,6 +1,7 @@
 import AppKit
 import MoteAI
 import MoteCore
+import SwiftUI
 
 // The address field's actions: what it suggests, ⌘L, ⌘K and Return.
 extension Browser {
@@ -134,6 +135,14 @@ extension Browser {
         field.askFocus()
     }
 
+    /// The ask card's chat, in the chat sidebar instead.
+    func moveAskToSidebar() {
+        guard let tab = active, field.askCard != nil else { return }
+        editing = false
+        field.clear()
+        if !tab.chatOpen { slidingFold { tab.chatOpen = true } }
+    }
+
     /// Escape or a click outside. A blank tab keeps its field; there is no
     /// page behind it.
     func dismiss() {
@@ -255,9 +264,9 @@ extension Browser {
     /// first, as a first question in the panel would.
     private func ask(_ text: String, about tab: Tab) {
         let chat = tab.ensurePageChat()
-        editing = false
-        field.clear()
-        if !tab.chatOpen { slidingFold { tab.chatOpen = true } }
+        // Answered in the search itself, which becomes a chat card.
+        field.typed = ""
+        withAnimation(Motion.glide) { field.askCard = chat }
         Task {
             await tab.attachCurrentPage()
             Assistant.shared.ask(text, in: chat)

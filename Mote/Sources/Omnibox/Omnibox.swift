@@ -16,19 +16,67 @@ struct Omnibox: View {
                 .onTapGesture { browser.dismiss() }
                 .transition(.opacity)
 
-            Composer(browser: browser, compact: true)
-                .frame(width: Metrics.fieldWidth)
-                .overlay(alignment: .top) {
-                    if !browser.field.offers.isEmpty {
-                        SuggestionList(browser: browser)
-                            .offset(y: Composer.compactHeight + 8)
-                            .transition(.opacity.combined(with: .offset(y: -4)))
+            if let chat = browser.field.askCard {
+                AskCard(browser: browser, chat: chat)
+                    .padding(.top, 120)
+                    .transition(.scale(scale: 0.97, anchor: .top).combined(with: .opacity))
+            } else {
+                Composer(browser: browser, compact: true)
+                    .frame(width: Metrics.fieldWidth)
+                    .overlay(alignment: .top) {
+                        if !browser.field.offers.isEmpty {
+                            SuggestionList(browser: browser)
+                                .offset(y: Composer.compactHeight + 8)
+                                .transition(.opacity.combined(with: .offset(y: -4)))
+                        }
                     }
-                }
-                .padding(.top, 120)
-                .transition(.scale(scale: 0.97, anchor: .top).combined(with: .opacity))
-                .animation(Motion.quick, value: browser.field.offers.isEmpty)
+                    .padding(.top, 120)
+                    .transition(.scale(scale: 0.97, anchor: .top).combined(with: .opacity))
+                    .animation(Motion.quick, value: browser.field.offers.isEmpty)
+            }
         }
+    }
+}
+
+/// A question asked from the floating search, answered in it: the search
+/// grows into a chat card. Its header goes back to the recent chats, shows the
+/// model, and moves the chat to the sidebar; the answer is in the middle,
+/// with a follow-up field at the foot. Escape closes it, and the chat stays
+/// with the tab, to pick up in the sidebar.
+private struct AskCard: View {
+    @ObservedObject var browser: Browser
+    let chat: Conversation
+    @State private var listing = false
+
+    private static let size = CGSize(width: 680, height: 520)
+    private let shape = RoundedRectangle(cornerRadius: 18, style: .continuous)
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 8) {
+                Door(icon: listing ? "chevron.left" : "clock.arrow.circlepath", help: listing ? "Back to the answer" : "Recent chats") {
+                    withAnimation(Motion.quick) { listing.toggle() }
+                }
+                Image(systemName: "sparkle").font(.system(size: 12, weight: .medium)).foregroundStyle(Palette.muted)
+                Text("Ask").font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.ink)
+                AIChip(browser: browser)
+                Spacer(minLength: 0)
+                Door(icon: "sidebar.right", help: "Open in the chat sidebar") { browser.moveAskToSidebar() }
+            }
+            .padding(.horizontal, 10)
+            .frame(height: 44)
+            Rectangle().fill(Palette.hairline).frame(height: 1)
+            if listing {
+                ChatsPage(browser: browser, inPanel: true) { browser.dismiss() }
+            } else {
+                ChatView(browser: browser, conversation: chat)
+            }
+        }
+        .frame(width: Self.size.width, height: Self.size.height)
+        .background(Palette.ground, in: shape)
+        .clipShape(shape)
+        .overlay(shape.strokeBorder(Palette.hairline))
+        .shadow(color: .black.opacity(0.07), radius: 24, y: 10)
     }
 }
 
@@ -439,6 +487,12 @@ struct SuggestionList: View {
             }
         }
         .padding(6)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if browser.prefs.tabAsks, browser.field.launching, !browser.field.typed.isEmpty {
+                Text("⇥ Tab to ask").font(.system(size: 11)).foregroundStyle(Palette.muted)
+                    .frame(maxWidth: .infinity, alignment: .trailing).padding(.horizontal, 14).padding(.bottom, 8)
+            }
+        }
         .background(Palette.ground, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
