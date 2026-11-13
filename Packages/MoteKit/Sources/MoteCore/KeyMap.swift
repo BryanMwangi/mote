@@ -21,7 +21,7 @@ public enum KeyMap {
     }
 
     public enum Command: Equatable, Sendable {
-        case newTab, newPrivateWindow, reopenTab, closeTab, duplicateTab
+        case newTab, newPrivateWindow, reopenTab, closeTab, closeUnpinned, duplicateTab
         case nextTab, previousTab
         /// A tab by position; `last` for ⌘9.
         case tab(Int), lastTab

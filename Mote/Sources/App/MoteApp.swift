@@ -215,6 +215,8 @@ private struct MenuBar: Commands {
         Button("Paste and Go", action: browser.pasteAndGo).keyboardShortcut(keys(.pasteAndGo))
         Divider()
         Button("Close Other Tabs") { if let tab = browser.active { browser.closeOthers(but: tab) } }.disabled(browser.tabs.count < 2)
+        Button("Close Unpinned Tabs", action: browser.closeUnpinned).keyboardShortcut(keys(.closeUnpinned))
+            .disabled(!browser.tabs.contains { !$0.held })
         Button("Stop Sound in Tab", action: browser.pauseMedia).keyboardShortcut(keys(.pauseSound))
     }
 

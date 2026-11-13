@@ -1079,6 +1079,40 @@ final class Browser: NSObject, ObservableObject {
         select(keep)
     }
 
+    /// ⇧⌘K: every tab that isn't an essential or pinned, at once. The toast
+    /// brings them all back; ⌘⇧T, one at a time.
+    func closeUnpinned() {
+        let loose = tabs.filter { !$0.held }
+        guard !loose.isEmpty else { return }
+        if let floating, loose.contains(where: { $0.id == floating }) { land() }
+        var gone: [Ghost] = []
+        for tab in loose {
+            if let index = row.index(of: tab.id), !tab.shy, let url = tab.address {
+                let ghost = Ghost(url: url, title: tab.title, index: index, state: tab.history)
+                closed.push(ghost)
+                gone.append(ghost)
+            }
+            permissions.drop(tab: tab.id)
+            unsplit(tab: tab.id)
+            tab.close()
+        }
+        reorder { row in for tab in loose { row.remove(tab.id) } }
+        if tabs.isEmpty {
+            let fresh = Tab()
+            prepare(fresh)
+            tabs = [fresh]
+            activeID = fresh.id
+        } else if !tabs.contains(where: { $0.id == activeID }), let next = recentlyUsed(besides: nil) {
+            select(next)
+        }
+        saveSoon()
+        let count = loose.count
+        announce(
+            Announcement(
+                count == 1 ? "1 tab closed" : "\(count) tabs closed", detail: "⇧⌘T brings them back one at a time.", symbol: "xmark.square",
+                action: gone.isEmpty ? nil : .init(title: "Reopen") { [weak self] in for ghost in gone { self?.reopen(ghost) } }))
+    }
+
     /// ⌘⇧T.
     func reopen() {
         if let ghost = closed.last { reopen(ghost) }

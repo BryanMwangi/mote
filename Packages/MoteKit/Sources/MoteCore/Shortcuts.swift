@@ -66,8 +66,8 @@ public struct KeyCombo: Hashable, Codable, Sendable {
 /// from here, so a change shows and works everywhere.
 public enum ShortcutID: String, CaseIterable, Codable, CodingKeyRepresentable, Sendable {
     // Tabs
-    case newTab, reopenTab, closeTab, duplicateTab, unloadTab, nextTab, previousTab, switcher, editAddress, copyAddress, pasteAndGo,
-        openFile
+    case newTab, reopenTab, closeTab, closeUnpinned, duplicateTab, unloadTab, nextTab, previousTab, switcher, editAddress, copyAddress,
+        pasteAndGo, openFile
     // Windows
     case newWindow, newPrivateWindow, newPrivateTab
     // Page
@@ -92,8 +92,8 @@ public enum ShortcutID: String, CaseIterable, Codable, CodingKeyRepresentable, S
 
     public var group: Group {
         switch self {
-        case .newTab, .reopenTab, .closeTab, .duplicateTab, .unloadTab, .nextTab, .previousTab, .switcher, .editAddress, .copyAddress,
-            .pasteAndGo, .openFile:
+        case .newTab, .reopenTab, .closeTab, .closeUnpinned, .duplicateTab, .unloadTab, .nextTab, .previousTab, .switcher, .editAddress,
+            .copyAddress, .pasteAndGo, .openFile:
             .tabs
         case .newWindow, .newPrivateWindow, .newPrivateTab: .windows
         case .back, .forward, .reload, .reloadFromOrigin, .reader, .find, .findNext, .findPrevious, .print, .savePage, .screenshot,
@@ -115,6 +115,7 @@ public enum ShortcutID: String, CaseIterable, Codable, CodingKeyRepresentable, S
         case .newTab: "New Tab"
         case .reopenTab: "Reopen Closed Tab"
         case .closeTab: "Close Tab"
+        case .closeUnpinned: "Close Unpinned Tabs"
         case .duplicateTab: "Duplicate Tab"
         case .unloadTab: "Unload Tab"
         case .nextTab: "Next Tab"
@@ -181,6 +182,7 @@ public enum ShortcutID: String, CaseIterable, Codable, CodingKeyRepresentable, S
         case .newTab: [.cmd("t")]
         case .reopenTab: [.cmd("t", shift: true)]
         case .closeTab: [.cmd("w")]
+        case .closeUnpinned: [.cmd("k", shift: true)]
         case .duplicateTab: [.cmd("d")]
         case .unloadTab: [KeyCombo("u", command: true, control: true)]
         // The layout sends ⇧] as "]" or "}".
@@ -250,6 +252,7 @@ public enum ShortcutID: String, CaseIterable, Codable, CodingKeyRepresentable, S
         case .newTab: .newTab
         case .reopenTab: .reopenTab
         case .closeTab: .closeTab
+        case .closeUnpinned: .closeUnpinned
         case .duplicateTab: .duplicateTab
         case .nextTab: .nextTab
         case .previousTab: .previousTab

@@ -14,6 +14,7 @@ extension Browser {
         case .reopenTab: ghosts.isEmpty ? Windows.shared.reopenClosed() : reopen()
         case .closeTab:
             if peekTab != nil { closePeek() } else if let tab = active { close(tab) }
+        case .closeUnpinned: closeUnpinned()
         case .duplicateTab: duplicate()
         case .nextTab: step(1)
         case .previousTab: step(-1)
