@@ -329,9 +329,8 @@ struct Composer: View {
         .frame(height: contentHeight)
         .background {
             ZStack {
-                if !compact {
-                    AskAura(on: leads).padding(-AskAura.spill)
-                }
+                // Asking, the glow stays round it, the floating search's as the new tab's.
+                AskAura(on: leads).padding(-AskAura.spill)
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
                     .fill(compact ? Palette.ground : Palette.composer)
                     .shadow(color: .black.opacity(0.04), radius: 1, y: 1)
@@ -347,7 +346,7 @@ struct Composer: View {
         }
         .overlay {
             // Asking: the logo's colours run round the border.
-            if !compact { AskHalo(on: leads).padding(-AskHalo.spill) }
+            AskHalo(on: leads).padding(-AskHalo.spill)
         }
         .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         .onTapGesture { browser.field.askFocus() }
@@ -688,34 +687,21 @@ private struct Breath: NSViewRepresentable {
     }
 }
 
-/// The floating search switching to asking: a bump and a brief glow round
-/// its edge, as the full composer's halo marks it.
+/// The floating search switching to asking: a bump, as the glow comes round it.
 private struct AskBump: ViewModifier {
     let on: Bool
     let asking: Bool
     @State private var bumped = false
-    @State private var glowing = false
 
     func body(content: Content) -> some View {
         content
             .scaleEffect(bumped ? 1.015 : 1)
-            .overlay {
-                if on {
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .strokeBorder(Color(nsColor: Glow.clay), lineWidth: 1.5)
-                        .opacity(glowing ? 0.9 : 0)
-                        .shadow(color: Color(nsColor: Glow.clay).opacity(glowing ? 0.6 : 0), radius: 10)
-                        .allowsHitTesting(false)
-                }
-            }
             .onChange(of: asking) { _, now in
                 guard on, now, !Glow.stillness else { return }
                 withAnimation(Motion.press) { bumped = true }
-                withAnimation(.easeOut(duration: 0.15)) { glowing = true }
                 Task {
                     try? await Task.sleep(for: .seconds(0.15))
                     withAnimation(Motion.press) { bumped = false }
-                    withAnimation(.easeOut(duration: 0.5)) { glowing = false }
                 }
             }
     }
