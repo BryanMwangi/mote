@@ -585,6 +585,7 @@ final class Browser: NSObject, ObservableObject {
         tab.folder = entry.kept == true ? entry.folder.flatMap(UUID.init(uuidString:)) : nil
         prepare(tab)
         tab.restore(url: url, title: entry.title, name: entry.name)
+        if let used = entry.used { tab.touch(at: used) }
         tab.pin = entry.pin
         tab.kept = entry.kept == true
         tab.heldID = entry.held.flatMap(UUID.init(uuidString:))
@@ -637,7 +638,7 @@ final class Browser: NSObject, ObservableObject {
         let home = tab.held ? tab.home.map(\.absoluteString).flatMap { $0 == url.absoluteString ? nil : $0 } : nil
         return Session.Entry(
             url: url.absoluteString, title: tab.title, pin: tab.pin, kept: tab.kept ? true : nil, name: tab.name, held: held, home: home,
-            folder: tab.kept ? tab.folder?.uuidString : nil)
+            folder: tab.kept ? tab.folder?.uuidString : nil, used: tab.touched)
     }
 
     // MARK: - Merging spaces
@@ -1132,21 +1133,38 @@ final class Browser: NSObject, ObservableObject {
     /// ⇧⌘K: every tab that isn't an essential or pinned, at once. The toast
     /// brings them all back; ⌘⇧T, one at a time.
     func closeUnpinned() {
-        let loose = tabs.filter { !$0.held }
-        guard !loose.isEmpty else { return }
+        closeTogether(tabs.filter { !$0.held })
+    }
+
+    /// Closes several tabs as one: essentials and pinned tabs let their page
+    /// go, the rest go, here or in a space not showing. The toast brings them
+    /// all back; ⌘⇧T, one at a time.
+    func closeTogether(_ closing: [Tab]) {
+        guard !closing.isEmpty else { return }
+        let held = closing.filter(\.held)
+        let loose = closing.filter { !$0.held }
+        held.forEach(close)
         if let floating, loose.contains(where: { $0.id == floating }) { land() }
         var gone: [Ghost] = []
+        var here: [Tab] = []
         for tab in loose {
-            if let index = row.index(of: tab.id), !tab.shy, let url = tab.address {
-                let ghost = Ghost(url: url, title: tab.title, index: index, state: tab.history)
-                closed.push(ghost)
-                gone.append(ghost)
+            if let index = row.index(of: tab.id) {
+                if !tab.shy, let url = tab.address {
+                    let ghost = Ghost(url: url, title: tab.title, index: index, state: tab.history)
+                    closed.push(ghost)
+                    gone.append(ghost)
+                }
+                here.append(tab)
+            } else if let space = parked.first(where: { $0.value.tabs.contains { $0 === tab } })?.key {
+                // In a space not showing: out of its row there.
+                parked[space]?.tabs.removeAll { $0 === tab }
+                if let row = parked[space] { writeSession(now: true, space: space, tabs: row.tabs, active: row.active) }
             }
             permissions.drop(tab: tab.id)
             unsplit(tab: tab.id)
             tab.close()
         }
-        reorder { row in for tab in loose { row.remove(tab.id) } }
+        reorder { row in for tab in here { row.remove(tab.id) } }
         if tabs.isEmpty {
             let fresh = Tab()
             prepare(fresh)
@@ -1156,6 +1174,7 @@ final class Browser: NSObject, ObservableObject {
             select(next)
         }
         saveSoon()
+        guard !loose.isEmpty else { return }
         let count = loose.count
         announce(
             Announcement(

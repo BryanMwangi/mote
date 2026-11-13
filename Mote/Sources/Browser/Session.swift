@@ -22,6 +22,8 @@ enum Session {
         var home: String?
         /// A pinned tab's folder; nil in older files and for the others.
         var folder: String?
+        /// When the tab was last used; nil in older files.
+        var used: Date?
     }
 
     nonisolated struct Saved: Codable, Sendable {

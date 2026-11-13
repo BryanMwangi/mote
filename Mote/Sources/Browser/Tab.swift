@@ -208,7 +208,7 @@ final class Tab: ObservableObject, Identifiable {
         self.configuration = configuration ?? Web.configuration(shy: shy)
     }
 
-    func touch() { touched = Date() }
+    func touch(at when: Date = Date()) { touched = when }
 
     // MARK: - The web view
 

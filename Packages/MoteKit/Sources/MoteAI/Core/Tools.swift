@@ -174,6 +174,11 @@ extension ToolLoop {
         case "fill": return "Typing on the page"
         case "close_tabs": return "Closing tabs"
         case "select_tab": return "Switching tabs"
+        case "move_tabs": return "Moving tabs"
+        case "pin_tabs": return input?["pinned"]?.bool == false ? "Unpinning tabs" : "Pinning tabs"
+        case "mute_tabs": return input?["muted"]?.bool == false ? "Unmuting tabs" : "Muting tabs"
+        case "reload_tabs": return "Reloading tabs"
+        case "navigate": return site.map { "Going to \($0)" } ?? "Going \(input?["go"]?.string ?? "elsewhere")"
         default: return name
         }
     }

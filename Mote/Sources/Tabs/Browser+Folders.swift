@@ -41,6 +41,14 @@ extension Browser {
         }
     }
 
+    /// A folder by name, made if there's none, at the top: for the assistant.
+    func folder(named name: String) -> UUID {
+        if let found = folders.first(where: { $0.name.localizedCaseInsensitiveCompare(name) == .orderedSame }) { return found.id }
+        let folder = Folder(name: name, parent: nil)
+        FolderStore.shared.change(spaceID) { $0.append(folder) }
+        return folder.id
+    }
+
     /// Into a folder; a tab that isn't pinned is pinned on the way.
     func move(_ tab: Tab, toFolder folder: UUID?) {
         if folder != nil, !tab.kept { keep(tab) }
