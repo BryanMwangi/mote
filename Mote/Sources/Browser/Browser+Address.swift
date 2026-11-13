@@ -61,6 +61,9 @@ extension Browser {
         cancelTabEdit()
         field.clear()
         field.launching = true
+        // What was typed before it was dismissed, for a while.
+        if let left = Self.leftTyping, Date().timeIntervalSince(left.at) < Self.keepsTyping { field.typed = left.text }
+        Self.leftTyping = nil
         editing = true
         field.askFocus()
         Self.clipboardAddress { [weak self] url in
@@ -136,6 +139,7 @@ extension Browser {
     func dismiss() {
         field.switching = false
         field.cycling = false
+        if field.launching, !field.typed.trimmingCharacters(in: .whitespaces).isEmpty { Self.leftTyping = (field.typed, Date()) }
         if field.launching || field.relocating {
             editing = false
             return field.clear()
@@ -167,9 +171,14 @@ extension Browser {
         if field.picked != nil { submit() }
     }
 
-    /// Return.
+    /// The floating search's text when it was dismissed, and when; it comes
+    /// back with the search for `keepsTyping` seconds.
+    private static var leftTyping: (text: String, at: Date)?
+    private static let keepsTyping: TimeInterval = 45
+
     /// Return. `searching`: go or search even where the assistant leads.
     func submit(searching: Bool = false) {
+        Self.leftTyping = nil
         if let picked = field.picked, field.offers.indices.contains(picked), field.offers[picked].kind == .action {
             return runAction(field.offers[picked])
         }
