@@ -18,6 +18,8 @@ struct ChatInput: NSViewRepresentable {
     let choose: () -> Bool
     /// Escape; true when it was used.
     let escape: () -> Bool
+    /// ⇧⇥; true when it was used (the chat's Ask or Auto).
+    var backtab: (() -> Bool)? = nil
 
     static let font = NSFont.systemFont(ofSize: 14)
     static var line: CGFloat { ceil(font.ascender - font.descender + font.leading) + 2 }
@@ -114,6 +116,8 @@ struct ChatInput: NSViewRepresentable {
                 return true
             case #selector(NSResponder.insertTab(_:)):
                 return parent.choose()
+            case #selector(NSResponder.insertBacktab(_:)):
+                return parent.backtab?() ?? false
             case #selector(NSResponder.moveDown(_:)):
                 return parent.moveSelection(1)
             case #selector(NSResponder.moveUp(_:)):

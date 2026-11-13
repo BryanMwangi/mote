@@ -64,7 +64,8 @@ final class KeyRouter {
         if press.code == KeyMap.tabKey, !press.command, !press.option, !press.control {
             if browser.editingTab != nil { return true }
             if !press.shift, browser.asksOnTab() { return true }
-            guard browser.fieldShowing, !browser.field.offers.isEmpty else { return false }
+            // The ask card's chat takes its own Tab and ⇧⇥.
+            guard browser.field.askCard == nil, browser.fieldShowing, !browser.field.offers.isEmpty else { return false }
             browser.field.walk(press.shift ? -1 : 1)
             return true
         }

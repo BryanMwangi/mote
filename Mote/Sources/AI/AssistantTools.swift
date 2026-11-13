@@ -1,7 +1,21 @@
 import AppKit
+import Combine
 import MoteAI
 import MoteCore
 import WebKit
+
+/// Chats switched to Auto with ⇧⇥: the assistant acts in pages without
+/// asking, for that chat only, until switched back or Mote quits. Closing,
+/// moving and deleting still ask.
+@MainActor
+final class ChatModes: ObservableObject {
+    static let shared = ChatModes()
+    @Published private(set) var auto: Set<UUID> = []
+
+    func toggle(_ chat: UUID) {
+        if auto.contains(chat) { auto.remove(chat) } else { auto.insert(chat) }
+    }
+}
 
 /// What the assistant may ask Mote to do while it answers (Settings › AI ›
 /// Tools): read the tabs, any page, history and bookmarks; and, with Act for
@@ -104,6 +118,7 @@ final class AssistantTools {
         case .inPage(let url):
             if outside { return developerSite(url) }
             guard acts else { return false }
+            if let chat, ChatModes.shared.auto.contains(chat) { return true }
             if prefs.aiMode == .trusted, SiteList.contains(prefs.aiTrusted, url) { return true }
             if prefs.aiMode == .developer, developerSite(url) { return true }
             return await ask(question(), trusting: Address.siteHost(of: url) ?? "")

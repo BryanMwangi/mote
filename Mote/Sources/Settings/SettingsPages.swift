@@ -168,6 +168,10 @@ struct GeneralSettings: View {
                 symbol: "hammer", tint: Tint.indigo, keywords: ["claude code", "mcp", "playwright"], on: $prefs.agentsUseMote)
             if prefs.agentsUseMote {
                 RowRule()
+                SettingRow("Sites they may test", "The same as Settings › AI › Developer sites", symbol: "globe", tint: Tint.indigo) {
+                    TextField("localhost:*, staging.example.com", text: $prefs.aiDevSites).textFieldStyle(.roundedBorder).frame(width: 260)
+                }
+                RowRule()
                 SettingRow("Set up an agent", "For Claude Code; others take the same address and header", symbol: "doc.on.clipboard", tint: Tint.indigo) {
                     HStack(spacing: 8) {
                         Pill("Copy for Claude Code") {

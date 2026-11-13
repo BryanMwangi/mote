@@ -70,8 +70,10 @@ struct AISettings: View {
                     RowRule()
                     sites("Trusted sites", "github.com, mail.google.com", $prefs.aiTrusted)
                 }
-                RowRule()
-                sites("Developer sites", "localhost:*, staging.example.com", $prefs.aiDevSites)
+                if prefs.aiMode == .developer {
+                    RowRule()
+                    sites("Developer sites", "localhost:*, staging.example.com", $prefs.aiDevSites)
+                }
                 RowRule()
                 sites("May sign in to", "Added when you allow it", $prefs.aiSignIn)
             }

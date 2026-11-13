@@ -667,6 +667,11 @@ private struct ChatComposer: View {
                     guard conversation.busy else { return false }
                     conversation.stop()
                     return true
+                },
+                backtab: {
+                    guard browser.prefs.aiActs else { return false }
+                    ChatModes.shared.toggle(conversation.id)
+                    return true
                 }
             )
             .frame(height: height)
@@ -680,6 +685,7 @@ private struct ChatComposer: View {
             }
             HStack(spacing: 8) {
                 ToolToggles()
+                if browser.prefs.aiActs { ModeChip(chat: conversation.id) }
                 Spacer(minLength: 0)
                 AIChip(browser: browser)
                 if conversation.busy, !hasText {
@@ -772,5 +778,34 @@ struct RenderedReply {
         if kept.count > 200 { kept.removeAll() }
         kept[message.id] = (key, reply)
         return reply
+    }
+}
+
+/// Whether this chat asks before acting in pages, or goes ahead (Auto): ⇧⇥
+/// or a click switches it, for this chat only.
+private struct ModeChip: View {
+    let chat: UUID
+    @ObservedObject private var modes = ChatModes.shared
+
+    var body: some View {
+        let auto = modes.auto.contains(chat)
+        Button {
+            modes.toggle(chat)
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: auto ? "forward.fill" : "hand.raised").font(.system(size: 9, weight: .semibold))
+                Text(auto ? "Auto" : "Asks").font(.system(size: 11.5, weight: .medium))
+            }
+            .foregroundStyle(auto ? Color(nsColor: Glow.clay) : Palette.muted)
+            .padding(.horizontal, 8)
+            .frame(height: 24)
+            .background(auto ? Color(nsColor: Glow.clay).opacity(0.14) : .clear, in: Capsule())
+        }
+        .buttonStyle(.plain)
+        .help(
+            auto
+                ? "Auto: it acts in pages without asking, in this chat. Closing, moving or deleting still asks.   ⇧⇥"
+                : "It asks before acting in pages. Switch this chat to Auto with ⇧⇥.")
+        .animation(Motion.quick, value: auto)
     }
 }
