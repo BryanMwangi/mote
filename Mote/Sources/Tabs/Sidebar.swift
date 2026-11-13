@@ -743,6 +743,12 @@ private struct SideRow: View {
             hovering = over
             if over { fading = true }
         }
+        // Rested on a moment: a picture of its page beside it.
+        .task(id: hovering) {
+            guard hovering, !live, !renaming, NSEvent.pressedMouseButtons == 0 else { return TabPreview.leave() }
+            try? await Task.sleep(for: .seconds(TabPreview.wait))
+            if !Task.isCancelled { TabPreview.show(tab, in: browser) }
+        }
         // A tab the pointer rests on is likely the next: it warms (see Browser.warm).
         .task(id: hovering) {
             guard hovering, !live else { return }

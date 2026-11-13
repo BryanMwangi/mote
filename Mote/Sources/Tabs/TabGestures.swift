@@ -395,3 +395,90 @@ struct SpaceDropSpot: FillsRoom {
         override func hitTest(_ point: NSPoint) -> NSView? { nil }
     }
 }
+
+/// A picture of a tab's page beside its row while the pointer rests on it:
+/// after half a second, then at once moving from row to row, gone a moment
+/// after leaving. One card, over every window; never while dragging.
+@MainActor
+enum TabPreview {
+    private static var panel: NSPanel?
+    private static var hiding: Task<Void, Never>?
+    private static var shownAt = Date.distantPast
+    private static var showing = false
+    /// The tab the pointer is on, for a picture that arrives late.
+    private static var wanted: Tab.ID?
+
+    /// How long to rest on a row first: less when a card was just up.
+    static var wait: Double { showing || Date().timeIntervalSince(shownAt) < 0.3 ? 0.15 : 0.5 }
+
+    static func show(_ tab: Tab, in browser: Browser) {
+        hiding?.cancel()
+        guard NSEvent.pressedMouseButtons == 0, let window = browser.window else { return }
+        wanted = tab.id
+        let pointer = NSEvent.mouseLocation
+        tab.previewPicture { image in
+            MainActor.assumeIsolated {
+                guard wanted == tab.id, NSEvent.pressedMouseButtons == 0 else { return }
+                let panel = panel ?? made()
+                (panel.contentView as? NSHostingView<Card>)?.rootView = Card(image: image, title: tab.label, site: tab.address?.host() ?? "")
+                let size = panel.contentView?.fittingSize ?? .zero
+                let side = browser.prefs.sideWidth
+                let x =
+                    browser.prefs.sideRight
+                    ? window.frame.maxX - side - size.width - 8 : window.frame.minX + side + 8
+                panel.setFrame(NSRect(x: x, y: pointer.y - size.height / 2, width: size.width, height: size.height), display: true)
+                panel.orderFrontRegardless()
+                showing = true
+            }
+        }
+    }
+
+    /// The pointer left the row: the card goes a moment later, unless another row takes it.
+    static func leave() {
+        wanted = nil
+        guard showing else { return }
+        hiding?.cancel()
+        hiding = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(0.3))
+            guard !Task.isCancelled else { return }
+            panel?.orderOut(nil)
+            showing = false
+            shownAt = Date()
+            hiding = nil
+        }
+    }
+
+    private static func made() -> NSPanel {
+        let made = NSPanel(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+        made.isOpaque = false
+        made.backgroundColor = .clear
+        made.hasShadow = true
+        made.level = .floating
+        made.ignoresMouseEvents = true
+        made.contentView = NSHostingView(rootView: Card(image: nil, title: "", site: ""))
+        panel = made
+        return made
+    }
+
+    struct Card: View {
+        let image: NSImage?
+        let title: String
+        let site: String
+
+        var body: some View {
+            VStack(alignment: .leading, spacing: 6) {
+                if let image {
+                    Image(nsImage: image).resizable().aspectRatio(contentMode: .fill)
+                        .frame(width: 240, height: 150, alignment: .top).clipped()
+                        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                }
+                Text(title).font(.system(size: 12, weight: .medium)).lineLimit(1)
+                if !site.isEmpty { Text(site).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1) }
+            }
+            .frame(width: 240, alignment: .leading)
+            .padding(8)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .fixedSize()
+        }
+    }
+}

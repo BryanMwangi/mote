@@ -790,6 +790,23 @@ final class Tab: ObservableObject, Identifiable {
         }
     }
 
+    /// A small picture of the page for the preview card on hover (TabPreview),
+    /// and when it was taken: taken again after a minute.
+    private var preview: (image: NSImage, at: Date)?
+
+    /// The page's picture for the card: kept a minute, else drawn now by the
+    /// web process (off screen too), else the picture it went to sleep with.
+    func previewPicture(_ done: @escaping (NSImage?) -> Void) {
+        if let preview, Date().timeIntervalSince(preview.at) < 60 { return done(preview.image) }
+        guard let built else { return done(rested?.picture.flatMap(NSImage.init(data:))) }
+        let config = WKSnapshotConfiguration()
+        config.snapshotWidth = 320
+        built.takeSnapshot(with: config) { [weak self] image, _ in
+            if let image { self?.preview = (image, Date()) }
+            done(image)
+        }
+    }
+
     /// A JPEG of the page, drawn by the web process so it works off screen.
     func snapshot(_ done: @escaping (Data?) -> Void) {
         guard let built else { return done(nil) }
