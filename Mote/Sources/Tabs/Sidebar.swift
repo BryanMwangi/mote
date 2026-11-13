@@ -263,6 +263,9 @@ private struct SpacePage: View {
     /// A drag among one folder's tabs, by folder: each folder's rows make
     /// room only for their own.
     @State private var folderDrags: [UUID: ReorderDrag<Tab.ID>] = [:]
+    /// Which way the selected tab is, scrolled out of sight; nil while it shows.
+    @State private var activeAway: VerticalEdge?
+    @State private var viewport: CGFloat = 0
     @ObservedObject private var folderStore = FolderStore.shared
     @ObservedObject private var feeds = LiveFeeds.shared
 
@@ -302,8 +305,29 @@ private struct SpacePage: View {
                 listed(loose)
             } else {
                 ScrollViewReader { scroller in
-                    ScrollView(.vertical) { listed(loose) }
+                    ScrollView(.vertical) { listed(loose, scrolls: true) }
                         .floatingScrollBar()
+                        .coordinateSpace(name: Self.viewport)
+                        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { viewport = $0 }
+                        // The selected tab scrolled out of sight: a way back to it.
+                        .overlay(alignment: activeAway == .top ? .top : .bottom) {
+                            if live, let away = activeAway, let id = active {
+                                Button {
+                                    withAnimation(Motion.glide) { scroller.scrollTo(id, anchor: .center) }
+                                } label: {
+                                    Image(systemName: away == .top ? "arrow.up" : "arrow.down")
+                                        .font(.system(size: 10, weight: .semibold))
+                                        .foregroundStyle(Palette.ink)
+                                        .frame(width: 26, height: 26)
+                                        .bubble(shadow: 0.1, radius: 8)
+                                }
+                                .buttonStyle(.plain)
+                                .help("Back to the selected tab")
+                                .padding(6)
+                                .transition(.opacity.combined(with: .scale(scale: 0.8)))
+                            }
+                        }
+                        .animation(Motion.quick, value: activeAway)
                         // Within the space only: a switch moves the page whole,
                         // and the page coming in is already where it was left.
                         .onChange(of: browser.activeID) { old, id in
@@ -435,11 +459,22 @@ private struct SpacePage: View {
         }
     }
 
-    private func listed(_ loose: [Tab]) -> some View {
+    /// The scrolling list's own space, for the selected tab to say where it is.
+    private static let viewport = "viewport"
+
+    /// `scrolls`: in the scrolling list, where the selected tab says when it's out of sight.
+    private func listed(_ loose: [Tab], scrolls: Bool = false) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             VStack(spacing: Self.gap) {
                 ForEach(Array(loose.enumerated()), id: \.element.id) { index, tab in
                     row(tab)
+                        .onGeometryChange(for: VerticalEdge?.self) { [viewport] proxy in
+                            guard scrolls, tab.id == active else { return nil }
+                            let frame = proxy.frame(in: .named(Self.viewport))
+                            return frame.maxY < 0 ? .top : frame.minY > viewport ? .bottom : nil
+                        } action: { away in
+                            if tab.id == active, activeAway != away { activeAway = away }
+                        }
                         .background {
                             if let run = browser.splitRun(at: index, in: loose) {
                                 SplitRun(axis: .vertical, first: run.first, last: run.last, gap: Self.gap)
@@ -799,6 +834,9 @@ private struct FolderRow: View {
     let dropping: Bool
 
     @State private var hovering = false
+    /// Its tabs listed beside it, and the pointer on that list.
+    @State private var listing = false
+    @State private var overList = false
 
     var body: some View {
         HStack(spacing: 8) {
@@ -812,6 +850,7 @@ private struct FolderRow: View {
                     Text(icon).font(.system(size: 13))
                 } else {
                     Image(systemName: folder.live != nil ? "dot.radiowaves.left.and.right" : folder.collapsed ? "folder" : "folder.fill")
+                        .contentTransition(.symbolEffect(.replace))
                         .font(.system(size: 12))
                         .foregroundStyle(Palette.ink.opacity(0.7))
                 }
@@ -842,6 +881,31 @@ private struct FolderRow: View {
             return true
         }
         .rowHover { hovering = $0 }
+        // A closed folder rested on a moment lists its tabs.
+        .task(id: hovering || overList) {
+            guard hovering || overList else {
+                // A moment to reach the list.
+                try? await Task.sleep(for: .seconds(0.3))
+                if !Task.isCancelled { listing = false }
+                return
+            }
+            guard !listing, folder.collapsed, folder.live == nil, live else { return }
+            try? await Task.sleep(for: .seconds(0.5))
+            if !Task.isCancelled { listing = true }
+        }
+        .menuPanel(isPresented: $listing, edge: .trailing, keyboard: false) {
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(browser.tabs.filter { $0.folder == folder.id }) { tab in
+                    PopoverLine(tab.label, image: tab.icon) {
+                        listing = false
+                        browser.select(tab)
+                    }
+                }
+            }
+            .padding(6)
+            .frame(width: 240)
+            .onHover { overList = $0 }
+        }
         .contextMenu {
             Button("Rename Folder…") { browser.renameFolder(folder.id) }
             Button("Change Icon…") { browser.changeFolderIcon(folder.id) }
