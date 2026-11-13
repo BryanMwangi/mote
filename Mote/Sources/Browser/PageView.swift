@@ -647,7 +647,7 @@ final class PageView: WKWebView {
             case .show(let pull):
                 onPull?(pull)
             case .tick(let armed):
-                NSHapticFeedbackManager.defaultPerformer.perform(armed ? .levelChange : .alignment, performanceTime: .now)
+                Haptic.tick(armed ? .levelChange : .alignment)
             case .navigate(let back):
                 if back { goBack() } else { goForward() }
                 leaving = true

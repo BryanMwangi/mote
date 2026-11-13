@@ -1,5 +1,14 @@
 import SwiftUI
 
+/// A tick under the fingers on a trackpad that has them, as a step passes:
+/// a reorder, a drop, a swipe ready to switch, a slider's notch.
+@MainActor
+enum Haptic {
+    static func tick(_ pattern: NSHapticFeedbackManager.FeedbackPattern = .alignment) {
+        NSHapticFeedbackManager.defaultPerformer.perform(pattern, performanceTime: .now)
+    }
+}
+
 /// An on/off switch in Mote's ink rather than the system accent.
 struct Switch: View {
     @Binding var on: Bool

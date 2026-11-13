@@ -316,7 +316,12 @@ private struct WaveSlider: View {
             .contentShape(Rectangle())
             .gesture(
                 DragGesture(minimumDistance: 0)
-                    .onChanged { change(min(max($0.location.x / width, 0.1), 1), false) }
+                    .onChanged {
+                        let next = min(max($0.location.x / width, 0.1), 1)
+                        // A tick at each tenth passed.
+                        if Int(next * 10) != Int(value * 10) { Haptic.tick() }
+                        change(next, false)
+                    }
                     .onEnded { change(min(max($0.location.x / width, 0.1), 1), true) })
         }
         .frame(height: 44)

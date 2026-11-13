@@ -220,7 +220,7 @@ extension Browser {
             hover = SplitHover(target: target.key, side: side)
         }
         if splitHover != hover {
-            if splitHover == nil, hover != nil { NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now) }
+            if splitHover == nil, hover != nil { Haptic.tick() }
             splitHover = hover
         }
         return .page

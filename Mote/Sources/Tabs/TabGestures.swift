@@ -100,6 +100,7 @@ struct Reorderable: ViewModifier {
         if next.target == before {
             drag = next
         } else {
+            Haptic.tick()
             withAnimation(Motion.settle) { drag = next }
         }
     }

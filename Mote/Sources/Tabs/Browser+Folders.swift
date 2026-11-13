@@ -69,6 +69,7 @@ extension Browser {
     func dropInFolder(_ tab: Tab) {
         guard let folder = folderHover else { return }
         folderHover = nil
+        Haptic.tick()
         move(tab, toFolder: folder)
     }
 
