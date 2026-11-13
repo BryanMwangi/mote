@@ -285,6 +285,7 @@ struct AddressPill: View {
     @ObservedObject var browser: Browser
 
     @State private var hovering = false
+    @State private var shake: CGFloat = 0
 
     static let height: CGFloat = 32
 
@@ -325,6 +326,7 @@ struct AddressPill: View {
             RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Palette.ink.opacity(editing ? 0.14 : 0))
                 .allowsHitTesting(false)
         }
+        .shakesOnRefusal(browser.field.refusals, while: editing, travel: $shake)
         .onHover { hovering = $0 }
         // Suggestions in a panel of their own: the sidebar is too narrow and
         // clipped, and the field keeps the keyboard.
