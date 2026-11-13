@@ -31,6 +31,7 @@ extension Browser {
             if editing, !field.offers.isEmpty { stepSummon() } else { summon() }
         case .pasteAndGo: pasteAndGo()
         case .copyAddress: copyAddress()
+        case .copyLinks: copyLinks()
         case .find: openFind()
         case .findAgain(let backwards): finder.look(forward: !backwards)
         case .print: printPage()

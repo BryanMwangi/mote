@@ -203,7 +203,7 @@ struct TabMenu: View {
             Menu("Move to Space") {
                 ForEach(browser.spaces.filter { $0.id != browser.spaceID }) { space in
                     Button(space.name) {
-                        browser.move(tab, toSpace: space.id)
+                        for picked in browser.picked(with: tab) { browser.move(picked, toSpace: space.id) }
                     }
                 }
             }
@@ -231,7 +231,12 @@ struct TabMenu: View {
         .disabled(tab.isBlank)
         Button("Move to New Window") { browser.moveToNewWindow(tab) }.disabled(tab.held || browser.tabs.count < 2)
         Divider()
-        Button("Close Tab", action: close)
+        let together = browser.picked(with: tab)
+        if together.count > 1 {
+            Button("Close \(together.count) Tabs") { together.forEach(browser.close) }
+        } else {
+            Button("Close Tab", action: close)
+        }
         Button("Close Duplicate Tabs") { browser.closeDuplicates(of: tab) }.disabled(tab.isBlank)
         Button("Close Tabs Below") { browser.closeTabs(below: tab) }.disabled(browser.tabs.last === tab)
         Button("Close Other Tabs") { browser.closeOthers(but: tab) }.disabled(browser.tabs.count < 2)

@@ -212,6 +212,7 @@ private struct MenuBar: Commands {
             .disabled(blank || browser.active?.asleep == true)
         Button("Copy Address", action: browser.copyAddress).keyboardShortcut(keys(.copyAddress)).disabled(blank)
         Button("Copy as Markdown Link", action: browser.copyMarkdownLink).disabled(blank)
+        Button("Copy Links as Markdown", action: browser.copyLinks).keyboardShortcut(keys(.copyLinks))
         Button("Paste and Go", action: browser.pasteAndGo).keyboardShortcut(keys(.pasteAndGo))
         Divider()
         Button("Close Other Tabs") { if let tab = browser.active { browser.closeOthers(but: tab) } }.disabled(browser.tabs.count < 2)

@@ -45,6 +45,8 @@ final class Browser: NSObject, ObservableObject {
     let field = AddressEntry()
     let finder = PageFinder()
     let permissions = SitePermissions()
+    /// Tabs picked together with ⌘- or ⇧-click (see TabPicks).
+    let picks = TabPicks()
     /// The AI app's site in the chat sidebar, when Settings › AI shows one.
     private(set) lazy var siteChat = SiteChat(browser: self)
     private(set) lazy var logins = Logins(say: { [weak self] in self?.announce($0) }, tab: { [weak self] in self?.tab($0) })
@@ -1079,6 +1081,46 @@ final class Browser: NSObject, ObservableObject {
         select(keep)
     }
 
+    /// A click on a tab with ⌘ (adds it to the tabs picked, or takes it out)
+    /// or ⇧ (picks those from the tab in front to it). Returns whether it was
+    /// that; a plain click lets the picks go and selects as ever.
+    func pick(_ tab: Tab, with flags: NSEvent.ModifierFlags) -> Bool {
+        if flags.contains(.command) {
+            if picks.ids.isEmpty, let activeID, activeID != tab.id { picks.ids.insert(activeID) }
+            if picks.ids.contains(tab.id) { picks.ids.remove(tab.id) } else { picks.ids.insert(tab.id) }
+            return true
+        }
+        if flags.contains(.shift), let from = tabs.firstIndex(where: { $0.id == activeID }),
+            let to = tabs.firstIndex(where: { $0.id == tab.id })
+        {
+            picks.ids = Set(tabs[min(from, to)...max(from, to)].map(\.id))
+            return true
+        }
+        if !picks.ids.isEmpty { picks.ids = [] }
+        return false
+    }
+
+    /// The tabs picked with `tab`, when it's one of several; else just it.
+    func picked(with tab: Tab) -> [Tab] {
+        guard picks.ids.contains(tab.id), picks.ids.count > 1 else { return [tab] }
+        return tabs.filter { picks.ids.contains($0.id) }
+    }
+
+    /// A picked tab was dragged to a new place: the others it was picked
+    /// with follow it there, in their order.
+    func gatherPicks(around tab: Tab) {
+        let others = picked(with: tab).filter { $0.id != tab.id && !$0.held }
+        guard !others.isEmpty else { return }
+        reorder { row in
+            for other in others { _ = row.remove(other.id) }
+            guard var at = row.index(of: tab.id).map({ $0 + 1 }) else { return }
+            for other in others {
+                row.insert(other, at: at)
+                at += 1
+            }
+        }
+    }
+
     /// ⇧⌘K: every tab that isn't an essential or pinned, at once. The toast
     /// brings them all back; ⌘⇧T, one at a time.
     func closeUnpinned() {
@@ -1449,4 +1491,11 @@ extension Browser: TabOwner {
     func tab(_ tab: Tab, middleClicked link: URL) { openedBehind(open(link, foreground: false, from: tab)) }
     func tabPressed(_ tab: Tab) { if tab.id != activeID, shownSplit?.contains(tab.id) == true { select(tab) } }
     func tab(_ tab: Tab, crosses url: URL) { replace(tab, going: url) }
+}
+
+/// Tabs picked together, to drag, close, move or copy as one; apart from
+/// the browser so picking redraws only the rows.
+@MainActor
+final class TabPicks: ObservableObject {
+    @Published var ids: Set<Tab.ID> = []
 }

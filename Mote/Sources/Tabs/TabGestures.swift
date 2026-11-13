@@ -90,7 +90,7 @@ struct Reorderable: ViewModifier {
         // Away from the list the row can't follow: it holds still, and a card
         // of it does, so where it's going shows.
         if let away, zone != .list {
-            TabGhost.show(away.tab.label, at: NSEvent.mouseLocation)
+            TabGhost.show(away.tab.label, at: NSEvent.mouseLocation, count: away.browser.picked(with: away.tab).count)
             if drag == nil { drag = next }
             return
         }
@@ -137,6 +137,8 @@ struct Reorderable: ViewModifier {
         still.disablesAnimations = true
         withTransaction(still) {
             if landing.target != landing.start { move(landing.target) }
+            // The tabs picked with it follow.
+            if let away { away.browser.gatherPicks(around: away.tab) }
             drag = landing
         }
         let settling = $drag
@@ -219,6 +221,8 @@ struct OneClick: ViewModifier {
     var spare: CGFloat = 0
     let pick: () -> Void
     let edit: () -> Void
+    /// A click with ⌘ or ⇧ picks tabs together (Browser.pick); true when it did.
+    var together: ((NSEvent.ModifierFlags) -> Bool)? = nil
     @State private var last = Date.distantPast
     @State private var pressed = false
     @State private var width: CGFloat = 0
@@ -250,6 +254,7 @@ struct OneClick: ViewModifier {
     }
 
     private func pressedDown() {
+        if let together, together(NSEvent.modifierFlags) { return }
         let now = Date()
         if now.timeIntervalSince(last) < NSEvent.doubleClickInterval {
             last = .distantPast
@@ -299,9 +304,9 @@ struct MiddleClick: FillsRoom {
 enum TabGhost {
     private static var panel: NSPanel?
 
-    static func show(_ title: String, at point: NSPoint) {
+    static func show(_ title: String, at point: NSPoint, count: Int = 1) {
         let panel = panel ?? made()
-        (panel.contentView as? NSHostingView<Card>)?.rootView = Card(title: title)
+        (panel.contentView as? NSHostingView<Card>)?.rootView = Card(title: title, count: count)
         let size = panel.contentView?.fittingSize ?? .zero
         panel.setFrame(NSRect(x: point.x - 16, y: point.y - size.height + 8, width: size.width, height: size.height), display: true)
         panel.orderFrontRegardless()
@@ -316,13 +321,17 @@ enum TabGhost {
         made.hasShadow = true
         made.level = .floating
         made.ignoresMouseEvents = true
-        made.contentView = NSHostingView(rootView: Card(title: ""))
+        made.contentView = NSHostingView(rootView: Card(title: "", count: 1))
         panel = made
         return made
     }
 
     struct Card: View {
         let title: String
+        /// Tabs picked together: up to three cards stacked, and how many.
+        let count: Int
+        private let shape = RoundedRectangle(cornerRadius: 10, style: .continuous)
+
         var body: some View {
             Text(title)
                 .font(TextStyle.body.font)
@@ -330,7 +339,20 @@ enum TabGhost {
                 .frame(maxWidth: 240, alignment: .leading)
                 .padding(.horizontal, 12)
                 .frame(height: Metrics.row)
-                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .background(.regularMaterial, in: shape)
+                .background {
+                    ForEach(1..<min(count, 3), id: \.self) { n in
+                        shape.fill(.regularMaterial).offset(x: CGFloat(n) * 4, y: CGFloat(n) * 4).opacity(0.7)
+                    }
+                }
+                .overlay(alignment: .topTrailing) {
+                    if count > 1 {
+                        Text("\(count)").font(.system(size: 10, weight: .semibold)).foregroundStyle(.white)
+                            .padding(.horizontal, 5).frame(minWidth: 18, minHeight: 18)
+                            .background(Color.accentColor, in: Capsule()).offset(x: 6, y: -6)
+                    }
+                }
+                .padding(10)
                 .fixedSize()
         }
     }

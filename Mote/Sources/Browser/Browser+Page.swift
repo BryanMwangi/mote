@@ -91,6 +91,15 @@ extension Browser {
         announce("Link copied")
     }
 
+    /// ⌥⇧⌘C: the selected tabs' links, or the one in front's, as a Markdown list.
+    func copyLinks() {
+        let picked = tabs.filter { picks.ids.contains($0.id) }
+        let chosen = (picked.isEmpty ? active.map { [$0] } ?? [] : picked).filter { $0.address != nil }
+        guard !chosen.isEmpty else { return }
+        copyText(chosen.compactMap { tab in tab.address.map { "- " + Clippings.markdownLink(title: tab.label, url: $0) } }.joined(separator: "\n"))
+        announce(chosen.count == 1 ? "Link copied" : "\(chosen.count) links copied")
+    }
+
     private func copyText(_ text: String) {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(text, forType: .string)

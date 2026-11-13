@@ -67,7 +67,7 @@ public struct KeyCombo: Hashable, Codable, Sendable {
 public enum ShortcutID: String, CaseIterable, Codable, CodingKeyRepresentable, Sendable {
     // Tabs
     case newTab, reopenTab, closeTab, closeUnpinned, duplicateTab, unloadTab, nextTab, previousTab, switcher, editAddress, copyAddress,
-        pasteAndGo, openFile
+        copyLinks, pasteAndGo, openFile
     // Windows
     case newWindow, newPrivateWindow, newPrivateTab
     // Page
@@ -93,7 +93,7 @@ public enum ShortcutID: String, CaseIterable, Codable, CodingKeyRepresentable, S
     public var group: Group {
         switch self {
         case .newTab, .reopenTab, .closeTab, .closeUnpinned, .duplicateTab, .unloadTab, .nextTab, .previousTab, .switcher, .editAddress,
-            .copyAddress, .pasteAndGo, .openFile:
+            .copyAddress, .copyLinks, .pasteAndGo, .openFile:
             .tabs
         case .newWindow, .newPrivateWindow, .newPrivateTab: .windows
         case .back, .forward, .reload, .reloadFromOrigin, .reader, .find, .findNext, .findPrevious, .print, .savePage, .screenshot,
@@ -123,6 +123,7 @@ public enum ShortcutID: String, CaseIterable, Codable, CodingKeyRepresentable, S
         case .switcher: "Search Tabs"
         case .editAddress: "Open Address"
         case .copyAddress: "Copy Address"
+        case .copyLinks: "Copy Links as Markdown"
         case .pasteAndGo: "Paste and Go"
         case .openFile: "Open File"
         case .newWindow: "New Window"
@@ -191,6 +192,7 @@ public enum ShortcutID: String, CaseIterable, Codable, CodingKeyRepresentable, S
         case .switcher: [.cmd("k")]
         case .editAddress: [.cmd("l")]
         case .copyAddress: [.cmd("c", shift: true)]
+        case .copyLinks: [.cmd("c", shift: true, option: true)]
         case .pasteAndGo: [.cmd("v", shift: true)]
         case .openFile: [.cmd("o")]
         case .newWindow: [.cmd("n")]
@@ -259,6 +261,7 @@ public enum ShortcutID: String, CaseIterable, Codable, CodingKeyRepresentable, S
         case .switcher: .switcher
         case .editAddress: .editAddress
         case .copyAddress: .copyAddress
+        case .copyLinks: .copyLinks
         case .pasteAndGo: .pasteAndGo
         case .newPrivateWindow: .newPrivateWindow
         case .back: .back

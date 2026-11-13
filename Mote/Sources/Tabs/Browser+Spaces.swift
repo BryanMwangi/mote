@@ -55,6 +55,7 @@ extension Browser {
     /// shows the other's.
     private func enter(_ id: UUID) {
         guard id != spaceID, let to = spaces.firstIndex(where: { $0.id == id }) else { return }
+        if !picks.ids.isEmpty { picks.ids = [] }
         let interval = switching.beginInterval("Switch space")
         defer { switching.endInterval("Switch space", interval) }
         // Every change in one transaction, so SwiftUI updates once: a change

@@ -27,7 +27,7 @@ public enum KeyMap {
         case tab(Int), lastTab
         case space(Int)
         case back, forward, reload, reader
-        case editAddress, switcher, pasteAndGo, copyAddress
+        case editAddress, switcher, pasteAndGo, copyAddress, copyLinks
         case find, findAgain(backwards: Bool)
         case print, pauseSound, floatVideo
         case pageChat

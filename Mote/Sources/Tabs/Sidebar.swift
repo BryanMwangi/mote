@@ -351,7 +351,7 @@ private struct SpacePage: View {
             browser: browser, tab: tab, live: tab.id == active, renaming: renaming,
             draft: renaming ? browser.tabDraft : "", refusals: renaming ? browser.field.refusals : 0,
             icons: prefs.glyph == .icons, showsReading: prefs.showsReading,
-            preview: live && tab.id == active ? browser.peekTab : nil, carded: live && showing && browser.siteCardRow == tab.id)
+            preview: live && tab.id == active ? browser.peekTab : nil, carded: live && showing && browser.siteCardRow == tab.id, picks: browser.picks)
     }
 
     /// The line between the pinned tabs and the others.
@@ -670,6 +670,8 @@ private struct SideRow: View {
 
     @State private var hovering = false
     @State private var shake: CGFloat = 0
+    /// Tabs picked together, this one among them or not.
+    @ObservedObject var picks: TabPicks
     /// The title's end is faded, or fading back: masked only then, as a mask
     /// costs every row a drawing pass of its own.
     @State private var fading = false
@@ -724,11 +726,9 @@ private struct SideRow: View {
         // A double click renames the tab you're on; a click goes to any other.
         .modifier(
             // The speaker, ring or preview's mark, and the speaker moved aside on hover.
-            OneClick(live: live, spare: status ? (hovering && speaker ? 60 : 34) : 0) {
-                browser.select(tab)
-            } edit: {
-                browser.beginTabRename(tab)
-            }
+            OneClick(
+                live: live, spare: status ? (hovering && speaker ? 60 : 34) : 0, pick: { browser.select(tab) },
+                edit: { browser.beginTabRename(tab) }, together: { browser.pick(tab, with: $0) })
         )
         // Over the row, not inside it: inside, its click would wait out the
         // double-click interval of the tab you're on before closing it.
@@ -778,6 +778,8 @@ private struct SideRow: View {
                     ReadFill(reading: tab.reading)
                 }
             }
+        } else if picks.ids.contains(tab.id) {
+            shape.fill(Palette.hover).overlay(shape.strokeBorder(Palette.ink.opacity(0.18)))
         } else if hovering {
             shape.fill(Palette.veil)
         }
