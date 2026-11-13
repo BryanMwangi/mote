@@ -55,13 +55,13 @@ extension AssistantTools {
         case "list_tabs":
             return listTabs(window: input["window"]?.int, space: input["space"]?.string)
         case "select_tab":
-            guard await permit(.gentle, "") else { return Self.actingOff }
+            guard await permit(.gentle, "") else { return refused }
             guard let found = find(input) else { return "There's no open tab with that id; list the tabs again." }
             bringForward(found)
             return "“\(found.tab.label)” is in front."
         case "open_tab":
             guard let url = web(input["url"]?.string) else { return "That isn't a web address." }
-            guard await permit(.inPage(url), "Open \(url.absoluteString) in a new tab?") else { return acts ? Self.declined : Self.actingOff }
+            guard await permit(.inPage(url), "Open \(url.absoluteString) in a new tab?") else { return refused }
             browser.open(url, foreground: true)
             return "Opened."
         case "close_tabs":
@@ -69,7 +69,7 @@ extension AssistantTools {
         case "move_tabs":
             return await moveTabs(input)
         case "pin_tabs":
-            guard await permit(.gentle, "") else { return Self.actingOff }
+            guard await permit(.gentle, "") else { return refused }
             let (found, missing) = find(all: input)
             let pinning = input["pinned"]?.bool ?? true
             for item in found where item.tab.pin == nil && item.tab.kept != pinning {
@@ -77,13 +77,13 @@ extension AssistantTools {
             }
             return "\(pinning ? "Pinned" : "Unpinned") \(found.count)." + Self.missing(missing)
         case "mute_tabs":
-            guard await permit(.gentle, "") else { return Self.actingOff }
+            guard await permit(.gentle, "") else { return refused }
             let (found, missing) = find(all: input)
             let muting = input["muted"]?.bool ?? true
             for item in found where item.tab.muted != muting { item.tab.toggleMute() }
             return "\(muting ? "Muted" : "Unmuted") \(found.count)." + Self.missing(missing)
         case "reload_tabs":
-            guard await permit(.gentle, "") else { return Self.actingOff }
+            guard await permit(.gentle, "") else { return refused }
             let (found, missing) = find(all: input)
             for item in found where !item.parked { item.tab.reload() }
             let away = found.filter(\.parked).count
@@ -138,7 +138,7 @@ extension AssistantTools {
         let names = Self.names(tabs)
         if input["dry_run"]?.bool == true { return "Would close \(tabs.count): \(names)." + Self.missing(missing) }
         guard await permit(.destructive, tabs.count == 1 ? "Close \(names)?" : "Close \(tabs.count) tabs: \(names)?") else {
-            return acts ? Self.declined : Self.actingOff
+            return refused
         }
         for (browser, group) in Dictionary(grouping: found, by: { ObjectIdentifier($0.browser) }).compactMap({ ($0.value.first?.browser, $0.value) }) {
             browser?.closeTogether(group.map(\.tab))
@@ -153,7 +153,7 @@ extension AssistantTools {
         let names = Self.names(tabs)
         if let folder = input["folder"]?.string, !folder.isEmpty {
             if input["dry_run"]?.bool == true { return "Would put \(tabs.count) in folder “\(folder)”: \(names)." }
-            guard await permit(.gentle, "") else { return Self.actingOff }
+            guard await permit(.gentle, "") else { return refused }
             let here = found.filter { !$0.parked && $0.browser === browser }
             let id = browser.folder(named: folder)
             for item in here { browser.move(item.tab, toFolder: id) }
@@ -166,7 +166,7 @@ extension AssistantTools {
             }
             if input["dry_run"]?.bool == true { return "Would move \(tabs.count) to “\(space.name)”: \(names)." }
             guard await permit(.destructive, "Move \(tabs.count == 1 ? names : "\(tabs.count) tabs: \(names)") to “\(space.name)”?") else {
-                return acts ? Self.declined : Self.actingOff
+                return refused
             }
             let movable = found.filter { !$0.parked && $0.browser === browser && $0.space?.id != space.id }
             for item in movable { browser.move(item.tab, toSpace: space.id) }
@@ -178,7 +178,7 @@ extension AssistantTools {
             guard window == "new" || target != nil else { return "There's no window \(window); there are \(windows.count)." }
             if input["dry_run"]?.bool == true { return "Would move \(tabs.count) to \(window == "new" ? "a new window" : "window \(window)"): \(names)." }
             guard await permit(.destructive, "Move \(tabs.count == 1 ? names : "\(tabs.count) tabs: \(names)") to \(window == "new" ? "a new window" : "window \(window)")?") else {
-                return acts ? Self.declined : Self.actingOff
+                return refused
             }
             var moved = 0
             var into = target
@@ -198,13 +198,13 @@ extension AssistantTools {
         let tab = found.tab
         if let go = input["go"]?.string {
             guard let here = tab.address, await permit(.inPage(here), "Go \(go) in “\(tab.label)”?") else {
-                return acts ? Self.declined : Self.actingOff
+                return refused
             }
             go == "back" ? tab.back() : tab.forward()
             return "Went \(go)."
         }
         guard let url = web(input["url"]?.string) else { return "Give an address, or go: back or forward." }
-        guard await permit(.inPage(url), "Go to \(url.absoluteString) in “\(tab.label)”?") else { return acts ? Self.declined : Self.actingOff }
+        guard await permit(.inPage(url), "Go to \(url.absoluteString) in “\(tab.label)”?") else { return refused }
         found.browser.go(tab, to: url)
         return "Going to \(url.absoluteString)."
     }

@@ -17,21 +17,40 @@ final class AssistantTools {
     let chat: UUID?
     /// Who's asking, for the page's pill ("Claude Code").
     let driver: String
+    /// A coding agent Mote didn't start, over MCP: it sees and acts only on
+    /// the developer sites (Settings › AI), never asks, and never reads the
+    /// person's other tabs, history or bookmarks.
+    let outside: Bool
     /// Sites this chat may act on without asking again.
     private static var trusted: [UUID: Set<String>] = [:]
 
     /// The tools on now for the window in front, or nil with none on.
     static func current(chat: UUID?, driver: String = "Assistant") -> AssistantTools? {
         guard let browser = Browser.front ?? Windows.shared.main, browser.prefs.aiReads else { return nil }
-        return AssistantTools(browser: browser, acts: browser.prefs.aiActs, chat: chat, driver: driver)
+        return AssistantTools(browser: browser, acts: browser.prefs.aiActs, chat: chat, driver: driver, outside: false)
     }
 
-    private init(browser: Browser, acts: Bool, chat: UUID?, driver: String) {
+    /// For a coding agent from outside (Settings › General › Let coding agents use Mote).
+    static func outside(driver: String) -> AssistantTools? {
+        guard let browser = Browser.front ?? Windows.shared.main, browser.prefs.agentsUseMote else { return nil }
+        return AssistantTools(browser: browser, acts: true, chat: nil, driver: driver, outside: true)
+    }
+
+    private init(browser: Browser, acts: Bool, chat: UUID?, driver: String, outside: Bool) {
         self.browser = browser
         self.acts = acts
         self.chat = chat
         self.driver = driver
+        self.outside = outside
     }
+
+    var prefs: Preferences { browser.prefs }
+
+    /// One of the sites developer tools may work on freely.
+    func developerSite(_ url: URL?) -> Bool { SiteList.contains(prefs.aiDevSites, url) }
+
+    /// The developer tools are offered: Developer mode, or an agent from outside.
+    var developing: Bool { outside || (acts && prefs.aiMode == .developer) }
 
     /// Stops this turn: the pill's Stop and Take over.
     var stopTurn: (() -> Void)? {
@@ -39,18 +58,20 @@ final class AssistantTools {
         return { Assistant.shared.stop(chat: chat) }
     }
 
-    var list: [Tool] { tabTools + pageTools + dataTools }
+    var list: [Tool] { outside ? tabTools + pageTools + devTools : tabTools + pageTools + signInTools + devTools + dataTools }
 
     /// The step's line in the chat.
     nonisolated static func describe(_ call: ToolCall) -> String {
         ToolLoop.title(of: call.name, input: call.input)
     }
 
-    func run(_ call: ToolCall) async -> String {
-        if let said = await runTab(call) { return said }
-        if let said = await runPage(call) { return said }
-        if let said = await runData(call) { return said }
-        return "There's no tool called \(call.name)."
+    func run(_ call: ToolCall) async -> ToolOutput {
+        if let said = await runDev(call) { return said }
+        if let said = await runTab(call) { return ToolOutput(said) }
+        if let said = await runPage(call) { return ToolOutput(said) }
+        if !outside, let said = await runSignIn(call) { return ToolOutput(said) }
+        if !outside, let said = await runData(call) { return ToolOutput(said) }
+        return ToolOutput("There's no tool called \(call.name).")
     }
 
     // MARK: - How much is at stake
@@ -70,13 +91,31 @@ final class AssistantTools {
 
     /// Whether the assistant may go ahead; asks the person when the risk says
     /// to. `question` names what would be done.
+    /// Ask mode asks for every action. Trusted sites mode acts on its sites
+    /// without asking; Developer mode on its sites. An agent from outside
+    /// acts only on the developer sites, without asking, and never closes or
+    /// moves the person's tabs.
     func permit(_ risk: Risk, _ question: @autoclosure () -> String) async -> Bool {
         switch risk {
-        case .read: return true
-        case .gentle: return acts
-        case .inPage(let url): return acts ? await ask(question(), trusting: Address.siteHost(of: url) ?? "") : false
-        case .destructive: return acts ? await ask(question(), trusting: nil) : false
+        case .read:
+            return true
+        case .gentle:
+            return acts
+        case .inPage(let url):
+            if outside { return developerSite(url) }
+            guard acts else { return false }
+            if prefs.aiMode == .trusted, SiteList.contains(prefs.aiTrusted, url) { return true }
+            if prefs.aiMode == .developer, developerSite(url) { return true }
+            return await ask(question(), trusting: Address.siteHost(of: url) ?? "")
+        case .destructive:
+            return outside || !acts ? false : await ask(question(), trusting: nil)
         }
+    }
+
+    /// Why an action wasn't done, in words the model can act on.
+    var refused: String {
+        if outside { return "Coding agents act only on the developer sites (Settings › AI): \(prefs.aiDevSites). Open one in a test tab with new_test_tab." }
+        return acts ? Self.declined : Self.actingOff
     }
 
     /// The answer when acting is off.
@@ -116,8 +155,15 @@ final class AssistantTools {
         let parked: Bool
     }
 
-    /// Every tab the assistant can see: each window's, in every space; never private ones.
+    /// Every tab the assistant can see: each window's, in every space; never
+    /// private ones. An agent from outside sees only its own test tabs and
+    /// the developer sites'.
     var everyTab: [Found] {
+        let all = allTabs
+        return outside ? all.filter { $0.tab.bench || developerSite($0.tab.pending ?? $0.tab.address) } : all
+    }
+
+    private var allTabs: [Found] {
         Windows.shared.all.enumerated().flatMap { index, browser -> [Found] in
             guard !browser.isPrivate else { return [] }
             let here = browser.tabs.map { Found(tab: $0, browser: browser, window: index + 1, space: browser.space, parked: false) }

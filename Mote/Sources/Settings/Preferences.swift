@@ -11,6 +11,43 @@ enum Glyph: String, CaseIterable, Identifiable, Storable {
     var title: String { self == .letters ? "Letters" : "Site icons" }
 }
 
+/// How the assistant acts, as Claude Code's modes: asking for every action;
+/// acting freely on trusted sites; or, on developer sites, acting freely with
+/// developer tools.
+enum AIMode: String, CaseIterable, Identifiable, Storable {
+    case ask, trusted, developer
+
+    var id: String { rawValue }
+    var title: String {
+        switch self {
+        case .ask: "Ask"
+        case .trusted: "Trusted sites"
+        case .developer: "Developer"
+        }
+    }
+}
+
+/// A list of sites as typed in Settings: "github.com, localhost:*".
+enum SiteList {
+    /// Whether `url` is one of `list`: by host (and its subdomains), and by
+    /// port when one is given; `*` for any port.
+    static func contains(_ list: String, _ url: URL?) -> Bool {
+        guard let url, let host = url.host()?.lowercased() else { return false }
+        let port = url.port.map(String.init)
+        return list.split(separator: ",").contains { entry in
+            let parts = entry.trimmingCharacters(in: .whitespaces).lowercased().split(separator: ":", maxSplits: 1).map(String.init)
+            guard let site = parts.first, !site.isEmpty, host == site || host.hasSuffix("." + site) else { return false }
+            guard parts.count == 2 else { return true }
+            return parts[1] == "*" || parts[1] == port
+        }
+    }
+
+    static func adding(_ host: String, to list: String) -> String {
+        let entries = list.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+        return entries.contains(host) ? list : (entries + [host]).joined(separator: ", ")
+    }
+}
+
 /// How the spaces show at the sidebar's foot: each by its icon (the others
 /// shrinking to dots when there isn't room), or every other space a dot.
 enum SpaceMarks: String, CaseIterable, Identifiable, Storable {
@@ -107,6 +144,17 @@ final class Preferences: ObservableObject {
     @Published var aiActs: Bool
     /// Tab in the floating search asks the assistant what was typed.
     @Published var tabAsks: Bool
+    /// How the assistant may act (see AssistantTools.permit).
+    @Published var aiMode: AIMode
+    /// Sites it may act on without asking, in Trusted mode: "github.com", "localhost:3000".
+    @Published var aiTrusted: String
+    /// Sites it may test freely with developer tools, in Developer mode and
+    /// for coding agents: "localhost:*", "staging.example.com".
+    @Published var aiDevSites: String
+    /// Sites it may sign in to with saved passwords.
+    @Published var aiSignIn: String
+    /// Coding agents on this Mac may drive Mote over MCP (MoteMCP).
+    @Published var agentsUseMote: Bool
     @Published var glyph: Glyph
     /// The spaces at the sidebar's foot (see SpaceIcons).
     @Published var spaceMarks: SpaceMarks
@@ -227,6 +275,11 @@ final class Preferences: ObservableObject {
         aiReads = store.value("ai.tools.read", or: true)
         aiActs = store.value("ai.tools.act", or: false)
         tabAsks = store.value("ai.tabAsks", or: false)
+        aiMode = store.value("ai.mode", or: .ask)
+        aiTrusted = store.value("ai.trusted", or: "")
+        aiDevSites = store.value("ai.devSites", or: "localhost:*, 127.0.0.1:*")
+        aiSignIn = store.value("ai.signIn", or: "")
+        agentsUseMote = store.value("ai.agents", or: false)
         chatWidth = min(Metrics.chatMax, max(Metrics.chatMin, store.value("chat.width", or: Metrics.chat)))
         // Installs from before the welcome existed already have settings, and skip it.
         welcomed = store.value("welcomed", or: false) || store.object(forKey: "glyph") != nil
@@ -322,6 +375,11 @@ final class Preferences: ObservableObject {
         keep($aiReads, "ai.tools.read")
         keep($aiActs, "ai.tools.act")
         keep($tabAsks, "ai.tabAsks")
+        keep($aiMode, "ai.mode")
+        keep($aiTrusted, "ai.trusted")
+        keep($aiDevSites, "ai.devSites")
+        keep($aiSignIn, "ai.signIn")
+        keep($agentsUseMote, "ai.agents") { on in MoteMCP.shared.outside(on) }
         keep($glyph, "glyph")
         keep($spaceMarks, "spaces.marks")
         keep($bookmarksBar, "bookmarks.bar")

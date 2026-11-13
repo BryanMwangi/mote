@@ -44,7 +44,7 @@ extension Tab {
     /// A picture of the page (at the device's width in Responsive Design
     /// Mode), into the downloads folder, or onto the clipboard.
     func screenshot(_ shot: Shot = .visible, copy: Bool = false) {
-        guard let web = built, let browser = owner as? Browser else { return }
+        guard built != nil, let browser = owner as? Browser else { return }
         var name = "\(label) – \(shot == .wholePage ? "whole page" : "screenshot").png"
         if let device { name = "\(label) – \(device.name) \(Int(device.width))×\(Int(device.height)).png" }
         // Beside earlier ones, never over them: "Name 2.png", "Name 3.png".
@@ -67,6 +67,14 @@ extension Tab {
             else { return browser.announce("The screenshot couldn't be saved") }
             browser.announce("Screenshot saved to \(browser.downloadsFolder.lastPathComponent)")
         }
+        picture(shot, then: done)
+    }
+
+    /// A picture of the page: what shows, the whole of it, or a region; for
+    /// Take Screenshot and for the assistant, which looks without asking the
+    /// Mac to record the screen.
+    func picture(_ shot: Shot, then done: @escaping (NSImage?) -> Void) {
+        guard let web = built else { return done(nil) }
         switch shot {
         case .region(let rect, let scrolled):
             // What shows is a snapshot, as the eye saw it; what reaches past

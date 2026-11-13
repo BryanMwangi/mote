@@ -63,7 +63,7 @@ extension Browser: WKNavigationDelegate, WKUIDelegate {
             if mainFrame, let from {
                 let host = Address.siteHost(of: url)
                 from.boostScript = Boosts.script(for: Boosts.shared.boost(for: host))
-                from.arm(hiding: elementHider.hiding(on: host))
+                from.arm(hiding: elementHider.hiding(on: host), for: url)
                 AdBlocker.shared.tune(webView.configuration.userContentController, for: host)
             }
             decisionHandler(.allow)

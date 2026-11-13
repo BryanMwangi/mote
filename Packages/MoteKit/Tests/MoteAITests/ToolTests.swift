@@ -26,7 +26,7 @@ struct ToolTests {
         let ran = Ran()
         let loop = ToolLoop(service: service, tools: [readTab], describe: { _ in "Reading a tab" }) { called in
             await ran.add(called.name)
-            return "A page about cats"
+            return ToolOutput("A page about cats")
         }
         let events = try await collect(loop.reply(to: ChatRequest(model: "m", messages: [Message(role: .user, text: "Hi")])))
         #expect(await ran.names == ["read_tab"])
@@ -98,6 +98,23 @@ struct ToolTests {
         let line =
             #"data: {"type":"response.output_item.done","item":{"type":"function_call","call_id":"c1","name":"read_tab","arguments":"{\"tab\":\"ab12\"}"}}"#
         #expect(try decoder.read(line) == [.toolCall(call)])
+    }
+}
+
+@Suite("Tool pictures")
+struct ToolPictureTests {
+    @Test("A screenshot goes to Anthropic as an image beside the words; others are told it can't be shown")
+    func pictures() throws {
+        var request = ChatRequest(model: "m", messages: [Message(role: .user, text: "Look")])
+        request.tools = [Tool(name: "screenshot_tab", description: "Looks")]
+        request.exchanges = [ToolExchange(call: ToolCall(id: "s1", name: "screenshot_tab", input: .object([:])), result: "Here it is.", image: Data([1, 2, 3]))]
+        let anthropic = try #require(AnthropicService(base: URL(string: "https://x")!, key: "k").request(for: request).httpBody)
+        let body = try #require(JSON(parsing: String(decoding: anthropic, as: UTF8.self)))
+        let result = body["messages"]?[2]?["content"]?[0]?["content"]
+        #expect(result?[1]?["type"]?.string == "image")
+        #expect(result?[1]?["source"]?["data"]?.string == Data([1, 2, 3]).base64EncodedString())
+        let chat = try #require(OpenAIChatService(base: URL(string: "https://x")!, key: nil).request(for: request).httpBody)
+        #expect(String(decoding: chat, as: UTF8.self).contains("can't be shown it here"))
     }
 }
 

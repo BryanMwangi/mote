@@ -565,22 +565,23 @@ final class Tab: ObservableObject, Identifiable {
     // MARK: - Scripts in the page
 
     /// Replaces the scripts for the next document (see PageScripts).
-    func arm(hiding config: ElementHidingStyle.Config) {
+    func arm(hiding config: ElementHidingStyle.Config, for url: URL? = nil) {
         hiding = config
+        let dev = PageScripts.wantsDevHooks(url ?? pending ?? address)
         guard let controller = built?.configuration.userContentController else { return }
         // Every navigation arms the page; the scripts go to it again only when
         // they'd differ, or it's a page made since.
         // The script itself only acts on YouTube; blocking may be off there.
         let ads = AdBlocker.shared.blocksAds(on: "youtube.com")
-        let armed = (ObjectIdentifier(controller), config, boostScript, ads)
-        if let last = lastArmed, last.0 == armed.0, last.1 == armed.1, last.2 == armed.2, last.3 == armed.3 { return }
+        let armed = (ObjectIdentifier(controller), config, boostScript, ads, dev)
+        if let last = lastArmed, last.0 == armed.0, last.1 == armed.1, last.2 == armed.2, last.3 == armed.3, last.4 == armed.4 { return }
         lastArmed = armed
         controller.removeAllUserScripts()
-        PageScripts.all(hiding: config, boost: boostScript, ads: ads).forEach(controller.addUserScript)
+        PageScripts.all(hiding: config, boost: boostScript, ads: ads, dev: dev).forEach(controller.addUserScript)
     }
 
     /// What the page's scripts were last made from, and for which controller.
-    private var lastArmed: (ObjectIdentifier, ElementHidingStyle.Config, String, Bool)?
+    private var lastArmed: (ObjectIdentifier, ElementHidingStyle.Config, String, Bool, Bool)?
 
     /// The boost for the site the tab is loading, as script (see Boosts.swift).
     var boostScript = ""

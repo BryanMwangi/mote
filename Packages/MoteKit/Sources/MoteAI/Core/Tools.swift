@@ -58,16 +58,31 @@ public struct ToolCall: Equatable, Sendable {
     }
 }
 
+/// What a tool gives back: words, and a picture for one that looked (a screenshot).
+public struct ToolOutput: Equatable, Sendable {
+    public var text: String
+    /// A JPEG.
+    public var image: Data?
+
+    public init(_ text: String, image: Data? = nil) {
+        self.text = text
+        self.image = image
+    }
+}
+
 /// A tool the model asked for this turn, and what came of it.
 public struct ToolExchange: Equatable, Sendable {
     public var call: ToolCall
     public var result: String
+    /// A picture the tool gave back, as a JPEG.
+    public var image: Data?
     /// What the model wrote before asking, kept with its first call.
     public var said: String
 
-    public init(call: ToolCall, result: String, said: String = "") {
+    public init(call: ToolCall, result: String, image: Data? = nil, said: String = "") {
         self.call = call
         self.result = result
+        self.image = image
         self.said = said
     }
 }
@@ -81,14 +96,14 @@ public struct ToolLoop: ChatService {
     let tools: [Tool]
     /// A line for the step, such as "Reading example.com".
     let describe: @Sendable (ToolCall) -> String
-    let run: @Sendable (ToolCall) async -> String
+    let run: @Sendable (ToolCall) async -> ToolOutput
     /// An agent's: it reaches the tools here itself, and the loop only tells it so.
     let server: ToolServer?
     static let rounds = 8
 
     public init(
         service: any ChatService, tools: [Tool], server: ToolServer? = nil, describe: @escaping @Sendable (ToolCall) -> String,
-        run: @escaping @Sendable (ToolCall) async -> String
+        run: @escaping @Sendable (ToolCall) async -> ToolOutput
     ) {
         self.service = service
         self.tools = tools
@@ -146,7 +161,8 @@ public struct ToolLoop: ChatService {
                         var done = step
                         done.done = true
                         continuation.yield(.activity(done))
-                        request.exchanges.append(ToolExchange(call: call, result: result, said: index == 0 ? said : ""))
+                        request.exchanges.append(
+                            ToolExchange(call: call, result: result.text, image: result.image, said: index == 0 ? said : ""))
                     }
                 }
                 continuation.finish()

@@ -164,7 +164,9 @@ Object.defineProperty(exports, Symbol.toStringTag, { value: 'Module' });
 			x: box.x,
 			y: box.y,
 			w: box.width,
-			h: box.height
+			h: box.height,
+			sx: window.scrollX,
+			sy: window.scrollY
 		};
 	}
 	function run(op, args = {}) {
@@ -215,6 +217,10 @@ Object.defineProperty(exports, Symbol.toStringTag, { value: 'Module' });
 			case "find": return find(args.text ?? "");
 			case "tables": return tables();
 			case "selection": return window.getSelection()?.toString() ?? "";
+			case "code": {
+				const field = document.querySelector("input[autocomplete=\"one-time-code\"], input[name*=\"otp\" i], input[name*=\"code\" i][inputmode=\"numeric\"]");
+				return field ? write(field, args.text ?? "", "replace") : "nowhere";
+			}
 			default: return "unknown";
 		}
 	}

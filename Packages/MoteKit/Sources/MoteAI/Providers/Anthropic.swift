@@ -57,7 +57,15 @@ public struct AnthropicService: ChatService {
             var asked: [Any] = exchange.said.isEmpty ? [] : [["type": "text", "text": exchange.said]]
             asked.append(["type": "tool_use", "id": exchange.call.id, "name": exchange.call.name, "input": exchange.call.input.plain])
             messages.append(["role": "assistant", "content": asked])
-            messages.append(["role": "user", "content": [["type": "tool_result", "tool_use_id": exchange.call.id, "content": exchange.result]]])
+            // A picture goes back with the words, as the model can see it.
+            var result: Any = exchange.result
+            if let image = exchange.image {
+                result = [
+                    ["type": "text", "text": exchange.result],
+                    ["type": "image", "source": ["type": "base64", "media_type": "image/jpeg", "data": image.base64EncodedString()]],
+                ]
+            }
+            messages.append(["role": "user", "content": [["type": "tool_result", "tool_use_id": exchange.call.id, "content": result]]])
         }
         if !said.isEmpty { messages.append(["role": "assistant", "content": said.map(\.plain)]) }
         var body: [String: Any] = ["model": chat.model, "max_tokens": Self.replyLimit, "stream": true, "messages": messages]

@@ -37,7 +37,9 @@ public struct OpenAIChatService: ChatService {
                 "id": exchange.call.id, "type": "function", "function": ["name": exchange.call.name, "arguments": exchange.call.input.encoded],
             ]
             messages.append(["role": "assistant", "content": exchange.said.isEmpty ? NSNull() : exchange.said, "tool_calls": [call]])
-            messages.append(["role": "tool", "tool_call_id": exchange.call.id, "content": exchange.result])
+            // A tool's answer here is words only.
+            let said = exchange.image == nil ? exchange.result : exchange.result + " (A screenshot was taken, but this model can't be shown it here.)"
+            messages.append(["role": "tool", "tool_call_id": exchange.call.id, "content": said])
         }
         var request = authorized(URLRequest(url: base.appending(path: "chat/completions")))
         request.httpMethod = "POST"

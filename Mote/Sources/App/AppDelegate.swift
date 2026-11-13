@@ -25,6 +25,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// SwiftUI makes no window for a launch that isn't the usual one (`open
     /// -j`, a link), so one is asked for; a hidden launch stays hidden.
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Coding agents on this Mac may drive Mote (Settings › General).
+        if Storage.settings.bool(forKey: "ai.agents") { MoteMCP.shared.outside(true) }
         // Another profile's Mote wears its avatar on the Dock icon.
         Profiles.shared.dressDock()
         // A profile made from another browser's brings its things in, once.

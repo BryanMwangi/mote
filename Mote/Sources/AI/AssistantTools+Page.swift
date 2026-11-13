@@ -93,7 +93,7 @@ extension AssistantTools {
         case "read_field":
             return Self.said(await page(tab, "read", args), n: n)
         case "scroll":
-            guard await permit(.gentle, "") else { return Self.actingOff }
+            guard await permit(.gentle, "") else { return refused }
             if let to = input["to"]?.string { args["to"] = to }
             if let by = input["by"]?.double { args["by"] = by }
             show(found, "Scrolling")
@@ -119,7 +119,7 @@ extension AssistantTools {
         case "check": question = "\(input["on"]?.bool == false ? "Untick" : "Tick") \(what) on \(site)?"
         default: question = "Press \(input["key"]?.string ?? "Enter") at \(what) on \(site)?"
         }
-        guard await permit(.inPage(address), question) else { return acts ? Self.declined : Self.actingOff }
+        guard await permit(.inPage(address), question) else { return refused }
         // The page mustn't have moved to another site while asked.
         guard Address.siteHost(of: tab.address) == Address.siteHost(of: address) else { return "The page changed; read the tab again." }
         if let box { tab.agent.effects.send(call.name == "click" ? .click(box) : call.name == "write" || call.name == "fill" ? .write(box) : .move(box)) }

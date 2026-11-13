@@ -221,10 +221,12 @@ export function tables(root: Document = document): string {
 }
 
 /** Where an element is in the window, for the cursor to go to; null if gone. */
-export function place(target: Element | null): { x: number; y: number; w: number; h: number } | null {
+export function place(
+  target: Element | null,
+): { x: number; y: number; w: number; h: number; sx: number; sy: number } | null {
   if (!target) return null;
   const box = target.getBoundingClientRect();
-  return { x: box.x, y: box.y, w: box.width, h: box.height };
+  return { x: box.x, y: box.y, w: box.width, h: box.height, sx: window.scrollX, sy: window.scrollY };
 }
 
 export function run(op: string, args: Args = {}): unknown {
@@ -277,6 +279,13 @@ export function run(op: string, args: Args = {}): unknown {
       return tables();
     case 'selection':
       return window.getSelection()?.toString() ?? '';
+    case 'code': {
+      // A one-time code goes only where the page asks for one.
+      const field = document.querySelector<HTMLInputElement>(
+        'input[autocomplete="one-time-code"], input[name*="otp" i], input[name*="code" i][inputmode="numeric"]',
+      );
+      return field ? write(field, args.text ?? '', 'replace') : 'nowhere';
+    }
     default:
       return 'unknown';
   }

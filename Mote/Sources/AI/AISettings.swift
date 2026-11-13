@@ -58,6 +58,23 @@ struct AISettings: View {
             SettingRow(
                 "Read your tabs and the web", "Open tabs, pages it looks up, your history and bookmarks", symbol: "doc.text.magnifyingglass",
                 tint: Tint.blue, on: $prefs.aiReads)
+            if prefs.aiReads, prefs.aiActs {
+                RowRule()
+                SettingRow(
+                    "When it acts", prefs.aiMode == .ask ? "It asks before each action" : prefs.aiMode == .trusted ? "It acts on the trusted sites without asking" : "It tests the developer sites freely, with developer tools",
+                    symbol: "hand.raised", tint: Tint.orange, keywords: AIMode.allCases.map(\.title)
+                ) {
+                    Segmented(options: AIMode.allCases.map { ($0, $0.title) }, selection: $prefs.aiMode)
+                }
+                if prefs.aiMode == .trusted {
+                    RowRule()
+                    sites("Trusted sites", "github.com, mail.google.com", $prefs.aiTrusted)
+                }
+                RowRule()
+                sites("Developer sites", "localhost:*, staging.example.com", $prefs.aiDevSites)
+                RowRule()
+                sites("May sign in to", "Added when you allow it", $prefs.aiSignIn)
+            }
             if prefs.aiReads {
                 RowRule()
                 SettingRow(
@@ -124,6 +141,13 @@ struct AISettings: View {
     }
 
     // MARK: - Choosing
+
+    /// A list of sites, typed with commas.
+    private func sites(_ title: String, _ example: String, _ list: Binding<String>) -> some View {
+        SettingRow(title, nil, symbol: "globe", tint: Tint.gray) {
+            TextField(example, text: list).textFieldStyle(.roundedBorder).frame(width: 260)
+        }
+    }
 
     /// The sidebar's site among the known ones, or "Other Site…" for an address typed.
     private var otherSite: Bool { !prefs.chatSite.isEmpty && !SidebarSite.all.contains { $0.address == prefs.chatSite } }

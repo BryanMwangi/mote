@@ -8,7 +8,9 @@ enum PageScripts {
     /// middle-clicks, passkeys, and this site's hidden elements (at document
     /// start, so they never show).
     @MainActor
-    static func all(hiding: ElementHidingStyle.Config, boost: String = "", ads: Bool = false) -> [WKUserScript] {
+    /// `dev`: the page is a developer site the assistant may test, which gets
+    /// the console and network hook (Scripts/src/dev-hooks.ts) in its own world.
+    static func all(hiding: ElementHidingStyle.Config, boost: String = "", ads: Bool = false, dev: Bool = false) -> [WKUserScript] {
         var scripts = [
             mote(ScrollRelay.script, at: .atDocumentEnd),
             mote(ElementPicker.picker, at: .atDocumentStart),
@@ -44,6 +46,7 @@ enum PageScripts {
         scripts.append(WKUserScript(source: MediaRelay.script, injectionTime: .atDocumentStart, forMainFrameOnly: true, in: .page))
         // Notifications, which WebKit shows apps no way to give the page.
         scripts.append(WKUserScript(source: NotificationRelay.script, injectionTime: .atDocumentStart, forMainFrameOnly: true, in: .page))
+        if dev { scripts.append(WKUserScript(source: Self.devHooks, injectionTime: .atDocumentStart, forMainFrameOnly: true, in: .page)) }
         // An image on its own (a file dropped in, a download opened): on a
         // dark ground, as Firefox shows one, rather than the page's white.
         scripts.append(mote(Self.imageGround, at: .atDocumentEnd))
@@ -51,6 +54,16 @@ enum PageScripts {
         // The site's boost (see Boosts.swift), from the first paint.
         if !boost.isEmpty { scripts.append(mote(boost, at: .atDocumentStart)) }
         return scripts
+    }
+
+    private static let devHooks = InjectedScript.source("dev-hooks")
+
+    /// Whether a page at `url` gets the developer hook: one of the developer
+    /// sites, with Developer mode on or coding agents let in.
+    static func wantsDevHooks(_ url: URL?) -> Bool {
+        let store = Storage.settings
+        guard store.string(forKey: "ai.mode") == AIMode.developer.rawValue || store.bool(forKey: "ai.agents") else { return false }
+        return SiteList.contains(store.string(forKey: "ai.devSites") ?? "localhost:*, 127.0.0.1:*", url)
     }
 
     private static let imageGround = """

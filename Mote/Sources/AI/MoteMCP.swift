@@ -18,6 +18,53 @@ final class MoteMCP {
     private let token = UUID().uuidString + UUID().uuidString
     private var port: UInt16?
 
+    // MARK: - Coding agents from outside
+
+    /// The port agents Mote didn't start reach it on (Settings › General).
+    /// A test world's on the next, so it never meets the everyday Mote's.
+    static var outsidePort: UInt16 { Storage.world == nil ? 52917 : 52918 }
+    private var outsideListener: NWListener?
+    /// Who the outside agent said it is, for the page's pill.
+    private var outsideName = "Coding agent"
+    private static let tokenKey = "mote-mcp-outside"
+
+    /// The outside agents' token, made once and kept in the keychain.
+    var outsideToken: String {
+        if let kept = Assistant.shared.secrets.key(for: Self.tokenKey), !kept.isEmpty { return kept }
+        let made = UUID().uuidString + UUID().uuidString
+        Assistant.shared.secrets.setKey(made, for: Self.tokenKey)
+        return made
+    }
+
+    /// A new token: every agent set up before is shut out.
+    func resetOutsideToken() {
+        Assistant.shared.secrets.setKey(UUID().uuidString + UUID().uuidString, for: Self.tokenKey)
+    }
+
+    /// What to run to give Claude Code Mote's tools.
+    var claudeSetup: String {
+        "claude mcp add --transport http mote http://127.0.0.1:\(Self.outsidePort)/mcp --header \"Authorization: Bearer \(outsideToken)\""
+    }
+
+    /// Listens for agents from outside at the fixed port, or stops.
+    func outside(_ on: Bool) {
+        guard on else {
+            outsideListener?.cancel()
+            outsideListener = nil
+            return
+        }
+        guard outsideListener == nil, let port = NWEndpoint.Port(rawValue: Self.outsidePort) else { return }
+        let parameters = NWParameters.tcp
+        parameters.requiredLocalEndpoint = NWEndpoint.hostPort(host: .ipv4(.loopback), port: port)
+        parameters.allowLocalEndpointReuse = true
+        guard let made = try? NWListener(using: parameters) else { return }
+        made.newConnectionHandler = { connection in
+            MainActor.assumeIsolated { MoteMCP.shared.serve(connection) }
+        }
+        made.start(queue: .main)
+        outsideListener = made
+    }
+
     /// Where the agent finds it; nil until it's listening.
     var server: ToolServer? {
         guard let port, let url = URL(string: "http://127.0.0.1:\(port)/mcp") else { return nil }
@@ -75,7 +122,12 @@ final class MoteMCP {
     }
 
     private func answer(_ request: HTTPRequest) async -> (String, Data) {
-        guard request.headers["authorization"] == "Bearer \(token)" else { return ("401 Unauthorized", Data()) }
+        let said = request.headers["authorization"]
+        // Mote's own agents for a turn, or an agent from outside while that's on.
+        let fromOutside = said != "Bearer \(token)"
+        if fromOutside {
+            guard outsideListener != nil, said == "Bearer \(outsideToken)" else { return ("401 Unauthorized", Data()) }
+        }
         guard request.method == "POST" else { return ("405 Method Not Allowed", Data()) }
         guard let message = (try? JSONSerialization.jsonObject(with: request.body)) as? [String: Any],
             let method = message["method"] as? String
@@ -85,23 +137,29 @@ final class MoteMCP {
         let result: [String: Any]
         switch method {
         case "initialize":
+            if fromOutside, let name = ((message["params"] as? [String: Any])?["clientInfo"] as? [String: Any])?["name"] as? String {
+                outsideName = name == "claude-code" ? "Claude Code" : name
+            }
             result = [
                 "protocolVersion": (message["params"] as? [String: Any])?["protocolVersion"] as? String ?? "2025-06-18",
                 "capabilities": ["tools": [:] as [String: Any]], "serverInfo": ["name": "Mote", "version": "1"],
             ]
         case "tools/list":
-            result = ["tools": (tools?.list ?? []).map { ["name": $0.name, "description": $0.description, "inputSchema": $0.schema] }]
+            let serving = fromOutside ? AssistantTools.outside(driver: outsideName) : tools
+            result = ["tools": (serving?.list ?? []).map { ["name": $0.name, "description": $0.description, "inputSchema": $0.schema] }]
         case "tools/call":
             let params = message["params"] as? [String: Any]
             let name = params?["name"] as? String ?? ""
             let arguments = (params?["arguments"]).flatMap { try? JSONSerialization.data(withJSONObject: $0) }
             let input = arguments.flatMap { JSON(parsing: String(decoding: $0, as: UTF8.self)) } ?? .object([:])
-            guard let tools else {
+            guard let serving = fromOutside ? AssistantTools.outside(driver: outsideName) : tools else {
                 result = ["content": [["type": "text", "text": "Mote's tools are off."]], "isError": true]
                 break
             }
-            let said = await tools.run(ToolCall(id: UUID().uuidString, name: name, input: input))
-            result = ["content": [["type": "text", "text": said]], "isError": false]
+            let said = await serving.run(ToolCall(id: UUID().uuidString, name: name, input: input))
+            var content: [[String: Any]] = [["type": "text", "text": said.text]]
+            if let image = said.image { content.append(["type": "image", "data": image.base64EncodedString(), "mimeType": "image/jpeg"]) }
+            result = ["content": content, "isError": false]
         case "ping":
             result = [:]
         default:

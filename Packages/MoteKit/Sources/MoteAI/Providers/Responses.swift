@@ -27,7 +27,8 @@ public struct ResponsesService: ChatService {
             input.append([
                 "type": "function_call", "call_id": exchange.call.id, "name": exchange.call.name, "arguments": exchange.call.input.encoded,
             ])
-            input.append(["type": "function_call_output", "call_id": exchange.call.id, "output": exchange.result])
+            let said = exchange.image == nil ? exchange.result : exchange.result + " (A screenshot was taken, but this model can't be shown it here.)"
+            input.append(["type": "function_call_output", "call_id": exchange.call.id, "output": said])
         }
         var body: [String: Any] = ["model": chat.model, "stream": true, "input": input]
         if let instructions = chat.instructions, !instructions.isEmpty { body["instructions"] = instructions }
