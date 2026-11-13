@@ -49,6 +49,37 @@ struct AISettings: View {
         .id(provider.id)
 
         SettingsSection(
+            "Chat sidebar",
+            note: "A site stays as you move between tabs, signed in as it is in the space it opened in. ⇧⌘A opens and closes it."
+        ) {
+            SettingRow(
+                "Sidebar shows", "Mote's chat, or an AI app's site", symbol: "sidebar.right", tint: Tint.purple,
+                keywords: SidebarSite.all.map(\.name)
+            ) {
+                Picker("", selection: siteChoice) {
+                    Text("Mote's Chat").tag("")
+                    ForEach(SidebarSite.all, id: \.address) { Text($0.name).tag($0.address) }
+                    Text("Other Site…").tag(SidebarSite.other)
+                }
+                .labelsHidden()
+                .pickerStyle(.menu)
+                .fixedSize()
+            }
+            if otherSite {
+                RowRule()
+                SettingRow("Site", "Its address", symbol: "link", tint: Tint.purple) {
+                    TextField("example.com", text: $prefs.chatSite).textFieldStyle(.roundedBorder).frame(width: 220)
+                }
+            }
+            if prefs.chatSite.isEmpty {
+                RowRule()
+                SettingRow(
+                    "One chat for all tabs", "The chat stays as you switch tabs, about the page in front", symbol: "bubble.left.and.text.bubble.right",
+                    tint: Tint.indigo, on: $prefs.oneChat)
+            }
+        }
+
+        SettingsSection(
             "On this Mac",
             note:
                 "Agents use their own accounts and work in a folder of Mote's own. Claude Code gets only web search and page reading; Codex runs read-only; opencode's planning agent writes no files but may run commands."
@@ -75,6 +106,15 @@ struct AISettings: View {
     }
 
     // MARK: - Choosing
+
+    /// The sidebar's site among the known ones, or "Other Site…" for an address typed.
+    private var otherSite: Bool { !prefs.chatSite.isEmpty && !SidebarSite.all.contains { $0.address == prefs.chatSite } }
+
+    private var siteChoice: Binding<String> {
+        Binding(
+            get: { otherSite ? SidebarSite.other : prefs.chatSite },
+            set: { prefs.chatSite = $0 == SidebarSite.other ? "https://" : $0 })
+    }
 
     private var providerPicker: some View {
         Picker(
@@ -346,4 +386,19 @@ private struct AddressRow: View {
         assistant.change(provider) { $0.address = address.isEmpty ? nil : address }
         assistant.forgetModels(of: provider)
     }
+}
+
+/// AI apps the chat sidebar can show.
+struct SidebarSite {
+    let name: String
+    let address: String
+
+    static let all = [
+        SidebarSite(name: "Claude", address: "https://claude.ai/new"),
+        SidebarSite(name: "ChatGPT", address: "https://chatgpt.com/"),
+        SidebarSite(name: "Gemini", address: "https://gemini.google.com/app"),
+        SidebarSite(name: "Perplexity", address: "https://www.perplexity.ai/"),
+    ]
+    /// The picker's tag for an address typed in.
+    static let other = "other"
 }

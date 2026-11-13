@@ -45,6 +45,8 @@ final class Browser: NSObject, ObservableObject {
     let field = AddressEntry()
     let finder = PageFinder()
     let permissions = SitePermissions()
+    /// The AI app's site in the chat sidebar, when Settings › AI shows one.
+    private(set) lazy var siteChat = SiteChat(browser: self)
     private(set) lazy var logins = Logins(say: { [weak self] in self?.announce($0) }, tab: { [weak self] in self?.tab($0) })
 
     /// The address field is up over the page (⌘L). Blank tabs always show it.
@@ -900,6 +902,11 @@ final class Browser: NSObject, ObservableObject {
         floatActiveVideo()
         if let left, !left.isBlank { lastOpened = left.id }
         selectedAt = Date()
+        // A sidebar chat that belongs to the window goes along to the tab.
+        if let left, !prefs.chatSite.isEmpty || prefs.oneChat {
+            if prefs.chatSite.isEmpty, let chat = left.pageChat { tab.share(chat) }
+            if tab.chatOpen != left.chatOpen { tab.chatOpen = left.chatOpen }
+        }
         activeID = tab.id
         tab.touch()
         // Load a waiting tab now; only when there was nothing to wake, check

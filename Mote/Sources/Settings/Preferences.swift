@@ -87,6 +87,11 @@ final class Preferences: ObservableObject {
     /// Set by dragging the page chat panel's edge; it docks on the window's
     /// trailing edge, the mirror of the sidebar.
     @Published var chatWidth: CGFloat
+    /// The chat sidebar shows this site (an AI app's address) instead of
+    /// Mote's own chat; empty for Mote's.
+    @Published var chatSite: String
+    /// Mote's chat is one conversation that stays as the tabs change.
+    @Published var oneChat: Bool
     @Published var glyph: Glyph
     @Published var bookmarksBar: Bool
     /// The Develop menu in the menu bar, with the inspector's commands from View.
@@ -198,6 +203,8 @@ final class Preferences: ObservableObject {
         sidebarFolded = store.value("sidebar.folded", or: store.value("sidebar.hides", or: false))
         stripFolded = store.value("strip.folded", or: false)
         sideWidth = min(Metrics.sideMax, max(Metrics.sideMin, store.value("sidebar.width", or: Metrics.side)))
+        chatSite = store.value("ai.sidebar.site", or: "")
+        oneChat = store.value("ai.oneChat", or: false)
         chatWidth = min(Metrics.chatMax, max(Metrics.chatMin, store.value("chat.width", or: Metrics.chat)))
         // Installs from before the welcome existed already have settings, and skip it.
         welcomed = store.value("welcomed", or: false) || store.object(forKey: "glyph") != nil
@@ -286,6 +293,8 @@ final class Preferences: ObservableObject {
         keep($stripFolded, "strip.folded")
         keep($sideWidth, "sidebar.width")
         keep($chatWidth, "chat.width")
+        keep($chatSite, "ai.sidebar.site")
+        keep($oneChat, "ai.oneChat")
         keep($glyph, "glyph")
         keep($bookmarksBar, "bookmarks.bar")
         keep($developerMenu, "develop.menu")

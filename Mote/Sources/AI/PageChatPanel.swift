@@ -1,6 +1,7 @@
 import MoteAI
 import MoteCore
 import SwiftUI
+import WebKit
 
 /// The chat about the page showing, docked on the window's trailing edge as the
 /// mirror of the sidebar: full height, on the frame, the page card losing width
@@ -29,7 +30,13 @@ struct PageChatPanel: View {
 
     var body: some View {
         Group {
-            if let chat = tab.pageChat, tab.chatOpen || filled {
+            if !browser.prefs.chatSite.isEmpty {
+                if tab.chatOpen || filled, let page = browser.siteChat.page(for: browser.prefs.chatSite) {
+                    SiteChatStage(page: page)
+                } else {
+                    Palette.frame
+                }
+            } else if let chat = tab.pageChat, tab.chatOpen || filled {
                 ChatView(
                     browser: browser, conversation: chat,
                     accessory: { chip(chat) },
@@ -288,5 +295,53 @@ private struct Suggestion: View {
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
         .animation(Motion.hover, value: hovering)
+    }
+}
+
+/// An AI app's site in the chat sidebar (Settings › AI), one page per window
+/// kept as the tabs change, signed in as the site is in the space it opened
+/// in. Its links to other windows open as tabs.
+@MainActor
+final class SiteChat: NSObject, WKUIDelegate {
+    private weak var browser: Browser?
+    private(set) var page: WKWebView?
+    private var site = ""
+
+    init(browser: Browser) { self.browser = browser }
+
+    /// The page for the site set now, made once, and loaded again only if
+    /// the site changes.
+    func page(for site: String) -> WKWebView? {
+        guard let browser, let url = URL(string: site.contains("://") ? site : "https://" + site), url.host() != nil else { return nil }
+        let page = page ?? WKWebView(frame: .zero, configuration: Web.configuration(space: browser.spaceID))
+        page.uiDelegate = self
+        page.allowsBackForwardNavigationGestures = true
+        if self.page == nil || self.site != site { page.load(URLRequest(url: url)) }
+        self.page = page
+        self.site = site
+        return page
+    }
+
+    func webView(
+        _ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration, for action: WKNavigationAction,
+        windowFeatures: WKWindowFeatures
+    ) -> WKWebView? {
+        if let url = action.request.url { browser?.open(url, foreground: true) }
+        return nil
+    }
+}
+
+/// Holds the site's page in the panel; it moves here from wherever it was.
+private struct SiteChatStage: FillsRoom {
+    let page: WKWebView
+
+    func makeNSView(context: Context) -> NSView { NSView() }
+
+    func updateNSView(_ holder: NSView, context: Context) {
+        guard page.superview !== holder else { return }
+        page.removeFromSuperview()
+        page.frame = holder.bounds
+        page.autoresizingMask = [.width, .height]
+        holder.addSubview(page)
     }
 }

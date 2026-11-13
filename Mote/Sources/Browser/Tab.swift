@@ -429,6 +429,11 @@ final class Tab: ObservableObject, Identifiable {
         return chat
     }
 
+    /// Takes over the chat another tab had, for one chat across the tabs.
+    func share(_ chat: Conversation) {
+        if pageChat !== chat { pageChat = chat }
+    }
+
     /// Shares `page` with this tab's chat, making the chat if it must.
     func attachPage(_ page: PageContext) {
         ensurePageChat().attach(page)
