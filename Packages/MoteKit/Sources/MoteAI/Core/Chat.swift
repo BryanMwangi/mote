@@ -57,6 +57,8 @@ public struct ChatRequest: Equatable, Sendable {
     public var tools: [Tool] = []
     /// The tools asked for in this reply so far, and their results.
     public var exchanges: [ToolExchange] = []
+    /// Where an agent on the Mac reaches `tools` itself, over MCP.
+    public var toolServer: ToolServer?
 
     public init(model: String, messages: [Message], instructions: String? = nil, resume: String? = nil, search: Bool = false) {
         self.model = model

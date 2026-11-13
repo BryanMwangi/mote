@@ -22,7 +22,16 @@ public struct OpenCodeAgent: AgentWire {
             prompt = request.instructions.map { "\($0)\n\n---\n\n\(transcript)" } ?? transcript
         }
         // opencode's own web search, which it only offers when asked.
-        let environment = request.search ? ["OPENCODE_ENABLE_EXA": "1"] : [:]
+        var environment = request.search ? ["OPENCODE_ENABLE_EXA": "1"] : [:]
+        // Mote's tools, over MCP from Mote, added to its configuration.
+        if let server = request.mcp {
+            let remote: [String: Any] = [
+                "type": "remote", "url": server.url.absoluteString, "enabled": true,
+                "headers": ["Authorization": "Bearer {env:\(ToolServer.tokenVariable)}"],
+            ]
+            environment["OPENCODE_CONFIG_CONTENT"] = JSON.encode(["mcp": [ToolServer.name: remote]])
+            environment[ToolServer.tokenVariable] = server.token
+        }
         return Command(executable: executable, arguments: arguments, environment: environment, directory: workspace, input: prompt)
     }
 

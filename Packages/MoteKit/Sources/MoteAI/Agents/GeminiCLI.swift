@@ -16,8 +16,24 @@ public struct GeminiCLIAgent: AgentWire {
             let transcript = Transcript.prompt(for: request.messages)
             prompt = request.instructions.map { "\($0)\n\n---\n\n\(transcript)" } ?? transcript
         }
+        // Mote's tools, over MCP from Mote: Gemini reads servers only from its
+        // settings, here in Mote's own folder, which names the token's
+        // variable rather than holding it.
+        var environment: [String: String] = [:]
+        var files: [URL: String] = [:]
+        if let server = request.mcp {
+            let remote: [String: Any] = [
+                "httpUrl": server.url.absoluteString, "trust": true,
+                "headers": ["Authorization": "Bearer $\(ToolServer.tokenVariable)"],
+            ]
+            files[workspace.appending(path: ".gemini/settings.json")] = JSON.encode(["mcpServers": [ToolServer.name: remote]])
+            environment[ToolServer.tokenVariable] = server.token
+            arguments += ["--allowed-mcp-server-names", ToolServer.name]
+        }
         // Without a terminal it reads the prompt from stdin; `-p ""` makes it headless.
-        return Command(executable: executable, arguments: arguments + ["-p", ""], directory: workspace, input: prompt)
+        var command = Command(executable: executable, arguments: arguments + ["-p", ""], environment: environment, directory: workspace, input: prompt)
+        command.files = files
+        return command
     }
 
     public func decoder() -> GeminiCLIDecoder { GeminiCLIDecoder() }

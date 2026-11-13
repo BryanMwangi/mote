@@ -101,6 +101,47 @@ struct ToolTests {
     }
 }
 
+@Suite("Tools for agents")
+struct AgentToolTests {
+    private static let server = ToolServer(url: URL(string: "http://127.0.0.1:4567/mcp")!, token: "secret")
+    private static func request() -> ChatRequest {
+        var request = ChatRequest(model: "", messages: [Message(role: .user, text: "Hi")])
+        request.tools = [Tool(name: "list_tabs", description: "Tabs")]
+        request.toolServer = server
+        return request
+    }
+    private static let program = URL(fileURLWithPath: "/bin/agent")
+    private static let folder = URL(fileURLWithPath: "/tmp/mote-agent")
+
+    @Test("An agent gets Mote's server with the token in its environment, never in its arguments")
+    func everyAgent() {
+        let commands = [
+            ClaudeCodeAgent().command(for: Self.request(), executable: Self.program, workspace: Self.folder),
+            CodexAgent().command(for: Self.request(), executable: Self.program, workspace: Self.folder),
+            OpenCodeAgent().command(for: Self.request(), executable: Self.program, workspace: Self.folder),
+            GeminiCLIAgent().command(for: Self.request(), executable: Self.program, workspace: Self.folder),
+        ]
+        for command in commands {
+            #expect(command.environment[ToolServer.tokenVariable] == "secret")
+            #expect(!command.arguments.joined(separator: " ").contains("secret"))
+            let said = command.arguments.joined(separator: " ") + (command.environment["OPENCODE_CONFIG_CONTENT"] ?? "")
+                + command.files.values.joined()
+            #expect(said.contains("127.0.0.1:4567/mcp"))
+        }
+        #expect(commands[0].arguments.contains("mcp__mote"))
+        #expect(commands[3].files.keys.first?.path == "/tmp/mote-agent/.gemini/settings.json")
+    }
+
+    @Test("Without tools, no server")
+    func none() {
+        var request = Self.request()
+        request.tools = []
+        let claude = ClaudeCodeAgent().command(for: request, executable: Self.program, workspace: Self.folder)
+        #expect(claude.arguments.contains(#"{"mcpServers":{}}"#))
+        #expect(claude.environment.isEmpty)
+    }
+}
+
 private actor Ran {
     var names: [String] = []
     func add(_ name: String) { names.append(name) }

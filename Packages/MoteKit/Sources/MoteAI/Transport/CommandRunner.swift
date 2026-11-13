@@ -11,6 +11,8 @@ public struct Command: Equatable, Sendable {
     public var directory: URL?
     /// Written to the program's input, which is then closed.
     public var input: String?
+    /// Files put in place before it starts, by path: an agent's settings.
+    public var files: [URL: String] = [:]
 
     public init(
         executable: URL, arguments: [String], environment: [String: String] = [:], directory: URL? = nil, input: String? = nil
@@ -73,6 +75,10 @@ private final class Run: @unchecked Sendable {
         let errors = Pipe()
         process.executableURL = command.executable
         process.arguments = command.arguments
+        for (file, text) in command.files {
+            try? FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try? Data(text.utf8).write(to: file, options: .atomic)
+        }
         process.environment = ProcessInfo.processInfo.environment.filter { !command.unset.contains($0.key) }
             .merging(command.environment) { $1 }
         if let directory = command.directory { process.currentDirectoryURL = directory }

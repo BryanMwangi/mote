@@ -14,19 +14,32 @@ public struct ClaudeCodeAgent: AgentWire {
 
     public func command(for request: ChatRequest, executable: URL, workspace: URL) -> Command {
         let tools = request.search ? "WebSearch,WebFetch" : ""
+        // Mote's own tools, over MCP from Mote, when it offers them; no other server.
+        var servers: [String: Any] = [:]
+        var environment: [String: String] = [:]
+        if let server = request.mcp {
+            // The token through the environment, out of the process list.
+            servers[ToolServer.name] = [
+                "type": "http", "url": server.url.absoluteString,
+                "headers": ["Authorization": "Bearer ${\(ToolServer.tokenVariable)}"],
+            ]
+            environment[ToolServer.tokenVariable] = server.token
+        }
         var arguments = [
             "-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--include-partial-messages",
-            "--tools", tools, "--strict-mcp-config", "--mcp-config", #"{"mcpServers":{}}"#,
+            "--tools", tools, "--strict-mcp-config", "--mcp-config", JSON.encode(["mcpServers": servers]),
             "--settings", #"{"disableAllHooks":true}"#, "--disable-slash-commands", "--no-chrome",
         ]
         // Allowed up front: in print mode a tool that needs asking is refused.
-        if request.search { arguments += ["--allowedTools", tools] }
+        // Mote asks the person itself before acting in a page.
+        let allowed = [request.search ? tools : nil, servers.isEmpty ? nil : "mcp__\(ToolServer.name)"].compactMap { $0 }
+        if !allowed.isEmpty { arguments += ["--allowedTools", allowed.joined(separator: ",")] }
         if !request.model.isEmpty { arguments += ["--model", request.model] }
         if let instructions = request.instructions, !instructions.isEmpty { arguments += ["--system-prompt", instructions] }
         if let session = request.resume { arguments += ["--resume", session] }
         let prompt = request.resume == nil ? Transcript.prompt(for: request.messages) : request.prompt
         let line = JSON.encode(["type": "user", "message": ["role": "user", "content": prompt]])
-        return Command(executable: executable, arguments: arguments, directory: workspace, input: line + "\n")
+        return Command(executable: executable, arguments: arguments, environment: environment, directory: workspace, input: line + "\n")
     }
 
     public func decoder() -> ClaudeCodeDecoder { ClaudeCodeDecoder() }
@@ -129,6 +142,9 @@ public struct ClaudeCodeDecoder: LineDecoder {
         switch name {
         case "WebSearch": .search(id, input?["query"]?.string)
         case "WebFetch": .read(id, input?["url"]?.string)
+        // Mote's own, over MCP.
+        case _ where name.hasPrefix("mcp__\(ToolServer.name)__"):
+            Activity(id: id, title: ToolLoop.title(of: String(name.dropFirst("mcp__\(ToolServer.name)__".count)), input: input))
         default: Activity(id: id, title: name)
         }
     }

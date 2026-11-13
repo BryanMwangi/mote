@@ -10,6 +10,15 @@ public struct CodexAgent: AgentWire {
         // Live search; left alone, Codex only looks in a cached index.
         if request.search { arguments += ["-c", #"web_search="live""#] }
         if !request.model.isEmpty { arguments += ["--model", request.model] }
+        // Mote's tools, over MCP from Mote; the token comes from the environment.
+        var environment: [String: String] = [:]
+        if let server = request.mcp {
+            arguments += [
+                "-c", "mcp_servers.\(ToolServer.name).url=\(JSON.quote(server.url.absoluteString))",
+                "-c", "mcp_servers.\(ToolServer.name).bearer_token_env_var=\(JSON.quote(ToolServer.tokenVariable))",
+            ]
+            environment[ToolServer.tokenVariable] = server.token
+        }
         let prompt: String
         if let session = request.resume {
             arguments += ["resume", session]
@@ -19,7 +28,7 @@ public struct CodexAgent: AgentWire {
             prompt = request.instructions.map { "\($0)\n\n---\n\n\(transcript)" } ?? transcript
         }
         // "-" reads the prompt from stdin, which keeps it out of the process list.
-        return Command(executable: executable, arguments: arguments + ["-"], directory: workspace, input: prompt)
+        return Command(executable: executable, arguments: arguments + ["-"], environment: environment, directory: workspace, input: prompt)
     }
 
     public func decoder() -> CodexDecoder { CodexDecoder() }

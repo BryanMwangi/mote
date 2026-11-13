@@ -301,7 +301,12 @@ final class Assistant {
             service = Research(service: service)
         } else if let tools = AssistantTools.current(chat: chat) {
             // Mote's own tools: the model asks, Mote does it, the model goes on.
-            service = ToolLoop(service: service, tools: tools.list, describe: AssistantTools.describe) { call in await tools.run(call) }
+            // An agent on the Mac runs them itself, from Mote over MCP.
+            let server = provider.agent != nil ? await MoteMCP.shared.start() : nil
+            if server != nil { MoteMCP.shared.tools = tools }
+            service = ToolLoop(service: service, tools: tools.list, server: server, describe: AssistantTools.describe) { call in
+                await tools.run(call)
+            }
         }
         let author = model.isEmpty ? provider.name : "\(provider.name) · \(modelName(for: provider))"
         return Conversation.Route(
