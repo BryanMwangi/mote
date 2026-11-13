@@ -2,6 +2,7 @@ import AppKit
 import MoteAI
 import MoteCore
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// The ⌘K palette over a page: the address field in tab-switcher mode, high
 /// in the window over a dimmed page, with the open tabs listed below.
@@ -136,6 +137,8 @@ struct NewTabPage: View {
             .position(x: geo.size.width / 2, y: geo.size.height * 0.46)
         }
         .background { DragStrip(click: { browser.field.askFocus() }) }
+        // A file or link dropped on a new tab opens in it.
+        .onDrop(of: [.fileURL, .url], isTargeted: nil) { browser.take($0, into: browser.active) }
     }
 }
 

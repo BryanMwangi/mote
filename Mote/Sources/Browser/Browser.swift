@@ -835,14 +835,20 @@ final class Browser: NSObject, ObservableObject {
     }
 
     /// Links dropped on the tab row open as new tabs.
-    func take(_ providers: [NSItemProvider]) -> Bool {
+    /// `into`: a blank tab the first one opens in, as a file dropped on it.
+    func take(_ providers: [NSItemProvider], into blank: Tab? = nil) -> Bool {
         var took = false
+        var here = blank
         for provider in providers {
             if provider.canLoadObject(ofClass: URL.self) {
                 took = true
+                let into = here
+                here = nil
                 _ = provider.loadObject(ofClass: URL.self) { url, _ in
                     guard let url else { return }
-                    Task { @MainActor in self.open(url, foreground: true) }
+                    Task { @MainActor in
+                        if let into, into.isBlank { self.go(into, to: url) } else { self.open(url, foreground: true) }
+                    }
                 }
             } else if provider.canLoadObject(ofClass: String.self) {
                 took = true

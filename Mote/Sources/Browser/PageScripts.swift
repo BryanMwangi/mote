@@ -44,11 +44,21 @@ enum PageScripts {
         scripts.append(WKUserScript(source: MediaRelay.script, injectionTime: .atDocumentStart, forMainFrameOnly: true, in: .page))
         // Notifications, which WebKit shows apps no way to give the page.
         scripts.append(WKUserScript(source: NotificationRelay.script, injectionTime: .atDocumentStart, forMainFrameOnly: true, in: .page))
+        // An image on its own (a file dropped in, a download opened): on a
+        // dark ground, as Firefox shows one, rather than the page's white.
+        scripts.append(mote(Self.imageGround, at: .atDocumentEnd))
         if !hiding.selectors.isEmpty { scripts.append(mote(ElementPicker.hiding(hiding), at: .atDocumentStart)) }
         // The site's boost (see Boosts.swift), from the first paint.
         if !boost.isEmpty { scripts.append(mote(boost, at: .atDocumentStart)) }
         return scripts
     }
+
+    private static let imageGround = """
+        if (document.contentType.startsWith('image/') && document.images.length === 1 && document.body.children.length === 1) {
+          document.documentElement.style.background = '#1c1c1e';
+          document.body.style.background = '#1c1c1e';
+        }
+        """
 
     @MainActor
     private static func mote(_ source: String, at time: WKUserScriptInjectionTime, everyFrame: Bool = false) -> WKUserScript {
