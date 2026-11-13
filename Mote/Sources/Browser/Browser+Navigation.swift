@@ -166,6 +166,8 @@ extension Browser: WKNavigationDelegate, WKUIDelegate {
         let downloads = NavigationPolicy.downloads(
             status: http?.statusCode, disposition: http?.value(forHTTPHeaderField: "Content-Disposition"),
             canShow: response.canShowMIMEType)
+        // A PDF shown in the tab goes to Mote's reader once it's in.
+        if response.isForMainFrame, let tab = tab(for: webView) { tab.pdfExpected = !downloads && response.response.mimeType == "application/pdf" }
         decisionHandler(downloads ? .download : .allow)
     }
 

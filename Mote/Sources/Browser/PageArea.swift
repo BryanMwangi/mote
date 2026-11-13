@@ -29,6 +29,8 @@ struct Page: View {
             DeviceStage(
                 tab: tab, drag: tab.deviceDrag, page: tab.isBlank || tab.asleep || tab.floating ? nil : tab.web, warm: warm)
             if let device = tab.device { DeviceFrame(tab: tab, drag: tab.deviceDrag, device: device) }
+            // A PDF, in Mote's reader over the page WebKit made of it.
+            if let reader = tab.pdf, tab.device == nil { PDFReaderView(reader: reader) }
             // The assistant at work on the page: its cursor, what it does, a way to stop it.
             AgentOverlay(activity: tab.agent, zoom: tab.built?.pageZoom ?? 1)
 

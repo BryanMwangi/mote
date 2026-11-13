@@ -96,6 +96,11 @@ final class Tab: ObservableObject, Identifiable {
     let deviceDrag = DeviceDrag()
     /// The assistant at work on this tab's page (AgentOverlay).
     let agent = AgentActivity()
+    /// The page is a PDF, read in Mote's reader (PDFReader).
+    @Published var pdf: PDFReader?
+    /// The page coming in is a PDF, by its response; and its bytes are being read.
+    var pdfExpected = false
+    var readingPDF = false
     /// The site the page is loading from just now, for the status at its foot.
     /// Its own object: it changes many times a second while a page loads, and
     /// only the status watches it.
@@ -318,6 +323,8 @@ final class Tab: ObservableObject, Identifiable {
     /// Copies what changed on the web view into the tab.
     private func syncWithWeb() {
         guard let web = built else { return }
+        // A page done loading may be a PDF for Mote's reader, or no longer one.
+        if !web.isLoading { readPDFIfShown() }
         let capture = Capture(camera: web.cameraCaptureState, microphone: web.microphoneCaptureState)
         if self.capture != capture { self.capture = capture }
         if title != web.title ?? "" { title = web.title ?? "" }
