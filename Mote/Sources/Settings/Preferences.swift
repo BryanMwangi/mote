@@ -105,6 +105,8 @@ final class Preferences: ObservableObject {
     @Published var aiReads: Bool
     /// The assistant may open tabs and click and type in pages, asking each time.
     @Published var aiActs: Bool
+    /// Tab in the floating search asks the assistant what was typed.
+    @Published var tabAsks: Bool
     @Published var glyph: Glyph
     /// The spaces at the sidebar's foot (see SpaceIcons).
     @Published var spaceMarks: SpaceMarks
@@ -222,6 +224,7 @@ final class Preferences: ObservableObject {
         oneChat = store.value("ai.oneChat", or: false)
         aiReads = store.value("ai.tools.read", or: true)
         aiActs = store.value("ai.tools.act", or: false)
+        tabAsks = store.value("ai.tabAsks", or: false)
         chatWidth = min(Metrics.chatMax, max(Metrics.chatMin, store.value("chat.width", or: Metrics.chat)))
         // Installs from before the welcome existed already have settings, and skip it.
         welcomed = store.value("welcomed", or: false) || store.object(forKey: "glyph") != nil
@@ -315,6 +318,7 @@ final class Preferences: ObservableObject {
         keep($oneChat, "ai.oneChat")
         keep($aiReads, "ai.tools.read")
         keep($aiActs, "ai.tools.act")
+        keep($tabAsks, "ai.tabAsks")
         keep($glyph, "glyph")
         keep($spaceMarks, "spaces.marks")
         keep($bookmarksBar, "bookmarks.bar")

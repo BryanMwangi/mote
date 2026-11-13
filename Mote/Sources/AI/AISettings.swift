@@ -37,6 +37,10 @@ struct AISettings: View {
             }
             RowRule()
             SettingRow(
+                "Tab asks", "In the floating search, Tab asks about the page what you typed", symbol: "arrow.right.to.line",
+                tint: Tint.purple, keywords: ["floating search", "tab key"], on: $prefs.tabAsks)
+            RowRule()
+            SettingRow(
                 "Search the web", provider.searches ? webDetail(provider) : "\(provider.name) can't search the web", symbol: "globe",
                 tint: Tint.blue, on: Binding(get: { assistant.searchesWeb }, set: { assistant.searchesWeb = $0 })
             )
