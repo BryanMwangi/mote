@@ -82,7 +82,7 @@ extension Browser {
     func copyAddress() {
         guard let url = active?.address else { return }
         copyText(url.absoluteString)
-        announce("Address copied")
+        announce(Announcement("Address copied", symbol: "link", action: .init(title: "Share") { [weak self] in self?.share() }))
     }
 
     func copyMarkdownLink() {
