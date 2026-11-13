@@ -40,7 +40,8 @@
 			artist: clip(metadata?.artist),
 			playing: media ? !media.paused && !media.ended : state === "playing",
 			actions: handled,
-			session: Boolean(metadata?.title) || handled.length > 0
+			session: Boolean(metadata?.title) || handled.length > 0,
+			video: media instanceof HTMLVideoElement
 		};
 	}
 

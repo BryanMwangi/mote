@@ -80,6 +80,7 @@ suite('media strip', () => {
       playing: true,
       actions: ['nexttrack'],
       session: true,
+      video: false,
     });
     expect(describe(playing, null, 'Page', [])?.session).toBe(false);
     expect(describe(playing, null, 'x'.repeat(500), [])?.title.length).toBe(LIMIT);

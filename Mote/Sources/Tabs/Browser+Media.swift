@@ -21,6 +21,8 @@ extension Browser {
         let now = Date()
         let heard = (tabs + parkedTabs)
             .filter { tab in
+                // A call on the camera or microphone gets a strip, to mute it.
+                if tab !== active, !tab.shy, tab.capture.any { return true }
                 guard tab !== active, !tab.shy, let media = tab.media else { return false }
                 return tab.noisy || media.session == true
                     || tab.lastAudible.map { now.timeIntervalSince($0) < Self.pausedFor } == true

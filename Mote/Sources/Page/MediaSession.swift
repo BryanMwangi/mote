@@ -14,6 +14,8 @@ struct MediaState: Equatable, Decodable {
     var actions: [String]
     /// The site describes what plays or handles its controls: a player.
     var session: Bool?
+    /// A video, which can float in its own window.
+    var video: Bool?
 }
 
 /// Hears a page's media reports. The script runs in the page's own world, so

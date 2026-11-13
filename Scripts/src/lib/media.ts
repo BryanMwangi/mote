@@ -12,6 +12,8 @@ export interface MediaReport {
   /** The site describes what plays (`mediaSession.metadata`) or handles its
    * controls: a player, not a decoration. */
   session: boolean;
+  /** What plays is a video, which can float in its own window. */
+  video: boolean;
 }
 
 /** Titles and names are cut to this many characters. */
@@ -76,5 +78,6 @@ export function describe(
     playing: media ? !media.paused && !media.ended : state === 'playing',
     actions: handled,
     session: Boolean(metadata?.title) || handled.length > 0,
+    video: media instanceof HTMLVideoElement,
   };
 }

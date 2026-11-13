@@ -8,6 +8,11 @@ extension Browser {
         if floater.showing { land() } else { lift(active, quietly: false) }
     }
 
+    /// A strip's picture in picture: that tab's video floats, or comes back.
+    func float(_ tab: Tab) {
+        if floating == tab.id { land() } else { lift(tab, quietly: false) }
+    }
+
     /// Before another tab takes over: floats this tab's video when that is on.
     func floatActiveVideo() {
         if prefs.floatsOnLeave { lift(active, quietly: true) }

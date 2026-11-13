@@ -1325,6 +1325,7 @@ final class Browser: NSObject, ObservableObject {
         tab.$address.dropFirst().sink { [weak self] _ in self?.saveSoon() }.store(in: &bag)
         tab.$media.dropFirst().sink { [weak self] _ in self?.notePlayingSoon() }.store(in: &bag)
         tab.$noisy.dropFirst().sink { [weak self] _ in self?.notePlayingSoon() }.store(in: &bag)
+        tab.$capture.dropFirst().sink { [weak self] _ in self?.notePlayingSoon() }.store(in: &bag)
         // The panel's open state lives on the tab, but the chrome, the toolbar
         // and the menu read it through this object (`chatting`); pass the tab's
         // changes on so they redraw when the active tab's panel opens or closes.

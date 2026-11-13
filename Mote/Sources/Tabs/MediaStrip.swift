@@ -1,4 +1,5 @@
 import SwiftUI
+import WebKit
 
 /// At the foot of the sidebar while something plays in tabs you aren't on: a
 /// strip for each, stacked behind the one heard last, that fan out when the
@@ -124,7 +125,8 @@ struct MediaStrip: View {
     @State private var hovering = false
 
     var body: some View {
-        if let media = tab.media {
+        // A call with nothing playing still gets its strip, to mute it.
+        if let media = tab.media ?? (tab.capture.any ? MediaState(title: "", artist: "", playing: false, actions: []) : nil) {
             let shape = RoundedRectangle(cornerRadius: 10, style: .continuous)
             VStack(alignment: .leading, spacing: 0) {
                 if open {
@@ -133,9 +135,8 @@ struct MediaStrip: View {
                             browser.showPlaying(tab)
                         } label: {
                             VStack(alignment: .leading, spacing: 0) {
-                                Text(media.title.isEmpty ? tab.label : media.title)
-                                    .font(.system(size: 11.5, weight: .medium))
-                                    .foregroundStyle(Palette.ink)
+                                Marquee(text: media.title.isEmpty ? tab.label : media.title)
+                                    .frame(height: 15)
                                 if !media.artist.isEmpty {
                                     Text(media.artist).font(.system(size: 10)).foregroundStyle(Palette.muted)
                                 }
@@ -165,11 +166,28 @@ struct MediaStrip: View {
                     }
                     .buttonStyle(.plain)
                     .help("Go to “\(tab.label)”")
-                    Control(symbol: "backward.fill", help: "Previous") { tab.send(.previous) }
-                    Control(symbol: media.playing ? "pause.fill" : "play.fill", help: media.playing ? "Pause" : "Play") {
-                        tab.send(.toggle)
+                    if tab.capture.microphone != .none {
+                        let on = tab.capture.microphone == .active
+                        Control(symbol: on ? "mic.fill" : "mic.slash.fill", help: on ? "Mute Microphone" : "Unmute Microphone") {
+                            tab.toggleCapture(camera: false)
+                        }
                     }
-                    Control(symbol: "forward.fill", help: "Next") { tab.send(.next) }
+                    if tab.capture.camera != .none {
+                        let on = tab.capture.camera == .active
+                        Control(symbol: on ? "video.fill" : "video.slash.fill", help: on ? "Turn Camera Off" : "Turn Camera On") {
+                            tab.toggleCapture(camera: true)
+                        }
+                    }
+                    if tab.media != nil {
+                        if media.video == true {
+                            Control(symbol: "pip.enter", help: "Picture in Picture") { browser.float(tab) }
+                        }
+                        Control(symbol: "backward.fill", help: "Previous") { tab.send(.previous) }
+                        Control(symbol: media.playing ? "pause.fill" : "play.fill", help: media.playing ? "Pause" : "Play") {
+                            tab.send(.toggle)
+                        }
+                        Control(symbol: "forward.fill", help: "Next") { tab.send(.next) }
+                    }
                     Control(symbol: tab.muted ? "speaker.slash.fill" : "speaker.wave.2.fill", help: tab.muted ? "Unmute" : "Mute") {
                         tab.toggleMute()
                     }
@@ -231,6 +249,59 @@ struct MediaStrip: View {
             .buttonStyle(.plain)
             .onHover { hovering = $0 }
             .help(help)
+        }
+    }
+}
+
+/// A title too long for its room drifts back and forth to show the rest, as
+/// Core Animation moves its layer, so the strip isn't redrawn as it goes.
+private struct Marquee: FillsRoom {
+    let text: String
+
+    func makeNSView(context: Context) -> Holder { Holder() }
+    func updateNSView(_ holder: Holder, context: Context) { holder.text = text }
+
+    final class Holder: NSView {
+        private let line = CATextLayer()
+        var text = "" {
+            didSet { if text != oldValue { needsLayout = true } }
+        }
+
+        override init(frame: NSRect) {
+            super.init(frame: frame)
+            wantsLayer = true
+            layer?.masksToBounds = true
+            line.contentsScale = NSScreen.main?.backingScaleFactor ?? 2
+            line.font = NSFont.systemFont(ofSize: 11.5, weight: .medium)
+            line.fontSize = 11.5
+            layer?.addSublayer(line)
+        }
+
+        @available(*, unavailable)
+        required init?(coder: NSCoder) { fatalError() }
+
+        override func layout() {
+            super.layout()
+            let attributed = NSAttributedString(
+                string: text, attributes: [.font: NSFont.systemFont(ofSize: 11.5, weight: .medium), .foregroundColor: NSColor.labelColor])
+            let width = ceil(attributed.size().width)
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            line.string = attributed
+            line.frame = CGRect(x: 0, y: (bounds.height - 15) / 2, width: width, height: 15)
+            line.removeAnimation(forKey: "drift")
+            CATransaction.commit()
+            let over = width - bounds.width
+            guard over > 0, !Glow.stillness else { return }
+            let drift = CABasicAnimation(keyPath: "position.x")
+            drift.fromValue = line.position.x
+            drift.toValue = line.position.x - over
+            drift.duration = 5
+            drift.autoreverses = true
+            drift.repeatCount = .infinity
+            drift.beginTime = CACurrentMediaTime() + 1.5
+            drift.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            line.add(drift, forKey: "drift")
         }
     }
 }

@@ -100,6 +100,24 @@ final class Tab: ObservableObject, Identifiable {
     let loadingFrom = LoadingFrom()
     /// What the page says it plays, for the media strip (MediaSession.swift).
     @Published var media: MediaState?
+    /// The page's camera and microphone: off, on or muted.
+    @Published private(set) var capture = Capture(camera: .none, microphone: .none)
+
+    struct Capture: Equatable {
+        var camera: WKMediaCaptureState
+        var microphone: WKMediaCaptureState
+        var any: Bool { camera != .none || microphone != .none }
+    }
+
+    /// Mutes or unmutes the page's camera or microphone, as a call's own buttons would.
+    func toggleCapture(camera: Bool) {
+        guard let web = built else { return }
+        if camera {
+            web.setCameraCaptureState(web.cameraCaptureState == .active ? .muted : .active)
+        } else {
+            web.setMicrophoneCaptureState(web.microphoneCaptureState == .active ? .muted : .active)
+        }
+    }
     /// When the page was last heard, from WebKit rather than the page.
     var lastAudible: Date?
     /// Muted by the user; the page keeps playing.
@@ -285,6 +303,8 @@ final class Tab: ObservableObject, Identifiable {
             web.observe(\.isLoading) { [weak self] _, _ in self?.webChanged() },
             web.observe(\.canGoBack) { [weak self] _, _ in self?.webChanged() },
             web.observe(\.canGoForward) { [weak self] _, _ in self?.webChanged() },
+            web.observe(\.cameraCaptureState) { [weak self] _, _ in self?.webChanged() },
+            web.observe(\.microphoneCaptureState) { [weak self] _, _ in self?.webChanged() },
         ]
     }
 
@@ -296,6 +316,8 @@ final class Tab: ObservableObject, Identifiable {
     /// Copies what changed on the web view into the tab.
     private func syncWithWeb() {
         guard let web = built else { return }
+        let capture = Capture(camera: web.cameraCaptureState, microphone: web.microphoneCaptureState)
+        if self.capture != capture { self.capture = capture }
         if title != web.title ?? "" { title = web.title ?? "" }
         // Letting a pinned tab's page go loads about:blank, which must not
         // replace the address it comes back to.
