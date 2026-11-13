@@ -214,13 +214,24 @@ extension Bench {
                 // page's items go in after tracking begins.
                 let timer = Timer(timeInterval: 0.25, repeats: false) { _ in
                     MainActor.assumeIsolated {
-                        guard let index = menu.items.firstIndex(where: { $0.title.hasPrefix(pick) }) else {
+                        // "Item", or "Submenu>Item".
+                        let path = pick.split(separator: ">", maxSplits: 1).map(String.init)
+                        guard let index = menu.items.firstIndex(where: { $0.title.hasPrefix(path[0]) }) else {
                             picked = "no \(pick)"
                             return menu.cancelTracking()
                         }
-                        picked = menu.items[index].title
                         menu.cancelTracking()
-                        menu.performActionForItem(at: index)
+                        guard path.count == 2 else {
+                            picked = menu.items[index].title
+                            return menu.performActionForItem(at: index)
+                        }
+                        let sub = menu.items[index].submenu
+                        guard let sub, let inner = sub.items.firstIndex(where: { $0.title.hasPrefix(path[1]) }) else {
+                            picked = "no \(pick); has \(sub?.items.map(\.title) ?? [])"
+                            return
+                        }
+                        picked = "\(menu.items[index].title)>\(sub.items[inner].title)"
+                        sub.performActionForItem(at: inner)
                     }
                 }
                 RunLoop.main.add(timer, forMode: .common)
