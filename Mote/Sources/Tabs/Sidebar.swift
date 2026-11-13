@@ -700,7 +700,7 @@ private struct SideRow: View {
         .overlay(alignment: .trailing) {
             if !renaming {
                 let home = tab.wandered
-                Shut(shown: hovering, home: home, act: home ? { browser.goHome(tab) } : close)
+                Shut(shown: hovering, home: home, rests: tab.held, act: home ? { browser.goHome(tab) } : close)
                     .padding(.trailing, preview == nil ? 7 : 30)
             }
         }

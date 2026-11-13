@@ -6,6 +6,8 @@ struct Shut: View {
     let shown: Bool
     /// A pinned tab browsed away goes home instead (see `Tab.wandered`).
     var home = false
+    /// An essential or pinned tab: closing lets its page go and keeps it.
+    var rests = false
     let act: () -> Void
 
     @State private var hovering = false
@@ -13,7 +15,8 @@ struct Shut: View {
     var body: some View {
         ZStack {
             if shown {
-                Image(systemName: home ? "arrow.uturn.backward" : "xmark")
+                Image(systemName: home ? "arrow.uturn.backward" : rests ? "minus" : "xmark")
+                    .contentTransition(.symbolEffect(.replace))
                     .font(.system(size: home ? 9 : 8.5, weight: .semibold))
                     .foregroundStyle(hovering ? Palette.ink.opacity(0.8) : Palette.muted)
                     .frame(width: 18, height: 18)
@@ -29,8 +32,8 @@ struct Shut: View {
                 .onTapGesture { if shown { act() } }
                 .rowHover { hovering = $0 }
         }
-        .help(shown ? home ? "Back to Pinned Page" : "Close Tab   ⌘W" : "")
-        .accessibilityLabel(home ? "Back to Pinned Page" : "Close Tab")
+        .help(shown ? home ? "Back to Pinned Page" : rests ? "Unload Tab, keeping it   ⌘W" : "Close Tab   ⌘W" : "")
+        .accessibilityLabel(home ? "Back to Pinned Page" : rests ? "Unload Tab" : "Close Tab")
         .animation(Motion.hover, value: hovering)
         .animation(Motion.hover, value: shown)
     }
