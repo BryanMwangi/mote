@@ -348,6 +348,7 @@ struct Composer: View {
         }
         .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         .onTapGesture { browser.field.askFocus() }
+        .modifier(AskBump(on: compact, asking: browser.field.asksAssistant))
         .modifier(Shake(travel: shake))
         .onChange(of: browser.field.refusals) { _, _ in
             shake = 0
@@ -681,5 +682,38 @@ private struct Breath: NSViewRepresentable {
             both.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
             glow.add(both, forKey: "breath")
         }
+    }
+}
+
+/// The floating search switching to asking: a bump and a brief glow round
+/// its edge, as the full composer's halo marks it.
+private struct AskBump: ViewModifier {
+    let on: Bool
+    let asking: Bool
+    @State private var bumped = false
+    @State private var glowing = false
+
+    func body(content: Content) -> some View {
+        content
+            .scaleEffect(bumped ? 1.015 : 1)
+            .overlay {
+                if on {
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .strokeBorder(Color(nsColor: Glow.clay), lineWidth: 1.5)
+                        .opacity(glowing ? 0.9 : 0)
+                        .shadow(color: Color(nsColor: Glow.clay).opacity(glowing ? 0.6 : 0), radius: 10)
+                        .allowsHitTesting(false)
+                }
+            }
+            .onChange(of: asking) { _, now in
+                guard on, now, !Glow.stillness else { return }
+                withAnimation(Motion.press) { bumped = true }
+                withAnimation(.easeOut(duration: 0.15)) { glowing = true }
+                Task {
+                    try? await Task.sleep(for: .seconds(0.15))
+                    withAnimation(Motion.press) { bumped = false }
+                    withAnimation(.easeOut(duration: 0.5)) { glowing = false }
+                }
+            }
     }
 }
