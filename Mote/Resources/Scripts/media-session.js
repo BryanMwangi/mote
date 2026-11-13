@@ -17,22 +17,28 @@
 	/**
 	* The element the strip controls: one playing that can be heard, else the
 	* audible one furthest into its media (paused part way). Silent ones never.
+	* `loose`: elements playing outside the page, as a music player's own `Audio`.
 	*/
-	function currentMedia(root) {
-		const all = [...root.querySelectorAll("video, audio")].filter(audible);
+	function currentMedia(root, loose = []) {
+		const all = [...root.querySelectorAll("video, audio"), ...loose].filter(audible);
 		return all.find((media) => !media.paused && !media.ended) ?? all.filter((media) => media.currentTime > 0 && !media.ended).toSorted((a, b) => b.currentTime - a.currentTime)[0] ?? null;
 	}
 	function clip(text) {
 		return (text ?? "").trim().slice(0, 200);
 	}
-	/** The report for `media`, or null when there is nothing to control. */
-	function describe(media, metadata, pageTitle, actions) {
-		if (!media) return null;
+	/**
+	* The report for `media`, or null when there is nothing to control. With no
+	* element in sight, a site that describes its track and plays and pauses it
+	* itself is still a player: `state`, its `playbackState`, says whether it plays.
+	*/
+	function describe(media, metadata, pageTitle, actions, state = "none") {
 		const handled = [...actions].toSorted();
+		const runsItself = Boolean(metadata?.title) && handled.includes("play") && handled.includes("pause") && state !== "none";
+		if (!media && !runsItself) return null;
 		return {
 			title: clip(metadata?.title) || clip(pageTitle),
 			artist: clip(metadata?.artist),
-			playing: !media.paused && !media.ended,
+			playing: media ? !media.paused && !media.ended : state === "playing",
 			actions: handled,
 			session: Boolean(metadata?.title) || handled.length > 0
 		};
@@ -66,20 +72,39 @@
 				});
 			}
 		}
+		const loose = /* @__PURE__ */ new Set();
+		const play = HTMLMediaElement.prototype.play;
+		HTMLMediaElement.prototype.play = function() {
+			if (!this.isConnected && !loose.has(this)) {
+				if (loose.size >= 4) loose.delete(loose.values().next().value);
+				loose.add(this);
+				for (const kind of [
+					"play",
+					"pause",
+					"ended",
+					"emptied",
+					"loadedmetadata",
+					"volumechange"
+				]) this.addEventListener(kind, soon);
+				this.addEventListener("timeupdate", progress);
+			}
+			return play.call(this);
+		};
+		const playing = () => currentMedia(document, loose);
 		let sent = "";
 		const report = () => {
-			const media = currentMedia(document);
-			const found = describe(media, session?.metadata, document.title, handlers.keys());
+			const media = playing();
+			const found = describe(media, session?.metadata, document.title, handlers.keys(), session?.playbackState);
 			const message = JSON.stringify(found);
 			if (message === sent) return;
 			sent = message;
 			handler.postMessage(message);
 		};
 		let waiting;
-		const soon = () => {
+		function soon() {
 			clearTimeout(waiting);
 			waiting = window.setTimeout(report, 150);
-		};
+		}
 		for (const kind of [
 			"play",
 			"pause",
@@ -91,7 +116,7 @@
 		let shown = -1;
 		let told = 0;
 		const progress = () => {
-			const media = currentMedia(document);
+			const media = playing();
 			if (!media || !Number.isFinite(media.duration) || media.duration <= 0) return;
 			const now = Date.now();
 			const done = Math.round(media.currentTime / media.duration * 1e3) / 1e3;
@@ -113,11 +138,11 @@
 			return true;
 		};
 		const run = (command) => {
-			const media = currentMedia(document);
+			const media = playing();
 			switch (command) {
 				case "toggle":
-					if (media && !media.paused) {
-						if (!call("pause")) media.pause();
+					if (media ? !media.paused : session?.playbackState === "playing") {
+						if (!call("pause")) media?.pause();
 					} else if (!call("play")) media?.play().catch(() => {});
 					break;
 				case "next":

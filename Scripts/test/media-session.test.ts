@@ -51,6 +51,26 @@ suite('media strip', () => {
     expect(describe(null, null, 'Page', [])).toBeNull();
   });
 
+  it('controls a player playing outside the page', () => {
+    document.body.innerHTML = '';
+    const outside = media('audio', { paused: false });
+    outside.remove();
+    expect(currentMedia(document)).toBeNull();
+    expect(currentMedia(document, [outside])).toBe(outside);
+  });
+
+  it('takes a site that plays and pauses its own track for a player, with no element in sight', () => {
+    const track = { title: 'Song', artist: 'Band' };
+    expect(describe(null, track, 'Page', ['pause', 'play'], 'paused')).toMatchObject({
+      title: 'Song',
+      playing: false,
+    });
+    expect(describe(null, track, 'Page', ['pause', 'play'], 'playing')?.playing).toBe(true);
+    expect(describe(null, track, 'Page', ['play'], 'playing')).toBeNull();
+    expect(describe(null, null, 'Page', ['pause', 'play'], 'playing')).toBeNull();
+    expect(describe(null, track, 'Page', ['pause', 'play'], 'none')).toBeNull();
+  });
+
   it('prefers the session title, and cuts long ones', () => {
     document.body.innerHTML = '';
     const playing = media('audio', { paused: false });

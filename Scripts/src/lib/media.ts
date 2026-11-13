@@ -34,9 +34,13 @@ export function audible(media: HTMLMediaElement): boolean {
 /**
  * The element the strip controls: one playing that can be heard, else the
  * audible one furthest into its media (paused part way). Silent ones never.
+ * `loose`: elements playing outside the page, as a music player's own `Audio`.
  */
-export function currentMedia(root: ParentNode): HTMLMediaElement | null {
-  const all = [...root.querySelectorAll<HTMLMediaElement>('video, audio')].filter(audible);
+export function currentMedia(
+  root: ParentNode,
+  loose: Iterable<HTMLMediaElement> = [],
+): HTMLMediaElement | null {
+  const all = [...root.querySelectorAll<HTMLMediaElement>('video, audio'), ...loose].filter(audible);
   return (
     all.find((media) => !media.paused && !media.ended) ??
     all
@@ -50,19 +54,26 @@ function clip(text: string | undefined): string {
   return (text ?? '').trim().slice(0, LIMIT);
 }
 
-/** The report for `media`, or null when there is nothing to control. */
+/**
+ * The report for `media`, or null when there is nothing to control. With no
+ * element in sight, a site that describes its track and plays and pauses it
+ * itself is still a player: `state`, its `playbackState`, says whether it plays.
+ */
 export function describe(
   media: HTMLMediaElement | null,
   metadata: { title?: string; artist?: string } | null | undefined,
   pageTitle: string,
   actions: Iterable<string>,
+  state: string = 'none',
 ): MediaReport | null {
-  if (!media) return null;
   const handled = [...actions].toSorted();
+  const runsItself =
+    Boolean(metadata?.title) && handled.includes('play') && handled.includes('pause') && state !== 'none';
+  if (!media && !runsItself) return null;
   return {
     title: clip(metadata?.title) || clip(pageTitle),
     artist: clip(metadata?.artist),
-    playing: !media.paused && !media.ended,
+    playing: media ? !media.paused && !media.ended : state === 'playing',
     actions: handled,
     session: Boolean(metadata?.title) || handled.length > 0,
   };

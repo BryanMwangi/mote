@@ -53,10 +53,28 @@ if (handler && !window.__moteMedia) {
     }
   }
 
+  // Elements that play without being in the page, as a music player's own
+  // `Audio`: the page can't be searched for them, so their playing is heard.
+  // A few at most; their media events go where the page's do.
+  const loose = new Set<HTMLMediaElement>();
+  const play = HTMLMediaElement.prototype.play;
+  HTMLMediaElement.prototype.play = function (this: HTMLMediaElement): Promise<void> {
+    if (!this.isConnected && !loose.has(this)) {
+      if (loose.size >= 4) loose.delete(loose.values().next().value as HTMLMediaElement);
+      loose.add(this);
+      for (const kind of ['play', 'pause', 'ended', 'emptied', 'loadedmetadata', 'volumechange']) {
+        this.addEventListener(kind, soon);
+      }
+      this.addEventListener('timeupdate', progress);
+    }
+    return play.call(this);
+  };
+  const playing = (): HTMLMediaElement | null => currentMedia(document, loose);
+
   let sent = '';
   const report = (): void => {
-    const media = currentMedia(document);
-    const found = describe(media, session?.metadata, document.title, handlers.keys());
+    const media = playing();
+    const found = describe(media, session?.metadata, document.title, handlers.keys(), session?.playbackState);
     const message = JSON.stringify(found);
     if (message === sent) return;
     sent = message;
@@ -66,10 +84,10 @@ if (handler && !window.__moteMedia) {
   };
 
   let waiting: number | undefined;
-  const soon = (): void => {
+  function soon(): void {
     clearTimeout(waiting);
     waiting = window.setTimeout(report, 150);
-  };
+  }
 
   // Media events don't bubble, so they're caught on the way down.
   for (const kind of ['play', 'pause', 'ended', 'emptied', 'loadedmetadata', 'volumechange']) {
@@ -81,7 +99,7 @@ if (handler && !window.__moteMedia) {
   let shown = -1;
   let told = 0;
   const progress = (): void => {
-    const media = currentMedia(document);
+    const media = playing();
     if (!media || !Number.isFinite(media.duration) || media.duration <= 0) return;
     const now = Date.now();
     const done = Math.round((media.currentTime / media.duration) * 1000) / 1000;
@@ -92,10 +110,14 @@ if (handler && !window.__moteMedia) {
     handler.postMessage(JSON.stringify({ progress: done }));
   };
   document.addEventListener('timeupdate', progress, true);
-  document.addEventListener('seeked', () => {
-    told = 0;
-    progress();
-  }, true);
+  document.addEventListener(
+    'seeked',
+    () => {
+      told = 0;
+      progress();
+    },
+    true,
+  );
 
   /** Runs the site's own handler for `action`, if it gave one. */
   const call = (action: MediaSessionAction): boolean => {
@@ -106,18 +128,19 @@ if (handler && !window.__moteMedia) {
   };
 
   const run = (command: Command): void => {
-    const media = currentMedia(document);
+    const media = playing();
     switch (command) {
       case 'toggle':
-        if (media && !media.paused) {
-          if (!call('pause')) media.pause();
+        if (media ? !media.paused : session?.playbackState === 'playing') {
+          if (!call('pause')) media?.pause();
         } else if (!call('play')) {
           void media?.play().catch(() => {});
         }
         break;
       case 'next':
         // With no next track, ten seconds on.
-        if (!call('nexttrack') && media) media.currentTime = Math.min(media.duration || Infinity, media.currentTime + 10);
+        if (!call('nexttrack') && media)
+          media.currentTime = Math.min(media.duration || Infinity, media.currentTime + 10);
         break;
       case 'previous':
         if (!call('previoustrack') && media) media.currentTime = 0;
