@@ -334,7 +334,13 @@ extension Browser: WKDownloadDelegate {
 
         let transfer = downloads.transfer(for: download)
         guard prefs.asksWhereToSave else {
-            let free = Clippings.freeName(name) { FileManager.default.fileExists(atPath: folder.appendingPathComponent($0).path) }
+            // Taken on disk, or by a download still under way, whose file
+            // may not be written yet: two of the same would share a name.
+            let underWay = Set(downloads.transfers.compactMap { $0.file?.standardizedFileURL.path })
+            let free = Clippings.freeName(name) {
+                let path = folder.appendingPathComponent($0).standardizedFileURL.path
+                return FileManager.default.fileExists(atPath: path) || underWay.contains(path)
+            }
             let file = folder.appendingPathComponent(free)
             transfer?.file = file
             completionHandler(file)
@@ -350,6 +356,9 @@ extension Browser: WKDownloadDelegate {
             transfer.map(downloads.cancel)
             return completionHandler(nil)
         }
+        // Replacing a file the panel asked about: WebKit won't write over one,
+        // so it goes to the Trash first, where it can be got back.
+        if FileManager.default.fileExists(atPath: url.path) { try? FileManager.default.trashItem(at: url, resultingItemURL: nil) }
         transfer?.file = url
         completionHandler(url)
         DownloadDrop.fly(FileKind.icon(named: url.lastPathComponent), in: window, within: 120)
