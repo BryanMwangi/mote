@@ -11,6 +11,15 @@ enum Glyph: String, CaseIterable, Identifiable, Storable {
     var title: String { self == .letters ? "Letters" : "Site icons" }
 }
 
+/// How the spaces show at the sidebar's foot: each by its icon (the others
+/// shrinking to dots when there isn't room), or every other space a dot.
+enum SpaceMarks: String, CaseIterable, Identifiable, Storable {
+    case icons, dots
+
+    var id: String { rawValue }
+    var title: String { self == .icons ? "Icons" : "Dots" }
+}
+
 /// Where the toolbar is: always on the card, out of the way until the
 /// pointer reaches the card's top edge, or (beside a sidebar) moved into it.
 /// The click that previews a link: shift.
@@ -97,6 +106,8 @@ final class Preferences: ObservableObject {
     /// The assistant may open tabs and click and type in pages, asking each time.
     @Published var aiActs: Bool
     @Published var glyph: Glyph
+    /// The spaces at the sidebar's foot (see SpaceIcons).
+    @Published var spaceMarks: SpaceMarks
     @Published var bookmarksBar: Bool
     /// The Develop menu in the menu bar, with the inspector's commands from View.
     @Published var developerMenu: Bool
@@ -215,6 +226,7 @@ final class Preferences: ObservableObject {
         // Installs from before the welcome existed already have settings, and skip it.
         welcomed = store.value("welcomed", or: false) || store.object(forKey: "glyph") != nil
         glyph = store.value("glyph", or: .letters)
+        spaceMarks = store.value("spaces.marks", or: .icons)
         bookmarksBar = store.value("bookmarks.bar", or: false)
         developerMenu = store.value("develop.menu", or: false)
         showsReading = store.value("tabs.reading", or: true)
@@ -304,6 +316,7 @@ final class Preferences: ObservableObject {
         keep($aiReads, "ai.tools.read")
         keep($aiActs, "ai.tools.act")
         keep($glyph, "glyph")
+        keep($spaceMarks, "spaces.marks")
         keep($bookmarksBar, "bookmarks.bar")
         keep($developerMenu, "develop.menu")
         keep($showsReading, "tabs.reading")

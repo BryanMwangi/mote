@@ -141,11 +141,12 @@ struct Sidebar: View {
             } else {
                 FootButtons(browser: browser, prefs: prefs, showing: showing)
                 if browser.usesSpaces {
+                    SpaceIcons(browser: browser, prefs: prefs).padding(.horizontal, 4)
+                } else {
                     Spacer(minLength: 4)
-                    SpaceIcons(browser: browser)
                 }
             }
-            Spacer(minLength: 4)
+            if browser.isPrivate { Spacer(minLength: 4) }
             AddMenuButton(browser: browser)
         }
         .padding(EdgeInsets(top: 0, leading: 10, bottom: 10, trailing: 10))

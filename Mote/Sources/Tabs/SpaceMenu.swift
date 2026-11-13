@@ -18,10 +18,12 @@ enum SpaceMenu {
     /// Every space, then what can be done to `space` (the one showing
     /// unless another is given, as a right-click on its icon does).
     /// `from`: the view it was opened from, which the icon picker then hangs from.
-    static func show(for browser: Browser, space: Space? = nil, from anchor: IconAnchor = .dot) {
+    /// `listing`: every space first even for one space's menu, as the foot's
+    /// row offers when it can't show them all.
+    static func show(for browser: Browser, space: Space? = nil, from anchor: IconAnchor = .dot, listing: Bool = false) {
         let here = space ?? browser.space
         let menu = NSMenu()
-        if space == nil {
+        if space == nil || listing {
             for (index, space) in browser.spaces.enumerated() {
                 menu.addItem(
                     item(
@@ -33,7 +35,8 @@ enum SpaceMenu {
             }
             menu.addItem(.separator())
             menu.addItem(item("New Space…") { browser.askForSpace() })
-        } else if here.id != browser.spaceID {
+        }
+        if space != nil, here.id != browser.spaceID {
             menu.addItem(item("Switch to “\(here.name)”") { browser.switchSpace(to: here.id) })
         }
         if !menu.items.isEmpty { menu.addItem(.separator()) }

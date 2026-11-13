@@ -59,43 +59,129 @@ struct SpaceHeader: View {
     }
 }
 
-/// Every space's icon at the foot of the sidebar, this one marked; a click
-/// goes to that space. Falls back to the single `SpaceDot` when they don't fit.
+/// Every space at the foot of the sidebar, this one marked; a click goes to
+/// that space. The others are icons, or dots (Settings, or when the icons
+/// don't fit) that show their icon on hover. Too many even as dots, the row
+/// scrolls sideways, and a right-click lists every space to jump to.
 struct SpaceIcons: View {
     @ObservedObject var browser: Browser
+    @ObservedObject var prefs: Preferences
+    /// The room the foot leaves the row.
+    @State private var room: CGFloat = 0
+
+    private static let gap: CGFloat = 2
+    static let dot: CGFloat = 12
 
     var body: some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(spacing: 2) {
-                ForEach(browser.spaces) { space in
-                    SpaceIcon(browser: browser, space: space)
+        let count = CGFloat(browser.spaces.count)
+        let full = count * SpaceDot.width + (count - 1) * Self.gap
+        let dotted = prefs.spaceMarks == .dots || full > room
+        let width = dotted ? SpaceDot.width + (count - 1) * (Self.dot + Self.gap) : full
+        let overflows = width > room + 0.5
+        Color.clear
+            .frame(maxWidth: .infinity, maxHeight: 26)
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { room = $0 }
+            .overlay {
+                ScrollViewReader { scroller in
+                    ScrollView(.horizontal) {
+                        HStack(spacing: Self.gap) {
+                            ForEach(browser.spaces) { space in
+                                SpaceIcon(browser: browser, space: space, dot: dotted, listing: overflows).id(space.id)
+                            }
+                        }
+                    }
+                    .scrollIndicators(.never)
+                    .scrollDisabled(!overflows)
+                    .frame(width: min(width, max(room, 0)))
+                    .mask { Fades(on: overflows) }
+                    .background { SpaceRowSpot(overflows: overflows) }
+                    .onChange(of: browser.spaceID) { _, id in withAnimation(Motion.glide) { scroller.scrollTo(id) } }
+                    .onAppear { scroller.scrollTo(browser.spaceID) }
                 }
             }
-            SpaceDot(browser: browser)
+            .animation(Motion.quick, value: dotted)
+    }
+
+    /// Soft edges where the row is cut off.
+    private struct Fades: View {
+        let on: Bool
+
+        var body: some View {
+            if on {
+                HStack(spacing: 0) {
+                    LinearGradient(colors: [.clear, .black], startPoint: .leading, endPoint: .trailing).frame(width: 10)
+                    Rectangle()
+                    LinearGradient(colors: [.black, .clear], startPoint: .leading, endPoint: .trailing).frame(width: 10)
+                }
+            } else {
+                Rectangle()
+            }
         }
+    }
+}
+
+/// Where the spaces' row is, for a sideways scroll over it to scroll it
+/// rather than swipe between spaces, while it overflows (see SpaceSwipe).
+@MainActor
+enum SpaceRow {
+    fileprivate static weak var view: NSView?
+    fileprivate static var overflows = false
+
+    /// Whether `event` is over the row, and the row scrolls.
+    static func takes(_ event: NSEvent) -> Bool {
+        guard overflows, let view, view.window === event.window else { return false }
+        return view.bounds.contains(view.convert(event.locationInWindow, from: nil))
+    }
+}
+
+private struct SpaceRowSpot: FillsRoom {
+    let overflows: Bool
+
+    func makeNSView(context: Context) -> NSView { Spot() }
+
+    func updateNSView(_ view: NSView, context: Context) {
+        SpaceRow.view = view
+        SpaceRow.overflows = overflows
+    }
+
+    private final class Spot: NSView {
+        override func hitTest(_ point: NSPoint) -> NSView? { nil }
     }
 }
 
 private struct SpaceIcon: View {
     @ObservedObject var browser: Browser
     let space: Space
+    /// Other spaces are dots, until hovered.
+    let dot: Bool
+    /// The row overflows: a right-click lists every space.
+    let listing: Bool
 
     @State private var hovering = false
     @State private var warming: Task<Void, Never>?
 
     private var here: Bool { space.id == browser.spaceID && !browser.makingSpace }
+    private var small: Bool { dot && !here && !hovering }
 
     var body: some View {
         Button {
             // The menu is on right-click only, for every space's icon.
             if !here { browser.switchSpace(to: space.id) }
         } label: {
-            SpaceGlyph(space: space)
-                .foregroundStyle(here || hovering ? Palette.ink : Palette.muted.opacity(0.8))
-                .frame(width: SpaceDot.width, height: 26)
-                // The space's own wash, as the tab in front has.
-                .background { if here || hovering { Tinted(shape: Rounded.row, fill: here ? Palette.wash : Palette.hover) } }
-                .contentShape(Rectangle())
+            ZStack {
+                Circle()
+                    .fill(Palette.muted.opacity(0.7))
+                    .frame(width: 5, height: 5)
+                    .opacity(small ? 1 : 0)
+                SpaceGlyph(space: space)
+                    .foregroundStyle(here || hovering ? Palette.ink : Palette.muted.opacity(0.8))
+                    .scaleEffect(small ? 0.4 : 1)
+                    .opacity(small ? 0 : 1)
+            }
+            .frame(width: small ? SpaceIcons.dot : SpaceDot.width, height: 26)
+            // The space's own wash, as the tab in front has.
+            .background { if here || hovering { Tinted(shape: Rounded.row, fill: here ? Palette.wash : Palette.hover) } }
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .onHover { over in
@@ -109,7 +195,7 @@ private struct SpaceIcon: View {
             }
         }
         .help(space.name)
-        .onRightClick { SpaceMenu.show(for: browser, space: space, from: .foot) }
+        .onRightClick { SpaceMenu.show(for: browser, space: space, from: .foot, listing: listing) }
         .iconPicker(browser: browser, space: space, from: .foot)
         .animation(Motion.hover, value: hovering)
         .animation(Motion.quick, value: here)

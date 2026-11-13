@@ -44,6 +44,8 @@ final class SpaceSwipe {
         // The window under the gesture; not mid-swipe, which stays with its window.
         if !gate.tracking, let owner = Windows.shared.browser(for: event.window) { browser = owner }
         guard let browser, browser.usesSpaces, !browser.folded || browser.peeking else { return false }
+        // Over the spaces' row when it scrolls, a sideways scroll scrolls it.
+        if !gate.tracking, SpaceRow.takes(event) { return false }
         guard event.hasPreciseScrollingDeltas else { return wheel(event, in: browser) }
         switch gate.verdict(Self.phase(of: event), over: overTabs(event, in: browser)) {
         case .pass:

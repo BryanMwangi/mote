@@ -270,6 +270,15 @@ struct TabSettings: View {
             ) {
                 Segmented(options: Glyph.allCases.map { ($0, $0.title) }, selection: $prefs.glyph)
             }
+            if prefs.usesSpaces {
+                RowRule()
+                SettingRow(
+                    "Spaces at the foot", "Other spaces as icons, or dots that show theirs on hover", symbol: "circle.grid.2x1",
+                    tint: Tint.orange, keywords: ["space"] + SpaceMarks.allCases.map(\.title)
+                ) {
+                    Segmented(options: SpaceMarks.allCases.map { ($0, $0.title) }, selection: $prefs.spaceMarks)
+                }
+            }
             RowRule()
             SettingRow(
                 "How far you've read", "The tab you're on fills in as you scroll", symbol: "text.line.first.and.arrowtriangle.forward",
