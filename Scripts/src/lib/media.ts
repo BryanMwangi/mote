@@ -78,6 +78,7 @@ export function describe(
     playing: media ? !media.paused && !media.ended : state === 'playing',
     actions: handled,
     session: Boolean(metadata?.title) || handled.length > 0,
-    video: media instanceof HTMLVideoElement,
+    // A video element with a picture: players such as Spotify's play sound through one with none.
+    video: media instanceof HTMLVideoElement && media.videoWidth > 0,
   };
 }

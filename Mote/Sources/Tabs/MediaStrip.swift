@@ -179,7 +179,8 @@ struct MediaStrip: View {
                         }
                     }
                     if tab.media != nil {
-                        if media.video == true {
+                        // Floating needs a picture, and floating on (Settings › Keep playing when you switch tabs).
+                        if media.video == true, browser.prefs.floatsOnLeave {
                             Control(symbol: "pip.enter", help: "Picture in Picture") { browser.float(tab) }
                         }
                         Control(symbol: "backward.fill", help: "Previous") { tab.send(.previous) }
