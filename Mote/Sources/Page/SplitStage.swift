@@ -90,7 +90,7 @@ struct SplitStage<Pane: View>: View {
                             moving = tab.id
                             let pointer = NSEvent.mouseLocation
                             _ = browser.zone(dragging: tab, at: pointer)
-                            TabGhost.show(tab.label, at: pointer)
+                            TabGhost.show(tab, at: pointer)
                         }
                         .onEnded { _ in
                             moving = nil

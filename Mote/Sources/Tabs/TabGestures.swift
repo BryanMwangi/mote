@@ -80,8 +80,16 @@ struct Reorderable: ViewModifier {
         if let drag, drag.id != id { return }
         if drag == nil, let away { away.browser.beginDrag(away.tab) }
         var next = drag ?? ReorderDrag(id: id, start: index)
-        // Held at the sidebar's edge, it goes to the space that way.
-        if let away { SpaceDrag.hold(away.tab, in: away.browser) { drag = nil } }
+        // Held at the sidebar's edge, the spaces slide that way under it.
+        if let away {
+            SpaceDrag.hold(away.tab, in: away.browser)
+            // Carried into another space, its row is out of sight: the card follows.
+            if SpaceDrag.carrying(away.tab, in: away.browser) {
+                TabGhost.show(away.tab, at: NSEvent.mouseLocation, count: away.browser.picked(with: away.tab).count)
+                if drag == nil { drag = next }
+                return
+            }
+        }
         // Over a folder's row, it would go in; the list makes room as ever.
         if let filing {
             filing.browser.hoverFolder(
@@ -90,7 +98,7 @@ struct Reorderable: ViewModifier {
         // Away from the list the row can't follow: it holds still, and a card
         // of it does, so where it's going shows.
         if let away, zone != .list {
-            TabGhost.show(away.tab.label, at: NSEvent.mouseLocation, count: away.browser.picked(with: away.tab).count)
+            TabGhost.show(away.tab, at: NSEvent.mouseLocation, count: away.browser.picked(with: away.tab).count)
             if drag == nil { drag = next }
             return
         }
@@ -109,6 +117,14 @@ struct Reorderable: ViewModifier {
 
     private func ended() {
         TabGhost.hide()
+        // Let go in another space: the tab moves there, once, where it's dropped.
+        if let away, let from = SpaceDrag.carried(away.tab, in: away.browser) {
+            withAnimation(Motion.settle) { drag = nil }
+            away.browser.endDrag()
+            Haptic.tick()
+            let place = away.browser.loosePlace(at: NSEvent.mouseLocation)
+            return withAnimation(Motion.settle) { away.browser.bring(away.tab, from: from, at: place) }
+        }
         SpaceDrag.stop()
         // Let go over a space's icon: the tab goes to that space.
         if let away, drag?.id == id, let space = SpaceDrag.space(under: NSEvent.mouseLocation, in: away.browser) {
@@ -310,15 +326,29 @@ struct MiddleClick: FillsRoom {
 enum TabGhost {
     private static var panel: NSPanel?
 
-    static func show(_ title: String, at point: NSPoint, count: Int = 1) {
+    /// The picture of the tab being dragged, fetched once per drag.
+    private static var picture: (tab: Tab.ID, image: NSImage?)?
+
+    static func show(_ tab: Tab, at point: NSPoint, count: Int = 1) {
+        if picture?.tab != tab.id {
+            picture = (tab.id, nil)
+            tab.previewPicture { image in MainActor.assumeIsolated { if picture?.tab == tab.id { picture?.image = image } } }
+        }
+        show(tab.label, at: point, count: count, image: picture?.image)
+    }
+
+    static func show(_ title: String, at point: NSPoint, count: Int = 1, image: NSImage? = nil) {
         let panel = panel ?? made()
-        (panel.contentView as? NSHostingView<Card>)?.rootView = Card(title: title, count: count)
+        (panel.contentView as? NSHostingView<Card>)?.rootView = Card(title: title, count: count, image: image)
         let size = panel.contentView?.fittingSize ?? .zero
         panel.setFrame(NSRect(x: point.x - 16, y: point.y - size.height + 8, width: size.width, height: size.height), display: true)
         panel.orderFrontRegardless()
     }
 
-    static func hide() { panel?.orderOut(nil) }
+    static func hide() {
+        panel?.orderOut(nil)
+        picture = nil
+    }
 
     private static func made() -> NSPanel {
         let made = NSPanel(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
@@ -327,7 +357,7 @@ enum TabGhost {
         made.hasShadow = true
         made.level = .floating
         made.ignoresMouseEvents = true
-        made.contentView = NSHostingView(rootView: Card(title: "", count: 1))
+        made.contentView = NSHostingView(rootView: Card(title: "", count: 1, image: nil))
         panel = made
         return made
     }
@@ -336,16 +366,26 @@ enum TabGhost {
         let title: String
         /// Tabs picked together: up to three cards stacked, and how many.
         let count: Int
+        /// The page's picture, as the preview card shows it (TabPreview).
+        let image: NSImage?
         private let shape = RoundedRectangle(cornerRadius: 10, style: .continuous)
 
         var body: some View {
-            Text(title)
-                .font(TextStyle.body.font)
-                .lineLimit(1)
-                .frame(maxWidth: 240, alignment: .leading)
-                .padding(.horizontal, 12)
-                .frame(height: Metrics.row)
-                .background(.regularMaterial, in: shape)
+            VStack(alignment: .leading, spacing: 6) {
+                if let image {
+                    Image(nsImage: image).resizable().aspectRatio(contentMode: .fill)
+                        .frame(width: 216, height: 124, alignment: .top).clipped()
+                        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                }
+                Text(title)
+                    .font(TextStyle.body.font)
+                    .lineLimit(1)
+                    .frame(maxWidth: 216, alignment: .leading)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, image == nil ? 0 : 12)
+            .frame(minHeight: Metrics.row)
+            .background(.regularMaterial, in: shape)
                 .background {
                     ForEach(1..<min(count, 3), id: \.self) { n in
                         shape.fill(.regularMaterial).offset(x: CGFloat(n) * 4, y: CGFloat(n) * 4).opacity(0.7)
@@ -365,41 +405,61 @@ enum TabGhost {
 }
 
 /// A tab dragged in the sidebar to another space: held half a second at the
-/// sidebar's edge, it goes to the space before or after and that space shows;
-/// let go over a space's icon at the foot, it goes there.
+/// sidebar's edge, the spaces slide that way under it (again, to go further),
+/// and it goes along as a card; let go, it moves once, into the space showing,
+/// where it's dropped. Or let go over a space's icon at the foot.
 @MainActor
 enum SpaceDrag {
     private static var waiting: (forward: Bool, task: Task<Void, Never>)?
+    /// The tab carried, and the space it came from.
+    private static var carry: (tab: Tab, from: UUID)?
     /// The foot's space icons, where they are.
     static var icons: [UUID: WeakView] = [:]
 
-    static func hold(_ tab: Tab, in browser: Browser, leave: @escaping () -> Void) {
-        guard browser.prefs.sidebar, browser.usesSpaces, browser.spaces.count > 1, let window = browser.window else { return stop() }
+    static func hold(_ tab: Tab, in browser: Browser) {
+        guard browser.prefs.sidebar, browser.usesSpaces, browser.spaces.count > 1, let window = browser.window else { return wait(nil) }
         let x = window.convertPoint(fromScreen: NSEvent.mouseLocation).x
         let side = browser.prefs.sideWidth
         let left = browser.prefs.sideRight ? window.frame.width - side : 0
         let edge: Bool? = x < left + 12 ? false : x > left + side - 12 && x <= left + side ? true : nil
-        guard let forward = edge else { return stop() }
+        guard let forward = edge else { return wait(nil) }
         if waiting?.forward == forward { return }
-        stop()
+        wait(nil)
         waiting = (forward, Task { @MainActor in
             try? await Task.sleep(for: .seconds(0.5))
             guard !Task.isCancelled, let here = browser.spaces.firstIndex(where: { $0.id == browser.spaceID }) else { return }
             let next = here + (forward ? 1 : -1)
             guard browser.spaces.indices.contains(next) else { return }
-            let target = browser.spaces[next].id
-            waiting = nil
-            leave()
-            browser.endDrag()
+            if carry == nil { carry = (tab, browser.spaceID) }
             Haptic.tick()
-            browser.move(tab, toSpace: target)
-            browser.switchSpace(to: target)
+            browser.switchSpace(to: browser.spaces[next].id)
+            // Held on, it goes on to the next.
+            waiting = nil
+            hold(tab, in: browser)
         })
     }
 
-    static func stop() {
+    private static func wait(_ none: Void?) {
         waiting?.task.cancel()
         waiting = nil
+    }
+
+    /// Whether `tab` is being carried, and out of its own space now.
+    static func carrying(_ tab: Tab, in browser: Browser) -> Bool {
+        guard let carry, carry.tab === tab else { return false }
+        return carry.from != browser.spaceID
+    }
+
+    /// Let go: the space `tab` came from, when it's being carried into another.
+    static func carried(_ tab: Tab, in browser: Browser) -> UUID? {
+        defer { stop() }
+        guard let carry, carry.tab === tab, carry.from != browser.spaceID else { return nil }
+        return carry.from
+    }
+
+    static func stop() {
+        wait(nil)
+        carry = nil
     }
 
     /// The space whose icon is under `point`, on screen.

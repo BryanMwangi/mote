@@ -219,6 +219,34 @@ extension Browser {
     /// Whether a tab here would keep its sign-ins in another space.
     func sharesData(with id: UUID) -> Bool { Spaces.store(for: id) === Spaces.store(for: spaceID) }
 
+    /// A tab carried here by a drag from another space (SpaceDrag), at `place`
+    /// among the open tabs (first, with none). Between spaces with the same
+    /// website data the page comes as it is; otherwise it opens again here.
+    func bring(_ tab: Tab, from space: UUID, at place: Int?) {
+        guard space != spaceID, var row = parked[space], row.tabs.contains(where: { $0 === tab }), let url = tab.pending ?? tab.address
+        else { return }
+        row.tabs.removeAll { $0 === tab }
+        if row.active == tab.id { row.active = row.tabs.first?.id }
+        parked[space] = row
+        writeSession(now: true, space: space, tabs: row.tabs, active: row.active)
+        tab.pin = nil
+        tab.kept = false
+        tab.folder = nil
+        let moving: Tab
+        if sharesData(with: space) {
+            moving = tab
+        } else {
+            moving = Tab(configuration: Web.configuration(space: spaceID))
+            prepare(moving)
+            moving.restore(url: url, title: tab.title, name: tab.name)
+            tab.close()
+        }
+        let loose = tabs.filter { !$0.held }.count
+        reorder { $0.insert(moving, at: pinnedCount + min(max(place ?? 0, 0), loose)) }
+        select(moving)
+        writeSession(now: true)
+    }
+
     /// Moves a tab to the end of another space's row. Between spaces with the
     /// same website data the page goes as it is; otherwise it opens again in
     /// the other space's data, signed in only as that space is, and its back
