@@ -115,6 +115,10 @@ struct GeneralSettings: View {
                 on: $prefs.showsLinks)
             RowRule()
             SettingRow(
+                "Loading pill", "A pulse at the top of the page while it loads, as well as the tab's ring", symbol: "capsule.portrait",
+                tint: Tint.blue, keywords: ["progress"], on: $prefs.loadingPill)
+            RowRule()
+            SettingRow(
                 "Scroll with the middle button", "Press the wheel and move the mouse; press again to stop", symbol: "computermouse",
                 tint: Tint.gray, on: $prefs.autoScroll)
             RowRule()

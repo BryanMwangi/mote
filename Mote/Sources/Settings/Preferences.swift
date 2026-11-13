@@ -153,6 +153,8 @@ final class Preferences: ObservableObject {
     @Published var linksSpace: String
     /// The hovered link's address at the bottom of the page (see StatusLine.swift).
     @Published var showsLinks: Bool
+    /// A pulse at the top of the page while it loads.
+    @Published var loadingPill: Bool
 
     // Tabs and video
     /// Tabs idle for half an hour let their page go and keep their place.
@@ -253,6 +255,7 @@ final class Preferences: ObservableObject {
         footButtons = foot
         extensionStore = store.value("extensions.store", or: "chrome")
         shortcuts = store.value("keys.custom", or: Shortcuts())
+        loadingPill = store.value("page.loadingPill", or: false)
         littleLinks = store.value("links.little", or: false)
         linksSpace = store.value("links.space", or: LinkSpace.current)
         showsLinks = store.value("links.show", or: false)
@@ -346,6 +349,7 @@ final class Preferences: ObservableObject {
             }
         }
         keep($littleLinks, "links.little")
+        keep($loadingPill, "page.loadingPill")
         keep($linksSpace, "links.space")
         keep($showsLinks, "links.show") { HoveredLink.on = $0 }
         keep($sleepsTabs, "tabs.sleep")

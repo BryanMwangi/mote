@@ -349,6 +349,7 @@ private struct PageCard: View {
                 .overlay {
                     LinkBubble(status: browser.linkStatus, tab: tab, loadingFrom: tab.loadingFrom, showsLinks: prefs.showsLinks)
                 }
+                .overlay(alignment: .top) { if prefs.loadingPill { LoadingPill(tab: tab) } }
                 .overlay(alignment: .topTrailing) {
                     if browser.finder.showing {
                         FindBar(finder: browser.finder)

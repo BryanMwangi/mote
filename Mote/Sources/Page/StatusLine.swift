@@ -135,3 +135,38 @@ struct LinkBubble: View {
         .animation(.easeOut(duration: 0.12), value: text == nil)
     }
 }
+
+/// A small pulse at the top of the page while it loads (Settings › General).
+/// Made only while loading, and pulsed by Core Animation, so it costs nothing
+/// at rest and nothing on the main thread as it goes.
+struct LoadingPill: View {
+    @ObservedObject var tab: Tab
+
+    var body: some View {
+        if tab.loading {
+            Pulse().frame(width: 44, height: 4).padding(.top, 6).allowsHitTesting(false).transition(.opacity)
+        }
+    }
+
+    private struct Pulse: NSViewRepresentable {
+        func makeNSView(context: Context) -> NSView {
+            let view = NSView()
+            view.wantsLayer = true
+            let layer = view.layer!
+            layer.cornerRadius = 2
+            layer.backgroundColor = NSColor.labelColor.withAlphaComponent(0.45).cgColor
+            guard !Glow.stillness else { return view }
+            let pulse = CABasicAnimation(keyPath: "opacity")
+            pulse.fromValue = 1
+            pulse.toValue = 0.25
+            pulse.duration = 0.7
+            pulse.autoreverses = true
+            pulse.repeatCount = .infinity
+            pulse.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            layer.add(pulse, forKey: "pulse")
+            return view
+        }
+
+        func updateNSView(_ view: NSView, context: Context) {}
+    }
+}
