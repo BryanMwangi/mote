@@ -48,7 +48,7 @@ struct Toast: FillsRoom {
     func makeNSView(context: Context) -> Holder { Holder() }
 
     func updateNSView(_ holder: Holder, context: Context) {
-        holder.show(announcer.showing.map { AnyView(AnnouncementCard(message: $0, browser: browser)) })
+        holder.show(announcer.showing.map { AnyView(AnnouncementCard(message: $0, browser: browser)) }, saying: announcer.showing?.text)
     }
 
     final class Holder: NSView {
@@ -81,14 +81,24 @@ struct Toast: FillsRoom {
                 height: size.height)
         }
 
-        func show(_ content: AnyView?) {
+        /// The message showing, to tell the same one said again.
+        private var said: String?
+
+        func show(_ content: AnyView?, saying text: String?) {
             guard let content else { return hide() }
             let fresh = card == nil || card?.alphaValue == 0
+            let again = !fresh && text == said
+            said = text
             let host = host ?? made()
             host.rootView = AnyView(content.padding(Self.margin))
             let card = host.view
             let target = place(host)
-            guard fresh, window != nil else { return card.frame = target }
+            guard fresh, window != nil else {
+                card.frame = target
+                // The same message again pops the card that's up.
+                if again { spring(card, from: 1.06) }
+                return
+            }
             card.alphaValue = 0
             card.frame = target.offsetBy(dx: 0, dy: Self.rise)
             NSAnimationContext.runAnimationGroup { context in
@@ -97,12 +107,30 @@ struct Toast: FillsRoom {
                 card.animator().alphaValue = 1
                 card.animator().frame = target
             }
+            spring(card, from: 0.96)
+        }
+
+        /// From `scale` about its middle back to its size, on a spring Core
+        /// Animation runs, so it keeps moving while the main thread is busy.
+        private func spring(_ card: NSView, from scale: CGFloat) {
+            guard let layer = card.layer, !Glow.stillness else { return }
+            let middle = CGPoint(x: card.bounds.midX, y: card.bounds.midY)
+            var start = CATransform3DMakeTranslation(middle.x, middle.y, 0)
+            start = CATransform3DScale(start, scale, scale, 1)
+            start = CATransform3DTranslate(start, -middle.x, -middle.y, 0)
+            let spring = CASpringAnimation(perceptualDuration: 0.5, bounce: 0.2)
+            spring.keyPath = "transform"
+            spring.fromValue = NSValue(caTransform3D: start)
+            spring.toValue = NSValue(caTransform3D: CATransform3DIdentity)
+            spring.duration = spring.settlingDuration
+            layer.add(spring, forKey: "pop")
         }
 
         private func made() -> NSHostingController<AnyView> {
             let made = NSHostingController(rootView: AnyView(EmptyView()))
             made.sizingOptions = []
             made.safeAreaRegions = []
+            made.view.wantsLayer = true
             made.view.alphaValue = 0
             addSubview(made.view)
             host = made
