@@ -46,6 +46,15 @@ final class History: ObservableObject {
         scheduleSave()
     }
 
+    /// The pages last visited in a time range, newest first.
+    func visited(between start: Date, and end: Date) -> [HistoryIndex.Visit] { index.visited(between: start, and: end) }
+
+    @discardableResult
+    func remove(visitedBetween start: Date, and end: Date) -> Int {
+        defer { scheduleSave() }
+        return index.remove(visitedBetween: start, and: end)
+    }
+
     func clear() {
         index.removeAll()
         scheduleSave()

@@ -166,6 +166,19 @@ public struct HistoryIndex: Sendable {
         visitsByKey = [:]
     }
 
+    /// The pages last visited from `start` to `end`, newest first.
+    public func visited(between start: Date, and end: Date) -> [Visit] {
+        visitsByKey.values.filter { $0.last >= start && $0.last <= end }.sorted { $0.last > $1.last }
+    }
+
+    /// Forgets the pages last visited from `start` to `end`; how many went.
+    @discardableResult
+    public mutating func remove(visitedBetween start: Date, and end: Date) -> Int {
+        let going = visited(between: start, and: end)
+        for visit in going { visitsByKey[visit.key] = nil }
+        return going.count
+    }
+
     private func isRecordable(_ url: URL) -> Bool {
         url.scheme == "http" || url.scheme == "https"
     }

@@ -115,4 +115,16 @@ struct HistoryIndexTests {
         }
         #expect(index.visitsToSave(now: now).count == HistoryIndex.capacity)
     }
+
+    @Test("Pages last visited in a time range are listed and forgotten, the rest kept")
+    func removesARange() {
+        var index = HistoryIndex()
+        let now = Date()
+        index.merge(URL(string: "https://old.example")!, title: "Old", count: 1, last: now.addingTimeInterval(-86_400 * 10))
+        index.merge(URL(string: "https://new.example")!, title: "New", count: 1, last: now.addingTimeInterval(-60))
+        let lastDay = (start: now.addingTimeInterval(-86_400), end: now)
+        #expect(index.visited(between: lastDay.start, and: lastDay.end).map(\.title) == ["New"])
+        #expect(index.remove(visitedBetween: lastDay.start, and: lastDay.end) == 1)
+        #expect(index.entries().map(\.title) == ["Old"])
+    }
 }
