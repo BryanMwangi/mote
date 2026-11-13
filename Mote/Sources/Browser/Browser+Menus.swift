@@ -87,6 +87,8 @@ extension Browser {
     /// The page in front, as a web archive where the user says.
     func savePage() {
         guard let tab = active, !tab.isBlank, let web = tab.built else { return }
+        // A PDF saves as itself, with what was marked on it.
+        if let pdf = tab.pdf { return pdf.save(in: window, to: downloadsFolder) }
         web.createWebArchiveData { [weak self] result in
             MainActor.assumeIsolated {
                 guard case .success(let data) = result else { return self?.announce("This page couldn't be saved") ?? () }

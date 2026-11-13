@@ -17,7 +17,12 @@ final class PDFReader: ObservableObject {
     @Published var sidebar: Sidebar? = .pages
     @Published var found: [PDFSelection] = []
     @Published var foundAt = 0
-    @Published var tool: Tool = .select
+    @Published var tool: Tool = .select {
+        didSet { inkLayer?.tool = tool }
+    }
+    /// The pen and signatures.
+    let ink = PDFInk()
+    weak var inkLayer: InkLayer?
     /// The ink drawn and stamps placed since opening, for Save to say so.
     @Published var edited = false
     weak var view: PDFView?
@@ -153,13 +158,17 @@ final class PDFReader: ObservableObject {
     }
 
     /// With what was marked, drawn and signed, where the person says.
-    func save(in window: NSWindow?) {
+    func save(in window: NSWindow?, to folder: URL? = nil) {
         let panel = NSSavePanel()
+        panel.directoryURL = folder
         panel.allowedContentTypes = [.pdf]
         panel.nameFieldStringValue = url.lastPathComponent.isEmpty ? "Document.pdf" : url.lastPathComponent
         let write: (NSApplication.ModalResponse) -> Void = { [document] answer in
             guard answer == .OK, let to = panel.url else { return }
-            document.write(to: to)
+            // Signatures are drawn by Mote, so they go into the pages themselves;
+            // marks and ink stay editable.
+            let signed = (0..<document.pageCount).contains { document.page(at: $0)?.annotations.contains { $0 is SignatureStamp } == true }
+            document.write(to: to, withOptions: signed ? [.burnInAnnotationsOption: true] : nil)
         }
         if let window { panel.beginSheetModal(for: window, completionHandler: write) } else { write(panel.runModal()) }
     }
@@ -240,6 +249,10 @@ struct PDFReaderView: View {
         VStack(spacing: 0) {
             toolbar
             Rectangle().fill(Palette.hairline).frame(height: 1)
+            if reader.tool != .select {
+                PDFInkBar(reader: reader, ink: reader.ink)
+                Rectangle().fill(Palette.hairline).frame(height: 1)
+            }
             HStack(spacing: 0) {
                 if let sidebar = reader.sidebar {
                     Group {
@@ -290,6 +303,11 @@ struct PDFReaderView: View {
             Door(icon: "underline", help: "Underline the selected text") { reader.mark(.underline) }
             Door(icon: "strikethrough", help: "Strike through the selected text") { reader.mark(.strikeOut) }
             Door(icon: "note.text", help: "Add a note") { reader.note() }
+            Door(icon: "square.and.arrow.down", help: reader.edited ? "Save with changes" : "Save") {
+                reader.save(in: reader.view?.window, to: Browser.front?.downloadsFolder)
+            }
+            Door(icon: "pencil.tip", on: reader.tool == .draw, help: "Draw") { reader.tool = reader.tool == .draw ? .select : .draw }
+            Door(icon: "signature", on: reader.tool == .sign, help: "Sign") { reader.tool = reader.tool == .sign ? .select : .sign }
             divider
             Menu {
                 Button("Rotate Page") { reader.rotate() }
@@ -301,7 +319,7 @@ struct PDFReaderView: View {
                 Button("Presentation") { present() }
                 Divider()
                 Button("Print…") { reader.print() }
-                Button(reader.edited ? "Save with Changes…" : "Save…") { reader.save(in: reader.view?.window) }
+                Button(reader.edited ? "Save with Changes…" : "Save…") { reader.save(in: reader.view?.window, to: Browser.front?.downloadsFolder) }
                 Button("Document Properties…") { showsProperties = true }
             } label: {
                 Image(systemName: "ellipsis.circle")
@@ -364,7 +382,7 @@ struct PDFReaderView: View {
 private struct PDFPages: NSViewRepresentable {
     let reader: PDFReader
 
-    func makeNSView(context: Context) -> PDFView {
+    func makeNSView(context: Context) -> NSView {
         let view = PDFView()
         view.document = reader.document
         view.autoScales = true
@@ -373,10 +391,25 @@ private struct PDFPages: NSViewRepresentable {
         view.backgroundColor = .underPageBackgroundColor
         reader.view = view
         context.coordinator.watch(view, reader)
-        return view
+        // The pen and signatures, over the pages.
+        let ink = InkLayer()
+        ink.pdfView = view
+        ink.ink = reader.ink
+        ink.tool = reader.tool
+        reader.inkLayer = ink
+        let holder = NSView()
+        for part in [view, ink as NSView] {
+            part.translatesAutoresizingMaskIntoConstraints = false
+            holder.addSubview(part)
+            NSLayoutConstraint.activate([
+                part.leadingAnchor.constraint(equalTo: holder.leadingAnchor), part.trailingAnchor.constraint(equalTo: holder.trailingAnchor),
+                part.topAnchor.constraint(equalTo: holder.topAnchor), part.bottomAnchor.constraint(equalTo: holder.bottomAnchor),
+            ])
+        }
+        return holder
     }
 
-    func updateNSView(_ view: PDFView, context: Context) {}
+    func updateNSView(_ view: NSView, context: Context) {}
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
