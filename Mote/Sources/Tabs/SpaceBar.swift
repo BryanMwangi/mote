@@ -195,6 +195,7 @@ private struct SpaceIcon: View {
             }
         }
         .help(space.name)
+        .background { SpaceDropSpot(space: space.id) }
         .onRightClick { SpaceMenu.show(for: browser, space: space, from: .foot, listing: listing) }
         .iconPicker(browser: browser, space: space, from: .foot)
         .animation(Motion.hover, value: hovering)

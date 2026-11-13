@@ -80,6 +80,8 @@ struct Reorderable: ViewModifier {
         if let drag, drag.id != id { return }
         if drag == nil, let away { away.browser.beginDrag(away.tab) }
         var next = drag ?? ReorderDrag(id: id, start: index)
+        // Held at the sidebar's edge, it goes to the space that way.
+        if let away { SpaceDrag.hold(away.tab, in: away.browser) { drag = nil } }
         // Over a folder's row, it would go in; the list makes room as ever.
         if let filing {
             filing.browser.hoverFolder(
@@ -107,6 +109,14 @@ struct Reorderable: ViewModifier {
 
     private func ended() {
         TabGhost.hide()
+        SpaceDrag.stop()
+        // Let go over a space's icon: the tab goes to that space.
+        if let away, drag?.id == id, let space = SpaceDrag.space(under: NSEvent.mouseLocation, in: away.browser) {
+            withAnimation(Motion.settle) { drag = nil }
+            away.browser.endDrag()
+            Haptic.tick()
+            return away.browser.move(away.tab, toSpace: space)
+        }
         guard var landing = drag, landing.id == id, !landing.landed else { return }
         defer { away?.browser.endDrag() }
         if let filing, filing.browser.folderHover != nil {
@@ -323,5 +333,65 @@ enum TabGhost {
                 .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                 .fixedSize()
         }
+    }
+}
+
+/// A tab dragged in the sidebar to another space: held half a second at the
+/// sidebar's edge, it goes to the space before or after and that space shows;
+/// let go over a space's icon at the foot, it goes there.
+@MainActor
+enum SpaceDrag {
+    private static var waiting: (forward: Bool, task: Task<Void, Never>)?
+    /// The foot's space icons, where they are.
+    static var icons: [UUID: WeakView] = [:]
+
+    static func hold(_ tab: Tab, in browser: Browser, leave: @escaping () -> Void) {
+        guard browser.prefs.sidebar, browser.usesSpaces, browser.spaces.count > 1, let window = browser.window else { return stop() }
+        let x = window.convertPoint(fromScreen: NSEvent.mouseLocation).x
+        let side = browser.prefs.sideWidth
+        let left = browser.prefs.sideRight ? window.frame.width - side : 0
+        let edge: Bool? = x < left + 12 ? false : x > left + side - 12 && x <= left + side ? true : nil
+        guard let forward = edge else { return stop() }
+        if waiting?.forward == forward { return }
+        stop()
+        waiting = (forward, Task { @MainActor in
+            try? await Task.sleep(for: .seconds(0.5))
+            guard !Task.isCancelled, let here = browser.spaces.firstIndex(where: { $0.id == browser.spaceID }) else { return }
+            let next = here + (forward ? 1 : -1)
+            guard browser.spaces.indices.contains(next) else { return }
+            let target = browser.spaces[next].id
+            waiting = nil
+            leave()
+            browser.endDrag()
+            Haptic.tick()
+            browser.move(tab, toSpace: target)
+            browser.switchSpace(to: target)
+        })
+    }
+
+    static func stop() {
+        waiting?.task.cancel()
+        waiting = nil
+    }
+
+    /// The space whose icon is under `point`, on screen.
+    static func space(under point: NSPoint, in browser: Browser) -> UUID? {
+        guard browser.usesSpaces else { return nil }
+        return icons.first { id, spot in
+            guard id != browser.spaceID, let view = spot.view, let window = view.window, window === browser.window else { return false }
+            return view.convert(view.bounds, to: nil).contains(window.convertPoint(fromScreen: point))
+        }?.key
+    }
+}
+
+/// Marks a space's icon for a dragged tab to be dropped on.
+struct SpaceDropSpot: FillsRoom {
+    let space: UUID
+
+    func makeNSView(context: Context) -> NSView { Spot() }
+    func updateNSView(_ view: NSView, context: Context) { SpaceDrag.icons[space] = WeakView(view) }
+
+    private final class Spot: NSView {
+        override func hitTest(_ point: NSPoint) -> NSView? { nil }
     }
 }
