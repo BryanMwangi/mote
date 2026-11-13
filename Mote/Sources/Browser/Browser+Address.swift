@@ -135,6 +135,16 @@ extension Browser {
         field.askFocus()
     }
 
+    /// Tab in the floating search, with Settings › AI › Tab asks on: asks
+    /// what was typed. A completion being offered keeps Tab for itself.
+    func asksOnTab() -> Bool {
+        guard prefs.tabAsks, field.launching, field.askCard == nil, field.ending == nil,
+            !field.typed.trimmingCharacters(in: .whitespaces).isEmpty
+        else { return false }
+        ask()
+        return true
+    }
+
     /// The ask card's chat, in the chat sidebar instead.
     func moveAskToSidebar() {
         guard let tab = active, field.askCard != nil else { return }

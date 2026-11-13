@@ -139,13 +139,7 @@ struct AddressField: NSViewRepresentable {
                 if choose?() != true { browser.submit() }
             case #selector(NSResponder.insertTab(_:)):
                 if choose?() == true { return true }
-                // With the setting on, Tab in the floating search asks; a
-                // completion being offered keeps Tab for itself.
-                let field = browser.field
-                guard browser.prefs.tabAsks, field.launching, field.ending == nil,
-                    !field.typed.trimmingCharacters(in: .whitespaces).isEmpty
-                else { return false }
-                browser.ask()
+                return browser.asksOnTab()
             case #selector(NSResponder.moveDown(_:)):
                 if moveSelection?(1) == true { return true }
                 browser.field.walk(1)

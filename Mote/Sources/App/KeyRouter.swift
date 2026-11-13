@@ -63,6 +63,7 @@ final class KeyRouter {
         // is swallowed while renaming a tab, and otherwise goes to the page.
         if press.code == KeyMap.tabKey, !press.command, !press.option, !press.control {
             if browser.editingTab != nil { return true }
+            if !press.shift, browser.asksOnTab() { return true }
             guard browser.fieldShowing, !browser.field.offers.isEmpty else { return false }
             browser.field.walk(press.shift ? -1 : 1)
             return true
@@ -125,6 +126,8 @@ final class KeyRouter {
             (browser.pickingElement, browser.toggleHiding),
             (browser.reviewing, { browser.reviewing = false }),
             (browser.finder.showing, browser.finder.hide),
+            // The ask card closes at once; it has no pick of its own.
+            (browser.field.askCard != nil, browser.dismiss),
             // The pick goes before the field does.
             (browser.field.picked != nil, { browser.field.picked = nil }),
             (browser.editing && browser.active?.isStart == false, browser.dismiss),
