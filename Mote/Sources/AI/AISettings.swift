@@ -61,7 +61,7 @@ struct AISettings: View {
             if prefs.aiReads {
                 RowRule()
                 SettingRow(
-                    "Act in pages", "Open tabs, click and type for you, asking first", symbol: "cursorarrow.click.2", tint: Tint.orange,
+                    "Act for you", "Open, switch and close tabs, click and type in pages, asking first", symbol: "cursorarrow.click.2", tint: Tint.orange,
                     on: $prefs.aiActs)
             }
         }

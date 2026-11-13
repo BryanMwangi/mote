@@ -50,6 +50,12 @@ final class AssistantTools {
             tools += [
                 Tool(name: "open_tab", description: "Opens an address in a new tab. The person is asked first.", schema: url),
                 Tool(
+                    name: "close_tabs",
+                    description:
+                        "Closes tabs by their ids from list_tabs, such as duplicates. The person is asked first, once for all of them. Essentials and pinned tabs only let their page go.",
+                    schema: #"{"type":"object","properties":{"tabs":{"type":"array","items":{"type":"string"}}},"required":["tabs"]}"#),
+                Tool(name: "select_tab", description: "Brings a tab to the front.", schema: tab),
+                Tool(
                     name: "click", description: "Clicks an element read_tab listed. The person is asked first.",
                     schema: element + #"},"required":["tab","element"]}"#),
                 Tool(
@@ -72,6 +78,8 @@ final class AssistantTools {
         case "open_tab": return url.map { "Opening \(Address.siteName(for: $0))" } ?? "Opening a tab"
         case "click": return "Clicking on the page"
         case "fill": return "Typing on the page"
+        case "close_tabs": return "Closing tabs"
+        case "select_tab": return "Switching tabs"
         default: return call.name
         }
     }
@@ -106,6 +114,21 @@ final class AssistantTools {
             guard await allowed("Open \(url.absoluteString) in a new tab?", on: url) else { return "The person said no." }
             browser.open(url, foreground: true)
             return "Opened."
+        case "close_tabs":
+            guard acts else { return "Acting in pages is off." }
+            let ids = Set((input["tabs"]?.array ?? []).compactMap { $0.string?.lowercased() })
+            let closing = browser.tabs.filter { ids.contains(Self.id($0)) }
+            guard !closing.isEmpty else { return "None of those tabs is open." }
+            let names = closing.prefix(6).map { "“\($0.label)”" }.joined(separator: ", ") + (closing.count > 6 ? " and \(closing.count - 6) more" : "")
+            guard await confirm(closing.count == 1 ? "Close \(names)?" : "Close \(closing.count) tabs: \(names)?") else {
+                return "The person said no."
+            }
+            closing.forEach(browser.close)
+            return "Closed \(closing.count)."
+        case "select_tab":
+            guard acts, let tab = tab(input) else { return "No such tab." }
+            browser.select(tab)
+            return "It's in front."
         case "click", "fill":
             return await act(call)
         default:
@@ -152,17 +175,26 @@ final class AssistantTools {
         }
     }
 
+    /// Asks the person, every time: closing tabs isn't a site's to trust.
+    private func confirm(_ question: String) async -> Bool {
+        await ask(question, trusting: nil)
+    }
+
     /// Asks the person, unless this chat may already act on the site.
     private func allowed(_ question: String, on url: URL) async -> Bool {
-        let site = Address.siteHost(of: url) ?? ""
-        if let chat, Self.trusted[chat]?.contains(site) == true { return true }
+        await ask(question, trusting: Address.siteHost(of: url) ?? "")
+    }
+
+    /// `site`: one this chat may be allowed to act on from now on.
+    private func ask(_ question: String, trusting site: String?) async -> Bool {
+        if let chat, let site, Self.trusted[chat]?.contains(site) == true { return true }
         let alert = NSAlert()
         alert.messageText = question
         alert.informativeText = "The assistant asks to do this for you."
         alert.addButton(withTitle: "Allow")
         alert.addButton(withTitle: "Deny")
-        alert.showsSuppressionButton = chat != nil
-        alert.suppressionButton?.title = "Allow on \(site) for this chat"
+        alert.showsSuppressionButton = chat != nil && site != nil
+        alert.suppressionButton?.title = "Allow on \(site ?? "") for this chat"
         let answer: NSApplication.ModalResponse
         if let window = browser.window {
             answer = await withCheckedContinuation { done in alert.beginSheetModal(for: window) { done.resume(returning: $0) } }
@@ -170,7 +202,7 @@ final class AssistantTools {
             answer = alert.runModal()
         }
         guard answer == .alertFirstButtonReturn else { return false }
-        if let chat, alert.suppressionButton?.state == .on { Self.trusted[chat, default: []].insert(site) }
+        if let chat, let site, alert.suppressionButton?.state == .on { Self.trusted[chat, default: []].insert(site) }
         return true
     }
 

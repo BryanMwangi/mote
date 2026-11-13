@@ -172,6 +172,8 @@ extension ToolLoop {
         case "open_tab": return site.map { "Opening \($0)" } ?? "Opening a tab"
         case "click": return "Clicking on the page"
         case "fill": return "Typing on the page"
+        case "close_tabs": return "Closing tabs"
+        case "select_tab": return "Switching tabs"
         default: return name
         }
     }
