@@ -125,7 +125,7 @@ extension AssistantTools {
     }
 
     /// To the front: its window, its space, then the tab.
-    private func bringForward(_ found: Found) {
+    func bringForward(_ found: Found) {
         found.browser.window?.makeKeyAndOrderFront(nil)
         if found.parked, let space = found.space { found.browser.switchSpace(to: space.id) }
         found.browser.select(found.tab)

@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import MoteAI
 import MoteCore
 import WebKit
@@ -95,12 +96,19 @@ extension AssistantTools {
             guard await permit(.gentle, "") else { return Self.actingOff }
             if let to = input["to"]?.string { args["to"] = to }
             if let by = input["by"]?.double { args["by"] = by }
+            show(found, "Scrolling")
+            tab.agent.effects.send(.scroll(down: input["to"]?.string != "top" && (input["by"]?.double ?? 1) > 0))
+            defer { tab.agent.end() }
             return Self.said(await page(tab, "scroll", args), n: n, done: "Scrolled.")
         default:
             break
         }
-        // Acting in the page: asked per site, naming what and where.
-        let what = n == nil ? "where the caret is" : "“\(await page(tab, "describe", args) ?? "element \(n ?? 0)")”"
+        // Acting in the page: shown on the page, asked per site, naming what and where.
+        let what = n == nil ? "where the caret is" : Self.named(await page(tab, "describe", args), call.name, n: n ?? 0)
+        show(found, Self.caption(call.name, what: what))
+        let box = n == nil ? nil : Self.box(await page(tab, "rect", args))
+        if let box { tab.agent.effects.send(.move(box)) }
+        defer { tab.agent.end(then: finished(found)) }
         let site = Address.siteName(for: address)
         let text = input["text"]?.string ?? ""
         let question: String
@@ -114,6 +122,9 @@ extension AssistantTools {
         guard await permit(.inPage(address), question) else { return acts ? Self.declined : Self.actingOff }
         // The page mustn't have moved to another site while asked.
         guard Address.siteHost(of: tab.address) == Address.siteHost(of: address) else { return "The page changed; read the tab again." }
+        if let box { tab.agent.effects.send(call.name == "click" ? .click(box) : call.name == "write" || call.name == "fill" ? .write(box) : .move(box)) }
+        // The cursor gets there first.
+        if box != nil, !Glow.stillness { try? await Task.sleep(for: .milliseconds(380)) }
         switch call.name {
         case "click":
             return Self.said(await page(tab, "click", args), n: n, done: "Clicked.")
@@ -130,6 +141,52 @@ extension AssistantTools {
         default:
             return await press(input["key"]?.string ?? "Enter", in: tab, args: args)
         }
+    }
+
+    /// The work shown on the tab's page: it comes to the front, and the
+    /// overlay says who's doing what, with Stop.
+    private func show(_ found: Found, _ caption: String) {
+        if found.browser.active !== found.tab || found.parked { bringForward(found) }
+        found.tab.agent.begin(caption, by: driver, stop: stopTurn)
+    }
+
+    /// Once the work on a tab that has gone out of sight is done, a notice.
+    private func finished(_ found: Found) -> () -> Void {
+        { [weak browser = found.browser, tab = found.tab] in
+            guard let browser, browser.active !== tab else { return }
+            browser.announce(
+                Announcement(
+                    "Done on “\(tab.label)”", symbol: "sparkle", action: .init(title: "Show") { [weak browser] in browser?.select(tab) }))
+        }
+    }
+
+    /// An element by what it says, else by what it is.
+    private static func named(_ said: String?, _ tool: String, n: Int) -> String {
+        if let said, !said.isEmpty { return "“\(said)”" }
+        switch tool {
+        case "write", "fill": return "the text box"
+        case "check": return "the box"
+        case "select_option": return "the list"
+        default: return "element \(n)"
+        }
+    }
+
+    private static func caption(_ tool: String, what: String) -> String {
+        switch tool {
+        case "click": "Clicking \(what)"
+        case "write", "fill": "Writing in \(what)"
+        case "select_option": "Choosing in \(what)"
+        case "check": "Ticking \(what)"
+        default: "Pressing a key at \(what)"
+        }
+    }
+
+    /// The page script's rectangle, in CSS pixels.
+    private static func box(_ json: String?) -> CGRect? {
+        guard let json, let place = try? JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Double],
+            let x = place["x"], let y = place["y"], let w = place["w"], let h = place["h"]
+        else { return nil }
+        return CGRect(x: x, y: y, width: w, height: h)
     }
 
     /// A key: through WebKit as a real key when the page is on screen, so

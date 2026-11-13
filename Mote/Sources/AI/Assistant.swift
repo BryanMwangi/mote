@@ -299,7 +299,7 @@ final class Assistant {
         // that search, a writer that doesn't. Only researchers get the search method.
         if mode == .research {
             service = Research(service: service)
-        } else if let tools = AssistantTools.current(chat: chat) {
+        } else if let tools = AssistantTools.current(chat: chat, driver: provider.name) {
             // Mote's own tools: the model asks, Mote does it, the model goes on.
             // An agent on the Mac runs them itself, from Mote over MCP.
             let server = provider.agent != nil ? await MoteMCP.shared.start() : nil
@@ -333,11 +333,26 @@ final class Assistant {
 
     /// Sends `text` in `conversation` to the chosen provider.
     func ask(_ text: String, in conversation: Conversation) {
+        answering[conversation.id] = WeakChat(conversation)
         conversation.send(text, routing: { [self] in try await route(chat: conversation.id) })
+    }
+
+    /// Conversations asked something, by id, so a tool's Stop can stop one.
+    private var answering: [UUID: WeakChat] = [:]
+
+    private final class WeakChat {
+        weak var chat: Conversation?
+        init(_ chat: Conversation) { self.chat = chat }
+    }
+
+    /// Stops the reply under way in the chat with this id.
+    func stop(chat id: UUID) {
+        answering[id]?.chat?.stop()
     }
 
     /// Asks again for the last reply, through whatever provider is chosen now.
     func retry(in conversation: Conversation) {
+        answering[conversation.id] = WeakChat(conversation)
         conversation.retry(routing: { [self] in try await route(chat: conversation.id) })
     }
 }

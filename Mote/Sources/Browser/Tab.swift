@@ -94,6 +94,8 @@ final class Tab: ObservableObject, Identifiable {
     /// The device's size being dragged (see `dragDevice`): its own object,
     /// as `reading` is, so a drag's moves redraw only the device's outline.
     let deviceDrag = DeviceDrag()
+    /// The assistant at work on this tab's page (AgentOverlay).
+    let agent = AgentActivity()
     /// The site the page is loading from just now, for the status at its foot.
     /// Its own object: it changes many times a second while a page loads, and
     /// only the status watches it.

@@ -15,19 +15,28 @@ final class AssistantTools {
     let browser: Browser
     let acts: Bool
     let chat: UUID?
+    /// Who's asking, for the page's pill ("Claude Code").
+    let driver: String
     /// Sites this chat may act on without asking again.
     private static var trusted: [UUID: Set<String>] = [:]
 
     /// The tools on now for the window in front, or nil with none on.
-    static func current(chat: UUID?) -> AssistantTools? {
+    static func current(chat: UUID?, driver: String = "Assistant") -> AssistantTools? {
         guard let browser = Browser.front ?? Windows.shared.main, browser.prefs.aiReads else { return nil }
-        return AssistantTools(browser: browser, acts: browser.prefs.aiActs, chat: chat)
+        return AssistantTools(browser: browser, acts: browser.prefs.aiActs, chat: chat, driver: driver)
     }
 
-    private init(browser: Browser, acts: Bool, chat: UUID?) {
+    private init(browser: Browser, acts: Bool, chat: UUID?, driver: String) {
         self.browser = browser
         self.acts = acts
         self.chat = chat
+        self.driver = driver
+    }
+
+    /// Stops this turn: the pill's Stop and Take over.
+    var stopTurn: (() -> Void)? {
+        guard let chat else { return nil }
+        return { Assistant.shared.stop(chat: chat) }
     }
 
     var list: [Tool] { tabTools + pageTools + dataTools }
