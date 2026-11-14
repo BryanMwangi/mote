@@ -55,7 +55,7 @@ struct ClaudeCodeDecoderTests {
         ]
         #expect(
             try decode(ClaudeCodeDecoder(), lines) == [
-                .activity(Activity(id: "t1", title: "Read")), .activity(Activity(id: "t1", title: "Read", done: true)),
+                .activity(Activity(id: "t1", title: "Read")), .activity(Activity(id: "t1", title: "Read", done: true, detail: "...")),
             ])
     }
 

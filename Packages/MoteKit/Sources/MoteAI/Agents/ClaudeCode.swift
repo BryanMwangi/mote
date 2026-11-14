@@ -133,6 +133,12 @@ public struct ClaudeCodeDecoder: LineDecoder {
         content.flatMap { block -> [ChatEvent] in
             guard block["type"]?.string == "tool_result", let id = block["tool_use_id"]?.string, var activity = tools[id] else { return [] }
             activity.done = true
+            if block["is_error"]?.bool == true { activity.outcome = .failed }
+            // Its first line, as Mote's own tools show theirs.
+            let said = block["content"]?.string ?? block["content"]?.array.compactMap { $0["text"]?.string }.joined(separator: "\n")
+            if let first = said?.split(separator: "\n", maxSplits: 1).first, activity.kind == .tool {
+                activity.detail = first.count > 240 ? String(first.prefix(239)) + "…" : String(first)
+            }
             tools[id] = activity
             return Self.sources(in: result, for: activity) + [.activity(activity)]
         }

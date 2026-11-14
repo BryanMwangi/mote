@@ -87,6 +87,9 @@ public final class Conversation: Identifiable {
     public private(set) var summarised = 0
     /// A turn that heard this many tokens or more summarises the chat before the next.
     public static let compactAt = 100_000
+    /// The last reply was cut short, and how: told to the model with the next
+    /// question, so it checks where things stand rather than assuming.
+    @ObservationIgnored private var cutShort: String?
 
     /// Sessions providers opened, by provider.
     ///
@@ -248,10 +251,24 @@ public final class Conversation: Identifiable {
         turn += 1
         task?.cancel()
         task = nil
-        if let last = messages.indices.last, messages[last].role == .assistant { messages[last].interrupted = true }
+        if let last = messages.indices.last, messages[last].role == .assistant {
+            messages[last].interrupted = true
+            messages[last].steps = messages[last].steps.map(\.cutShort)
+            cutShort = Self.cutShortNote(messages[last].steps, why: "The person stopped your last reply before it finished.")
+        }
         activities = []
         phase = .idle
         touch()
+    }
+
+    /// What a cut-short reply did and didn't do, for the model's next turn.
+    static func cutShortNote(_ steps: [Activity], why: String) -> String {
+        let finished = steps.filter { $0.outcome == nil || $0.outcome == .done }.map { $0.title + ($0.detail.map { ": " + $0 } ?? "") }
+        let unfinished = steps.filter { $0.outcome == .interrupted || $0.outcome == .failed }.map(\.title)
+        var note = why
+        if !finished.isEmpty { note += " Done before then: " + finished.joined(separator: "; ") + "." }
+        if !unfinished.isEmpty { note += " Not done or not finished: " + unfinished.joined(separator: "; ") + "." }
+        return note + " Check how things stand now before carrying on, and say what was left undone."
     }
 
     /// Whether the chat has grown long enough to summarise before the next turn.
@@ -378,8 +395,10 @@ public final class Conversation: Identifiable {
     /// instructions when there is nothing shared.
     private func instructions(for route: Route) -> String? {
         let earlier = summary.map { "Earlier in this chat, in summary (the messages themselves aren't repeated):\n" + $0 } ?? ""
+        let note = cutShort ?? ""
+        cutShort = nil
         let context =
-            [earlier, Instructions.page(self.page), Instructions.mentions(self.mentions)]
+            [earlier, note, Instructions.page(self.page), Instructions.mentions(self.mentions)]
             .filter { !$0.isEmpty }
             .joined(separator: "\n\n")
         guard !context.isEmpty else { return route.instructions }
@@ -452,8 +471,17 @@ public final class Conversation: Identifiable {
             touch()
             return
         }
+        let reason = (failure as? LocalizedError)?.errorDescription ?? failure.localizedDescription
+        if let last = messages.indices.last, messages[last].role == .assistant {
+            messages[last].steps = messages[last].steps.map(\.cutShort)
+            if !messages[last].steps.isEmpty {
+                cutShort = Self.cutShortNote(messages[last].steps, why: "Your last reply failed before it finished (\(reason)).")
+            }
+        }
         // A reply that never started leaves nothing to show.
-        if let last = messages.last, last.role == .assistant, last.text.isEmpty, last.reasoning.isEmpty { messages.removeLast() }
+        if let last = messages.last, last.role == .assistant, last.text.isEmpty, last.reasoning.isEmpty, last.steps.isEmpty {
+            messages.removeLast()
+        }
         // A session that failed may be gone; the next try starts afresh.
         if let provider { sessions[provider] = nil }
         phase = .failed((failure as? LocalizedError)?.errorDescription ?? failure.localizedDescription)

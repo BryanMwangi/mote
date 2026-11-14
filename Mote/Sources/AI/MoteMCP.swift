@@ -159,7 +159,8 @@ final class MoteMCP {
             let said = await serving.run(ToolCall(id: UUID().uuidString, name: name, input: input))
             var content: [[String: Any]] = [["type": "text", "text": said.text]]
             if let image = said.image { content.append(["type": "image", "data": image.base64EncodedString(), "mimeType": "image/jpeg"]) }
-            result = ["content": content, "isError": false]
+            // Said no to or failed: an error, so the agent's step shows it.
+            result = ["content": content, "isError": said.outcome != .done]
         case "ping":
             result = [:]
         default:

@@ -113,6 +113,33 @@ struct ConversationTests {
         #expect(service.requests.last?.messages.map(\.text) == ["Three?"])
     }
 
+    @Test("Stopping marks unfinished steps cut short, and the next turn tells the model what was and wasn't done")
+    func cutShort() async {
+        let service = ScriptedService()
+        service.events = [
+            .activity(Activity(id: "1", title: "Closing tabs", done: true, outcome: .done, detail: "Closed “GitHub”")),
+            .activity(Activity(id: "2", title: "Moving tabs")),
+        ]
+        service.hold = true
+        let conversation = Conversation()
+        conversation.send("Tidy my tabs", via: route(service))
+        for _ in 0..<200 where conversation.messages.last?.steps.count != 2 { try? await Task.sleep(for: .milliseconds(5)) }
+        conversation.stop()
+        #expect(conversation.messages[1].steps.map(\.outcome) == [.done, .interrupted])
+        service.hold = false
+        service.events = [.text("Carrying on.")]
+        conversation.send("Go on", via: route(service))
+        await settle(conversation)
+        let told = service.requests.last?.instructions ?? ""
+        #expect(told.contains("stopped your last reply"))
+        #expect(told.contains("Closing tabs: Closed “GitHub”"))
+        #expect(told.contains("Not done or not finished: Moving tabs"))
+        // Told once.
+        conversation.send("Thanks", via: route(service))
+        await settle(conversation)
+        #expect(service.requests.last?.instructions?.contains("stopped your last reply") == false)
+    }
+
     @Test("The title is the first question, on one line and not too long")
     func title() {
         let conversation = Conversation()

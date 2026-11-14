@@ -80,12 +80,32 @@ final class AssistantTools {
     }
 
     func run(_ call: ToolCall) async -> ToolOutput {
+        var said = await dispatch(call)
+        if said.outcome == .done { said.outcome = outcome(of: said.text) }
+        return said
+    }
+
+    private func dispatch(_ call: ToolCall) async -> ToolOutput {
         if let said = await runDev(call) { return said }
         if let said = await runTab(call) { return ToolOutput(said) }
         if let said = await runPage(call) { return ToolOutput(said) }
         if !outside, let said = await runSignIn(call) { return ToolOutput(said) }
         if !outside, let said = await runData(call) { return ToolOutput(said) }
-        return ToolOutput("There's no tool called \(call.name).")
+        return ToolOutput("There's no tool called \(call.name).", outcome: .failed)
+    }
+
+    /// How a tool's answer went, for its step in the chat: said no to, or
+    /// failed, by the words the tools use for those.
+    private func outcome(of text: String) -> Activity.Outcome {
+        if text == refused || text == Self.declined || text == Self.actingOff || text.hasPrefix("The person didn't") { return .refused }
+        let fine = ["No tabs match", "No history matches", "Nothing found", "None found"]
+        if fine.contains(where: text.hasPrefix) { return .done }
+        let failures = [
+            "There's no", "That isn't", "That field can't", "That tab has no", "None of", "No ", "Not there", "The page didn't",
+            "The page changed", "The page's", "Give ", "Say where", "It couldn't", "Nothing has", "Element ", "Mote never", "Mote has no",
+            "Couldn't", "Can't",
+        ]
+        return failures.contains(where: text.hasPrefix) ? .failed : .done
     }
 
     // MARK: - How much is at stake

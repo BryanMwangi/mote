@@ -105,17 +105,43 @@ public struct Activity: Equatable, Codable, Sendable {
         case phase
     }
 
+    /// How a step ended.
+    public enum Outcome: String, Codable, Sendable {
+        case done
+        /// The person said no, or acting is off.
+        case refused
+        case failed
+        /// The reply was stopped, or failed, before the step finished.
+        case interrupted
+    }
+
     public var id: String
     /// Short, for a line in the chat ("Searching the web").
     public var title: String
     public var done: Bool
     public var kind: Kind
+    /// How it ended, when it went other than well; nil for a step done as
+    /// asked, as for steps from before outcomes were kept.
+    public var outcome: Outcome?
+    /// What it came to, in a line: "Closed “GitHub”, “Hacker News”".
+    public var detail: String?
 
-    public init(id: String, title: String, done: Bool = false, kind: Kind = .tool) {
+    public init(id: String, title: String, done: Bool = false, kind: Kind = .tool, outcome: Outcome? = nil, detail: String? = nil) {
         self.id = id
         self.title = title
         self.done = done
         self.kind = kind
+        self.outcome = outcome
+        self.detail = detail
+    }
+
+    /// Cut short: the reply ended before this step did.
+    public var cutShort: Activity {
+        var step = self
+        guard !step.done else { return step }
+        step.done = true
+        step.outcome = .interrupted
+        return step
     }
 
     /// A search for `query`.

@@ -63,10 +63,22 @@ public struct ToolOutput: Equatable, Sendable {
     public var text: String
     /// A JPEG.
     public var image: Data?
+    /// How it went, for the step's line in the chat.
+    public var outcome: Activity.Outcome
+    /// What it came to, in a line for the chat; the text's first line if not given.
+    public var detail: String?
 
-    public init(_ text: String, image: Data? = nil) {
+    public init(_ text: String, image: Data? = nil, outcome: Activity.Outcome = .done, detail: String? = nil) {
         self.text = text
         self.image = image
+        self.outcome = outcome
+        self.detail = detail
+    }
+
+    /// The line the chat shows under the step.
+    public var line: String {
+        let first = detail ?? text.split(separator: "\n", maxSplits: 1).first.map(String.init) ?? ""
+        return first.count > 240 ? String(first.prefix(239)) + "…" : first
     }
 }
 
@@ -160,6 +172,8 @@ public struct ToolLoop: ChatService {
                         try Task.checkCancellation()
                         var done = step
                         done.done = true
+                        if result.outcome != .done { done.outcome = result.outcome }
+                        done.detail = result.line.isEmpty ? nil : result.line
                         continuation.yield(.activity(done))
                         request.exchanges.append(
                             ToolExchange(call: call, result: result.text, image: result.image, said: index == 0 ? said : ""))

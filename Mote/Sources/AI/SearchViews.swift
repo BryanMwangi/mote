@@ -139,29 +139,77 @@ struct StepsSummary: View {
             }
             .buttonStyle(.plain)
             if open {
-                VStack(alignment: .leading, spacing: 6) {
-                    ForEach(steps, id: \.id) { step in
-                        HStack(spacing: 7) {
-                            Image(systemName: step.kind == .search ? "magnifyingglass" : step.kind == .read ? "doc.text" : "wrench")
-                                .font(.system(size: 10, weight: .medium))
-                                .frame(width: 14)
-                            Text(step.title).font(.system(size: 12.5)).lineLimit(1).truncationMode(.middle)
-                        }
-                        .foregroundStyle(Palette.muted)
-                    }
+                VStack(alignment: .leading, spacing: 7) {
+                    ForEach(steps, id: \.id) { step in StepLine(step: step) }
                 }
                 .padding(.leading, 2)
                 .transition(.opacity)
             }
         }
+        // What went wrong shows without asking.
+        .onAppear { if steps.contains(where: { $0.outcome != nil && $0.outcome != .done }) { open = true } }
     }
 
     private func summary(searches: Int, reads: Int) -> String {
         var parts: [String] = []
         if searches > 0 { parts.append(searches == 1 ? "Searched once" : "Searched \(searches) times") }
         if reads > 0 { parts.append(reads == 1 ? "read 1 page" : "read \(reads) pages") }
+        if parts.isEmpty { parts.append(steps.count == 1 ? "Used 1 tool" : "Used \(steps.count) tools") }
+        let count = { (outcome: Activity.Outcome) in steps.filter { $0.outcome == outcome }.count }
+        if count(.failed) > 0 { parts.append("\(count(.failed)) failed") }
+        if count(.refused) > 0 { parts.append("\(count(.refused)) not allowed") }
+        if count(.interrupted) > 0 { parts.append("\(count(.interrupted)) cut short") }
         let line = parts.joined(separator: " · ")
-        return line.isEmpty ? "Used \(steps.count) tools" : line.prefix(1).uppercased() + line.dropFirst()
+        return line.prefix(1).uppercased() + line.dropFirst()
+    }
+}
+
+/// A step, with how it went and what it came to: "Closed “GitHub”, “Hacker News”".
+private struct StepLine: View {
+    let step: Activity
+    @State private var whole = false
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 7) {
+            Image(systemName: mark)
+                .font(.system(size: 10, weight: .medium))
+                .foregroundStyle(tint)
+                .frame(width: 14)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(step.title + (label.map { " · " + $0 } ?? "")).font(.system(size: 12.5)).lineLimit(1).truncationMode(.middle)
+                if let detail = step.detail {
+                    Text(detail).font(.system(size: 11.5)).foregroundStyle(Palette.faint).lineLimit(whole ? nil : 2).textSelection(.enabled)
+                        .onTapGesture { whole.toggle() }
+                }
+            }
+        }
+        .foregroundStyle(Palette.muted)
+    }
+
+    private var mark: String {
+        switch step.outcome {
+        case .failed: "xmark.circle"
+        case .refused: "hand.raised"
+        case .interrupted: "pause.circle"
+        default: step.kind == .search ? "magnifyingglass" : step.kind == .read ? "doc.text" : "checkmark.circle"
+        }
+    }
+
+    private var tint: Color {
+        switch step.outcome {
+        case .failed: .red
+        case .refused, .interrupted: .orange
+        default: Palette.muted
+        }
+    }
+
+    private var label: String? {
+        switch step.outcome {
+        case .failed: "failed"
+        case .refused: "not allowed"
+        case .interrupted: "cut short"
+        default: nil
+        }
     }
 }
 
