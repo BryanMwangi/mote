@@ -179,7 +179,7 @@ extension AssistantTools {
         if input["dry_run"]?.bool == true {
             return "Would delete \(said): \(inRange.prefix(8).map { $0.title.isEmpty ? $0.url : $0.title }.joined(separator: ", "))"
         }
-        guard await permit(.destructive, "Delete \(said) from your history? This can't be undone.") else { return refused }
+        guard await permit(.irreversible, "Delete \(said) from your history? This can't be undone.") else { return refused }
         for key in keys { browser.history.remove(key) }
         if let range { browser.history.remove(visitedBetween: range.0, and: range.1) }
         return "Deleted \(said)."

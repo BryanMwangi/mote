@@ -4,9 +4,9 @@ import MoteAI
 import MoteCore
 import WebKit
 
-/// Chats switched to Auto with ⇧⇥: the assistant acts in pages without
-/// asking, for that chat only, until switched back or Mote quits. Closing,
-/// moving and deleting still ask.
+/// Chats switched to Auto with ⇧⇥: the assistant acts without asking, for
+/// that chat only, until switched back or Mote quits; what it does can be
+/// undone. Only what can't be (deleting history) still asks.
 @MainActor
 final class ChatModes: ObservableObject {
     static let shared = ChatModes()
@@ -154,8 +154,11 @@ final class AssistantTools {
         case gentle
         /// Acts in a page, on a site: asks, unless this chat may act there.
         case inPage(URL)
-        /// Closes, moves or deletes: asks every time, naming what it touches.
+        /// Closes, moves or deletes: asks every time, naming what it touches,
+        /// unless the chat is on Auto (it can all be undone).
         case destructive
+        /// Can't be undone (deleting history): asks every time, Auto or not.
+        case irreversible
     }
 
     /// Whether the assistant may go ahead; asks the person when the risk says
@@ -178,6 +181,10 @@ final class AssistantTools {
             if prefs.aiMode == .developer, developerSite(url) { return true }
             return await ask(question(), trusting: Address.siteHost(of: url) ?? "")
         case .destructive:
+            guard !outside, acts else { return false }
+            if let chat, ChatModes.shared.auto.contains(chat) { return true }
+            return await ask(question(), trusting: nil)
+        case .irreversible:
             return outside || !acts ? false : await ask(question(), trusting: nil)
         }
     }

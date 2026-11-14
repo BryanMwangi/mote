@@ -873,7 +873,7 @@ private struct ModeChip: View {
         .buttonStyle(.plain)
         .help(
             auto
-                ? "Auto: it acts in pages without asking, in this chat. Closing, moving or deleting still asks.   ⇧⇥"
+                ? "Auto: it acts without asking, in this chat; Undo puts it back. Only deleting history still asks.   ⇧⇥"
                 : "It asks before acting in pages. Switch this chat to Auto with ⇧⇥.")
         .animation(Motion.quick, value: auto)
     }
