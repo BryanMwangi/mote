@@ -9,16 +9,28 @@ public struct Lattice: Equatable, Sendable {
     /// places don't follow.
     public let step: CGSize
 
-    public init(columns: Int, step: CGSize) {
+    /// A short last row whose places share the full width: from which
+    /// place it starts, and the step across it.
+    public let short: (from: Int, step: CGFloat)?
+
+    public init(columns: Int, step: CGSize, short: (from: Int, step: CGFloat)? = nil) {
         self.columns = max(1, columns)
         self.step = step
+        self.short = short
+    }
+
+    public static func == (a: Lattice, b: Lattice) -> Bool {
+        a.columns == b.columns && a.step == b.step && a.short?.from == b.short?.from && a.short?.step == b.short?.step
     }
 
     public static func row(step: CGFloat) -> Lattice { Lattice(columns: .max, step: CGSize(width: step, height: 0)) }
     public static func column(step: CGFloat) -> Lattice { Lattice(columns: 1, step: CGSize(width: 0, height: step)) }
 
     public func origin(_ place: Int) -> CGSize {
-        CGSize(width: CGFloat(place % columns) * step.width, height: CGFloat(place / columns) * step.height)
+        if let short, place >= short.from {
+            return CGSize(width: CGFloat(place - short.from) * short.step, height: CGFloat(place / columns) * step.height)
+        }
+        return CGSize(width: CGFloat(place % columns) * step.width, height: CGFloat(place / columns) * step.height)
     }
 
     /// Only the part of `travel` along the axes the places follow.
@@ -31,6 +43,15 @@ public struct Lattice: Equatable, Sendable {
     /// held tab's section.
     public func target(from start: Int, travel: CGSize, within places: Range<Int>) -> Int {
         guard !places.isEmpty else { return start }
+        // With a short row the places aren't evenly spaced: the nearest one.
+        if short != nil {
+            let at = origin(start)
+            let goal = CGSize(width: at.width + travel.width, height: at.height + travel.height)
+            return places.min { a, b in
+                let p = origin(a), q = origin(b)
+                return hypot(p.width - goal.width, p.height - goal.height) < hypot(q.width - goal.width, q.height - goal.height)
+            } ?? start
+        }
         let column = start % columns + (step.width > 0 ? Int((travel.width / step.width).rounded()) : 0)
         let row = start / columns + (step.height > 0 ? Int((travel.height / step.height).rounded()) : 0)
         let lastRow = (places.upperBound - 1) / columns
@@ -100,22 +121,26 @@ extension CGSize {
     fileprivate static func - (a: CGSize, b: CGSize) -> CGSize { CGSize(width: a.width - b.width, height: a.height - b.height) }
 }
 
-/// The sidebar's pinned tabs: a grid of at least three columns that grows
-/// wider past six pins, keeping to two rows.
+/// The sidebar's essentials: rows of three, a short last row's one or two
+/// sharing its whole width, every row as tall.
 public struct PinGrid: Equatable, Sendable {
     public static let tallest: CGFloat = 36
 
-    public let columns: Int
+    public let columns = 3
+    /// A cell in a full row.
     public let cell: CGSize
     public let gap: CGFloat
+    public let width: CGFloat
+    public let count: Int
 
     /// For `count` pins across `width` (the sidebar less its margins).
     public init(count: Int, width: CGFloat, gap: CGFloat) {
-        columns = max(3, (count + 1) / 2)
         let cellWidth = max(20, (width - CGFloat(columns - 1) * gap) / CGFloat(columns))
         // Wide cells become short buttons rather than big squares.
         cell = CGSize(width: cellWidth, height: min(Self.tallest, cellWidth))
         self.gap = gap
+        self.width = width
+        self.count = count
     }
 
     public func rows(_ count: Int) -> Int { (count + columns - 1) / columns }
@@ -127,6 +152,35 @@ public struct PinGrid: Equatable, Sendable {
     }
 
     public var step: CGSize { CGSize(width: cell.width + gap, height: cell.height + gap) }
+
+    /// Where the short last row starts, and how many it holds; nil when every row is full.
+    private var shortRow: (from: Int, count: Int)? {
+        let left = count % columns
+        return left == 0 ? nil : (count - left, left)
+    }
+
+    /// The width of a cell in the short last row.
+    private func shortWidth(_ held: Int) -> CGFloat { (width - CGFloat(held - 1) * gap) / CGFloat(held) }
+
+    /// Pin `index`'s cell, from the grid's top left.
+    public func frame(of index: Int) -> CGRect {
+        let y = CGFloat(index / columns) * step.height
+        if let short = shortRow, index >= short.from {
+            let w = shortWidth(short.count)
+            return CGRect(x: CGFloat(index - short.from) * (w + gap), y: y, width: w, height: cell.height)
+        }
+        return CGRect(x: CGFloat(index % columns) * step.width, y: y, width: cell.width, height: cell.height)
+    }
+
+    /// The places pins are dragged between.
+    public var lattice: Lattice {
+        Lattice(columns: columns, step: step, short: shortRow.map { ($0.from, shortWidth($0.count) + gap) })
+    }
+
+    /// The pin at `point`, from the grid's top left.
+    public func index(at point: CGPoint) -> Int? {
+        (0..<count).first { frame(of: $0).insetBy(dx: -gap / 2, dy: -gap / 2).contains(point) }
+    }
 }
 
 /// The tab strip across the top.

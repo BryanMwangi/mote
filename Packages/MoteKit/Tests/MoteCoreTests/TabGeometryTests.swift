@@ -91,11 +91,22 @@ struct TabGeometryTests {
         #expect(drag.offset(of: "a", at: 2, in: column) == .zero)
     }
 
-    @Test("Pins sit in at least three columns, and more past six to keep two rows")
-    func pinColumns() {
-        #expect(PinGrid(count: 2, width: 220, gap: 6).columns == 3)
-        #expect(PinGrid(count: 6, width: 220, gap: 6).columns == 3)
-        #expect(PinGrid(count: 9, width: 220, gap: 6).columns == 5)
+    @Test("Pins sit in rows of three, a short last row sharing the width")
+    func pinRows() {
+        let width: CGFloat = 220, gap: CGFloat = 6
+        let full = (width - 2 * gap) / 3
+        // One: the whole width.
+        #expect(PinGrid(count: 1, width: width, gap: gap).frame(of: 0) == CGRect(x: 0, y: 0, width: width, height: 36))
+        // Two: half each.
+        let two = PinGrid(count: 2, width: width, gap: gap)
+        #expect(two.frame(of: 1) == CGRect(x: (width - gap) / 2 + gap, y: 0, width: (width - gap) / 2, height: 36))
+        // Seven: three, three and one.
+        let seven = PinGrid(count: 7, width: width, gap: gap)
+        #expect(seven.rows(7) == 3)
+        #expect(abs(seven.frame(of: 4).minX - (full + gap)) < 1e-9)
+        #expect(seven.frame(of: 6) == CGRect(x: 0, y: 2 * (36 + gap), width: width, height: 36))
+        // Six: two full rows.
+        #expect(abs(PinGrid(count: 6, width: width, gap: gap).frame(of: 5).width - full) < 1e-9)
     }
 
     @Test("Pin cells share the width and are never taller than 36")
@@ -105,7 +116,21 @@ struct TabGeometryTests {
         #expect(grid.cell.height == 36)
         #expect(grid.height(4) == CGFloat(78))
         #expect(grid.height(0) == 0)
-        #expect(PinGrid(count: 20, width: 100, gap: 6).cell.width == 20)
+        #expect(PinGrid(count: 20, width: 50, gap: 6).cell.width == 20)
+    }
+
+    @Test("A pin dragged into or out of the short row lands on the nearest place")
+    func pinTargets() {
+        let grid = PinGrid(count: 5, width: 220, gap: 6)
+        let lattice = grid.lattice
+        // The fifth sits halfway across the short row.
+        #expect(abs(lattice.origin(4).width - grid.frame(of: 4).minX) < 1e-9)
+        // The first dragged down and right lands on the short row's second.
+        let to = grid.frame(of: 4).origin
+        #expect(lattice.target(from: 0, travel: CGSize(width: to.x, height: to.y), within: 0..<5) == 4)
+        // The short row's first dragged up lands on the first.
+        #expect(lattice.target(from: 3, travel: CGSize(width: 0, height: -42), within: 0..<5) == 0)
+        #expect(grid.index(at: CGPoint(x: 200, y: 50)) == 4)
     }
 
     @Test("The strip's room leaves space for everything around the tabs")

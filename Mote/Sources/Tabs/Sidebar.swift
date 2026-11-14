@@ -535,11 +535,11 @@ private struct PinnedTabs: View {
             ForEach(Array(tabs.enumerated()), id: \.element.id) { index, tab in
                 PinSquare(
                     browser: browser, tab: tab, live: tab.id == active, lettering: live && showing && browser.editingPin == tab.id,
-                    icons: prefs.glyph == .icons, size: grid.cell
+                    icons: prefs.glyph == .icons, size: grid.frame(of: index).size
                 )
                 .modifier(
                     Reorderable(
-                        id: tab.id, index: index, places: 0..<tabs.count, lattice: Lattice(columns: grid.columns, step: grid.step),
+                        id: tab.id, index: index, places: 0..<tabs.count, lattice: grid.lattice,
                         space: "pins", drag: $drag
                     ) { browser.move(tab, to: $0) })
             }
@@ -547,8 +547,7 @@ private struct PinnedTabs: View {
         // As ⌘W: a pinned tab lets its page go and stays pinned.
         .overlay {
             MiddleClick { at in
-                let index = Int(at.y / grid.step.height) * grid.columns + Int(at.x / grid.step.width)
-                if tabs.indices.contains(index) { browser.close(tabs[index]) }
+                if let index = grid.index(at: at), tabs.indices.contains(index) { browser.close(tabs[index]) }
             }
         }
         .coordinateSpace(name: "pins")
@@ -585,22 +584,20 @@ private struct IconGlow: View {
     }
 }
 
-/// Fixed cells, row by row, a short last row keeping to the left. Not a
+/// Fixed cells, row by row, a short last row sharing the width. Not a
 /// LazyVGrid: that makes cells only once on screen, so they missed the
 /// sidebar's slide in.
 private struct PinCells: Layout {
     let grid: PinGrid
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        CGSize(width: CGFloat(grid.columns) * grid.step.width - grid.gap, height: grid.height(subviews.count))
+        CGSize(width: grid.width, height: grid.height(subviews.count))
     }
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
         for (index, cell) in subviews.enumerated() {
-            let place = CGPoint(
-                x: bounds.minX + CGFloat(index % grid.columns) * grid.step.width,
-                y: bounds.minY + CGFloat(index / grid.columns) * grid.step.height)
-            cell.place(at: place, proposal: ProposedViewSize(grid.cell))
+            let frame = grid.frame(of: index)
+            cell.place(at: CGPoint(x: bounds.minX + frame.minX, y: bounds.minY + frame.minY), proposal: ProposedViewSize(frame.size))
         }
     }
 }
@@ -617,6 +614,7 @@ private struct PinSquare: View {
     let size: CGSize
 
     @State private var hovering = false
+    @State private var overMinus = false
     @Environment(\.colorScheme) private var colorScheme
 
     /// Contents scale with the shorter side, so the mark stays its usual size.
@@ -650,18 +648,25 @@ private struct PinSquare: View {
             .rowHover { hovering = $0 }
             // – lets the page go, keeping the essential.
             .overlay(alignment: .topTrailing) {
-                if hovering, !tab.asleep, !lettering {
-                    Image(systemName: "minus")
-                        .font(.system(size: 7, weight: .bold))
-                        .foregroundStyle(Palette.muted)
-                        .frame(width: 14, height: 14)
-                        .background(Palette.ground, in: Circle())
-                        .overlay(Circle().strokeBorder(Palette.hairline))
-                        .contentShape(Circle())
-                        .onTapGesture { browser.close(tab) }
-                        .help("Unload Tab, keeping it   ⌘W")
-                        .offset(x: 4, y: -4)
-                        .transition(.opacity)
+                if hovering || overMinus, !tab.asleep, !lettering {
+                    // Small to look at, easy to hit: the press takes a square
+                    // well past the circle.
+                    Button { browser.close(tab) } label: {
+                        Image(systemName: "minus")
+                            .font(.system(size: 7, weight: .bold))
+                            .foregroundStyle(Palette.muted)
+                            .frame(width: 14, height: 14)
+                            .background(Palette.ground, in: Circle())
+                            .overlay(Circle().strokeBorder(Palette.hairline))
+                            .frame(width: 26, height: 26)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    // Past the square's edge it keeps itself showing.
+                    .onHover { overMinus = $0 }
+                    .help("Unload Tab, keeping it   ⌘W")
+                    .offset(x: 4, y: -4)
+                    .transition(.opacity)
                 }
             }
             .contextMenu { TabMenu(browser: browser, tab: tab) { browser.close(tab) } }
