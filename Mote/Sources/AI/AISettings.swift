@@ -83,6 +83,28 @@ struct AISettings: View {
                     "Act for you", "Open, switch and close tabs, click and type in pages, asking first", symbol: "cursorarrow.click.2", tint: Tint.orange,
                     on: $prefs.aiActs)
             }
+            RowRule()
+            SettingRow(
+                "Let coding agents use Mote",
+                "AI agents can test your developer sites in Mote",
+                symbol: "hammer", tint: Tint.indigo, keywords: ["AI", "agents", "developer"], on: $prefs.agentsUseMote)
+            if prefs.agentsUseMote {
+                RowRule()
+                SettingRow("Sites they may test", "The same as Settings › AI › Developer sites", symbol: "globe", tint: Tint.indigo) {
+                    TextField("localhost:*, staging.example.com", text: $prefs.aiDevSites).textFieldStyle(.roundedBorder).frame(width: 260)
+                }
+                RowRule()
+                SettingRow("Set up an agent", "For Claude Code; others take the same address and header", symbol: "doc.on.clipboard", tint: Tint.indigo) {
+                    HStack(spacing: 8) {
+                        Pill("Copy for Claude Code") {
+                            NSPasteboard.general.clearContents()
+                            NSPasteboard.general.setString(MoteMCP.shared.claudeSetup, forType: .string)
+                        }
+                        Pill("Reset Token") { MoteMCP.shared.resetOutsideToken() }
+                            .help("Agents set up before can no longer use Mote")
+                    }
+                }
+            }
         }
 
         SettingsSection(

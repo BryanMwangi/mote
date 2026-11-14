@@ -163,28 +163,6 @@ struct GeneralSettings: View {
             SettingRow(
                 "Let a script drive Mote", "A private socket for Tools/bench. Its tabs wear a flask and never jump to the front",
                 symbol: "terminal", tint: Tint.gray, on: $prefs.bench)
-            RowRule()
-            SettingRow(
-                "Let coding agents use Mote",
-                "Claude Code and others on this Mac can test your developer sites in Mote, instead of Playwright or Chrome (Settings › AI)",
-                symbol: "hammer", tint: Tint.indigo, keywords: ["claude code", "mcp", "playwright"], on: $prefs.agentsUseMote)
-            if prefs.agentsUseMote {
-                RowRule()
-                SettingRow("Sites they may test", "The same as Settings › AI › Developer sites", symbol: "globe", tint: Tint.indigo) {
-                    TextField("localhost:*, staging.example.com", text: $prefs.aiDevSites).textFieldStyle(.roundedBorder).frame(width: 260)
-                }
-                RowRule()
-                SettingRow("Set up an agent", "For Claude Code; others take the same address and header", symbol: "doc.on.clipboard", tint: Tint.indigo) {
-                    HStack(spacing: 8) {
-                        Pill("Copy for Claude Code") {
-                            NSPasteboard.general.clearContents()
-                            NSPasteboard.general.setString(MoteMCP.shared.claudeSetup, forType: .string)
-                        }
-                        Pill("Reset Token") { MoteMCP.shared.resetOutsideToken() }
-                            .help("Agents set up before can no longer use Mote")
-                    }
-                }
-            }
         }
     }
 
