@@ -311,7 +311,9 @@ final class Assistant {
         let author = model.isEmpty ? provider.name : "\(provider.name) · \(modelName(for: provider))"
         return Conversation.Route(
             provider: provider.id, model: model, author: author, service: service,
-            instructions: Instructions.compose(search: mode == .search, thorough: mode == .research), search: search)
+            instructions: [Instructions.compose(search: mode == .search, thorough: mode == .research), Memories.shared.note]
+                .compactMap { $0 }.joined(separator: "\n\n"),
+            search: search)
     }
 
     /// Every chat kept, for the list of past chats and for chat tabs that

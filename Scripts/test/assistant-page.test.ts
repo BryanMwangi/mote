@@ -97,3 +97,21 @@ describe('lists, boxes, finding and tables', () => {
     expect(run('click', { n: 0 })).toBe('gone');
   });
 });
+
+describe('fields by label', () => {
+  it('finds a field by its label, exactly first, and says what kind it is', () => {
+    document.body.innerHTML = `
+      <label for="n">Full name</label><input id="n">
+      <label>Email address <input id="e" type="email"></label>
+      <input id="p" type="password" aria-label="Password">
+      <select id="s" aria-label="Country"><option>Kenya</option></select>
+      <label><input id="c" type="checkbox"> Agree</label>`;
+    expect(run('find-field', { label: 'full name' })).toBe('0');
+    expect(run('find-field', { label: 'Email' })).toBe('1');
+    expect(run('find-field', { label: 'Phone' })).toBeNull();
+    expect(run('kind', { n: 1 })).toBe('text');
+    expect(run('kind', { n: 2 })).toBe('password');
+    expect(run('kind', { n: 3 })).toBe('select');
+    expect(run('kind', { n: 4 })).toBe('checkbox');
+  });
+});

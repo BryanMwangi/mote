@@ -15,6 +15,7 @@ export type Args = {
   to?: 'top' | 'bottom';
   by?: number;
   key?: string;
+  label?: string;
 };
 
 declare global {
@@ -79,6 +80,62 @@ export function outline(root: Document = document): string {
 }
 
 /** The element numbered `n`, while it's still in the page. */
+/** A field's label, as a person reads it: its <label>, else what it says it is. */
+export function labelOf(item: Element): string {
+  const field = item as HTMLInputElement;
+  const byFor = field.id ? document.querySelector(`label[for="${CSS.escape(field.id)}"]`) : null;
+  const wrapping = item.closest('label');
+  const named = item.getAttribute('aria-labelledby');
+  const labelled = named
+    ? named
+        .split(/\s+/)
+        .map((id) => document.getElementById(id)?.textContent ?? '')
+        .join(' ')
+    : '';
+  const said =
+    byFor?.textContent ||
+    labelled ||
+    item.getAttribute('aria-label') ||
+    wrapping?.textContent ||
+    field.placeholder ||
+    field.name ||
+    item.getAttribute('title') ||
+    '';
+  return said.trim().replace(/\s+/g, ' ');
+}
+
+/** The number of the form field whose label says `label`: the same words, else containing them. */
+export function findField(label: string): number | null {
+  if (!window.__moteOutline?.length) outline();
+  const known = window.__moteOutline ?? [];
+  const wanted = label.trim().toLowerCase();
+  const fields = known
+    .map((item, n) => ({ item, n }))
+    .filter(
+      ({ item }) =>
+        item.isConnected &&
+        (item instanceof HTMLInputElement ||
+          item instanceof HTMLSelectElement ||
+          item instanceof HTMLTextAreaElement ||
+          isEditor(item)),
+    );
+  const exact = fields.find(({ item }) => labelOf(item).toLowerCase() === wanted);
+  const near = exact ?? fields.find(({ item }) => labelOf(item).toLowerCase().includes(wanted));
+  return near ? near.n : null;
+}
+
+/** What kind of field an element is, for filling it the right way. */
+export function kindOf(item: Element | null): string {
+  if (!item) return 'gone';
+  if (item instanceof HTMLSelectElement) return 'select';
+  if (item instanceof HTMLInputElement) {
+    if (item.type === 'checkbox' || item.type === 'radio' || item.type === 'password') return item.type;
+    return 'text';
+  }
+  if (item.getAttribute('role') === 'checkbox') return 'checkbox';
+  return 'text';
+}
+
 function numbered(n: number | undefined): Element | null {
   if (n === undefined) return null;
   const found = window.__moteOutline?.[n];
@@ -275,6 +332,12 @@ export function run(op: string, args: Args = {}): unknown {
     }
     case 'find':
       return find(args.text ?? '');
+    case 'find-field': {
+      const n = findField(args.label ?? '');
+      return n === null ? null : String(n);
+    }
+    case 'kind':
+      return kindOf(target);
     case 'tables':
       return tables();
     case 'selection':

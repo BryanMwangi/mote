@@ -116,6 +116,8 @@ struct AISettings: View {
             }
         }
 
+        MemorySection()
+
         SettingsSection(
             "On this Mac",
             note:
@@ -445,4 +447,35 @@ struct SidebarSite {
     ]
     /// The picker's tag for an address typed in.
     static let other = "other"
+}
+
+/// Settings › AI › Memory: what the assistant keeps from chat to chat, each
+/// removable, and a way to keep nothing.
+private struct MemorySection: View {
+    @ObservedObject private var memories = Memories.shared
+
+    var body: some View {
+        SettingsSection(
+            "Memory",
+            note: "What you ask the assistant to remember, told to every chat. Never from a private window."
+        ) {
+            SettingRow("Remember things", "Across chats, when you ask it to", symbol: "brain", tint: Tint.purple, on: $memories.on)
+            ForEach(memories.all) { memory in
+                RowRule()
+                HStack(spacing: 10) {
+                    Text(memory.text).font(TextStyle.body.font).lineLimit(3).textSelection(.enabled)
+                    Spacer(minLength: 8)
+                    Door(icon: "xmark", help: "Forget") { _ = memories.forget(memory.id) }
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+            }
+            if !memories.all.isEmpty {
+                RowRule()
+                SettingRow("Forget everything", "\(memories.all.count) kept", symbol: "trash", tint: Tint.gray) {
+                    Pill("Forget All") { memories.forgetAll() }
+                }
+            }
+        }
+    }
 }

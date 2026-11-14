@@ -43,6 +43,38 @@ Object.defineProperty(exports, Symbol.toStringTag, { value: 'Module' });
 		return lines.join("\n");
 	}
 	/** The element numbered `n`, while it's still in the page. */
+	/** A field's label, as a person reads it: its <label>, else what it says it is. */
+	function labelOf(item) {
+		const field = item;
+		const byFor = field.id ? document.querySelector(`label[for="${CSS.escape(field.id)}"]`) : null;
+		const wrapping = item.closest("label");
+		const named = item.getAttribute("aria-labelledby");
+		const labelled = named ? named.split(/\s+/).map((id) => document.getElementById(id)?.textContent ?? "").join(" ") : "";
+		return (byFor?.textContent || labelled || item.getAttribute("aria-label") || wrapping?.textContent || field.placeholder || field.name || item.getAttribute("title") || "").trim().replace(/\s+/g, " ");
+	}
+	/** The number of the form field whose label says `label`: the same words, else containing them. */
+	function findField(label) {
+		if (!window.__moteOutline?.length) outline();
+		const known = window.__moteOutline ?? [];
+		const wanted = label.trim().toLowerCase();
+		const fields = known.map((item, n) => ({
+			item,
+			n
+		})).filter(({ item }) => item.isConnected && (item instanceof HTMLInputElement || item instanceof HTMLSelectElement || item instanceof HTMLTextAreaElement || isEditor(item)));
+		const near = fields.find(({ item }) => labelOf(item).toLowerCase() === wanted) ?? fields.find(({ item }) => labelOf(item).toLowerCase().includes(wanted));
+		return near ? near.n : null;
+	}
+	/** What kind of field an element is, for filling it the right way. */
+	function kindOf(item) {
+		if (!item) return "gone";
+		if (item instanceof HTMLSelectElement) return "select";
+		if (item instanceof HTMLInputElement) {
+			if (item.type === "checkbox" || item.type === "radio" || item.type === "password") return item.type;
+			return "text";
+		}
+		if (item.getAttribute("role") === "checkbox") return "checkbox";
+		return "text";
+	}
 	function numbered(n) {
 		if (n === void 0) return null;
 		const found = window.__moteOutline?.[n];
@@ -215,6 +247,11 @@ Object.defineProperty(exports, Symbol.toStringTag, { value: 'Module' });
 				return "done";
 			}
 			case "find": return find(args.text ?? "");
+			case "find-field": {
+				const n = findField(args.label ?? "");
+				return n === null ? null : String(n);
+			}
+			case "kind": return kindOf(target);
 			case "tables": return tables();
 			case "selection": return window.getSelection()?.toString() ?? "";
 			case "code": {
@@ -230,6 +267,9 @@ exports.check = check;
 exports.choose = choose;
 exports.describe = describe;
 exports.find = find;
+exports.findField = findField;
+exports.kindOf = kindOf;
+exports.labelOf = labelOf;
 exports.outline = outline;
 exports.place = place;
 exports.readField = readField;
