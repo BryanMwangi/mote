@@ -588,7 +588,7 @@ final class Browser: NSObject, ObservableObject {
         tab.home = entry.isHeld ? entry.home.flatMap(URL.init(string:)) ?? url : nil
         tab.folder = entry.kept == true ? entry.folder.flatMap(UUID.init(uuidString:)) : nil
         prepare(tab)
-        tab.restore(url: url, title: entry.title, name: entry.name)
+        tab.restore(url: url, title: entry.title, name: entry.name, state: entry.state)
         if let used = entry.used { tab.touch(at: used) }
         tab.pin = entry.pin
         tab.kept = entry.kept == true
@@ -642,7 +642,7 @@ final class Browser: NSObject, ObservableObject {
         let home = tab.held ? tab.home.map(\.absoluteString).flatMap { $0 == url.absoluteString ? nil : $0 } : nil
         return Session.Entry(
             url: url.absoluteString, title: tab.title, pin: tab.pin, kept: tab.kept ? true : nil, name: tab.name, held: held, home: home,
-            folder: tab.kept ? tab.folder?.uuidString : nil, used: tab.touched)
+            folder: tab.kept ? tab.folder?.uuidString : nil, used: tab.touched, state: Session.keptState(tab.history))
     }
 
     // MARK: - Merging spaces
@@ -886,10 +886,17 @@ final class Browser: NSObject, ObservableObject {
 
     /// Makes a tab that just opened the one showing.
     func bringForward(_ tab: Tab) {
+        let left = active
         floatActiveVideo()
+        // Opened from a tab with its chat open (a link, the assistant): the
+        // chat comes along, open, rather than closing as the new tab shows.
+        let carriesChat = left.map { $0 !== tab && $0.chatOpen } ?? false
+        if carriesChat, let chat = left?.pageChat, tab.pageChat == nil { tab.share(chat) }
+        if carriesChat { tab.chatOpen = true }
         activeID = tab.id
         editing = false
         field.clear()
+        if carriesChat { syncPageChat() }
     }
 
     /// Loads `url` in `tab` and puts the field away.

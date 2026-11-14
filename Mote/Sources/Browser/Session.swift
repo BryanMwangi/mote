@@ -24,6 +24,16 @@ enum Session {
         var folder: String?
         /// When the tab was last used; nil in older files.
         var used: Date?
+        /// Its back and forward pages, as WebKit keeps them; nil in older
+        /// files, and for a history too long to keep (see `keptState`).
+        var state: Data?
+    }
+
+    /// A tab's back and forward pages, for the session: WebKit's own record,
+    /// if it's a reasonable size.
+    nonisolated static func keptState(_ state: Any?) -> Data? {
+        guard let data = state as? Data, data.count <= 256 * 1024 else { return nil }
+        return data
     }
 
     nonisolated struct Saved: Codable, Sendable {
