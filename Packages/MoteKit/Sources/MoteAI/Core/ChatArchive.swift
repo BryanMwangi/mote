@@ -22,6 +22,10 @@ public struct SavedChat: Codable, Equatable, Sendable {
     public var sessions: [String: Session]
     public var created: Date
     public var updated: Date
+    /// The chat so far in the model's own summary, standing for its first
+    /// `summarised` messages; nil in older files and chats never compacted.
+    public var summary: String?
+    public var summarised: Int?
 
     public init(id: UUID, messages: [Message], sessions: [String: Session] = [:], created: Date, updated: Date) {
         self.id = id

@@ -34,6 +34,8 @@ struct ChatView<Accessory: View, Start: View>: View {
     /// Keeping to the end as the reply grows; scrolling up to read lets go,
     /// and coming back down takes it up again.
     @State private var pinned = true
+    /// How tall what sits over the end is: the page chip, mentions, composer.
+    @State private var overEnd: CGFloat = 0
 
     static var column: CGFloat { 720 }
     private static var end: String { "end" }
@@ -41,40 +43,7 @@ struct ChatView<Accessory: View, Start: View>: View {
     var body: some View {
         ScrollViewReader { scroller in
             ZStack(alignment: .bottom) {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 26) {
-                        if conversation.messages.isEmpty { start() }
-                        ForEach(conversation.messages) { message in
-                            let last = message.id == conversation.messages.last?.id
-                            MessageRow(message: message, last: last, streaming: last && conversation.busy).equatable()
-                                .environment(\.chatActions, actions)
-                                .transition(.opacity.combined(with: .offset(y: 6)))
-                        }
-                        Status(browser: browser, conversation: conversation, retry: retry)
-                        // Room for the composer over the end; scrolling to it shows the last line above the composer.
-                        Color.clear.frame(height: inputHeight + 96).id(Self.end)
-                            .onGeometryChange(for: ScrollDistance.self) { proxy in
-                                let view = proxy.bounds(of: .named("chat"))?.height ?? 0
-                                return ScrollDistance(below: proxy.frame(in: .named("chat")).maxY - view)
-                            } action: {
-                                distance = $0
-                            }
-                    }
-                    .frame(maxWidth: Self.column, alignment: .leading)
-                    .padding(.horizontal, 28)
-                    .padding(.top, 32)
-                    .frame(maxWidth: .infinity)
-                    .animation(Motion.settle, value: conversation.messages.count)
-                }
-                .coordinateSpace(name: "chat")
-                // Follows the reply as it grows, unless scrolled up to read.
-                .onChange(of: conversation.messages.last?.text) {
-                    if pinned { scroller.scrollTo(Self.end, anchor: .bottom) }
-                }
-                .onChange(of: conversation.messages.count) {
-                    pinned = true
-                    withAnimation(Motion.settle) { scroller.scrollTo(Self.end, anchor: .bottom) }
-                }
+                follow(ScrollView { transcript }.coordinateSpace(name: "chat"), scroller)
                 .onChange(of: distance) { _, now in if now == .end { pinned = true } }
                 .onScrollUp { pinned = false }
 
@@ -86,13 +55,16 @@ struct ChatView<Accessory: View, Start: View>: View {
                         }
                         .transition(.scale(scale: 0.8).combined(with: .opacity))
                     }
-                    accessory()
-                    if !conversation.mentions.isEmpty { mentioned(conversation) }
-                    ChatComposer(
-                        browser: browser, conversation: conversation, draft: $draft, height: $inputHeight, focus: focus,
-                        mentionables: mentionables, choseMention: chose, send: send
-                    )
-                    .frame(maxWidth: Self.column)
+                    VStack(spacing: 10) {
+                        accessory()
+                        if !conversation.mentions.isEmpty { mentioned(conversation) }
+                        ChatComposer(
+                            browser: browser, conversation: conversation, draft: $draft, height: $inputHeight, focus: focus,
+                            mentionables: mentionables, choseMention: chose, send: send
+                        )
+                        .frame(maxWidth: Self.column)
+                    }
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { overEnd = $0 }
                 }
                 .padding(.horizontal, 28)
                 .padding(.bottom, 18)
@@ -100,7 +72,7 @@ struct ChatView<Accessory: View, Start: View>: View {
                 .background(alignment: .bottom) {
                     // The conversation fades out under the composer.
                     LinearGradient(colors: [ground.opacity(0), ground], startPoint: .top, endPoint: .init(x: 0.5, y: 0.45))
-                        .frame(height: inputHeight + 110)
+                        .frame(height: max(inputHeight + 110, overEnd + 24))
                         .allowsHitTesting(false)
                 }
                 .animation(Motion.quick, value: distance == .far)
@@ -121,12 +93,69 @@ struct ChatView<Accessory: View, Start: View>: View {
             })
     }
 
+    /// The messages, the working line, and room at the end for what sits over it.
+    private var transcript: some View {
+        VStack(alignment: .leading, spacing: 26) {
+            if conversation.messages.isEmpty { start() }
+            ForEach(Array(conversation.messages.enumerated()), id: \.element.id) { index, message in
+                row(index, message)
+            }
+            Status(browser: browser, conversation: conversation, retry: retry)
+            if conversation.summarised == conversation.messages.count, conversation.summarised > 0, let summary = conversation.summary {
+                SummaryDivider(summary: summary)
+            }
+            // Room for everything over the end; scrolling to it shows the last line above them.
+            Color.clear.frame(height: max(inputHeight + 96, overEnd + 28)).id(Self.end)
+                .onGeometryChange(for: ScrollDistance.self) { proxy in
+                    let view = proxy.bounds(of: .named("chat"))?.height ?? 0
+                    return ScrollDistance(below: proxy.frame(in: .named("chat")).maxY - view)
+                } action: {
+                    distance = $0
+                }
+        }
+        .frame(maxWidth: Self.column, alignment: .leading)
+        .padding(.horizontal, 28)
+        .padding(.top, 32)
+        .frame(maxWidth: .infinity)
+        .animation(Motion.settle, value: conversation.messages.count)
+    }
+
+    @ViewBuilder
+    private func row(_ index: Int, _ message: Message) -> some View {
+        let last = message.id == conversation.messages.last?.id
+        // Where the chat was summarised, before the first message after.
+        if index == conversation.summarised, index > 0, let summary = conversation.summary {
+            SummaryDivider(summary: summary)
+        }
+        MessageRow(message: message, last: last, streaming: last && conversation.busy).equatable()
+            .environment(\.chatActions, actions)
+            .transition(.opacity.combined(with: .offset(y: 6)))
+    }
+
+    /// Keeps to the end as the reply grows, unless scrolled up to read; opens there.
+    private func follow(_ view: some View, _ scroller: ScrollViewProxy) -> some View {
+        let toEnd = { if pinned { scroller.scrollTo(Self.end, anchor: .bottom) } }
+        return view
+            .onChange(of: conversation.messages.last?.text) { toEnd() }
+            .onChange(of: conversation.messages.count) {
+                pinned = true
+                withAnimation(Motion.settle) { scroller.scrollTo(Self.end, anchor: .bottom) }
+            }
+            // Steps, the working line and what's over the end grow it too, not only the text.
+            .onChange(of: conversation.messages.last?.steps.count) { toEnd() }
+            .onChange(of: conversation.activities.count) { toEnd() }
+            .onChange(of: conversation.phase) { toEnd() }
+            .onChange(of: overEnd) { toEnd() }
+            .onAppear { DispatchQueue.main.async { scroller.scrollTo(Self.end, anchor: .bottom) } }
+    }
+
     private var actions: ChatActions { ChatActions(retry: retry) }
 
     private func send() {
         let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
         draft = ""
+        if text == Skill.compact.prompt { return Assistant.shared.compact(conversation) }
         guard let beforeSend else { return Assistant.shared.ask(text, in: conversation) }
         Task {
             await beforeSend()
@@ -418,6 +447,33 @@ private struct RetryButton: View {
 
 /// Under the last message: that the model is thinking or busy, or why the
 /// reply failed and what to do about it.
+/// Where the chat was summarised: the messages above are sent as the
+/// summary from here on. Opens to show it.
+private struct SummaryDivider: View {
+    let summary: String
+    @State private var open = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Button {
+                withAnimation(Motion.quick) { open.toggle() }
+            } label: {
+                HStack(spacing: 8) {
+                    Rectangle().fill(Palette.hairline).frame(height: 1)
+                    Label("Earlier messages summarised", systemImage: open ? "chevron.down" : "chevron.right")
+                        .font(TextStyle.secondary.font).foregroundStyle(Palette.muted).fixedSize()
+                    Rectangle().fill(Palette.hairline).frame(height: 1)
+                }
+            }
+            .buttonStyle(.plain)
+            if open {
+                Text(summary).font(TextStyle.secondary.font).foregroundStyle(Palette.muted).textSelection(.enabled)
+                    .transition(.opacity)
+            }
+        }
+    }
+}
+
 private struct Status: View {
     let browser: Browser
     let conversation: Conversation

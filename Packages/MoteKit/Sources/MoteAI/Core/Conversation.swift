@@ -81,6 +81,13 @@ public final class Conversation: Identifiable {
     /// How many tabs a chat may be told about at once.
     public static let mentionLimit = 5
 
+    /// The chat so far in the model's own summary, sent in place of the
+    /// first `summarised` messages, which stay on screen.
+    public private(set) var summary: String?
+    public private(set) var summarised = 0
+    /// A turn that heard this many tokens or more summarises the chat before the next.
+    public static let compactAt = 100_000
+
     /// Sessions providers opened, by provider.
     ///
     /// A session is only carried on while it has heard every message: it
@@ -119,6 +126,8 @@ public final class Conversation: Identifiable {
         created = saved.created
         updated = saved.updated
         messages = saved.messages
+        summary = saved.summary
+        summarised = min(saved.summarised ?? 0, saved.messages.count)
         title = SavedChat.title(of: saved.messages)
         sessions = saved.sessions.mapValues { ($0.id, $0.heard, $0.search, nil) }
     }
@@ -132,9 +141,12 @@ public final class Conversation: Identifiable {
             kept[last].reasoning += held.reasoning
             kept[last].interrupted = true
         }
-        return SavedChat(
+        var saved = SavedChat(
             id: id, messages: kept, sessions: sessions.mapValues { SavedChat.Session(id: $0.id, heard: $0.heard, search: $0.search) },
             created: created, updated: updated)
+        saved.summary = summary
+        saved.summarised = summary == nil ? nil : summarised
+        return saved
     }
 
     private func touch() {
@@ -242,9 +254,79 @@ public final class Conversation: Identifiable {
         touch()
     }
 
+    /// Whether the chat has grown long enough to summarise before the next turn.
+    private var wantsCompacting: Bool {
+        (usage?.input ?? 0) >= Self.compactAt && messages.count - summarised > 4
+    }
+
+    /// Summarises the chat so far (`/compact`): the model is sent the
+    /// summary in place of the messages before, which stay on screen.
+    public func compact(routing: @escaping Routing) {
+        guard !busy, messages.count - summarised >= 2 else { return }
+        turn += 1
+        let turn = turn
+        phase = .waiting
+        task = Task { [weak self] in
+            do {
+                let route = try await routing()
+                guard let self, self.turn == turn else { return }
+                try await self.summarise(via: route, through: self.messages.count)
+                guard self.turn == turn else { return }
+                self.task = nil
+                self.phase = .idle
+                self.touch()
+            } catch {
+                guard let self, self.turn == turn else { return }
+                self.task = nil
+                self.activities = []
+                self.phase = .failed("The chat couldn't be summarised: " + ((error as? LocalizedError)?.errorDescription ?? error.localizedDescription))
+            }
+        }
+    }
+
+    /// Asks the model for a summary of the first `through` messages (and any
+    /// summary before), and sends that from now on in their place. Every
+    /// provider's session starts afresh, since what it heard is replaced.
+    private func summarise(via route: Route, through: Int) async throws {
+        let step = Activity(id: "compact-\(through)", title: "Summarising the chat so far", kind: .phase)
+        activities = [step]
+        let earlier = summary.map { "Summary of the chat before this:\n\($0)\n\n" } ?? ""
+        let transcript = messages[summarised..<through].map { message in
+            (message.role == .user ? "Person: " : "Assistant: ") + message.text + Self.stepsLine(message.steps)
+        }.joined(separator: "\n\n")
+        let request = ChatRequest(
+            model: route.model,
+            messages: [Message(role: .user, text: Self.compactAsk + "\n\n" + earlier + transcript)],
+            instructions: "You summarise conversations faithfully and compactly, for the same assistant to carry on from.",
+            resume: nil, search: false)
+        var text = ""
+        for try await event in route.service.reply(to: request) {
+            if case .text(let more) = event { text += more }
+        }
+        let made = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !made.isEmpty else { throw CancellationError() }
+        summary = made
+        summarised = through
+        sessions = [:]
+        activities = []
+    }
+
+    static let compactAsk = """
+        Summarise this conversation between a person and their browser's assistant so the assistant can carry on \
+        without it. Keep: what the person wants and has decided, facts and figures found, tabs, pages, files and ids \
+        named, what the assistant did (and whether it worked), and anything left to do. Leave out pleasantries. \
+        Write it as notes, under 400 words.
+        """
+
+    /// What a reply did on the way, for the summary: its steps' titles.
+    private static func stepsLine(_ steps: [Activity]) -> String {
+        steps.isEmpty ? "" : "\n(Steps: " + steps.map(\.title).joined(separator: "; ") + ")"
+    }
+
     private func ask(routing: @escaping Routing) {
         turn += 1
         let turn = turn
+        let compacting = wantsCompacting
         messages.append(Message(role: .assistant, text: ""))
         phase = .waiting
         activities = []
@@ -254,6 +336,9 @@ public final class Conversation: Identifiable {
                 let route = try await routing()
                 guard let self, self.turn == turn else { return }
                 provider = route.provider
+                // A long chat is summarised first: everything but the new question.
+                if compacting { try await self.summarise(via: route, through: self.messages.count - 2) }
+                guard self.turn == turn else { return }
                 let request = self.request(for: route)
                 for try await event in route.service.reply(to: request) {
                     guard self.turn == turn else { return }
@@ -270,6 +355,8 @@ public final class Conversation: Identifiable {
     /// before it.
     private func request(for route: Route) -> ChatRequest {
         let asked = Array(messages.dropLast())
+        // What the summary stands for isn't sent again.
+        let sent = Array(asked.dropFirst(min(summarised, asked.count)))
         if let last = messages.indices.last { messages[last].author = route.author }
         let shared = self.shared
         // Up to date if it heard everything but the new question, and was
@@ -282,7 +369,7 @@ public final class Conversation: Identifiable {
         openedShared = shared
         searched = route.search
         return ChatRequest(
-            model: route.model, messages: asked, instructions: instructions(for: route), resume: session, search: route.search
+            model: route.model, messages: sent, instructions: instructions(for: route), resume: session, search: route.search
         )
     }
 
@@ -290,8 +377,9 @@ public final class Conversation: Identifiable {
     /// mentioned with @, described after them: exactly the route's
     /// instructions when there is nothing shared.
     private func instructions(for route: Route) -> String? {
+        let earlier = summary.map { "Earlier in this chat, in summary (the messages themselves aren't repeated):\n" + $0 } ?? ""
         let context =
-            [Instructions.page(self.page), Instructions.mentions(self.mentions)]
+            [earlier, Instructions.page(self.page), Instructions.mentions(self.mentions)]
             .filter { !$0.isEmpty }
             .joined(separator: "\n\n")
         guard !context.isEmpty else { return route.instructions }

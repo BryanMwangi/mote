@@ -42,8 +42,12 @@ public enum Skill {
     /// Pull the page's next steps.
     public static let actions = Item(command: "actions", title: "Next steps", prompt: "Extract actionable next steps from this page")
 
+    /// Summarise the chat itself, so a long one carries on lighter: the
+    /// composer runs it rather than sending it.
+    public static let compact = Item(command: "compact", title: "Compact chat", prompt: "/compact")
+
     /// The built-ins, in the order the picker shows them.
-    public static let all: [Item] = [summary, eli5, keypoints, actions]
+    public static let all: [Item] = [summary, eli5, keypoints, actions, compact]
 
     /// The skills whose command starts with `query`, case-insensitively. A
     /// blank query offers them all, in order.

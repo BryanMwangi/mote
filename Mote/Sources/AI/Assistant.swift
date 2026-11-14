@@ -350,6 +350,12 @@ final class Assistant {
         answering[id]?.chat?.stop()
     }
 
+    /// Summarises the chat so far (`/compact`), through whatever provider is chosen now.
+    func compact(_ conversation: Conversation) {
+        answering[conversation.id] = WeakChat(conversation)
+        conversation.compact(routing: { [self] in try await route(chat: conversation.id) })
+    }
+
     /// Asks again for the last reply, through whatever provider is chosen now.
     func retry(in conversation: Conversation) {
         answering[conversation.id] = WeakChat(conversation)

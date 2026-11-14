@@ -74,6 +74,45 @@ struct ConversationTests {
         #expect(request.messages.map(\.text) == ["What's 2+2?"])
     }
 
+    @Test("Compacting sends the model's summary in place of the messages before, which stay on screen")
+    func compact() async {
+        let service = ScriptedService()
+        service.events = [.session("s-1"), .text("Paris.")]
+        let conversation = Conversation()
+        conversation.send("Capital of France?", via: route(service))
+        await settle(conversation)
+        service.events = [.text("They asked for France's capital: Paris.")]
+        conversation.compact(routing: { self.route(service) })
+        await settle(conversation)
+        #expect(conversation.summary == "They asked for France's capital: Paris.")
+        #expect(conversation.summarised == 2)
+        #expect(conversation.messages.count == 2)
+        service.events = [.text("Berlin.")]
+        conversation.send("And Germany?", via: route(service))
+        await settle(conversation)
+        let last = service.requests.last!
+        #expect(last.messages.map(\.text) == ["And Germany?"])
+        #expect(last.instructions?.contains("France's capital: Paris") == true)
+        // Every session starts afresh after a summary.
+        #expect(last.resume == nil)
+        // And it's kept with the chat.
+        #expect(Conversation(saved: conversation.saved).summarised == 2)
+    }
+
+    @Test("A chat that's grown long is summarised before the next turn")
+    func compactsByItself() async {
+        let service = ScriptedService()
+        let conversation = Conversation()
+        for question in ["One?", "Two?", "Three?"] {
+            service.events = [.text("Yes."), .usage(Usage(input: Conversation.compactAt, output: 10))]
+            conversation.send(question, via: route(service))
+            await settle(conversation)
+        }
+        // The third turn was summarised first: the request before its reply.
+        #expect(conversation.summarised == 4)
+        #expect(service.requests.last?.messages.map(\.text) == ["Three?"])
+    }
+
     @Test("The title is the first question, on one line and not too long")
     func title() {
         let conversation = Conversation()
