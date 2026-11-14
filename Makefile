@@ -74,7 +74,6 @@ dmg: ## build/Mote.dmg (Apple silicon) and build/Mote-Intel.dmg, each its own bu
 		ditto $(DERIVED)/Build/Products/Release/Mote.app.dSYM $(BUILD_DIR)/$$name/Mote.app.dSYM || exit 1; \
 		if [ ! -d $(BUILD_DIR)/dmg-art ]; then \
 			swift Tools/dmg/art.swift $(BUILD_DIR)/$$name/Mote.app $(BUILD_DIR)/dmg-art || exit 1; \
-			tiffutil -cathidpicheck $(BUILD_DIR)/dmg-art/background.png $(BUILD_DIR)/dmg-art/background@2x.png -out $(BUILD_DIR)/dmg-art/background.tiff || exit 1; \
 			iconutil -c icns $(BUILD_DIR)/dmg-art/VolumeIcon.iconset -o $(BUILD_DIR)/dmg-art/VolumeIcon.icns || exit 1; \
 		fi; \
 		uvx 'dmgbuild>=1.6.7' -s Tools/dmg/settings.py -D app=$(BUILD_DIR)/$$name/Mote.app -D art=$(BUILD_DIR)/dmg-art Mote $(BUILD_DIR)/$$file.dmg || exit 1; \

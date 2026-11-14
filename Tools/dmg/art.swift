@@ -2,13 +2,18 @@
 //
 //   swift Tools/dmg/art.swift <Mote.app> <out dir>
 //
-// Writes background.png (660×400) and background@2x.png, which `make dmg`
-// joins into one Retina TIFF, and VolumeIcon.iconset from the app's icon.
+// Writes background.tiff, the 660×400 picture and its @2x in one Retina TIFF,
+// JPEG-compressed: its soft gradients took 800 KB as LZW (tiffutil's), a
+// tenth of that as JPEG with the words still sharp. And VolumeIcon.iconset
+// from the app's icon, up to 256 pt: a volume never shows bigger, and the
+// 512 pt sizes were two thirds of the icon's weight.
 // Finder draws the real icons and their labels over the background, at the
 // positions in settings.py, so the picture leaves those spots empty.
 
 import AppKit
+import ImageIO
 import SwiftUI
+import UniformTypeIdentifiers
 
 // Swift 6.2's script runner passes its own compiler flags first, then the
 // script's arguments after a "--".
@@ -87,16 +92,28 @@ struct Background: View {
     }
 }
 
+/// Both sizes in one TIFF, JPEG inside, 72 dpi per point so Finder shows
+/// the @2x at the same size.
 @MainActor
-func write(scale: CGFloat, to name: String) throws {
-    let renderer = ImageRenderer(content: Background().environment(\.colorScheme, .light))
-    renderer.scale = scale
-    renderer.isOpaque = true
-    guard let image = renderer.cgImage else { throw CocoaError(.fileWriteUnknown) }
-    let rep = NSBitmapImageRep(cgImage: image)
-    // 72 dpi per point, so Finder shows the @2x file at the same size.
-    rep.size = size
-    try rep.representation(using: .png, properties: [:])!.write(to: out.appendingPathComponent(name))
+func writeBackground() throws {
+    let file = out.appendingPathComponent("background.tiff") as CFURL
+    guard let tiff = CGImageDestinationCreateWithURL(file, UTType.tiff.identifier as CFString, 2, nil) else {
+        throw CocoaError(.fileWriteUnknown)
+    }
+    for scale in [1.0, 2.0] {
+        let renderer = ImageRenderer(content: Background().environment(\.colorScheme, .light))
+        renderer.scale = scale
+        renderer.isOpaque = true
+        guard let image = renderer.cgImage else { throw CocoaError(.fileWriteUnknown) }
+        let properties: [CFString: Any] = [
+            kCGImagePropertyDPIWidth: 72 * scale, kCGImagePropertyDPIHeight: 72 * scale,
+            // 7: JPEG.
+            kCGImagePropertyTIFFDictionary: [kCGImagePropertyTIFFCompression: 7],
+            kCGImageDestinationLossyCompressionQuality: 0.9,
+        ]
+        CGImageDestinationAddImage(tiff, image, properties as CFDictionary)
+    }
+    guard CGImageDestinationFinalize(tiff) else { throw CocoaError(.fileWriteUnknown) }
 }
 
 /// The app's icon as an iconset, for `iconutil` to make VolumeIcon.icns.
@@ -105,7 +122,7 @@ func writeIconset() throws {
     let icon = NSWorkspace.shared.icon(forFile: app)
     let set = out.appendingPathComponent("VolumeIcon.iconset", isDirectory: true)
     try FileManager.default.createDirectory(at: set, withIntermediateDirectories: true)
-    for points in [16, 32, 128, 256, 512] {
+    for points in [16, 32, 128, 256] {
         for scale in [1, 2] {
             let pixels = points * scale
             let rep = NSBitmapImageRep(
@@ -123,7 +140,6 @@ func writeIconset() throws {
 }
 
 try MainActor.assumeIsolated {
-    try write(scale: 1, to: "background.png")
-    try write(scale: 2, to: "background@2x.png")
+    try writeBackground()
     try writeIconset()
 }
