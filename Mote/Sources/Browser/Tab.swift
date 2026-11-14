@@ -98,8 +98,9 @@ final class Tab: ObservableObject, Identifiable {
     let agent = AgentActivity()
     /// The page is a PDF, read in Mote's reader (PDFReader).
     @Published var pdf: PDFReader?
-    /// The page coming in is a PDF, by its response; and its bytes are being read.
-    var pdfExpected = false
+    /// The address whose response was a PDF, so the reader's ground shows at
+    /// once instead of WebKit's own viewer; and its bytes are being read.
+    @Published var pdfAt: URL?
     var readingPDF = false
     /// The site the page is loading from just now, for the status at its foot.
     /// Its own object: it changes many times a second while a page loads, and
@@ -323,8 +324,6 @@ final class Tab: ObservableObject, Identifiable {
     /// Copies what changed on the web view into the tab.
     private func syncWithWeb() {
         guard let web = built else { return }
-        // A page done loading may be a PDF for Mote's reader, or no longer one.
-        if !web.isLoading { readPDFIfShown() }
         let capture = Capture(camera: web.cameraCaptureState, microphone: web.microphoneCaptureState)
         if self.capture != capture { self.capture = capture }
         if title != web.title ?? "" { title = web.title ?? "" }
@@ -342,6 +341,10 @@ final class Tab: ObservableObject, Identifiable {
         }
         if canGoBack != web.canGoBack { canGoBack = web.canGoBack }
         if canGoForward != web.canGoForward { canGoForward = web.canGoForward }
+        // Gone from the PDF (Back, a link): its reader goes at once. Once the
+        // address is the page's, one done loading may be a PDF for the reader.
+        if let pdf, web.url != pdf.url { self.pdf = nil }
+        if !web.isLoading { readPDFIfShown() }
     }
 
     private func takeCachedIcon() {

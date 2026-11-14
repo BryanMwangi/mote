@@ -202,8 +202,8 @@ extension Tab {
     /// Once a page has loaded: a PDF gets Mote's reader, made from what
     /// WebKit already has (a file, or the PDF WebKit shows); anything else lets it go.
     func readPDFIfShown() {
-        guard let web = built, !web.isLoading, let url = address else { return }
-        let shows = pdfExpected || web.unpublishedFlag("_isDisplayingPDF") == true || (url.isFileURL && url.pathExtension.lowercased() == "pdf")
+        guard let web = built, !web.isLoading, let url = web.url else { return }
+        let shows = pdfAt == url || web.unpublishedFlag("_isDisplayingPDF") == true || (url.isFileURL && url.pathExtension.lowercased() == "pdf")
         guard shows else {
             if pdf != nil { pdf = nil }
             return
@@ -212,8 +212,14 @@ extension Tab {
         readingPDF = true
         Task { [weak self] in
             defer { self?.readingPDF = false }
-            guard let data = await self?.pdfData(of: url, in: web), let document = PDFDocument(data: data), self?.address == url else { return }
-            self?.pdf = PDFReader(document: document, url: url)
+            let document = await self?.pdfData(of: url, in: web).flatMap(PDFDocument.init(data:))
+            guard let self, web.url == url else { return }
+            if let document {
+                pdf = PDFReader(document: document, url: url)
+            } else if pdfAt == url {
+                // Unreadable: WebKit's own viewer shows it instead.
+                pdfAt = nil
+            }
         }
     }
 
