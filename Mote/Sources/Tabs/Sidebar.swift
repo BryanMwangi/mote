@@ -442,6 +442,18 @@ private struct SpacePage: View {
                 }
             }
             .overlay { closing(lines.map { line in if case .line(.tab(let id, _)) = line { kept.first { $0.id == id } } else { nil } }) }
+            // The pinned tabs in no folder come last: where a tab dragged out
+            // of its folder lands still pinned, and where it would go.
+            .overlay(alignment: .topLeading) {
+                if live && showing {
+                    let step = Self.row + Self.gap
+                    let head = CGFloat(lines.count - unfiled.count) * step
+                    ListSpot { [weak browser] in browser?.keptSpot = $0 }.frame(height: max(0, CGFloat(unfiled.count) * step - Self.gap)).offset(y: head)
+                    if case .kept(let place) = browser.folderExit {
+                        DropLine().offset(y: head + CGFloat(min(place, unfiled.count)) * step - Self.gap / 2 - 1)
+                    }
+                }
+            }
             .coordinateSpace(name: "kept")
             Self.rule
         }
@@ -490,7 +502,12 @@ private struct SpacePage: View {
             }
             .overlay { closing(loose.map { $0 }) }
             // Where a tab dragged out of a folder would land.
-            .background { if live { LooseSpot(browser: browser) } }
+            .background { if live && showing { ListSpot { [weak browser] in browser?.looseSpot = $0 } } }
+            .overlay(alignment: .topLeading) {
+                if live && showing, case .loose(let place) = browser.folderExit {
+                    DropLine().offset(y: CGFloat(min(place, loose.count)) * (Self.row + Self.gap) - Self.gap / 2 - 1)
+                }
+            }
             // Drags are measured in the list's space (see Reorderable).
             .coordinateSpace(name: "rows")
             Quiet(icon: "plus", title: "New tab", height: Self.row) { browser.newTab() }.padding(.top, Self.gap)
@@ -860,6 +877,9 @@ private struct FolderRow: View {
     let live: Bool
     /// A dragged tab is over it, and would drop in.
     let dropping: Bool
+    /// Only the sidebar on screen says where its rows are: the docked and
+    /// the sliding one are both built.
+    @Environment(\.sidebarShowing) private var showing
 
     @State private var hovering = false
     /// Its tabs listed beside it, and the pointer on that list.
@@ -896,7 +916,7 @@ private struct FolderRow: View {
         }
         .animation(Motion.quick, value: dropping)
         // Where it is, for a tab dragged onto it; only in the space showing.
-        .background { if live && folder.live == nil { FolderSpot(browser: browser, id: folder.id) } }
+        .background { if live && showing && folder.live == nil { FolderSpot(browser: browser, id: folder.id) } }
         .contentShape(Rectangle())
         .onTapGesture { if live { withAnimation(Motion.settle) { browser.toggleFolder(folder.id) } } }
         // Dragged onto another folder, it goes before it, beside it.
@@ -1018,14 +1038,41 @@ extension EnvironmentValues {
     }
 }
 
-/// Marks the open tabs' list for a tab dragged out of a folder (Browser.loosePlace).
-private struct LooseSpot: FillsRoom {
-    let browser: Browser
+/// Where a dragged tab would go in a list: a line between rows.
+private struct DropLine: View {
+    var body: some View {
+        Capsule().fill(Color.accentColor).frame(height: 2).padding(.horizontal, 6).allowsHitTesting(false)
+    }
+}
 
-    func makeNSView(context: Context) -> NSView { Spot() }
-    func updateNSView(_ view: NSView, context: Context) { browser.looseSpot = WeakView(view) }
+/// Marks a list in the sidebar for a tab dragged out of a folder: the open
+/// tabs (Browser.loosePlace) or the pinned ones in no folder (keptPlace).
+/// It says where it is as it joins a window, as well as when redrawn: a list
+/// rebuilt (its tabs came to overflow) may not be redrawn again before a drag.
+private struct ListSpot: FillsRoom {
+    let mark: (WeakView) -> Void
+
+    func makeNSView(context: Context) -> NSView { Spot(mark: mark) }
+    func updateNSView(_ view: NSView, context: Context) {
+        (view as? Spot)?.mark = mark
+        if view.window != nil { mark(WeakView(view)) }
+    }
 
     private final class Spot: NSView {
+        var mark: (WeakView) -> Void
+
+        init(mark: @escaping (WeakView) -> Void) {
+            self.mark = mark
+            super.init(frame: .zero)
+        }
+
+        @available(*, unavailable)
+        required init?(coder: NSCoder) { fatalError() }
+
+        override func viewDidMoveToWindow() {
+            if window != nil { mark(WeakView(self)) }
+        }
+
         override func hitTest(_ point: NSPoint) -> NSView? { nil }
     }
 }

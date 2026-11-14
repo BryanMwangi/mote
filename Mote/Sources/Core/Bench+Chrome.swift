@@ -254,7 +254,13 @@ extension Bench {
             // drag:TAB:NAME, a drag that ends over the folder's row, as a pointer would.
             case ("drag", let spec?):
                 let bits = spec.split(separator: ":", maxSplits: 1).map(String.init)
-                if let found = bits.first.flatMap(tab), let folder = bits.last.flatMap(named),
+                // drag:TAB:pinned or drag:TAB:open, onto the top of those lists.
+                let list = ["pinned": browser.keptSpot, "open": browser.looseSpot][bits.last ?? ""]
+                if let found = bits.first.flatMap(tab), let list, let spot = list?.view, let window = spot.window {
+                    let frame = window.convertToScreen(spot.convert(spot.bounds, to: nil))
+                    ScriptedDrag.shared.pointer = NSPoint(x: frame.midX, y: frame.maxY - 4)
+                    ScriptedDrag.shared.play(found.id, by: CGSize(width: 0, height: 20), over: 0.3) { ScriptedDrag.shared.pointer = nil }
+                } else if let found = bits.first.flatMap(tab), let folder = bits.last.flatMap(named),
                     let spot = browser.folderSpots[folder.id]?.view, let window = spot.window
                 {
                     let frame = window.convertToScreen(spot.convert(spot.bounds, to: nil))

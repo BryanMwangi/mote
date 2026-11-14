@@ -25,6 +25,13 @@ final class FolderStore: ObservableObject {
     }
 }
 
+/// Where a tab dragged out of its folder would land: at a place among the
+/// pinned tabs in no folder, or among the open tabs.
+enum FolderExit: Equatable {
+    case kept(Int)
+    case loose(Int)
+}
+
 /// Folders of pinned tabs made from the plus menu or a tab's
 /// menu, collapsed with a click, renamed, unpacked or deleted from their own.
 extension Browser {
@@ -64,14 +71,54 @@ extension Browser {
         move(tab, to: pinnedCount + min(max(place ?? 0, 0), loose.count))
     }
 
+    /// Out of its folder, still pinned: at `place` among the pinned tabs in
+    /// no folder (a drop there).
+    func unfile(_ tab: Tab, toKeptAt place: Int) {
+        tab.folder = nil
+        let rest = tabs.filter { $0.id != tab.id }
+        let unfiled = rest.filter { $0.section == .pinned && $0.folder == nil }
+        let index =
+            place < unfiled.count
+            ? rest.firstIndex { $0.id == unfiled[max(place, 0)].id }
+            : rest.lastIndex { $0.section == .pinned }.map { $0 + 1 }
+        move(tab, to: index ?? essentialCount)
+        writeSession(now: true)
+    }
+
     /// Where among the open tabs a tab let go at `pointer` (on screen) goes,
     /// if it's over their list in the sidebar.
     func loosePlace(at pointer: NSPoint) -> Int? {
-        guard let view = looseSpot?.view, let window = view.window, window === self.window else { return nil }
+        place(at: pointer, in: looseSpot, reach: Metrics.row)
+    }
+
+    /// Where among the pinned tabs in no folder a tab let go at `pointer` goes,
+    /// if it's over them (or the line under them, with none).
+    func keptPlace(at pointer: NSPoint) -> Int? {
+        place(at: pointer, in: keptSpot, reach: Metrics.row / 2)
+    }
+
+    /// The row a pointer is on, in a list marked by `spot`; `reach` past its ends still counts.
+    private func place(at pointer: NSPoint, in spot: WeakView?, reach: CGFloat) -> Int? {
+        guard let view = spot?.view, let window = view.window, window === self.window else { return nil }
         let frame = window.convertToScreen(view.convert(view.bounds, to: nil))
-        guard frame.insetBy(dx: 0, dy: -Metrics.row).contains(pointer) else { return nil }
+        guard frame.insetBy(dx: 0, dy: -reach).contains(pointer) else { return nil }
         // Rows go down from the top; the screen's y goes up.
-        return Int((frame.maxY - pointer.y) / (Metrics.row + 2))
+        return max(0, Int((frame.maxY - pointer.y) / (Metrics.row + 2)))
+    }
+
+    /// Where a tab dragged out of its folder would go, noted for the list to
+    /// show: into another folder (`folderHover`), among the pinned tabs, or
+    /// among the open ones.
+    func hoverOutOfFolder(at pointer: NSPoint?, dragging tab: Tab) {
+        var next: FolderExit?
+        if let pointer, tab.folder != nil, folderHover == nil {
+            if let place = keptPlace(at: pointer) {
+                next = .kept(place)
+            } else if let place = loosePlace(at: pointer) {
+                next = .loose(place)
+            }
+        }
+        if folderExit != next { folderExit = next }
     }
 
     /// The folder a tab dragged to `pointer` (on screen) would drop into,

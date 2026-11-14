@@ -58,7 +58,14 @@ struct Reorderable: ViewModifier {
             )
             .onReceive(ScriptedDrag.shared.$travel) { travel in
                 guard ScriptedDrag.shared.tab == id else { return }
-                if let travel { changed(travel) } else { ended() }
+                // A drag starts from nothing: a row that appears mid-drag (the
+                // tab just moved lists) is handed the travel so far, not its own.
+                if let travel {
+                    if drag == nil, travel != .zero { return }
+                    changed(travel)
+                } else {
+                    ended()
+                }
             }
     }
 
@@ -92,8 +99,16 @@ struct Reorderable: ViewModifier {
         }
         // Over a folder's row, it would go in; the list makes room as ever.
         if let filing {
-            filing.browser.hoverFolder(
-                at: ScriptedDrag.shared.tab == nil ? NSEvent.mouseLocation : ScriptedDrag.shared.pointer, dragging: filing.tab)
+            let pointer = ScriptedDrag.shared.tab == nil ? NSEvent.mouseLocation : ScriptedDrag.shared.pointer
+            filing.browser.hoverFolder(at: pointer, dragging: filing.tab)
+            filing.browser.hoverOutOfFolder(at: pointer, dragging: filing.tab)
+            // A folder's tab over another list: its row stays in the folder,
+            // and a card of it follows the pointer there.
+            if filing.tab.folder != nil, filing.browser.folderHover != nil || filing.browser.folderExit != nil {
+                if let pointer { TabGhost.show(filing.tab, at: pointer) }
+                if drag == nil { drag = next }
+                return
+            }
         }
         // Away from the list the row can't follow: it holds still, and a card
         // of it does, so where it's going shows.
@@ -133,17 +148,25 @@ struct Reorderable: ViewModifier {
             Haptic.tick()
             return away.browser.move(away.tab, toSpace: space)
         }
+        let exit = filing?.browser.folderExit
+        filing?.browser.folderExit = nil
         guard var landing = drag, landing.id == id, !landing.landed else { return }
         defer { away?.browser.endDrag() }
         if let filing, filing.browser.folderHover != nil {
             withAnimation(Motion.settle) { drag = nil }
             return filing.browser.dropInFolder(filing.tab)
         }
-        // A tab of a folder let go over the open tabs leaves the folder for there.
-        if let filing, filing.tab.folder != nil, let place = filing.browser.loosePlace(at: NSEvent.mouseLocation) {
+        // A tab of a folder let go over the pinned tabs leaves the folder,
+        // still pinned; over the open tabs, it leaves it for there.
+        if let filing, filing.tab.folder != nil, let exit {
             withAnimation(Motion.settle) { drag = nil }
             Haptic.tick()
-            return withAnimation(Motion.settle) { filing.browser.unfile(filing.tab, at: place) }
+            return withAnimation(Motion.settle) {
+                switch exit {
+                case .kept(let place): filing.browser.unfile(filing.tab, toKeptAt: place)
+                case .loose(let place): filing.browser.unfile(filing.tab, at: place)
+                }
+            }
         }
         if let away, case let zone = zone, zone != .list {
             withAnimation(Motion.settle) { drag = nil }

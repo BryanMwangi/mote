@@ -114,6 +114,10 @@ final class Browser: NSObject, ObservableObject {
     var folderSpots: [UUID: WeakView] = [:]
     /// The open tabs' list in the sidebar, for a tab dragged out of a folder.
     var looseSpot: WeakView?
+    /// The pinned tabs in no folder, likewise.
+    var keptSpot: WeakView?
+    /// Where a tab dragged out of its folder would land, for a line to show it.
+    @Published var folderExit: FolderExit?
     /// The tabs the media strips show, the one heard last first (see Browser+Media.swift).
     @Published var players: [Tab] = []
     var playing: Tab? { players.first }
