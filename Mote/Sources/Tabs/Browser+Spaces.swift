@@ -56,6 +56,7 @@ extension Browser {
     private func enter(_ id: UUID) {
         guard id != spaceID, let to = spaces.firstIndex(where: { $0.id == id }) else { return }
         if !picks.ids.isEmpty { picks.ids = [] }
+        let left = active
         let interval = switching.beginInterval("Switch space")
         defer { switching.endInterval("Switch space", interval) }
         // Every change in one transaction, so SwiftUI updates once: a change
@@ -86,7 +87,14 @@ extension Browser {
             editing = active?.isStart ?? true
             field.clear()
             if editing { field.askFocus() }
+            // One chat for all tabs, or a site in the sidebar: it comes along
+            // to the other space, as it does from tab to tab.
+            if let left, let tab = active, !prefs.chatSite.isEmpty || prefs.oneChat {
+                if prefs.chatSite.isEmpty, let chat = left.pageChat { tab.share(chat) }
+                if tab.chatOpen != left.chatOpen { tab.chatOpen = left.chatOpen }
+            }
         }
+        if active?.chatOpen == true { syncPageChat() }
         // After the new space's first frame.
         let name = space.name
         DispatchQueue.main.async { [weak self] in self?.announce(name) }
