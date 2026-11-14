@@ -62,7 +62,7 @@ enum PageScripts {
     /// sites, with Developer mode on or coding agents let in.
     static func wantsDevHooks(_ url: URL?) -> Bool {
         let store = Storage.settings
-        guard store.string(forKey: "ai.mode") == AIMode.developer.rawValue || store.bool(forKey: "ai.agents") else { return false }
+        guard store.string(forKey: "ai.actMode") == AIMode.developer.rawValue || store.bool(forKey: "ai.agents") else { return false }
         return SiteList.contains(store.string(forKey: "ai.devSites") ?? "localhost:*, 127.0.0.1:*", url)
     }
 

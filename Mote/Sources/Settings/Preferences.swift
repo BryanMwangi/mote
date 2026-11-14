@@ -275,7 +275,9 @@ final class Preferences: ObservableObject {
         aiReads = store.value("ai.tools.read", or: true)
         aiActs = store.value("ai.tools.act", or: false)
         tabAsks = store.value("ai.tabAsks", or: false)
-        aiMode = store.value("ai.mode", or: .ask)
+        // Its own key: "ai.mode" is the chat's (chat, search, research), and the
+        // two overwrote each other. One saved there before comes along.
+        aiMode = store.value("ai.actMode", or: store.value("ai.mode", or: .ask))
         aiTrusted = store.value("ai.trusted", or: "")
         aiDevSites = store.value("ai.devSites", or: "localhost:*, 127.0.0.1:*")
         aiSignIn = store.value("ai.signIn", or: "")
@@ -375,7 +377,7 @@ final class Preferences: ObservableObject {
         keep($aiReads, "ai.tools.read")
         keep($aiActs, "ai.tools.act")
         keep($tabAsks, "ai.tabAsks")
-        keep($aiMode, "ai.mode")
+        keep($aiMode, "ai.actMode")
         keep($aiTrusted, "ai.trusted")
         keep($aiDevSites, "ai.devSites")
         keep($aiSignIn, "ai.signIn")
