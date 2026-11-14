@@ -36,7 +36,7 @@ struct ChatsPage: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     if periods.isEmpty {
-                        Text(archive.entries.isEmpty ? "No chats yet. Ask from a new tab with ⌘J." : "No chat matches.")
+                        Text(archive.entries.isEmpty ? "No chats yet. Ask in the chat sidebar (⇧⌘A), or from a new tab with ⌘J." : "No chat matches.")
                             .font(.system(size: 13))
                             .foregroundStyle(Palette.muted)
                             .padding(.horizontal, 10)

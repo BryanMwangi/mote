@@ -324,6 +324,12 @@ extension Browser {
     /// tab, or a new one.
     func open(chat id: UUID) {
         if let tab = tabs.first(where: { $0.chat?.id == id && $0.isBlank }) { return select(tab) }
+        // A chat from the chat sidebar goes back there, open.
+        if let tab = tabs.first(where: { $0.pageChat?.id == id }) { return showSidebarChat(on: tab) }
+        if Assistant.shared.chats.load(id)?.sidebar == true {
+            guard let chat = Assistant.shared.reopen(id) else { return }
+            return reopenSidebarChat(chat)
+        }
         guard let chat = Assistant.shared.reopen(id) else { return }
         // From the list of chats, the chat takes the list's place.
         if let tab = active, tab.isBlank, tab.chat == nil, !tab.shy {
@@ -337,6 +343,31 @@ extension Browser {
             show(tab, adopting: true)
         }
         writeSession()
+    }
+
+    /// A sidebar chat reopened: with one chat for all tabs, the open chat;
+    /// else on the tab it was about (by its pinned id, an open tab at its
+    /// address, or that address opened again), or this tab if it had none.
+    private func reopenSidebarChat(_ chat: Conversation) {
+        let shared = prefs.oneChat || !prefs.chatSite.isEmpty
+        var target = active
+        if !shared {
+            if let held = chat.originHeld, let tab = tabs.first(where: { $0.heldID == held }) {
+                target = tab
+            } else if let url = chat.origin, let tab = tabs.first(where: { ($0.pending ?? $0.address) == url }) {
+                target = tab
+            } else if let url = chat.origin, ["http", "https"].contains(url.scheme ?? "") {
+                target = open(url, foreground: false)
+            }
+        }
+        guard let target else { return }
+        target.share(chat)
+        showSidebarChat(on: target)
+    }
+
+    private func showSidebarChat(on tab: Tab) {
+        if active !== tab { select(tab) }
+        if !tab.chatOpen { slidingFold { tab.chatOpen = true } }
     }
 
     /// A clicked suggestion opens directly, without moving the keyboard pick,

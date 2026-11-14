@@ -326,12 +326,17 @@ final class Assistant {
     }
 
     /// A kept chat, ready to carry on and still being kept.
+    /// The one already open, if it is: tabs sharing a chat share one.
     func reopen(_ id: UUID) -> Conversation? {
+        if let open = reopened[id]?.chat { return open }
         guard let saved = chats.load(id) else { return nil }
         let conversation = Conversation(saved: saved)
         keep(conversation)
+        reopened[id] = WeakChat(conversation)
         return conversation
     }
+
+    private var reopened: [UUID: WeakChat] = [:]
 
     /// Sends `text` in `conversation` to the chosen provider.
     func ask(_ text: String, in conversation: Conversation) {

@@ -85,6 +85,11 @@ public final class Conversation: Identifiable {
     /// first `summarised` messages, which stay on screen.
     public private(set) var summary: String?
     public private(set) var summarised = 0
+    /// A chat in the chat sidebar, rather than a tab of its own; and the tab
+    /// it was about, to go back to when it's reopened.
+    @ObservationIgnored public var sidebar = false
+    @ObservationIgnored public var origin: URL?
+    @ObservationIgnored public var originHeld: UUID?
     /// A turn that heard this many tokens or more summarises the chat before the next.
     public static let compactAt = 100_000
     /// The last reply was cut short, and how: told to the model with the next
@@ -131,6 +136,9 @@ public final class Conversation: Identifiable {
         messages = saved.messages
         summary = saved.summary
         summarised = min(saved.summarised ?? 0, saved.messages.count)
+        sidebar = saved.sidebar ?? false
+        origin = saved.origin.flatMap(URL.init(string:))
+        originHeld = saved.originHeld.flatMap(UUID.init(uuidString:))
         title = SavedChat.title(of: saved.messages)
         sessions = saved.sessions.mapValues { ($0.id, $0.heard, $0.search, nil) }
     }
@@ -149,6 +157,9 @@ public final class Conversation: Identifiable {
             created: created, updated: updated)
         saved.summary = summary
         saved.summarised = summary == nil ? nil : summarised
+        saved.sidebar = sidebar ? true : nil
+        saved.origin = origin?.absoluteString
+        saved.originHeld = originHeld?.uuidString
         return saved
     }
 

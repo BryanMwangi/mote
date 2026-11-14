@@ -463,6 +463,12 @@ final class Tab: ObservableObject, Identifiable {
     func ensurePageChat() -> Conversation {
         if let pageChat { return pageChat }
         let chat = Conversation()
+        // A sidebar chat, kept with the list of chats from its first question
+        // on, and the tab it's about, to come back to.
+        chat.sidebar = true
+        chat.origin = pending ?? address
+        chat.originHeld = held ? heldID : nil
+        if !shy { Assistant.shared.keep(chat) }
         pageChat = chat
         return chat
     }

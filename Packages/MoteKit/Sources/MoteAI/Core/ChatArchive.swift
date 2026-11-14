@@ -26,6 +26,11 @@ public struct SavedChat: Codable, Equatable, Sendable {
     /// `summarised` messages; nil in older files and chats never compacted.
     public var summary: String?
     public var summarised: Int?
+    /// A chat from the chat sidebar, and the tab it was about: its address,
+    /// and an essential's or pinned tab's id. Nil in older files and ⌘J chats.
+    public var sidebar: Bool?
+    public var origin: String?
+    public var originHeld: String?
 
     public init(id: UUID, messages: [Message], sessions: [String: Session] = [:], created: Date, updated: Date) {
         self.id = id

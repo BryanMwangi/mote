@@ -140,6 +140,22 @@ struct ConversationTests {
         #expect(service.requests.last?.instructions?.contains("stopped your last reply") == false)
     }
 
+    @Test("A sidebar chat keeps the tab it was about")
+    func origin() {
+        let conversation = Conversation()
+        conversation.sidebar = true
+        conversation.origin = URL(string: "https://example.com/a")
+        let held = UUID()
+        conversation.originHeld = held
+        let back = Conversation(saved: conversation.saved)
+        #expect(back.sidebar)
+        #expect(back.origin?.absoluteString == "https://example.com/a")
+        #expect(back.originHeld == held)
+        // A chat kept before these were has none.
+        let old = Conversation(saved: SavedChat(id: UUID(), messages: [], created: Date(), updated: Date()))
+        #expect(!old.sidebar && old.origin == nil)
+    }
+
     @Test("The title is the first question, on one line and not too long")
     func title() {
         let conversation = Conversation()
