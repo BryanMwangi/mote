@@ -1,4 +1,5 @@
 import AppKit
+import WebKit
 import MoteAI
 import MoteCore
 import SwiftUI
@@ -50,7 +51,7 @@ final class KeyRouter {
             shift: flags.contains(.shift),
             option: flags.contains(.option), control: flags.contains(.control))
 
-        if press.code == KeyMap.escape { return escape(in: browser) }
+        if press.code == KeyMap.escape { return escape(in: browser, inPage: Self.inPage(event.window?.firstResponder)) }
         // ⌘J in a new tab's composer or the floating search: Return asks the
         // assistant, or searches again.
         if KeyMap.switchesAsking(press, inComposer: browser.composing) {
@@ -109,8 +110,20 @@ final class KeyRouter {
         return true
     }
 
-    /// Escape closes whatever is on top, one thing at a time.
-    private func escape(in browser: Browser) -> Bool {
+    /// Whether the keyboard is in a web page: its keys are the page's.
+    private static func inPage(_ responder: NSResponder?) -> Bool {
+        var view = responder as? NSView
+        while let here = view {
+            if here is WKWebView { return true }
+            view = here.superview
+        }
+        return false
+    }
+
+    /// Escape closes whatever is on top, one thing at a time. With the
+    /// keyboard in a page, the chat sidebar is left alone: the page's Escape
+    /// is its own (a menu, a video, a dialog).
+    private func escape(in browser: Browser, inPage: Bool) -> Bool {
         let steps: [(Bool, () -> Void)] = [
             (browser.welcoming, browser.finishWelcome),
             (browser.editingTab != nil, browser.cancelTabEdit),
@@ -137,8 +150,8 @@ final class KeyRouter {
             // The chat about the page: Escape stops its answer first, then the
             // panel itself. It sits above the page but under the sheets and
             // overlays earlier in the list, so those close first.
-            (browser.active?.pageChat?.busy == true, { browser.active?.pageChat?.stop() }),
-            (browser.chatting, browser.togglePageChat),
+            (!inPage && browser.active?.pageChat?.busy == true, { browser.active?.pageChat?.stop() }),
+            (!inPage && browser.chatting, browser.togglePageChat),
         ]
         guard let step = steps.first(where: \.0) else { return false }
         step.1()
