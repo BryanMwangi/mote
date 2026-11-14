@@ -18,13 +18,22 @@ final class PDFReader: ObservableObject {
     @Published var found: [PDFSelection] = []
     @Published var foundAt = 0
     @Published var tool: Tool = .select {
-        didSet { inkLayer?.tool = tool }
+        didSet {
+            inkLayer?.tool = tool
+            if tool != .sign { ink.placing = nil }
+        }
     }
     /// The pen and signatures.
     let ink = PDFInk()
     weak var inkLayer: InkLayer?
-    /// The ink drawn and stamps placed since opening, for Save to say so.
+    /// Marks, notes, strokes and signatures, moves and deletions: ⌘Z and ⇧⌘Z.
+    let undo = UndoManager()
+    /// The note, stroke or signature picked, for Delete.
+    private(set) var picked: (annotation: PDFAnnotation, page: PDFPage)?
+    /// Something was marked, drawn or signed since opening, for Save to say so.
     @Published var edited = false
+    /// Asks the find field for the keyboard (⌘F).
+    @Published var findAsked = 0
     weak var view: PDFView?
 
     enum Sidebar: String { case pages, outline }
@@ -113,6 +122,51 @@ final class PDFReader: ObservableObject {
         view?.scrollSelectionToVisible(nil)
     }
 
+    // MARK: Changes, each undoable
+
+    func add(_ annotation: PDFAnnotation, to page: PDFPage) {
+        page.addAnnotation(annotation)
+        edited = true
+        undo.registerUndo(withTarget: self) { $0.remove(annotation, from: page) }
+    }
+
+    func remove(_ annotation: PDFAnnotation, from page: PDFPage) {
+        page.removeAnnotation(annotation)
+        if picked?.annotation === annotation { picked = nil }
+        edited = true
+        undo.registerUndo(withTarget: self) { $0.add(annotation, to: page) }
+        inkLayer?.refreshOutline()
+    }
+
+    /// Moved or resized, from `bounds`.
+    func moved(_ annotation: PDFAnnotation, on page: PDFPage, from bounds: CGRect) {
+        let now = annotation.bounds
+        edited = true
+        undo.registerUndo(withTarget: self) { reader in
+            annotation.bounds = bounds
+            reader.view?.annotationsChanged(on: page)
+            reader.moved(annotation, on: page, from: now)
+            reader.inkLayer?.refreshOutline()
+        }
+    }
+
+    func setText(_ text: String, of note: PDFAnnotation) {
+        let was = note.contents ?? ""
+        guard text != was else { return }
+        note.contents = text
+        edited = true
+        undo.registerUndo(withTarget: self) { $0.setText(was, of: note) }
+    }
+
+    func pick(_ annotation: PDFAnnotation?, on page: PDFPage?) {
+        picked = annotation.flatMap { annotation in page.map { (annotation, $0) } }
+    }
+
+    func deletePicked() {
+        guard let picked else { return }
+        remove(picked.annotation, from: picked.page)
+    }
+
     // MARK: Marking up
 
     /// Highlights, underlines or strikes through the selected text, line by line.
@@ -122,11 +176,10 @@ final class PDFReader: ObservableObject {
             for page in line.pages {
                 let mark = PDFAnnotation(bounds: line.bounds(for: page), forType: kind, withProperties: nil)
                 mark.color = kind == .highlight ? NSColor.systemYellow.withAlphaComponent(0.5) : NSColor.systemRed
-                page.addAnnotation(mark)
+                add(mark, to: page)
             }
         }
         view?.clearSelection()
-        edited = true
     }
 
     /// A note at the selection, or the middle of the page.
@@ -134,16 +187,26 @@ final class PDFReader: ObservableObject {
         guard let view, let page = view.currentSelection?.pages.first ?? view.currentPage else { return }
         let at = view.currentSelection?.bounds(for: page).origin ?? CGPoint(x: page.bounds(for: .cropBox).midX, y: page.bounds(for: .cropBox).midY)
         let note = PDFAnnotation(bounds: CGRect(x: at.x, y: at.y, width: 20, height: 20), forType: .text, withProperties: nil)
-        note.contents = "Note"
+        note.contents = ""
         note.color = .systemYellow
-        page.addAnnotation(note)
-        edited = true
+        add(note, to: page)
+        pick(note, on: page)
+        inkLayer?.refreshOutline()
+        // Straight to its words.
+        inkLayer?.editNote(note, on: page)
     }
 
-    func rotate() {
-        guard let page = view?.currentPage else { return }
-        page.rotation = (page.rotation + 90) % 360
+    func rotate(_ page: PDFPage? = nil, by turn: Int = 90) {
+        guard let page = page ?? view?.currentPage else { return }
+        page.rotation = (page.rotation + turn + 360) % 360
         edited = true
+        undo.registerUndo(withTarget: self) { $0.rotate(page, by: -turn) }
+    }
+
+    func zoom(by factor: CGFloat) {
+        guard let view else { return }
+        view.autoScales = false
+        view.scaleFactor = min(max(view.scaleFactor * factor, 0.1), 8)
     }
 
     func layout(_ mode: PDFDisplayMode) {
@@ -250,6 +313,7 @@ struct PDFReaderView: View {
     @State private var wholeWords = false
     @State private var pageField = "1"
     @State private var showsProperties = false
+    @FocusState private var finding: Bool
 
     var body: some View {
         VStack(spacing: 0) {
@@ -296,8 +360,8 @@ struct PDFReaderView: View {
                 .onSubmit { reader.go(to: (Int(pageField) ?? 1) - 1) }
             Text("of \(reader.pages)").foregroundStyle(Palette.muted)
             divider
-            Door(icon: "minus", help: "Zoom out") { reader.view.map { $0.autoScales = false; $0.scaleFactor = max($0.scaleFactor / 1.2, 0.1) } }
-            Door(icon: "plus", help: "Zoom in") { reader.view.map { $0.autoScales = false; $0.scaleFactor = min($0.scaleFactor * 1.2, 8) } }
+            Door(icon: "minus", help: "Zoom out   ⌘-") { reader.zoom(by: 1 / 1.2) }
+            Door(icon: "plus", help: "Zoom in   ⌘=") { reader.zoom(by: 1.2) }
             Menu("Zoom") {
                 ForEach(PDFReader.Zoom.all, id: \.self) { zoom in Button(zoom.title) { reader.zoom(zoom) } }
             }
@@ -312,8 +376,8 @@ struct PDFReaderView: View {
             Door(icon: "square.and.arrow.down", help: reader.edited ? "Save with changes" : "Save") {
                 reader.save(in: reader.view?.window, to: Browser.front?.downloadsFolder)
             }
-            Door(icon: "pencil.tip", on: reader.tool == .draw, help: "Draw") { reader.tool = reader.tool == .draw ? .select : .draw }
-            Door(icon: "signature", on: reader.tool == .sign, help: "Sign") { reader.tool = reader.tool == .sign ? .select : .sign }
+            Door(icon: "pencil.tip", on: reader.tool == .draw, help: "Draw   D") { reader.tool = reader.tool == .draw ? .select : .draw }
+            Door(icon: "signature", on: reader.tool == .sign, help: "Sign   S") { reader.tool = reader.tool == .sign ? .select : .sign }
             divider
             Menu {
                 Button("Rotate Page") { reader.rotate() }
@@ -346,6 +410,8 @@ struct PDFReaderView: View {
             TextField("Find in document", text: $findText)
                 .textFieldStyle(.roundedBorder)
                 .frame(width: 170)
+                .focused($finding)
+                .onChange(of: reader.findAsked) { finding = true }
                 .onSubmit { reader.found.isEmpty ? reader.find(findText, matchCase: matchCase, wholeWords: wholeWords) : reader.show(reader.foundAt + 1) }
                 .onChange(of: findText) { _, text in reader.find(text, matchCase: matchCase, wholeWords: wholeWords) }
             if !reader.found.isEmpty {
@@ -389,7 +455,8 @@ private struct PDFPages: NSViewRepresentable {
     let reader: PDFReader
 
     func makeNSView(context: Context) -> NSView {
-        let view = PDFView()
+        let view = ReaderPDFView()
+        view.reader = reader
         view.document = reader.document
         view.autoScales = true
         view.displayMode = .singlePageContinuous
@@ -399,9 +466,9 @@ private struct PDFPages: NSViewRepresentable {
         context.coordinator.watch(view, reader)
         // The pen and signatures, over the pages.
         let ink = InkLayer()
-        ink.pdfView = view
-        ink.ink = reader.ink
+        ink.reader = reader
         ink.tool = reader.tool
+        ink.watch(view)
         reader.inkLayer = ink
         let holder = NSView()
         for part in [view, ink as NSView] {
@@ -412,6 +479,8 @@ private struct PDFPages: NSViewRepresentable {
                 part.topAnchor.constraint(equalTo: holder.topAnchor), part.bottomAnchor.constraint(equalTo: holder.bottomAnchor),
             ])
         }
+        // The keys and ⌘Z go to the pages from the start.
+        DispatchQueue.main.async { view.window?.makeFirstResponder(view) }
         return holder
     }
 
@@ -429,6 +498,31 @@ private struct PDFPages: NSViewRepresentable {
                     let index = reader.document.index(for: page)
                     if reader.page != index { reader.page = index }
                 }
+            }
+        }
+    }
+}
+
+/// PDFKit's view, with the reader's undo and keys: Delete removes the picked
+/// note, stroke or signature; Escape goes back to selecting; D draws, S signs.
+private final class ReaderPDFView: PDFView {
+    weak var reader: PDFReader?
+
+    override var undoManager: UndoManager? { reader?.undo ?? super.undoManager }
+
+    override func keyDown(with event: NSEvent) {
+        guard let reader, event.modifierFlags.intersection([.command, .control, .option]).isEmpty else { return super.keyDown(with: event) }
+        switch event.keyCode {
+        case 51 where reader.picked != nil, 117 where reader.picked != nil:
+            reader.deletePicked()
+        case 53:
+            if reader.tool != .select { reader.tool = .select } else { reader.pick(nil, on: nil) }
+            reader.inkLayer?.refreshOutline()
+        default:
+            switch event.charactersIgnoringModifiers?.lowercased() {
+            case "d": reader.tool = reader.tool == .draw ? .select : .draw
+            case "s": reader.tool = reader.tool == .sign ? .select : .sign
+            default: super.keyDown(with: event)
             }
         }
     }

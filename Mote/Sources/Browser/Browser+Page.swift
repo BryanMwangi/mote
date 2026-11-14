@@ -8,8 +8,14 @@ import WebKit
 // Actions on the page showing and on the window's data: zoom, reader,
 // copying, printing, bookmarks, imports and clearing.
 extension Browser {
-    func zoom(by factor: CGFloat) { active?.magnify(by: factor) }
-    func resetZoom() { active?.resetZoom() }
+    /// A PDF zooms in Mote's reader, the page in WebKit.
+    func zoom(by factor: CGFloat) {
+        if let pdf = active?.pdf { pdf.zoom(by: factor) } else { active?.magnify(by: factor) }
+    }
+
+    func resetZoom() {
+        if let pdf = active?.pdf { pdf.zoom(.automatic) } else { active?.resetZoom() }
+    }
     func reload() { active?.reload() }
     func reloadFromOrigin() { active?.reloadFromOrigin() }
 
@@ -56,6 +62,7 @@ extension Browser {
 
     /// ⌘F. There is nothing to find on a blank tab.
     func openFind() {
+        if let pdf = active?.pdf { return pdf.findAsked += 1 }
         if active?.isBlank == false { finder.show() }
     }
 
@@ -107,6 +114,7 @@ extension Browser {
 
     /// ⌘P: the system print sheet, which also saves PDFs.
     func printPage() {
+        if let pdf = active?.pdf { return pdf.print() }
         guard let tab = active, !tab.isBlank, let window = NSApp.keyWindow else { return }
         let info = NSPrintInfo.shared
         info.horizontalPagination = .fit
