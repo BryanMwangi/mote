@@ -198,6 +198,16 @@ extension Browser: WKNavigationDelegate, WKUIDelegate {
 
     /// Where you are, through a private WebKit delegate call: WebKit asks it
     /// before Core Location, and without it turns every site down.
+    /// Files dragged over a page: its drop zones and editable fields may
+    /// take them, but WebKit doesn't load one in the tab; PageView opens
+    /// those the page doesn't take in new tabs. Links still load where dropped.
+    @objc(_webView:dragDestinationActionMaskForDraggingInfo:)
+    func webView(_ webView: WKWebView, dragDestinationActionMaskFor info: Any) -> UInt {
+        guard let info = info as? NSDraggingInfo, !PageView.files(in: info).isEmpty else { return .max }
+        // Script (1) and editing (2), not loading (4).
+        return 1 | 2
+    }
+
     @objc(_webView:requestGeolocationPermissionForOrigin:initiatedByFrame:decisionHandler:)
     func webView(
         _ webView: WKWebView, requestGeolocationPermissionFor origin: WKSecurityOrigin, initiatedBy frame: WKFrameInfo,

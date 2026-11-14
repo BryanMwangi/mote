@@ -16,6 +16,10 @@ final class PageView: WKWebView {
     var onAsk: ((String) -> Void)?
     /// A swipe's progress, or nil when there is none to show.
     var onPull: ((Pull?) -> Void)?
+    /// Files dropped on the page that it didn't take: they open in tabs.
+    var onFiles: (([URL]) -> Void)?
+    /// The files over the page now go to Mote, not to the page.
+    private var takesFiles = false
     /// Any click or scroll, so a wake snapshot never gets in the way.
     var onTouch: (() -> Void)?
     /// A click, not a scroll.
@@ -100,6 +104,43 @@ final class PageView: WKWebView {
     /// The browser's Touch Bar on pages, as Safari shows it, except while
     /// the page has a video to control or is full screen: then WebKit's own
     /// playback bar (play, time, scrubber, full screen), which is Safari's.
+    // MARK: Files dropped on the page
+
+    /// Files dragged over a page go to its own drop zone if it has one;
+    /// anywhere else they open in new tabs. WebKit is told not to load them
+    /// itself (see Browser's dragDestinationActionMask), so it says when the
+    /// page doesn't want them.
+    static func files(in info: NSDraggingInfo) -> [URL] {
+        info.draggingPasteboard.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL] ?? []
+    }
+
+    private func taking(_ page: NSDragOperation, _ info: NSDraggingInfo) -> NSDragOperation {
+        takesFiles = page.isEmpty && !Self.files(in: info).isEmpty && onFiles != nil
+        return takesFiles ? .copy : page
+    }
+
+    override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
+        taking(super.draggingEntered(sender), sender)
+    }
+
+    override func draggingUpdated(_ sender: NSDraggingInfo) -> NSDragOperation {
+        taking(super.draggingUpdated(sender), sender)
+    }
+
+    override func draggingExited(_ sender: NSDraggingInfo?) {
+        takesFiles = false
+        super.draggingExited(sender)
+    }
+
+    override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
+        guard takesFiles else { return super.performDragOperation(sender) }
+        takesFiles = false
+        // The page's own drag ends without a drop.
+        super.draggingExited(sender)
+        onFiles?(Self.files(in: sender))
+        return true
+    }
+
     override func makeTouchBar() -> NSTouchBar? {
         // This page's own window's: the window in front may be another one
         // for a moment as windows change, and its buttons would act there.

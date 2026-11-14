@@ -259,6 +259,10 @@ final class Tab: ObservableObject, Identifiable {
         web.allowsBackForwardNavigationGestures = false
         Swipe.calm(web)
         web.onPull = { [weak self] in self?.pull = $0 }
+        web.onFiles = { [weak self] files in
+            guard let browser = self?.owner as? Browser else { return }
+            for file in files { _ = browser.open(file, foreground: true) }
+        }
         web.onTouch = { [weak self] in self?.uncover() }
         web.onPress = { [weak self] in if let self { owner?.tabPressed(self) } }
         web.searchName = { [weak self] in self?.owner?.searchEngineName }
@@ -958,6 +962,7 @@ final class Tab: ObservableObject, Identifiable {
         Web.release(controller)
         controller.removeAllUserScripts()
         web.onPull = nil
+        web.onFiles = nil
         web.onTouch = nil
         web.onPress = nil
         web.searchName = nil
