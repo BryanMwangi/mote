@@ -523,11 +523,18 @@ final class PageView: WKWebView {
 
     /// Side buttons, numbered as most mouse drivers do: 3 back, 4 forward.
     override func otherMouseDown(with event: NSEvent) {
+        if !sideButton(event) { super.otherMouseDown(with: event) }
+    }
+
+    /// Back or forward for a side button; false for any other.
+    @discardableResult
+    func sideButton(_ event: NSEvent) -> Bool {
         switch event.buttonNumber {
         case 3 where canGoBack: goBack()
         case 4 where canGoForward: goForward()
-        default: super.otherMouseDown(with: event)
+        default: return false
         }
+        return true
     }
 
     /// Logi Options+ sends its back and forward buttons as swipes, as Safari
@@ -656,6 +663,12 @@ final class PageView: WKWebView {
         onTouch?()
         // The page sees every event; the swipe only watches.
         super.scrollWheel(with: event)
+        watchSwipe(event)
+    }
+
+    /// A two-finger swipe back or forward, watched from a scroll the page,
+    /// or Mote's PDF reader over it, also gets.
+    func watchSwipe(_ event: NSEvent) {
         // Live trackpad gestures only: momentum and mouse wheels have no phases.
         guard event.momentumPhase == [] else { return }
         switch event.phase {

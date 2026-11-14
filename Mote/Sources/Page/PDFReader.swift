@@ -35,6 +35,8 @@ final class PDFReader: ObservableObject {
     /// Asks the find field for the keyboard (⌘F).
     @Published var findAsked = 0
     weak var view: PDFView?
+    /// The tab's page under the reader, which goes back and forward.
+    weak var web: PageView?
 
     enum Sidebar: String { case pages, outline }
     enum Tool: Equatable { case select, draw, sign }
@@ -278,7 +280,9 @@ extension Tab {
             let document = await self?.pdfData(of: url, in: web).flatMap(PDFDocument.init(data:))
             guard let self, web.url == url else { return }
             if let document {
-                pdf = PDFReader(document: document, url: url)
+                let reader = PDFReader(document: document, url: url)
+                reader.web = built
+                pdf = reader
             } else if pdfAt == url {
                 // Unreadable: WebKit's own viewer shows it instead.
                 pdfAt = nil
@@ -509,6 +513,51 @@ private final class ReaderPDFView: PDFView {
     weak var reader: PDFReader?
 
     override var undoManager: UndoManager? { reader?.undo ?? super.undoManager }
+
+    /// What the reader takes before anything else does:
+    /// - ⌘Z and ⇧⌘Z, its own undo and redo (Mote's Edit menu has no Undo,
+    ///   so they'd go to the page under it), unless a field is being typed in;
+    /// - a mouse's side buttons, a mouse driver's swipe, and a two-finger
+    ///   swipe (while the pages fit across, so none of it scrolls the PDF
+    ///   sideways): back and forward are the page's, and the reader covers it.
+    private var watching: Any?
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        if let watching { NSEvent.removeMonitor(watching) }
+        watching = nil
+        guard window != nil else { return }
+        watching = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .otherMouseDown, .scrollWheel, .swipe]) { [weak self] event in
+            MainActor.assumeIsolated { self?.takes(event) == true } ? nil : event
+        }
+    }
+
+    /// Whether the reader takes `event`, so nothing else gets it.
+    private func takes(_ event: NSEvent) -> Bool {
+        guard let reader, let window, event.window === window, !isHiddenOrHasHiddenAncestor else { return false }
+        if event.type == .keyDown {
+            let mods = event.modifierFlags.intersection([.command, .shift, .option, .control])
+            guard event.keyCode == 6, mods == .command || mods == [.command, .shift], !(window.firstResponder is NSText) else { return false }
+            if mods.contains(.shift) { reader.undo.redo() } else { reader.undo.undo() }
+            reader.inkLayer?.refreshOutline()
+            return true
+        }
+        guard let page = reader.web, bounds.contains(convert(event.locationInWindow, from: nil)) else { return false }
+        switch event.type {
+        case .otherMouseDown: return page.sideButton(event)
+        case .swipe:
+            page.swipe(with: event)
+            return true
+        default:
+            if fitsAcross { page.watchSwipe(event) }
+            return false
+        }
+    }
+
+    private var fitsAcross: Bool {
+        guard let document = documentView, let clip = document.enclosingScrollView?.contentView else { return true }
+        return document.frame.width <= clip.bounds.width + 1
+    }
 
     override func keyDown(with event: NSEvent) {
         guard let reader, event.modifierFlags.intersection([.command, .control, .option]).isEmpty else { return super.keyDown(with: event) }
