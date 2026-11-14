@@ -7,14 +7,19 @@ struct ChatsPage: View {
     let browser: Browser
     var inPanel = false
     var didOpen: () -> Void = {}
+    /// New Chat: in the chat sidebar, a fresh one there; elsewhere a new tab asking.
+    var newChat: (() -> Void)? = nil
     @State private var query = ""
+    @State private var showsArchived = false
     @State private var undo = ChatUndo()
     @FocusState private var searching: Bool
 
     private var archive: ChatArchive { Assistant.shared.chats }
 
     var body: some View {
-        let found = archive.entries(matching: query)
+        let all = archive.entries(matching: query)
+        let found = all.filter { $0.archived != true }
+        let archived = all.filter { $0.archived == true }
         let periods = ChatArchive.periods(of: found)
         VStack(alignment: .leading, spacing: 0) {
             VStack(alignment: .leading, spacing: 0) {
@@ -23,6 +28,11 @@ struct ChatsPage: View {
                     Text("\(archive.entries.count)").font(.system(size: 13)).foregroundStyle(Palette.muted)
                     Spacer()
                     if undo.chat != nil { UndoLink(undo: undo) }
+                    Pill("New Chat") {
+                        didOpen()
+                        (newChat ?? browser.newAskingTab)()
+                    }
+                    .help("A new chat; this list keeps the others   /new")
                 }
                 .padding(.horizontal, 10)
                 .padding(.bottom, 14)
@@ -35,7 +45,7 @@ struct ChatsPage: View {
             .frame(maxWidth: .infinity)
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    if periods.isEmpty {
+                    if periods.isEmpty, archived.isEmpty {
                         Text(archive.entries.isEmpty ? "No chats yet. Ask in the chat sidebar (⇧⌘A), or from a new tab with ⌘J." : "No chat matches.")
                             .font(.system(size: 13))
                             .foregroundStyle(Palette.muted)
@@ -49,14 +59,21 @@ struct ChatsPage: View {
                                 .padding(.horizontal, 10)
                                 .padding(.top, period.name == periods.first?.name ? 0 : 18)
                                 .padding(.bottom, 4)
-                            ForEach(period.entries) { entry in
-                                ChatRow(entry: entry, showsTime: false) {
-                                    browser.open(chat: entry.id)
-                                    didOpen()
-                                } delete: {
-                                    undo.delete(entry.id)
-                                }
+                            ForEach(period.entries) { entry in row(entry) }
+                        }
+                        // Put away, out of the way until wanted.
+                        if !archived.isEmpty {
+                            Button {
+                                withAnimation(Motion.quick) { showsArchived.toggle() }
+                            } label: {
+                                Label("Archived (\(archived.count))", systemImage: showsArchived ? "chevron.down" : "chevron.right")
+                                    .font(.system(size: 11.5, weight: .medium)).foregroundStyle(Palette.muted)
                             }
+                            .buttonStyle(.plain)
+                            .padding(.horizontal, 10)
+                            .padding(.top, periods.isEmpty ? 0 : 18)
+                            .padding(.bottom, 4)
+                            if showsArchived || !query.isEmpty { ForEach(archived) { entry in row(entry) } }
                         }
                     }
                 }
@@ -69,6 +86,19 @@ struct ChatsPage: View {
         .background(inPanel ? .clear : Palette.ground)
         .onAppear { searching = true }
         .animation(Motion.quick, value: found.map(\.id))
+    }
+}
+
+extension ChatsPage {
+    fileprivate func row(_ entry: ChatArchive.Entry) -> some View {
+        ChatRow(entry: entry, showsTime: false) {
+            browser.open(chat: entry.id)
+            didOpen()
+        } delete: {
+            undo.delete(entry.id)
+        } archive: {
+            Assistant.shared.archive(entry.id, entry.archived != true)
+        }
     }
 }
 
@@ -145,6 +175,8 @@ struct ChatRow: View {
     var showsTime = true
     let open: () -> Void
     let delete: () -> Void
+    /// Archive, or take out of the archive.
+    var archive: (() -> Void)? = nil
     @State private var hovering = false
 
     var body: some View {
@@ -159,6 +191,17 @@ struct ChatRow: View {
                 .lineLimit(1)
                 .truncationMode(.tail)
             Spacer(minLength: 8)
+            if hovering, let archive {
+                Button(action: archive) {
+                    Image(systemName: entry.archived == true ? "tray.and.arrow.up" : "archivebox")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(Palette.muted)
+                        .frame(width: 22, height: 22)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(Pressed())
+                .help(entry.archived == true ? "Take out of the archive" : "Archive this chat")
+            }
             if hovering {
                 Button(action: delete) {
                     Image(systemName: "trash")
@@ -183,6 +226,12 @@ struct ChatRow: View {
         .contentShape(Rectangle())
         .onTapGesture(perform: open)
         .onHover { hovering = $0 }
+        .contextMenu {
+            Button("Open", action: open)
+            if let archive { Button(entry.archived == true ? "Unarchive" : "Archive", action: archive) }
+            Divider()
+            Button("Delete", role: .destructive, action: delete)
+        }
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isButton)
         .accessibilityAction(named: "Delete", delete)

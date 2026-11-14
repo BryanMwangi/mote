@@ -90,6 +90,8 @@ public final class Conversation: Identifiable {
     @ObservationIgnored public var sidebar = false
     @ObservationIgnored public var origin: URL?
     @ObservationIgnored public var originHeld: UUID?
+    /// Put away in the list of chats; asking in it again takes it out.
+    @ObservationIgnored public var archived = false
     /// A turn that heard this many tokens or more summarises the chat before the next.
     public static let compactAt = 100_000
     /// The last reply was cut short, and how: told to the model with the next
@@ -139,6 +141,7 @@ public final class Conversation: Identifiable {
         sidebar = saved.sidebar ?? false
         origin = saved.origin.flatMap(URL.init(string:))
         originHeld = saved.originHeld.flatMap(UUID.init(uuidString:))
+        archived = saved.archived ?? false
         title = SavedChat.title(of: saved.messages)
         sessions = saved.sessions.mapValues { ($0.id, $0.heard, $0.search, nil) }
     }
@@ -160,6 +163,7 @@ public final class Conversation: Identifiable {
         saved.sidebar = sidebar ? true : nil
         saved.origin = origin?.absoluteString
         saved.originHeld = originHeld?.uuidString
+        saved.archived = archived ? true : nil
         return saved
     }
 
@@ -239,6 +243,7 @@ public final class Conversation: Identifiable {
         let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
         stop()
+        archived = false
         messages.append(Message(role: .user, text: text))
         if messages.count == 1 { title = SavedChat.title(of: messages) }
         ask(routing: routing)

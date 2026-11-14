@@ -338,6 +338,12 @@ final class Assistant {
 
     private var reopened: [UUID: WeakChat] = [:]
 
+    /// Puts a chat away in the list, or back; an open one keeps it.
+    func archive(_ id: UUID, _ on: Bool) {
+        reopened[id]?.chat?.archived = on
+        chats.archive(id, on)
+    }
+
     /// Sends `text` in `conversation` to the chosen provider.
     func ask(_ text: String, in conversation: Conversation) {
         answering[conversation.id] = WeakChat(conversation)

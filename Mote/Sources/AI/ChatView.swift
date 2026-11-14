@@ -26,6 +26,8 @@ struct ChatView<Accessory: View, Start: View>: View {
     /// through `took`, so it is not put back on the next draw.
     var seed: String? = nil
     var took: () -> Void = {}
+    /// /new and /clear: a fresh chat where this one is.
+    var newChat: (() -> Void)? = nil
 
     @State private var draft = ""
     @State private var inputHeight = ChatInput.line
@@ -159,6 +161,7 @@ struct ChatView<Accessory: View, Start: View>: View {
         guard !text.isEmpty else { return }
         draft = ""
         if text == Skill.compact.prompt { return Assistant.shared.compact(conversation) }
+        if text == Skill.new.prompt || text == Skill.clear.prompt { return (newChat ?? browser.newAskingTab)() }
         guard let beforeSend else { return Assistant.shared.ask(text, in: conversation) }
         Task {
             await beforeSend()

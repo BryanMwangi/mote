@@ -49,7 +49,8 @@ struct PageChatPanel: View {
                     ground: .clear,
                     fade: Self.scrim,
                     seed: tab.pendingAsk,
-                    took: { tab.pendingAsk = nil }
+                    took: { tab.pendingAsk = nil },
+                    newChat: { browser.newPageChat() }
                 )
                 .id(chat.id)
             } else {
@@ -62,9 +63,13 @@ struct PageChatPanel: View {
                 Spacer(minLength: 0)
                 // Earlier chats, each back on the tab it was about.
                 if browser.prefs.chatSite.isEmpty {
+                    Door(icon: "square.and.pencil", help: "New chat   /new") { browser.newPageChat() }
                     Door(icon: "clock.arrow.circlepath", help: "Earlier chats") { showsChats.toggle() }
                         .popover(isPresented: $showsChats, arrowEdge: .bottom) {
-                            ChatsPage(browser: browser, inPanel: true) { showsChats = false }
+                            ChatsPage(browser: browser, inPanel: true, didOpen: { showsChats = false }, newChat: {
+                                showsChats = false
+                                browser.newPageChat()
+                            })
                                 .frame(width: 360, height: 460)
                         }
                 }
@@ -75,6 +80,9 @@ struct PageChatPanel: View {
             .controlSize(.large)
             .padding(.horizontal, 6)
             .frame(height: ChromeLayout.toolbar)
+            // Frosted, so the chat scrolling under it doesn't run into the buttons.
+            .background(.ultraThinMaterial)
+            .overlay(alignment: .bottom) { Rectangle().fill(Palette.hairline).frame(height: 1) }
         }
         // On a card a little in from the edges, its top level with the page's,
         // its buttons inside it: the space's colours ring it and come through

@@ -31,6 +31,8 @@ public struct SavedChat: Codable, Equatable, Sendable {
     public var sidebar: Bool?
     public var origin: String?
     public var originHeld: String?
+    /// Put away: listed apart, under Archived, until asked in again.
+    public var archived: Bool?
 
     public init(id: UUID, messages: [Message], sessions: [String: Session] = [:], created: Date, updated: Date) {
         self.id = id
@@ -63,6 +65,8 @@ public final class ChatArchive {
         public var updated: Date
         /// Everything asked in the chat, folded for searching.
         var asked: String
+        /// Put away, listed apart; nil in older indexes.
+        public var archived: Bool?
     }
 
     /// Newest first.
@@ -107,6 +111,13 @@ public final class ChatArchive {
     /// Keeps a deleted chat again, undoing the deletion.
     public func restore(_ chat: SavedChat) {
         gone.remove(chat.id)
+        save(chat)
+    }
+
+    /// Puts a chat away, or back among the rest.
+    public func archive(_ id: UUID, _ on: Bool = true) {
+        guard var chat = load(id) else { return }
+        chat.archived = on ? true : nil
         save(chat)
     }
 
@@ -181,7 +192,7 @@ public final class ChatArchive {
 
     private static func entry(for chat: SavedChat) -> Entry {
         let asked = chat.messages.filter { $0.role == .user }.map(\.text).joined(separator: " ")
-        return Entry(id: chat.id, title: chat.title, updated: chat.updated, asked: fold(String(asked.prefix(2_000))))
+        return Entry(id: chat.id, title: chat.title, updated: chat.updated, asked: fold(String(asked.prefix(2_000))), archived: chat.archived)
     }
 
     /// Lowercase, without accents, on one line.

@@ -284,6 +284,26 @@ final class Browser: NSObject, ObservableObject {
         }
     }
 
+    /// A fresh chat in the chat sidebar (/new, New Chat): the one before is
+    /// kept in the list of chats; tabs that shared it share the new one.
+    func newPageChat() {
+        guard let tab = active else { return }
+        let old = tab.pageChat
+        old?.stop()
+        let fresh = tab.freshPageChat()
+        if let old { for other in tabs where other !== tab && other.pageChat === old { other.share(fresh) } }
+        if !tab.chatOpen { slidingFold { tab.chatOpen = true } }
+        syncPageChat()
+    }
+
+    /// A new chat of its own: a new tab asking the assistant, as ⌘J does.
+    func newAskingTab() {
+        newTab()
+        field.asksAssistant = true
+        Assistant.shared.prepare()
+        field.askFocus()
+    }
+
     /// Takes up the page the active tab shows for the chat about it, as its
     /// panel opens or the tab with its panel open becomes active, so the chip
     /// never reads as unshared over a page the model can be told about. A tab

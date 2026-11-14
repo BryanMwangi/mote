@@ -46,8 +46,12 @@ public enum Skill {
     /// composer runs it rather than sending it.
     public static let compact = Item(command: "compact", title: "Compact chat", prompt: "/compact")
 
+    /// A fresh chat; the one before is kept in the list of chats.
+    public static let new = Item(command: "new", title: "New chat", prompt: "/new")
+    public static let clear = Item(command: "clear", title: "Clear: a new chat", prompt: "/clear")
+
     /// The built-ins, in the order the picker shows them.
-    public static let all: [Item] = [summary, eli5, keypoints, actions, compact]
+    public static let all: [Item] = [summary, eli5, keypoints, actions, compact, new, clear]
 
     /// The skills whose command starts with `query`, case-insensitively. A
     /// blank query offers them all, in order.

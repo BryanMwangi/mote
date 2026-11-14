@@ -473,6 +473,12 @@ final class Tab: ObservableObject, Identifiable {
         return chat
     }
 
+    /// A fresh chat in place of this one, which stays in the list of chats.
+    func freshPageChat() -> Conversation {
+        pageChat = nil
+        return ensurePageChat()
+    }
+
     /// Takes over the chat another tab had, for one chat across the tabs.
     func share(_ chat: Conversation) {
         if pageChat !== chat { pageChat = chat }
