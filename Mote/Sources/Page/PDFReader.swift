@@ -1,5 +1,6 @@
 import AppKit
 import Combine
+import MoteCore
 import PDFKit
 import SwiftUI
 import UniformTypeIdentifiers
@@ -187,7 +188,17 @@ final class PDFReader: ObservableObject {
             to = folder.appendingPathComponent("\(base) (filled \(n)).pdf")
             n += 1
         }
-        return document.write(to: to) ? to : nil
+        guard document.write(to: to) else { return nil }
+        Self.listed(to, from: url)
+        return to
+    }
+
+    /// A PDF saved from the reader, in Downloads like any download.
+    static func listed(_ file: URL, from source: URL) {
+        Browser.front?.downloads.add(
+            DownloadRecord(
+                name: file.lastPathComponent, from: source.host() ?? "PDF", path: file.path, date: Date(),
+                source: source.isFileURL ? nil : source))
     }
 
     func pick(_ annotation: PDFAnnotation?, on page: PDFPage?) {
@@ -258,12 +269,12 @@ final class PDFReader: ObservableObject {
         panel.directoryURL = folder
         panel.allowedContentTypes = [.pdf]
         panel.nameFieldStringValue = url.lastPathComponent.isEmpty ? "Document.pdf" : url.lastPathComponent
-        let write: (NSApplication.ModalResponse) -> Void = { [document] answer in
+        let write: (NSApplication.ModalResponse) -> Void = { [document, url] answer in
             guard answer == .OK, let to = panel.url else { return }
             // Signatures are drawn by Mote, so they go into the pages themselves;
             // marks and ink stay editable.
             let signed = (0..<document.pageCount).contains { document.page(at: $0)?.annotations.contains { $0 is SignatureStamp } == true }
-            document.write(to: to, withOptions: signed ? [.burnInAnnotationsOption: true] : nil)
+            if document.write(to: to, withOptions: signed ? [.burnInAnnotationsOption: true] : nil) { PDFReader.listed(to, from: url) }
         }
         if let window { panel.beginSheetModal(for: window, completionHandler: write) } else { write(panel.runModal()) }
     }
