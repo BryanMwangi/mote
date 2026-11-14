@@ -18,12 +18,16 @@ struct PageChatPanel: View {
 
     /// The brand moment on opening: a short breath of the logo's light.
     @State private var glowing = false
+    @State private var showsChats = false
 
     /// Whether the conversation is built. It is kept through the close slide,
     /// so the panel does not empty as it goes, and dropped after it, so a chat
     /// the panel is not showing never takes the keyboard (see ChatView's
     /// `onAppear`).
     @State private var filled = false
+
+    /// What the chat reads on: the frame, mostly, over the space's colours.
+    static let scrim = Palette.frame.opacity(0.82)
 
     /// Whether this page may be shared with the assistant at all.
     private var shareable: Bool { PageSharing.canShare(tab.address) }
@@ -34,7 +38,7 @@ struct PageChatPanel: View {
                 if tab.chatOpen || filled, let page = browser.siteChat.page(for: browser.prefs.chatSite) {
                     SiteChatStage(page: page)
                 } else {
-                    Palette.frame
+                    Color.clear
                 }
             } else if let chat = tab.pageChat, tab.chatOpen || filled {
                 ChatView(
@@ -42,19 +46,28 @@ struct PageChatPanel: View {
                     accessory: { chip(chat) },
                     start: { start() },
                     beforeSend: { await shareIfNeeded() },
-                    ground: Palette.frame,
+                    ground: .clear,
+                    fade: Self.scrim,
                     seed: tab.pendingAsk,
                     took: { tab.pendingAsk = nil }
                 )
                 .id(chat.id)
             } else {
-                Palette.frame
+                Color.clear
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .safeAreaInset(edge: .top, spacing: 0) {
             HStack {
                 Spacer(minLength: 0)
+                // Earlier chats, each back on the tab it was about.
+                if browser.prefs.chatSite.isEmpty {
+                    Door(icon: "clock.arrow.circlepath", help: "Earlier chats") { showsChats.toggle() }
+                        .popover(isPresented: $showsChats, arrowEdge: .bottom) {
+                            ChatsPage(browser: browser, inPanel: true) { showsChats = false }
+                                .frame(width: 360, height: 460)
+                        }
+                }
                 Door(icon: "xmark", help: "Close page chat   ⇧⌘A") {
                     browser.togglePageChat()
                 }
@@ -62,13 +75,17 @@ struct PageChatPanel: View {
             .controlSize(.large)
             .padding(.horizontal, 6)
             .frame(height: ChromeLayout.toolbar)
-            .padding(.top, toolbarTop)
-            .padding(.trailing, ChromeLayout.gap)
         }
+        // On a card a little in from the edges, its top level with the page's,
+        // its buttons inside it: the space's colours ring it and come through
+        // faintly, the words stay readable.
+        .background(Self.scrim, in: RoundedRectangle(cornerRadius: ChromeLayout.corner, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: ChromeLayout.corner, style: .continuous))
+        .padding([.bottom, .trailing, .leading], ChromeLayout.gap)
+        .padding(.top, max(toolbarTop, ChromeLayout.gap))
         .background {
-            // On the window's frame, like the sidebar it mirrors; the ask glow
-            // gathers behind the panel on opening.
-            Palette.frame
+            // The window's frame, with the space's colours through it, as the
+            // sidebar it mirrors; the ask glow gathers behind on opening.
             AskAura(on: glowing)
         }
         .onAppear {

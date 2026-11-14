@@ -27,6 +27,10 @@ enum Session {
         /// Its back and forward pages, as WebKit keeps them; nil in older
         /// files, and for a history too long to keep (see `keptState`).
         var state: Data?
+        /// Its chat sidebar was open, and the chat in it (a kept chat's id);
+        /// nil in older files and for tabs without.
+        var chatOpen: Bool?
+        var pageChat: String?
     }
 
     /// A tab's back and forward pages, for the session: WebKit's own record,

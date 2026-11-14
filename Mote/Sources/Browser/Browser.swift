@@ -590,6 +590,9 @@ final class Browser: NSObject, ObservableObject {
         prepare(tab)
         tab.restore(url: url, title: entry.title, name: entry.name, state: entry.state)
         if let used = entry.used { tab.touch(at: used) }
+        // Its chat sidebar as it was left: the chat, and open or not.
+        if let id = entry.pageChat.flatMap(UUID.init(uuidString:)), let chat = Assistant.shared.reopen(id) { tab.share(chat) }
+        if entry.chatOpen == true { tab.chatOpen = true }
         tab.pin = entry.pin
         tab.kept = entry.kept == true
         tab.heldID = entry.held.flatMap(UUID.init(uuidString:))
@@ -642,7 +645,9 @@ final class Browser: NSObject, ObservableObject {
         let home = tab.held ? tab.home.map(\.absoluteString).flatMap { $0 == url.absoluteString ? nil : $0 } : nil
         return Session.Entry(
             url: url.absoluteString, title: tab.title, pin: tab.pin, kept: tab.kept ? true : nil, name: tab.name, held: held, home: home,
-            folder: tab.kept ? tab.folder?.uuidString : nil, used: tab.touched, state: Session.keptState(tab.history))
+            folder: tab.kept ? tab.folder?.uuidString : nil, used: tab.touched, state: Session.keptState(tab.history),
+            chatOpen: tab.chatOpen ? true : nil,
+            pageChat: tab.pageChat.flatMap { $0.messages.isEmpty ? nil : $0.id.uuidString })
     }
 
     // MARK: - Merging spaces

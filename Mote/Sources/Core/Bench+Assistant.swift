@@ -30,7 +30,9 @@ extension Bench {
             call.answer(describe(browser))
         case "follow":
             guard call.testRun("it would ask in your browser") else { return }
-            guard let text = request.string("text"), !text.isEmpty, let chat = browser.active?.chat else {
+            // A chat tab's, or the open chat sidebar's.
+            let sidebar = browser.active?.chatOpen == true ? browser.active?.pageChat : nil
+            guard let text = request.string("text"), !text.isEmpty, let chat = browser.active?.chat ?? sidebar else {
                 return call.fail("chat follow needs a chat in front and some text")
             }
             Assistant.shared.ask(text, in: chat)

@@ -19,6 +19,8 @@ struct ChatView<Accessory: View, Start: View>: View {
     /// The surface the conversation reads on: the card for a chat in a tab, the
     /// window frame for the page chat docked on it, the mirror of the sidebar.
     var ground: Color = Palette.ground
+    /// What the conversation fades into under the composer; the ground if not given.
+    var fade: Color? = nil
     /// A draft the composer opens with, seeded from outside — the page chat
     /// puts the selection asked about here. Taken up once, then reported
     /// through `took`, so it is not put back on the next draw.
@@ -43,7 +45,8 @@ struct ChatView<Accessory: View, Start: View>: View {
     var body: some View {
         ScrollViewReader { scroller in
             ZStack(alignment: .bottom) {
-                follow(ScrollView { transcript }.coordinateSpace(name: "chat"), scroller)
+                // The thin thumb the tab list has, with no track or border.
+                follow(ScrollView { transcript }.floatingScrollBar().coordinateSpace(name: "chat"), scroller)
                 .onChange(of: distance) { _, now in if now == .end { pinned = true } }
                 .onScrollUp { pinned = false }
 
@@ -71,7 +74,7 @@ struct ChatView<Accessory: View, Start: View>: View {
                 .frame(maxWidth: .infinity)
                 .background(alignment: .bottom) {
                     // The conversation fades out under the composer.
-                    LinearGradient(colors: [ground.opacity(0), ground], startPoint: .top, endPoint: .init(x: 0.5, y: 0.45))
+                    LinearGradient(colors: [(fade ?? ground).opacity(0), fade ?? ground], startPoint: .top, endPoint: .init(x: 0.5, y: 0.45))
                         .frame(height: max(inputHeight + 110, overEnd + 24))
                         .allowsHitTesting(false)
                 }
