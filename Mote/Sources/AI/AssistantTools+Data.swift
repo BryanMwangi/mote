@@ -89,8 +89,13 @@ extension AssistantTools {
             let title = (input["title"]?.string ?? found?.tab.label ?? url.absoluteString) + note
             let folder = call.name == "save_for_later" ? "Saved for later" : input["folder"]?.string
             let mark = Bookmark(title: title, url: url.absoluteString, children: nil)
+            let before = browser.bookmarks.roots
             browser.bookmarks.insert(mark, into: folder.map(bookmarkFolder(named:)))
-            return "Bookmarked “\(title)”\(folder.map { " in “\($0)”" } ?? "")."
+            return "Bookmarked “\(title)” \(url.absoluteString)\(folder.map { " in “\($0)”" } ?? "")."
+                + record("Bookmarked “\(title)”") { [weak browser] in
+                    browser?.bookmarks.restore(before)
+                    return "Took the bookmark out again."
+                }
         case "organise_bookmarks":
             return await organise(input)
         case "delete_history":
@@ -144,9 +149,14 @@ extension AssistantTools {
         ].compactMap { $0 }.joined(separator: " and ")
         if input["dry_run"]?.bool == true { return "Would \(plan)." }
         guard await permit(.destructive, "Tidy your bookmarks: \(plan)?") else { return refused }
+        let before = browser.bookmarks.roots
         for (found, folder) in moves { browser.bookmarks.move(found.id, into: bookmarkFolder(named: folder)) }
         for found in removing { browser.bookmarks.remove(found.id) }
-        return "Done: \(plan)."
+        let listed = moves.map { "- moved “\($0.0.title)” into “\($0.1)”" } + removing.map { "- removed “\($0.title)” \($0.url ?? "")" }
+        return "Done:\n" + listed.joined(separator: "\n") + record("Tidied the bookmarks: \(plan)") { [weak browser] in
+            browser?.bookmarks.restore(before)
+            return "The bookmarks are as they were."
+        }
     }
 
     // MARK: - History and downloads

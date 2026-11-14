@@ -23,6 +23,17 @@ final class AssistantLedger: ObservableObject {
     }
 
     @Published private(set) var entries: [Entry] = []
+    /// Each chat's turn under way or last answered: the one Undo under the
+    /// last reply puts back.
+    @Published private(set) var current: [UUID?: UUID] = [:]
+
+    func begin(_ turn: UUID, chat: UUID?) { current[chat] = turn }
+
+    /// What the chat's latest turn did that can be put back, for the Undo under it.
+    func latest(in chat: UUID?) -> [Entry] {
+        guard let turn = current[chat] else { return [] }
+        return open(in: chat).filter { $0.turn == turn }
+    }
 
     /// Notes something done; returns its id for the model, or nil when it
     /// can't be undone (which the model is told).

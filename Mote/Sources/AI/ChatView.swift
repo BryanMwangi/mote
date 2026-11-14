@@ -478,6 +478,7 @@ private struct Status: View {
     let browser: Browser
     let conversation: Conversation
     let retry: () -> Void
+    @ObservedObject private var ledger = AssistantLedger.shared
 
     var body: some View {
         Group {
@@ -496,7 +497,19 @@ private struct Status: View {
             case .failed(let reason):
                 Failure(reason: reason, retry: retry) { browser.openSettings(at: .ai) }
             case .idle:
-                EmptyView()
+                // What the last reply did, put back in one go.
+                let done = ledger.latest(in: conversation.id)
+                if !done.isEmpty {
+                    Button {
+                        Task { _ = await ledger.undo(done.map(\.id), in: conversation.id) }
+                    } label: {
+                        Label(done.count == 1 ? "Undo what it did" : "Undo the \(done.count) things it did", systemImage: "arrow.uturn.backward")
+                            .font(.system(size: 12.5))
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(Palette.muted)
+                    .help(done.map(\.what).joined(separator: "\n"))
+                }
             }
         }
         .transition(.opacity)

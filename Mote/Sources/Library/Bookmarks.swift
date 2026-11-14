@@ -34,6 +34,9 @@ final class Bookmarks: ObservableObject {
         return node
     }
 
+    /// All of them as they were, for undoing a change.
+    func restore(_ roots: [Bookmark]) { change { $0 = BookmarkTree(roots) } }
+
     /// For `chrome.bookmarks.update`.
     func update(_ id: Bookmark.ID, title: String?, url: String?) { change { $0.update(id, title: title, url: url) } }
 

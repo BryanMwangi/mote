@@ -58,6 +58,7 @@ final class AssistantTools {
         self.chat = chat
         self.driver = driver
         self.outside = outside
+        AssistantLedger.shared.begin(turn, chat: chat)
     }
 
     var prefs: Preferences { browser.prefs }
@@ -76,8 +77,8 @@ final class AssistantTools {
 
     var list: [Tool] {
         outside
-            ? tabTools + pageTools + pdfTools + devTools
-            : tabTools + pageTools + pdfTools + signInTools + devTools + dataTools + ledgerTools
+            ? tabTools + pageTools + pdfTools + workTools + devTools
+            : tabTools + pageTools + pdfTools + workTools + signInTools + devTools + dataTools + ledgerTools
     }
 
     /// The step's line in the chat.
@@ -96,6 +97,7 @@ final class AssistantTools {
         if let said = await runTab(call) { return ToolOutput(said) }
         if let said = await runPage(call) { return ToolOutput(said) }
         if let said = await runPDF(call) { return ToolOutput(said) }
+        if let said = await runWork(call) { return ToolOutput(said) }
         if !outside, let said = await runLedger(call) { return ToolOutput(said) }
         if !outside, let said = await runSignIn(call) { return ToolOutput(said) }
         if !outside, let said = await runData(call) { return ToolOutput(said) }

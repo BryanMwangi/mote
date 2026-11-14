@@ -131,9 +131,16 @@ extension AssistantTools {
         case "click":
             return Self.said(await page(tab, "click", args), n: n, done: "Clicked.")
         case "write", "fill":
+            // What it held, to put back on undo.
+            let was = n == nil ? nil : await page(tab, "read", args)
             args["text"] = text
             args["how"] = input["how"]?.string ?? "replace"
-            return Self.said(await page(tab, "write", args), n: n, done: "Written.")
+            let said = Self.said(await page(tab, "write", args), n: n, done: "Written.")
+            guard said == "Written.", let was, let n else { return said }
+            return said + record("Wrote into \(what) in \(Self.line(tab))") { [weak self] in
+                guard let self else { return "Not now." }
+                return Self.said(await self.page(tab, "write", ["n": n, "text": was, "how": "replace"]), n: n, done: "Put the old words back.")
+            }
         case "select_option":
             args["value"] = input["value"]?.string ?? ""
             return Self.said(await page(tab, "choose", args), n: n, done: "Chosen.")
