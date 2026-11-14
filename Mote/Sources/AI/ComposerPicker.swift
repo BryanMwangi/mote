@@ -57,7 +57,8 @@ struct ComposerPicker: View {
 
     var body: some View {
         ScrollViewReader { proxy in
-            ScrollView(.vertical, showsIndicators: true) {
+            // Scrolls past six, with no bar.
+            ScrollView(.vertical, showsIndicators: false) {
                 LazyVStack(alignment: .leading, spacing: 0) {
                     ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
                         Button {
@@ -82,7 +83,8 @@ struct ComposerPicker: View {
                             }
                             .padding(.horizontal, 10)
                             .frame(height: 28)
-                            .background(highlighted == index ? Palette.wash : .clear, in: Rounded.row)
+                            // The arrows' pick, plainly above the card's own wash.
+                            .background(highlighted == index ? Palette.ink.opacity(0.12) : .clear, in: Rounded.row)
                             .contentShape(Rounded.row)
                         }
                         .buttonStyle(.plain)
@@ -93,7 +95,8 @@ struct ComposerPicker: View {
                 }
                 .padding(.vertical, 3)
             }
-            .frame(maxHeight: 6 * 28 + 6)
+            // Six rows tall at most; fewer, as tall as they are.
+            .frame(height: CGFloat(min(items.count, 6)) * 28 + 6)
             .onChange(of: highlighted) { _, index in
                 guard let index, items.indices.contains(index) else { return }
                 withAnimation(Motion.quick) { proxy.scrollTo(index, anchor: .center) }
