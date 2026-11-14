@@ -74,6 +74,7 @@ final class History: ObservableObject {
     // MARK: - Reading
 
     func entries(matching text: String = "") -> [Entry] { index.entries(matching: text) }
+    func entries(withWords words: String, from: Date? = nil, to: Date? = nil) -> [Entry] { index.entries(withWords: words, from: from, to: to) }
 
     /// The eight most recent places, for the History menu.
     func recent() -> [Entry] {

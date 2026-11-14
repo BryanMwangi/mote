@@ -200,6 +200,20 @@ public struct HistoryIndex: Sendable {
             }
     }
 
+    /// Pages whose title or address has every one of `words` in it, in any
+    /// order, last visited between `from` and `to`, newest first: what an
+    /// assistant searching history looks for ("zen pdf" finds "Zen browser
+    /// pdf reader").
+    public func entries(withWords words: String, from: Date? = nil, to: Date? = nil) -> [Entry] {
+        let needles = words.lowercased().split(whereSeparator: { $0.isWhitespace || $0 == "," }).map(String.init)
+        return entries().filter { entry in
+            if let from, entry.last < from { return false }
+            if let to, entry.last > to { return false }
+            let haystack = (entry.key + " " + entry.title + " " + entry.url.absoluteString).lowercased()
+            return needles.allSatisfy(haystack.contains)
+        }
+    }
+
     /// The visits worth keeping on disk: the `capacity` with the highest frecency.
     public func visitsToSave(now: Date = Date()) -> [Visit] {
         Array(visitsByKey.values.sorted { frecency($0, now: now) > frecency($1, now: now) }.prefix(Self.capacity))

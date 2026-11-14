@@ -30,7 +30,7 @@ extension AssistantTools {
                 name: "read_field", description: "What a field or editor read_tab listed holds now. Never a password.",
                 schema: schema(tab + "," + element, ["tab", "element"])),
         ]
-        guard acts else { return tools }
+        // Listed even with acting off: asked for, the model hears how to turn it on.
         tools += [
             Tool(name: "click", description: "Clicks an element read_tab listed. Asks first, per site.", schema: schema(tab + "," + element, ["tab", "element"])),
             Tool(
@@ -72,6 +72,8 @@ extension AssistantTools {
         guard let found else { return "There's no open tab with that id; list the tabs again." }
         let tab = found.tab
         if call.name == "read_tab" {
+            // A PDF: its text page by page, and whether it has fields.
+            if let text = await pdfText(of: tab) { return text }
             _ = tab.wake()
             let text = await tab.capturePageContext()?.text ?? ""
             let outline = await page(tab, "outline") ?? ""

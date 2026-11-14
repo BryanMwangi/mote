@@ -35,6 +35,8 @@ final class AssistantTools {
     /// the developer sites (Settings › AI), never asks, and never reads the
     /// person's other tabs, history or bookmarks.
     let outside: Bool
+    /// This turn, for undoing all it did together (AssistantLedger).
+    let turn = UUID()
     /// Sites this chat may act on without asking again.
     private static var trusted: [UUID: Set<String>] = [:]
 
@@ -72,7 +74,11 @@ final class AssistantTools {
         return { Assistant.shared.stop(chat: chat) }
     }
 
-    var list: [Tool] { outside ? tabTools + pageTools + devTools : tabTools + pageTools + signInTools + devTools + dataTools }
+    var list: [Tool] {
+        outside
+            ? tabTools + pageTools + pdfTools + devTools
+            : tabTools + pageTools + pdfTools + signInTools + devTools + dataTools + ledgerTools
+    }
 
     /// The step's line in the chat.
     nonisolated static func describe(_ call: ToolCall) -> String {
@@ -89,6 +95,8 @@ final class AssistantTools {
         if let said = await runDev(call) { return said }
         if let said = await runTab(call) { return ToolOutput(said) }
         if let said = await runPage(call) { return ToolOutput(said) }
+        if let said = await runPDF(call) { return ToolOutput(said) }
+        if !outside, let said = await runLedger(call) { return ToolOutput(said) }
         if !outside, let said = await runSignIn(call) { return ToolOutput(said) }
         if !outside, let said = await runData(call) { return ToolOutput(said) }
         return ToolOutput("There's no tool called \(call.name).", outcome: .failed)
@@ -106,6 +114,31 @@ final class AssistantTools {
             "Couldn't", "Can't",
         ]
         return failures.contains(where: text.hasPrefix) ? .failed : .done
+    }
+
+    // MARK: - Undoing what was done
+
+    var ledgerTools: [Tool] {
+        [
+            Tool(
+                name: "undo_actions",
+                description:
+                    "Undoes what you did in this chat: by the ids your tools gave (\"Undo with undo_actions [...]\"), or everything in your last turn (last_turn: true). With neither, lists what can still be undone.",
+                schema: #"{"type":"object","properties":{"ids":{"type":"array","items":{"type":"string"}},"last_turn":{"type":"boolean"}}}"#)
+        ]
+    }
+
+    func runLedger(_ call: ToolCall) async -> String? {
+        guard call.name == "undo_actions" else { return nil }
+        let ledger = AssistantLedger.shared
+        var ids = call.input["ids"]?.array.compactMap(\.string) ?? []
+        if call.input["last_turn"]?.bool == true { ids += ledger.lastTurn(in: chat).map(\.id) }
+        guard !ids.isEmpty else {
+            let open = ledger.open(in: chat)
+            return open.isEmpty ? "Nothing you did in this chat is left to undo." : open.map { "\($0.id)\t\($0.what)" }.joined(separator: "\n")
+        }
+        guard await permit(.gentle, "") else { return refused }
+        return (await ledger.undo(ids, in: chat)).joined(separator: "\n")
     }
 
     // MARK: - How much is at stake

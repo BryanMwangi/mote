@@ -1,6 +1,7 @@
 import AppKit
 import MoteAI
 import MoteCore
+import PDFKit
 import WebKit
 
 /// The web and the person's own things: reading a page out of sight,
@@ -16,13 +17,18 @@ extension AssistantTools {
                 name: "read_page",
                 description: "Loads a web page out of sight and returns its text. A search engine's results address searches the web.",
                 schema: #"{"type":"object","properties":{"url":{"type":"string"}},"required":["url"]}"#),
-            Tool(name: "search_history", description: "Pages the person visited, matching the words.", schema: query),
+            Tool(
+                name: "search_history",
+                description:
+                    "Pages the person visited in Mote whose title or address has all the words, in any order (one word at a time finds the most), newest first: title, address, last visit, how many visits. from and to (ISO 8601 dates) narrow it to when; no words lists everything in that time.",
+                schema:
+                    #"{"type":"object","properties":{"query":{"type":"string"},"from":{"type":"string"},"to":{"type":"string"},"limit":{"type":"integer"}}}"#),
             Tool(name: "search_bookmarks", description: "The person's bookmarks matching the words (empty: all), with their ids and folders.", schema: query),
             Tool(
                 name: "downloads", description: "The person's downloads, numbered newest first; or opens one, or shows it in the Finder, by its number.",
                 schema: #"{"type":"object","properties":{"action":{"type":"string","enum":["list","open","reveal"]},"number":{"type":"integer"}}}"#),
         ]
-        guard acts else { return tools }
+        // Listed even with acting off: asked for, the model hears how to turn it on.
         tools += [
             Tool(
                 name: "add_bookmark", description: "Bookmarks a tab or an address, into a folder by name (made if there's none).",
@@ -57,10 +63,15 @@ extension AssistantTools {
         switch call.name {
         case "read_page":
             guard let url = web(input["url"]?.string) else { return "That isn't a web address." }
+            // A PDF: its text page by page, not WebKit's viewer.
+            if url.pathExtension.lowercased() == "pdf", let (data, _) = try? await URLSession.shared.data(from: url),
+                let document = PDFDocument(data: data)
+            {
+                return "\(url.absoluteString)\nA PDF of \(document.pageCount) pages.\n\n" + Self.text(of: document)
+            }
             return await ReadAway.text(of: url)
         case "search_history":
-            let found = browser.history.suggestions(for: input["query"]?.string ?? "", limit: 15)
-            return found.map { "\($0.key)\t\($0.url.absoluteString)" }.joined(separator: "\n").ifEmpty("Nothing found.")
+            return searchHistory(input)
         case "search_bookmarks":
             let words = (input["query"]?.string ?? "").lowercased()
             let found = Self.marks(browser.bookmarks.roots, in: nil).filter {
@@ -95,7 +106,7 @@ extension AssistantTools {
 
     // MARK: - Bookmarks
 
-    private static func short(_ id: UUID) -> String { String(id.uuidString.prefix(8)).lowercased() }
+    static func short(_ id: UUID) -> String { String(id.uuidString.prefix(8)).lowercased() }
 
     /// Every bookmark that's a page, with the folder it's in.
     private static func marks(_ nodes: [Bookmark], in folder: String?) -> [(mark: Bookmark, folder: String?)] {
@@ -162,6 +173,36 @@ extension AssistantTools {
         for key in keys { browser.history.remove(key) }
         if let range { browser.history.remove(visitedBetween: range.0, and: range.1) }
         return "Deleted \(said)."
+    }
+
+    /// A long address cut in the middle, for lists.
+    static func clipped(_ address: String) -> String {
+        address.count > 160 ? String(address.prefix(110)) + "…" + String(address.suffix(40)) : address
+    }
+
+    private func searchHistory(_ input: JSON) -> String {
+        let date = { (text: String?) -> Date? in
+            guard let text else { return nil }
+            let full = ISO8601DateFormatter()
+            let day = ISO8601DateFormatter()
+            day.formatOptions = [.withFullDate]
+            return full.date(from: text) ?? day.date(from: text)
+        }
+        let from = date(input["from"]?.string), to = date(input["to"]?.string)
+        let words = input["query"]?.string ?? ""
+        let found = browser.history.entries(withWords: words, from: from, to: to)
+        let limit = min(max(input["limit"]?.int ?? 25, 1), 100)
+        guard !found.isEmpty else {
+            return "Nothing in Mote's history has all of “\(words)”" + (from != nil || to != nil ? " in that time" : "")
+                + ". Try fewer or other words, one at a time."
+        }
+        let when = DateFormatter()
+        when.dateStyle = .medium
+        when.timeStyle = .short
+        let lines = found.prefix(limit).map { entry in
+            "\(entry.title.isEmpty ? entry.key : entry.title)\t\(Self.clipped(entry.url.absoluteString))\tlast \(when.string(from: entry.last))\t\(entry.count) visit\(entry.count == 1 ? "" : "s")"
+        }
+        return lines.joined(separator: "\n") + (found.count > limit ? "\n…and \(found.count - limit) more; narrow it with more words or dates." : "")
     }
 
     private func downloads(_ input: JSON) -> String {

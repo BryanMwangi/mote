@@ -1199,16 +1199,24 @@ final class Browser: NSObject, ObservableObject {
     }
 
     /// Reopens a closed tab where it was, with its history.
-    func reopen(_ ghost: Ghost) {
+    /// `front`: brought to the front, as ⌘⇧T does; else back where it was, asleep.
+    @discardableResult
+    func reopen(_ ghost: Ghost, front: Bool = true) -> Tab? {
         closed.remove(ghost.id)
         // Through select(), which wakes it with its history.
-        if let held = ghost.heldID, let tab = tabs.first(where: { $0.heldID == held }) { return select(tab) }
+        if let held = ghost.heldID, let tab = tabs.first(where: { $0.heldID == held }) {
+            if front { select(tab) }
+            return tab
+        }
         let tab = Tab()
         prepare(tab)
-        reorder { $0.insert(tab, at: ghost.index) }
+        reorder { $0.insert(tab, at: min(ghost.index, $0.tabs.count)) }
         tab.restore(url: ghost.url, title: ghost.title, state: ghost.state)
-        bringForward(tab)
-        tab.wake()
+        if front {
+            bringForward(tab)
+            tab.wake()
+        }
+        return tab
     }
 
     /// The tab used last: awake ones first,

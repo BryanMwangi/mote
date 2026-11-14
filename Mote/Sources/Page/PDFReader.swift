@@ -160,6 +160,36 @@ final class PDFReader: ObservableObject {
         undo.registerUndo(withTarget: self) { $0.setText(was, of: note) }
     }
 
+    /// A form field filled: text, "on" or "off" for a check box or radio,
+    /// or an option for a list.
+    func setField(_ widget: PDFAnnotation, to value: String) {
+        let text = widget.widgetStringValue, state = widget.buttonWidgetState
+        if widget.widgetFieldType == .button {
+            widget.buttonWidgetState = ["on", "yes", "true", "1", "x"].contains(value.lowercased()) ? .onState : .offState
+        } else {
+            widget.widgetStringValue = value
+        }
+        if let page = widget.page { view?.annotationsChanged(on: page) }
+        edited = true
+        undo.registerUndo(withTarget: self) { reader in
+            widget.widgetStringValue = text
+            widget.buttonWidgetState = state
+            if let page = widget.page { reader.view?.annotationsChanged(on: page) }
+        }
+    }
+
+    /// Saved without asking, into `folder`, by the PDF's own name; where it went.
+    func saveCopy(in folder: URL) -> URL? {
+        let base = url.deletingPathExtension().lastPathComponent.ifEmpty("Document")
+        var to = folder.appendingPathComponent(base + " (filled).pdf")
+        var n = 2
+        while FileManager.default.fileExists(atPath: to.path) {
+            to = folder.appendingPathComponent("\(base) (filled \(n)).pdf")
+            n += 1
+        }
+        return document.write(to: to) ? to : nil
+    }
+
     func pick(_ annotation: PDFAnnotation?, on page: PDFPage?) {
         picked = annotation.flatMap { annotation in page.map { (annotation, $0) } }
     }
@@ -293,7 +323,7 @@ extension Tab {
     /// The PDF's bytes: WebKit's own, once its viewer has them (it can say the
     /// page loaded a moment before); a file's; else fetched again with the
     /// tab's cookies.
-    private func pdfData(of url: URL, in web: WKWebView) async -> Data? {
+    func pdfData(of url: URL, in web: WKWebView) async -> Data? {
         if url.isFileURL { return try? Data(contentsOf: url) }
         for _ in 0..<6 {
             if let data = web.unpublishedObject("_dataForDisplayedPDF") as? Data, !data.isEmpty { return data }

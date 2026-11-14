@@ -46,6 +46,18 @@ struct HistoryIndexTests {
         #expect(index.entries(matching: "RECIPES").map(\.key) == ["a.example/one"])
     }
 
+    @Test("Searching by words finds every word in any order, within the dates given")
+    func entriesWithWords() {
+        var index = HistoryIndex()
+        index.record(url("https://www.google.com/search?q=zen+browser+pdf+reader"), title: "zen browser pdf reader - Google Search", at: now)
+        index.record(url("https://zen-browser.app/"), title: "Zen Browser", at: now.addingTimeInterval(-86_400 * 3))
+        index.record(url("https://example.com/"), title: "Example", at: now)
+        #expect(index.entries(withWords: "zen").count == 2)
+        #expect(index.entries(withWords: "pdf ZEN").map(\.title) == ["zen browser pdf reader - Google Search"])
+        #expect(index.entries(withWords: "zen", from: now.addingTimeInterval(-86_400)).count == 1)
+        #expect(index.entries(withWords: "zen", to: now.addingTimeInterval(-86_400)).map(\.title) == ["Zen Browser"])
+    }
+
     @Test("Visited sites outrank built-in ones, and prefixes outrank substrings")
     func suggestionRanking() {
         var index = HistoryIndex()

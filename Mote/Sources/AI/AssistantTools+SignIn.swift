@@ -7,7 +7,6 @@ import MoteCore
 /// Either way the password goes from Mote into the page and never to the model.
 extension AssistantTools {
     var signInTools: [Tool] {
-        guard acts else { return [] }
         let tab = #""tab":{"type":"string","description":"A tab id from list_tabs"}"#
         return [
             Tool(

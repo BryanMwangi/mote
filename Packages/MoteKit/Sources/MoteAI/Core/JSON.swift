@@ -68,6 +68,12 @@ public enum JSON: Equatable, Sendable, Decodable {
         return []
     }
 
+    /// An object's fields; nil for anything else.
+    public var fields: [String: JSON]? {
+        if case .object(let fields) = self { return fields }
+        return nil
+    }
+
     /// Replaces a field of an object; does nothing to anything else.
     mutating func set(_ key: String, _ value: JSON) {
         guard case .object(var fields) = self else { return }

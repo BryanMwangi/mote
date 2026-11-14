@@ -235,7 +235,21 @@ extension ToolLoop {
         case "mute_tabs": return input?["muted"]?.bool == false ? "Unmuting tabs" : "Muting tabs"
         case "reload_tabs": return "Reloading tabs"
         case "navigate": return site.map { "Going to \($0)" } ?? "Going \(input?["go"]?.string ?? "elsewhere")"
-        default: return name
+        case "essentials": return input?["add"]?.bool == false ? "Taking tabs out of the essentials" : "Adding tabs to the essentials"
+        case "recently_closed": return "Looking at closed tabs"
+        case "reopen_tabs": return "Reopening tabs"
+        case "list_folders": return "Looking at your folders"
+        case "rename_folder": return "Renaming a folder"
+        case "delete_folder": return "Deleting a folder"
+        case "undo_actions": return (input?["ids"]?.array.isEmpty ?? true) && input?["last_turn"]?.bool != true ? "Looking at what can be undone" : "Undoing"
+        case "pdf_fields": return "Reading the PDF's form fields"
+        case "fill_pdf_fields": return "Filling in the PDF"
+        case "read_tabs": return "Reading \(input?["tabs"]?.array.count ?? 0) tabs"
+        case "remember": return "Remembering"
+        case "forget": return "Forgetting"
+        case "memories": return "Looking at what I remember"
+        case "fill_form": return "Filling in the form"
+        default: return name.replacingOccurrences(of: "_", with: " ").capitalized
         }
     }
 }
