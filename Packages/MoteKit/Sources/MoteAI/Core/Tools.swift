@@ -111,7 +111,7 @@ public struct ToolLoop: ChatService {
     let run: @Sendable (ToolCall) async -> ToolOutput
     /// An agent's: it reaches the tools here itself, and the loop only tells it so.
     let server: ToolServer?
-    static let rounds = 8
+    static let rounds = 40
 
     public init(
         service: any ChatService, tools: [Tool], server: ToolServer? = nil, describe: @escaping @Sendable (ToolCall) -> String,
@@ -127,7 +127,10 @@ public struct ToolLoop: ChatService {
     /// Told to the model with the tools, so it knows to use them.
     static func note(_ tools: [Tool]) -> String {
         "You can use Mote's tools while you answer: " + tools.map(\.name).joined(separator: ", ")
-            + ". Use them when the question is about the person's other tabs, a page, their history or bookmarks, or asks you to act in a page; Mote asks the person before anything is done in a page."
+            + ". Use them when the question is about the person's tabs, spaces, a page, their history or bookmarks, or asks you to act in Mote or a page; Mote asks the person when it should."
+            + (tools.contains { $0.name == "run_script" }
+                ? " When no tool does what's asked in a page, read the page, then do it with a short run_script."
+                    + " For Mote itself, if no tool does it, say so plainly and name the setting or menu, rather than guessing." : "")
     }
 
     public func reply(to request: ChatRequest) -> AsyncThrowingStream<ChatEvent, Error> {
@@ -146,6 +149,7 @@ public struct ToolLoop: ChatService {
                 var request = request
                 request.tools = tools
                 var wrote = false
+                var finished = false
                 for _ in 0..<Self.rounds {
                     var calls: [ToolCall] = []
                     var said = ""
@@ -164,7 +168,10 @@ public struct ToolLoop: ChatService {
                         }
                     }
                     wrote = wrote || !said.isEmpty
-                    guard !calls.isEmpty else { break }
+                    guard !calls.isEmpty else {
+                        finished = true
+                        break
+                    }
                     for (index, call) in calls.enumerated() {
                         let step = Activity(id: call.id, title: describe(call))
                         continuation.yield(.activity(step))
@@ -178,6 +185,10 @@ public struct ToolLoop: ChatService {
                         request.exchanges.append(
                             ToolExchange(call: call, result: result.text, image: result.image, said: index == 0 ? said : ""))
                     }
+                }
+                // Out of rounds with tools still wanted: said, so it's not a silent stop.
+                if !finished {
+                    continuation.yield(.text((wrote ? "\n\n" : "") + "_Stopped after \(Self.rounds) rounds of tools; ask again to carry on._"))
                 }
                 continuation.finish()
             } catch {
@@ -249,6 +260,15 @@ extension ToolLoop {
         case "forget": return "Forgetting"
         case "memories": return "Looking at what I remember"
         case "fill_form": return "Filling in the form"
+        case "list_spaces": return "Looking at your spaces"
+        case "new_space": return "Making a space"
+        case "rename_space": return "Renaming a space"
+        case "space_icon": return "Changing a space's icon"
+        case "space_theme": return "Changing a space's colours"
+        case "order_spaces": return "Reordering spaces"
+        case "delete_space": return "Deleting a space"
+        case "sidebar_foot": return "Arranging the sidebar's foot"
+        case "page_appearance": return input?["look"]?.string == "auto" ? "Back to Mote's look" : "Showing the page in \(input?["look"]?.string ?? "another look")"
         default: return name.replacingOccurrences(of: "_", with: " ").capitalized
         }
     }

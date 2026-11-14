@@ -18,8 +18,24 @@ extension AssistantTools {
                 schema:
                     "{\"type\":\"object\",\"properties\":{\(tab),\"what\":{\"type\":\"string\",\"enum\":[\"visible\",\"whole\",\"element\",\"region\"]},\"element\":{\"type\":\"integer\"},\"x\":{\"type\":\"number\"},\"y\":{\"type\":\"number\"},\"width\":{\"type\":\"number\"},\"height\":{\"type\":\"number\"},\"save\":{\"type\":\"boolean\"}},\"required\":[\"tab\"]}")
         ]
+        let script = "{\"type\":\"object\",\"properties\":{\(tab),\"script\":{\"type\":\"string\",\"description\":\"A function body; use return\"}},\"required\":[\"tab\",\"script\"]}"
+        // Anywhere, asked per site: what to reach for when no tool does what's asked in a page.
+        let anywhere = Tool(
+            name: "run_script",
+            description:
+                "Runs JavaScript in a tab's page and returns what it returns (JSON-able values). When no tool does what's asked in a page, read the page first, then do it with a short script: reading things no tool reads, checking a layout, setting something up for a test. Asks first, per site. Never reads or writes password fields.",
+            schema: script)
+        tools += [
+            anywhere,
+            Tool(
+                name: "page_appearance",
+                description:
+                    "Shows a tab's page in light or dark (its prefers-color-scheme), or back to Mote's (auto): for testing both, with screenshot_tab between.",
+                schema: "{\"type\":\"object\",\"properties\":{\(tab),\"look\":{\"type\":\"string\",\"enum\":[\"light\",\"dark\",\"auto\"]}},\"required\":[\"tab\",\"look\"]}"),
+        ]
         guard developing else { return tools }
         let sites = prefs.aiDevSites
+        tools.removeAll { $0.name == "run_script" }
         tools += [
             Tool(
                 name: "run_script", description: "Runs JavaScript in a tab's page (developer sites: \(sites)) and returns what it returns.",
@@ -73,6 +89,17 @@ extension AssistantTools {
             let tab = browser.benchOpen(url)
             browser.select(tab)
             return ToolOutput("Opened test tab \(Self.id(tab)).")
+        case "page_appearance":
+            guard let found = find(input) else { return ToolOutput(Self.noTab) }
+            return ToolOutput(await appearance(found, input["look"]?.string ?? "auto"))
+        case "run_script" where !developing || !developerSite(find(input)?.tab.address):
+            // Off the developer sites: asked per site, as acting in a page is.
+            guard let found = find(input) else { return ToolOutput(Self.noTab) }
+            guard found.tab.built != nil, let address = found.tab.address else {
+                return ToolOutput("\(Self.line(found.tab)) is asleep; read it first, which wakes it.")
+            }
+            guard await permit(.inPage(address), "Run a script on \(Address.siteHost(of: address) ?? "this page")?") else { return ToolOutput(refused) }
+            return ToolOutput(await develop("run_script", input, on: found))
         case "run_script", "console", "network_errors", "wait_for", "responsive_design_mode":
             guard developing else { return nil }
             guard let found = find(input) else { return ToolOutput("There's no open tab with that id; list the tabs again.") }
@@ -83,6 +110,18 @@ extension AssistantTools {
             return ToolOutput(await develop(call.name, input, on: found))
         default:
             return nil
+        }
+    }
+
+    /// Light, dark, or Mote's own look for one tab's page.
+    private func appearance(_ found: Found, _ look: String) async -> String {
+        guard await permit(.gentle, "") else { return refused }
+        let web = found.tab.web
+        let was = web.appearance
+        web.appearance = look == "light" ? NSAppearance(named: .aqua) : look == "dark" ? NSAppearance(named: .darkAqua) : nil
+        return "\(Self.line(found.tab)) shows \(look == "auto" ? "in Mote's own look" : "in \(look)") now." + record("Showed \(Self.line(found.tab)) in \(look)") {
+            web.appearance = was
+            return "Its look is as it was."
         }
     }
 

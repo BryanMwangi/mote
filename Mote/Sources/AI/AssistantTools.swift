@@ -78,7 +78,7 @@ final class AssistantTools {
     var list: [Tool] {
         outside
             ? tabTools + pageTools + pdfTools + workTools + devTools
-            : tabTools + pageTools + pdfTools + workTools + signInTools + devTools + dataTools + ledgerTools
+            : tabTools + spaceTools + pageTools + pdfTools + workTools + signInTools + devTools + dataTools + ledgerTools
     }
 
     /// The step's line in the chat.
@@ -98,6 +98,7 @@ final class AssistantTools {
         if let said = await runPage(call) { return ToolOutput(said) }
         if let said = await runPDF(call) { return ToolOutput(said) }
         if let said = await runWork(call) { return ToolOutput(said) }
+        if !outside, let said = await runSpaces(call) { return ToolOutput(said) }
         if !outside, let said = await runLedger(call) { return ToolOutput(said) }
         if !outside, let said = await runSignIn(call) { return ToolOutput(said) }
         if !outside, let said = await runData(call) { return ToolOutput(said) }
