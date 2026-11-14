@@ -31,7 +31,8 @@ struct Page: View {
             if let device = tab.device { DeviceFrame(tab: tab, drag: tab.deviceDrag, device: device) }
             // A PDF, in Mote's reader over the page WebKit made of it.
             if let reader = tab.pdf, tab.device == nil {
-                PDFReaderView(reader: reader)
+                // Each tab's reader its own: reused, one tab's pages would stay up in another.
+                PDFReaderView(reader: reader).id(ObjectIdentifier(reader))
             } else if tab.device == nil, let at = tab.pdfAt, at == tab.address {
                 // Its bytes being read: the reader's ground, not WebKit's viewer first.
                 ZStack {
