@@ -311,10 +311,21 @@ final class Assistant {
         let author = model.isEmpty ? provider.name : "\(provider.name) · \(modelName(for: provider))"
         return Conversation.Route(
             provider: provider.id, model: model, author: author, service: service,
-            instructions: [Instructions.compose(search: mode == .search, thorough: mode == .research), Memories.shared.note]
-                .compactMap { $0 }.joined(separator: "\n\n"),
+            instructions: [
+                Instructions.compose(search: mode == .search, thorough: mode == .research), Memories.shared.note,
+                chat.flatMap { ChatModes.shared.mode(of: $0) == .plan ? Self.planning : nil },
+            ]
+            .compactMap { $0 }.joined(separator: "\n\n"),
             search: search)
     }
+
+    /// Told to the model while the chat is in Plan.
+    static let planning = """
+        The person has this chat in Plan mode: don't act yet. Look around as much as you need with the tools that only \
+        read (tabs, pages, history), and ask the person with ask_person where a choice is theirs. Then end with a short \
+        numbered plan of what you'll do, naming the tabs, spaces and sites each step touches, and stop there. The person \
+        runs the plan, or says what to change.
+        """
 
     /// Every chat kept, for the list of past chats and for chat tabs that
     /// come back at launch.
@@ -357,6 +368,9 @@ final class Assistant {
         weak var chat: Conversation?
         init(_ chat: Conversation) { self.chat = chat }
     }
+
+    /// The chat with this id, while it's open.
+    func conversation(_ id: UUID) -> Conversation? { answering[id]?.chat }
 
     /// Stops the reply under way in the chat with this id.
     func stop(chat id: UUID) {

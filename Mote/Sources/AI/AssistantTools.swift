@@ -4,17 +4,34 @@ import MoteAI
 import MoteCore
 import WebKit
 
-/// Chats switched to Auto with ⇧⇥: the assistant acts without asking, for
-/// that chat only, until switched back or Mote quits; what it does can be
-/// undone. Only what can't be (deleting history) still asks.
+/// How a chat acts, switched with ⇧⇥ for that chat only, until switched
+/// back or Mote quits. Asks: it asks before acting. Auto: it acts without
+/// asking; what it does can be undone, and only what can't be (deleting
+/// history) still asks. Plan: it only looks, and ends with a plan to approve.
+enum ChatMode: CaseIterable {
+    case asks, auto, plan
+
+    var next: ChatMode { Self.allCases[(Self.allCases.firstIndex(of: self)! + 1) % Self.allCases.count] }
+}
+
 @MainActor
 final class ChatModes: ObservableObject {
     static let shared = ChatModes()
-    @Published private(set) var auto: Set<UUID> = []
+    @Published private var modes: [UUID: ChatMode] = [:]
+    /// What a chat was in before Plan, to go back to when the plan runs.
+    private var beforePlan: [UUID: ChatMode] = [:]
 
-    func toggle(_ chat: UUID) {
-        if auto.contains(chat) { auto.remove(chat) } else { auto.insert(chat) }
+    func mode(of chat: UUID) -> ChatMode { modes[chat] ?? .asks }
+
+    func set(_ chat: UUID, _ mode: ChatMode) {
+        if mode == .plan, self.mode(of: chat) != .plan { beforePlan[chat] = self.mode(of: chat) }
+        modes[chat] = mode
     }
+
+    func toggle(_ chat: UUID) { set(chat, mode(of: chat).next) }
+
+    /// Out of Plan, into what it was before.
+    func leavePlan(_ chat: UUID) { set(chat, beforePlan.removeValue(forKey: chat) ?? .asks) }
 }
 
 /// What the assistant may ask Mote to do while it answers (Settings › AI ›
@@ -78,7 +95,7 @@ final class AssistantTools {
     var list: [Tool] {
         outside
             ? tabTools + pageTools + pdfTools + workTools + devTools
-            : tabTools + spaceTools + pageTools + pdfTools + workTools + signInTools + devTools + dataTools + ledgerTools
+            : tabTools + spaceTools + pageTools + pdfTools + workTools + signInTools + devTools + dataTools + ledgerTools + askTools
     }
 
     /// The step's line in the chat.
@@ -89,8 +106,22 @@ final class AssistantTools {
     func run(_ call: ToolCall) async -> ToolOutput {
         var said = await dispatch(call)
         if said.outcome == .done { said.outcome = outcome(of: said.text) }
+        // Every result goes back to the model each round after: a long one
+        // is cut, and said so, rather than filling the chat's room.
+        if said.text.count > Self.longest {
+            said.text = String(said.text.prefix(Self.longest))
+                + "\n…cut here, \(said.text.count - Self.longest) more characters. Ask for less (a selector, a filter, a smaller part)."
+        }
+        // What the person added while it worked goes with this result.
+        if let chat, let added = Assistant.shared.conversation(chat)?.takeSteering() {
+            if said.detail == nil { said.detail = said.line }
+            said.text += "\n\n[The person added while you worked: \(added)]"
+        }
         return said
     }
+
+    /// The most of any tool's result given back.
+    static let longest = 40_000
 
     private func dispatch(_ call: ToolCall) async -> ToolOutput {
         if let said = await runDev(call) { return said }
@@ -102,21 +133,64 @@ final class AssistantTools {
         if !outside, let said = await runLedger(call) { return ToolOutput(said) }
         if !outside, let said = await runSignIn(call) { return ToolOutput(said) }
         if !outside, let said = await runData(call) { return ToolOutput(said) }
+        if !outside, let said = await runAsk(call) { return ToolOutput(said) }
         return ToolOutput("There's no tool called \(call.name).", outcome: .failed)
     }
 
     /// How a tool's answer went, for its step in the chat: said no to, or
     /// failed, by the words the tools use for those.
     private func outcome(of text: String) -> Activity.Outcome {
-        if text == refused || text == Self.declined || text == Self.actingOff || text.hasPrefix("The person didn't") { return .refused }
+        if text == refused || text == Self.declined || text == Self.planOnly || text == Self.actingOff || text.hasPrefix("The person didn't") { return .refused }
         let fine = ["No tabs match", "No history matches", "Nothing found", "None found"]
         if fine.contains(where: text.hasPrefix) { return .done }
         let failures = [
             "There's no", "That isn't", "That field can't", "That tab has no", "None of", "No ", "Not there", "The page didn't",
-            "The page changed", "The page's", "Give ", "Say where", "It couldn't", "Nothing has", "Element ", "Mote never", "Mote has no",
+            "The page changed", "The page's", "Give ", "Say where", "It couldn't", "Nothing has", "Element ", "Mote never", "Mote has no", "Nothing moved",
             "Couldn't", "Can't",
         ]
         return failures.contains(where: text.hasPrefix) ? .failed : .done
+    }
+
+    // MARK: - Asking the person
+
+    var askTools: [Tool] {
+        guard chat != nil else { return [] }
+        return [
+            Tool(
+                name: "ask_person",
+                description:
+                    "Asks the person in the chat and waits for their answers. Use it when what they want is unclear, or there's a real choice that's theirs (which of several tabs, which approach), rather than guessing. Ask one question, or up to 4 together when you need several things decided; they're shown one after another and the answers come back together. Give each 2 to 4 short options, the one you'd suggest first; they can always write their own answer instead. Not for permission to act: Mote asks that itself.",
+                schema: #"""
+                    {"type":"object","properties":{"questions":{"type":"array","minItems":1,"maxItems":4,"items":{"type":"object","properties":{"question":{"type":"string","description":"The question, complete and on its own"},"options":{"type":"array","items":{"type":"object","properties":{"label":{"type":"string","description":"A few words"},"description":{"type":"string","description":"What picking it means"}},"required":["label"]},"description":"2 to 4 choices"},"multi_select":{"type":"boolean","description":"More than one may be picked"}},"required":["question","options"]}}},"required":["questions"]}
+                    """#)
+        ]
+    }
+
+    func runAsk(_ call: ToolCall) async -> String? {
+        guard call.name == "ask_person" else { return nil }
+        guard let chat, let conversation = Assistant.shared.conversation(chat) else { return "There's no chat to ask in." }
+        // A list of questions; one given on its own, as the tool once took, counts too.
+        let asked = call.input["questions"]?.array ?? (call.input["question"] != nil ? [call.input] : [])
+        let questions = asked.prefix(4).compactMap { item -> Conversation.Question? in
+            guard let text = item["question"]?.string, !text.isEmpty else { return nil }
+            let options = (item["options"]?.array ?? []).prefix(4).compactMap { option -> Conversation.Question.Option? in
+                guard let label = option["label"]?.string ?? option.string, !label.isEmpty else { return nil }
+                return .init(label: label, description: option["description"]?.string)
+            }
+            return Conversation.Question(text: text, options: Array(options), several: item["multi_select"]?.bool == true)
+        }
+        guard !questions.isEmpty else { return "Give the question to ask." }
+        var answers: [String] = []
+        for (index, question) in questions.enumerated() {
+            var question = question
+            if questions.count > 1 { question.place = "\(index + 1) of \(questions.count)" }
+            guard let answer = await conversation.ask(question) else {
+                let got = answers.isEmpty ? "" : " Answered before then: " + answers.joined(separator: "; ") + "."
+                return "The person didn't answer: the reply was stopped." + got
+            }
+            answers.append(questions.count == 1 ? answer : "“\(question.text)” → \(answer)")
+        }
+        return questions.count == 1 ? "The person answered: \(answers[0])" : "The person answered:\n" + answers.map { "- " + $0 }.joined(separator: "\n")
     }
 
     // MARK: - Undoing what was done
@@ -169,6 +243,8 @@ final class AssistantTools {
     /// acts only on the developer sites, without asking, and never closes or
     /// moves the person's tabs.
     func permit(_ risk: Risk, _ question: @autoclosure () -> String) async -> Bool {
+        if case .read = risk { return true }
+        if planning { return false }
         switch risk {
         case .read:
             return true
@@ -177,21 +253,25 @@ final class AssistantTools {
         case .inPage(let url):
             if outside { return developerSite(url) }
             guard acts else { return false }
-            if let chat, ChatModes.shared.auto.contains(chat) { return true }
+            if let chat, ChatModes.shared.mode(of: chat) == .auto { return true }
             if prefs.aiMode == .trusted, SiteList.contains(prefs.aiTrusted, url) { return true }
             if prefs.aiMode == .developer, developerSite(url) { return true }
             return await ask(question(), trusting: Address.siteHost(of: url) ?? "")
         case .destructive:
             guard !outside, acts else { return false }
-            if let chat, ChatModes.shared.auto.contains(chat) { return true }
+            if let chat, ChatModes.shared.mode(of: chat) == .auto { return true }
             return await ask(question(), trusting: nil)
         case .irreversible:
             return outside || !acts ? false : await ask(question(), trusting: nil)
         }
     }
 
+    /// The chat is in Plan: it only looks.
+    var planning: Bool { !outside && chat.map { ChatModes.shared.mode(of: $0) == .plan } == true }
+
     /// Why an action wasn't done, in words the model can act on.
     var refused: String {
+        if planning { return Self.planOnly }
         if outside { return "Coding agents act only on the developer sites (Settings › AI): \(prefs.aiDevSites). Open one in a test tab with new_test_tab." }
         return acts ? Self.declined : Self.actingOff
     }
@@ -199,10 +279,22 @@ final class AssistantTools {
     /// The answer when acting is off.
     static let actingOff = "Acting for the person is off: they can turn on Settings › AI › Tools › Act for you."
     static let declined = "The person said no."
+    static let planOnly = "Plan mode: nothing is done yet. Put this in your plan as a step instead, and carry on looking."
 
     /// `site`: one this chat may be allowed to act on from now on.
     private func ask(_ question: String, trusting site: String?) async -> Bool {
         if let chat, let site, Self.trusted[chat]?.contains(site) == true { return true }
+        // In the chat, where the reply is: an alert only with no chat to ask in.
+        if let chat, let conversation = Assistant.shared.conversation(chat), conversation.busy {
+            let allow = "Allow", trust = site.map { "Allow on \($0) for this chat" }, deny = "Deny"
+            let options = [allow, trust, deny].compactMap { $0 }.map { Conversation.Question.Option(label: $0) }
+            let answer = await conversation.ask(Conversation.Question(text: question, options: options))
+            if let trust, let site, answer == trust { Self.trusted[chat, default: []].insert(site) }
+            if answer == allow || (trust != nil && answer == trust) { return true }
+            // Words of their own instead: a no, with what they said told to the model.
+            if let answer, answer != deny { conversation.addSteering(answer) }
+            return false
+        }
         let alert = NSAlert()
         alert.messageText = question
         alert.informativeText = "The assistant asks to do this for you."
@@ -212,7 +304,13 @@ final class AssistantTools {
         alert.suppressionButton?.title = "Allow on \(site ?? "") for this chat"
         let answer: NSApplication.ModalResponse
         if let window = browser.window {
-            answer = await withCheckedContinuation { done in alert.beginSheetModal(for: window) { done.resume(returning: $0) } }
+            // A stopped reply takes its question away, as Deny: a late Allow can't act.
+            answer = await withTaskCancellationHandler {
+                await withCheckedContinuation { done in alert.beginSheetModal(for: window) { done.resume(returning: $0) } }
+            } onCancel: {
+                Task { @MainActor in window.endSheet(alert.window, returnCode: .alertSecondButtonReturn) }
+            }
+            guard !Task.isCancelled else { return false }
         } else {
             answer = alert.runModal()
         }

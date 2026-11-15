@@ -219,7 +219,7 @@ extension AssistantTools {
         let kept = browser.downloads.kept
         switch input["action"]?.string ?? "list" {
         case "open", "reveal":
-            guard acts else { return refused }
+            guard acts, !planning else { return refused }
             guard let number = input["number"]?.int, kept.indices.contains(number - 1) else {
                 return "No download has that number; list them again."
             }

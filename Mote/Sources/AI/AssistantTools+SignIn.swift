@@ -24,7 +24,7 @@ extension AssistantTools {
 
     func runSignIn(_ call: ToolCall) async -> String? {
         guard ["sign_in", "ask_for_credentials"].contains(call.name) else { return nil }
-        guard acts else { return refused }
+        guard acts, !planning else { return refused }
         guard let found = find(call.input) else { return "There's no open tab with that id; list the tabs again." }
         let tab = found.tab
         guard let address = tab.address, let site = browser.logins.accounts(for: tab) else { return "That tab has no site to sign in to." }

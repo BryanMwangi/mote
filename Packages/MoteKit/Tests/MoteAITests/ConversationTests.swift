@@ -249,17 +249,80 @@ struct ConversationTests {
         #expect(service.stopped)
     }
 
-    @Test("Sending while a reply is coming stops that reply first")
+    @Test("Sending while a reply is coming queues it, and it goes once the reply ends")
     func sendWhileBusy() async throws {
+        let service = ScriptedService()
+        service.events = [.text("One it is")]
+        service.hold = true
+        let conversation = Conversation()
+        conversation.send("One", via: route(service))
+        await waitForRequest(service, count: 1)
+        conversation.send("Two", via: route(service))
+        #expect(conversation.queued.map(\.text) == ["Two"])
+        #expect(!service.stopped)
+        service.hold = false
+        service.events = [.text("Two it is")]
+        service.finish()
+        await waitForRequest(service, count: 2)
+        await settle(conversation)
+        #expect(conversation.messages.map(\.text) == ["One", "One it is", "Two", "Two it is"])
+        #expect(conversation.queued.isEmpty)
+    }
+
+    @Test("Send now stops the reply and sends the queued message")
+    func sendNow() async throws {
         let service = ScriptedService()
         service.hold = true
         let conversation = Conversation()
         conversation.send("One", via: route(service))
+        await waitForRequest(service, count: 1)
+        conversation.send("Two", via: route(service))
         service.hold = false
         service.events = [.text("Two it is")]
-        conversation.send("Two", via: route(service))
+        conversation.sendNow(try #require(conversation.queued.first).id)
         await settle(conversation)
         #expect(conversation.messages.map(\.text) == ["One", "", "Two", "Two it is"])
+        #expect(conversation.messages[1].interrupted)
+    }
+
+    @Test("Steering is taken once by the reply under way; untaken, it's sent after")
+    func steering() async throws {
+        let service = ScriptedService()
+        service.hold = true
+        let conversation = Conversation()
+        conversation.send("One", via: route(service))
+        await waitForRequest(service, count: 1)
+        conversation.send("Use the blue one", via: route(service))
+        conversation.steer(try #require(conversation.queued.first).id)
+        #expect(conversation.takeSteering() == "Use the blue one")
+        #expect(conversation.takeSteering() == nil)
+        #expect(conversation.messages.last?.steps.last?.detail == "Use the blue one")
+        conversation.send("Then close it", via: route(service))
+        conversation.steer(try #require(conversation.queued.first).id)
+        service.hold = false
+        service.finish()
+        await waitForRequest(service, count: 2)
+        await settle(conversation)
+        #expect(conversation.messages.map(\.text).contains("Then close it"))
+    }
+
+    @Test("A question waits for the answer; sending answers it, and stopping lets it go")
+    func question() async throws {
+        let service = ScriptedService()
+        service.hold = true
+        let conversation = Conversation()
+        conversation.send("Tidy my tabs", via: route(service))
+        await waitForRequest(service, count: 1)
+        let asked = Task { await conversation.ask(.init(text: "Which space?", options: [.init(label: "Work")])) }
+        for _ in 0..<100 where conversation.question == nil { try await Task.sleep(for: .milliseconds(5)) }
+        conversation.send("Work", via: route(service))
+        #expect(await asked.value == "Work")
+        #expect(conversation.queued.isEmpty)
+        let again = Task { await conversation.ask(.init(text: "Sure?", options: [])) }
+        for _ in 0..<100 where conversation.question == nil { try await Task.sleep(for: .milliseconds(5)) }
+        conversation.stop()
+        #expect(await again.value == nil)
+        #expect(conversation.question == nil)
     }
 
     @Test("Activity shows while the reply is coming, and is gone once it's done")

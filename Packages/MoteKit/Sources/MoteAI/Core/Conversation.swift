@@ -124,6 +124,49 @@ public final class Conversation: Identifiable {
     /// Counts replies, so a stopped one's late events are dropped.
     @ObservationIgnored private var turn = 0
 
+    /// A message sent while a reply was under way, waiting its turn.
+    public struct Queued: Identifiable, Equatable, Sendable {
+        public let id: UUID
+        public var text: String
+        /// Handed to the reply under way, at its next step, rather than
+        /// waiting for it to end.
+        public var steering = false
+    }
+
+    /// Messages waiting for the reply under way: each is sent when the one
+    /// before ends well, in order.
+    public private(set) var queued: [Queued] = []
+    /// Where the last message went, for sending what's queued the same way.
+    @ObservationIgnored private var routing: Routing?
+
+    /// A question the model asked the person, waiting for their answer.
+    public struct Question: Equatable, Sendable {
+        public struct Option: Equatable, Sendable {
+            public var label: String
+            public var description: String?
+            public init(label: String, description: String? = nil) {
+                self.label = label
+                self.description = description
+            }
+        }
+
+        public var text: String
+        public var options: [Option]
+        /// More than one option may be picked.
+        public var several: Bool
+        /// Which of several asked together: "2 of 3".
+        public var place: String?
+        public init(text: String, options: [Option], several: Bool = false, place: String? = nil) {
+            self.text = text
+            self.options = options
+            self.several = several
+            self.place = place
+        }
+    }
+
+    public private(set) var question: Question?
+    @ObservationIgnored private var answering: CheckedContinuation<String?, Never>?
+
     public init() {
         id = UUID()
         created = Date()
@@ -239,10 +282,17 @@ public final class Conversation: Identifiable {
 
     public func send(_ text: String, via route: Route) { send(text, routing: { route }) }
 
+    /// Sends `text`, or, while a reply is under way, queues it to go after;
+    /// while a question waits, it's the answer.
     public func send(_ text: String, routing: @escaping Routing) {
         let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
-        stop()
+        self.routing = routing
+        if question != nil { return answer(text) }
+        if busy {
+            queued.append(Queued(id: UUID(), text: text))
+            return
+        }
         archived = false
         messages.append(Message(role: .user, text: text))
         if messages.count == 1 { title = SavedChat.title(of: messages) }
@@ -260,9 +310,12 @@ public final class Conversation: Identifiable {
         ask(routing: routing)
     }
 
-    /// Stops the reply, keeping what arrived.
-    public func stop() {
+    /// Stops the reply, keeping what arrived. `why` is told to the model
+    /// with the next question.
+    public func stop(why: String = "The person stopped your last reply before it finished.") {
         guard busy else { return }
+        answer(nil)
+        unsteer()
         flush()
         turn += 1
         task?.cancel()
@@ -270,7 +323,7 @@ public final class Conversation: Identifiable {
         if let last = messages.indices.last, messages[last].role == .assistant {
             messages[last].interrupted = true
             messages[last].steps = messages[last].steps.map(\.cutShort)
-            cutShort = Self.cutShortNote(messages[last].steps, why: "The person stopped your last reply before it finished.")
+            cutShort = Self.cutShortNote(messages[last].steps, why: why)
         }
         activities = []
         phase = .idle
@@ -285,6 +338,67 @@ public final class Conversation: Identifiable {
         if !finished.isEmpty { note += " Done before then: " + finished.joined(separator: "; ") + "." }
         if !unfinished.isEmpty { note += " Not done or not finished: " + unfinished.joined(separator: "; ") + "." }
         return note + " Check how things stand now before carrying on, and say what was left undone."
+    }
+
+    /// Stops the reply and sends a queued message now.
+    public func sendNow(_ id: Queued.ID) {
+        guard let index = queued.firstIndex(where: { $0.id == id }), let routing else { return }
+        let text = queued.remove(at: index).text
+        stop()
+        send(text, routing: routing)
+    }
+
+    /// Hands a queued message to the reply under way at its next step.
+    public func steer(_ id: Queued.ID) {
+        guard busy, let index = queued.firstIndex(where: { $0.id == id }) else { return }
+        queued[index].steering = true
+    }
+
+    /// Words for the reply under way, taken with its next tool's result.
+    public func addSteering(_ text: String) {
+        guard busy else { return }
+        queued.append(Queued(id: UUID(), text: text, steering: true))
+    }
+
+    public func unqueue(_ id: Queued.ID) {
+        queued.removeAll { $0.id == id }
+    }
+
+    /// What the person added for the reply under way, taken once: told to
+    /// the model with the next tool's result, and shown as a step.
+    public func takeSteering() -> String? {
+        let steering = queued.filter(\.steering)
+        guard busy, !steering.isEmpty, let last = messages.indices.last, messages[last].role == .assistant else { return nil }
+        queued.removeAll(where: \.steering)
+        let text = steering.map(\.text).joined(separator: "\n")
+        messages[last].steps.append(Activity(id: "steer-\(UUID().uuidString)", title: "You added", done: true, detail: text))
+        return text
+    }
+
+    /// Steering not taken before the reply ended waits as a message again.
+    private func unsteer() {
+        for index in queued.indices { queued[index].steering = false }
+    }
+
+    /// Shows `question` and waits for the person's answer; nil if they
+    /// didn't give one (the reply was stopped). One at a time.
+    public func ask(_ question: Question) async -> String? {
+        answer(nil)
+        self.question = question
+        return await withTaskCancellationHandler {
+            await withCheckedContinuation { answering = $0 }
+        } onCancel: {
+            Task { @MainActor [weak self] in self?.answer(nil) }
+        }
+    }
+
+    /// Answers the question waiting, or lets it go with nil.
+    public func answer(_ text: String?) {
+        guard question != nil else { return }
+        question = nil
+        let waiting = answering
+        answering = nil
+        waiting?.resume(returning: text)
     }
 
     /// Whether the chat has grown long enough to summarise before the next turn.
@@ -337,7 +451,7 @@ public final class Conversation: Identifiable {
             if case .text(let more) = event { text += more }
         }
         let made = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !made.isEmpty else { throw CancellationError() }
+        guard !made.isEmpty else { throw AIError.failed("The chat couldn't be summarised: the summary came back empty") }
         summary = made
         summarised = through
         sessions = [:]
@@ -481,10 +595,14 @@ public final class Conversation: Identifiable {
         flush()
         task = nil
         activities = []
+        answer(nil)
+        unsteer()
         guard let failure, !(failure is CancellationError) else {
             if let provider, let opened { sessions[provider] = (opened, messages.count, searched, openedShared) }
             phase = .idle
             touch()
+            // The next message waiting goes now.
+            if !queued.isEmpty, let routing { send(queued.removeFirst().text, routing: routing) }
             return
         }
         let reason = (failure as? LocalizedError)?.errorDescription ?? failure.localizedDescription

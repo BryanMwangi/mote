@@ -63,6 +63,7 @@ struct ChatView<Accessory: View, Start: View>: View {
                     VStack(spacing: 10) {
                         accessory()
                         if !conversation.mentions.isEmpty { mentioned(conversation) }
+                        ChatTray(conversation: conversation).frame(maxWidth: Self.column)
                         ChatComposer(
                             browser: browser, conversation: conversation, draft: $draft, height: $inputHeight, focus: focus,
                             mentionables: mentionables, choseMention: chose, send: send
@@ -206,7 +207,7 @@ struct ChatView<Accessory: View, Start: View>: View {
 
     /// The tabs mentioned with @, each a small chip that lets it go.
     private func mentioned(_ conversation: Conversation) -> some View {
-        ScrollView(.horizontal, showsIndicators: true) {
+        ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 6) {
                 ForEach(conversation.mentions, id: \.url) { page in
                     ContextChip(title: page.title.isEmpty ? (page.url.host() ?? page.url.absoluteString) : page.title) {
@@ -766,7 +767,7 @@ private struct ChatComposer: View {
                 if conversation.busy, !hasText {
                     RoundButton(symbol: "stop.fill", filled: true, help: "Stop   esc") { conversation.stop() }
                 } else {
-                    RoundButton(symbol: "arrow.up", filled: hasText, help: "Send   ↩", act: send)
+                    RoundButton(symbol: "arrow.up", filled: hasText, help: conversation.busy ? "Send after this reply   ↩" : "Send   ↩", act: send)
                 }
             }
         }
@@ -856,31 +857,53 @@ struct RenderedReply {
     }
 }
 
-/// Whether this chat asks before acting in pages, or goes ahead (Auto): ⇧⇥
-/// or a click switches it, for this chat only.
+/// How this chat acts: asks before acting in pages, goes ahead (Auto), or
+/// only looks and plans (Plan). ⇧⇥ or a click moves it on, for this chat only.
 private struct ModeChip: View {
     let chat: UUID
     @ObservedObject private var modes = ChatModes.shared
 
     var body: some View {
-        let auto = modes.auto.contains(chat)
+        let mode = modes.mode(of: chat)
+        let lit = mode != .asks
         Button {
             modes.toggle(chat)
         } label: {
             HStack(spacing: 4) {
-                Image(systemName: auto ? "forward.fill" : "hand.raised").font(.system(size: 9, weight: .semibold))
-                Text(auto ? "Auto" : "Asks").font(.system(size: 11.5, weight: .medium))
+                Image(systemName: Self.symbol(mode)).font(.system(size: 9, weight: .semibold))
+                Text(Self.title(mode)).font(.system(size: 11.5, weight: .medium))
             }
-            .foregroundStyle(auto ? Color(nsColor: Glow.clay) : Palette.muted)
+            .foregroundStyle(lit ? Color(nsColor: Glow.clay) : Palette.muted)
             .padding(.horizontal, 8)
             .frame(height: 24)
-            .background(auto ? Color(nsColor: Glow.clay).opacity(0.14) : .clear, in: Capsule())
+            .background(lit ? Color(nsColor: Glow.clay).opacity(0.14) : .clear, in: Capsule())
         }
         .buttonStyle(.plain)
-        .help(
-            auto
-                ? "Auto: it acts without asking, in this chat; Undo puts it back. Only deleting history still asks.   ⇧⇥"
-                : "It asks before acting in pages. Switch this chat to Auto with ⇧⇥.")
-        .animation(Motion.quick, value: auto)
+        .help(Self.help(mode))
+        .animation(Motion.quick, value: mode)
+    }
+
+    private static func symbol(_ mode: ChatMode) -> String {
+        switch mode {
+        case .asks: "hand.raised"
+        case .auto: "forward.fill"
+        case .plan: "list.number"
+        }
+    }
+
+    private static func title(_ mode: ChatMode) -> String {
+        switch mode {
+        case .asks: "Asks"
+        case .auto: "Auto"
+        case .plan: "Plan"
+        }
+    }
+
+    private static func help(_ mode: ChatMode) -> String {
+        switch mode {
+        case .asks: "It asks before acting in pages. Switch this chat to Auto with ⇧⇥."
+        case .auto: "Auto: it acts without asking, in this chat; Undo puts it back. Only deleting history still asks. Plan next with ⇧⇥."
+        case .plan: "Plan: it only looks, then gives a plan to run. Back to Asks with ⇧⇥."
+        }
     }
 }

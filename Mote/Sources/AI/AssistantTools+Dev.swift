@@ -67,6 +67,10 @@ extension AssistantTools {
 
     func runDev(_ call: ToolCall) async -> ToolOutput? {
         let input = call.input
+        // These act without asking on the developer sites; in Plan nothing acts.
+        if planning, ["new_test_tab", "close_test_tabs", "run_script", "responsive_design_mode"].contains(call.name) {
+            return ToolOutput(Self.planOnly)
+        }
         switch call.name {
         case "screenshot_tab":
             guard let found = find(input) else { return ToolOutput("There's no open tab with that id; list the tabs again.") }
