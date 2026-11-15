@@ -1497,6 +1497,567 @@
 	}
 
 //#endregion
+//#region src/extension-shims/namespaces.ts
+/** The namespaces answered by the browser, in the order they are defined. */
+	function browserNamespaces(runtime) {
+		return [
+			{
+				name: "bookmarks",
+				methods: [
+					"get",
+					"getChildren",
+					"getRecent",
+					"getSubTree",
+					"getTree",
+					"search",
+					"create",
+					"move",
+					"update",
+					"remove",
+					"removeTree"
+				],
+				events: [
+					"onCreated",
+					"onRemoved",
+					"onChanged",
+					"onMoved",
+					"onChildrenReordered",
+					"onImportBegan",
+					"onImportEnded"
+				]
+			},
+			{
+				name: "history",
+				methods: [
+					"search",
+					"getVisits",
+					"addUrl",
+					"deleteUrl",
+					"deleteRange",
+					"deleteAll"
+				],
+				events: ["onVisited", "onVisitRemoved"]
+			},
+			{
+				name: "downloads",
+				methods: [
+					"download",
+					"search",
+					"pause",
+					"resume",
+					"cancel",
+					"open",
+					"show",
+					"showDefaultFolder",
+					"erase",
+					"removeFile",
+					"getFileIcon"
+				],
+				events: [
+					"onCreated",
+					"onChanged",
+					"onErased",
+					"onDeterminingFilename"
+				]
+			},
+			{
+				name: "sidePanel",
+				methods: [
+					"open",
+					"setOptions",
+					"getOptions",
+					"setPanelBehavior",
+					"getPanelBehavior"
+				]
+			},
+			{
+				name: "offscreen",
+				methods: [
+					"createDocument",
+					"closeDocument",
+					"hasDocument"
+				],
+				extra: { Reason: new Proxy({}, { get: (_, key) => String(key) }) }
+			},
+			{
+				name: "tabGroups",
+				methods: [
+					"get",
+					"query",
+					"update",
+					"move"
+				],
+				events: [
+					"onCreated",
+					"onRemoved",
+					"onUpdated",
+					"onMoved"
+				],
+				extra: { TAB_GROUP_ID_NONE: -1 }
+			},
+			{
+				name: "fontSettings",
+				methods: [
+					"getFontList",
+					"getFont",
+					"setFont",
+					"clearFont",
+					"getDefaultFontSize",
+					"setDefaultFontSize",
+					"clearDefaultFontSize",
+					"getDefaultFixedFontSize",
+					"setDefaultFixedFontSize",
+					"clearDefaultFixedFontSize",
+					"getMinimumFontSize",
+					"setMinimumFontSize",
+					"clearMinimumFontSize"
+				],
+				events: [
+					"onFontChanged",
+					"onDefaultFontSizeChanged",
+					"onDefaultFixedFontSizeChanged",
+					"onMinimumFontSizeChanged"
+				]
+			},
+			{
+				name: "management",
+				methods: [
+					"getSelf",
+					"getAll",
+					"get",
+					"setEnabled",
+					"uninstallSelf"
+				],
+				events: [
+					"onInstalled",
+					"onUninstalled",
+					"onEnabled",
+					"onDisabled"
+				]
+			},
+			{
+				name: "notifications",
+				methods: [
+					"create",
+					"update",
+					"clear",
+					"getAll",
+					"getPermissionLevel"
+				],
+				events: [
+					"onClicked",
+					"onClosed",
+					"onButtonClicked",
+					"onPermissionLevelChanged",
+					"onShowSettings"
+				]
+			},
+			{
+				name: "tts",
+				methods: [
+					"speak",
+					"stop",
+					"pause",
+					"resume",
+					"isSpeaking",
+					"getVoices"
+				],
+				events: ["onVoicesChanged"]
+			},
+			{
+				name: "identity",
+				methods: [
+					"launchWebAuthFlow",
+					"getAuthToken",
+					"getProfileUserInfo",
+					"removeCachedAuthToken",
+					"clearAllCachedAuthTokens"
+				],
+				events: ["onSignInChanged"],
+				extra: { getRedirectURL: (path = "") => "https://" + runtime.id + ".chromiumapp.org/" + String(path).replace(/^\//, "") }
+			},
+			{
+				name: "search",
+				methods: ["query"]
+			},
+			{
+				name: "idle",
+				methods: ["queryState", "getAutoLockDelay"],
+				extra: { IdleState: {
+					ACTIVE: "active",
+					IDLE: "idle",
+					LOCKED: "locked"
+				} }
+			},
+			{
+				name: "power",
+				methods: [
+					"requestKeepAwake",
+					"releaseKeepAwake",
+					"reportActivity"
+				]
+			},
+			{
+				name: "browsingData",
+				methods: [
+					"remove",
+					"removeAppcache",
+					"removeCache",
+					"removeCacheStorage",
+					"removeCookies",
+					"removeDownloads",
+					"removeFileSystems",
+					"removeFormData",
+					"removeHistory",
+					"removeIndexedDB",
+					"removeLocalStorage",
+					"removePasswords",
+					"removeServiceWorkers",
+					"removeWebSQL",
+					"settings"
+				]
+			},
+			{
+				name: "sessions",
+				methods: [
+					"getRecentlyClosed",
+					"getDevices",
+					"restore"
+				],
+				events: ["onChanged"],
+				extra: { MAX_SESSION_RESULTS: 25 }
+			},
+			{
+				name: "topSites",
+				methods: ["get"]
+			},
+			{
+				name: "readingList",
+				methods: [
+					"query",
+					"addEntry",
+					"removeEntry",
+					"updateEntry"
+				],
+				events: [
+					"onEntryAdded",
+					"onEntryRemoved",
+					"onEntryUpdated"
+				]
+			}
+		];
+	}
+	/** Sets a whole namespace on `chrome`, and on `browser` when that is another object, unless it is there. */
+	function putNamespace({ root, chrome, put }, name, api) {
+		if (chrome[name]) return;
+		put(chrome, name, api);
+		if (root.browser && root.browser !== chrome && !root.browser[name]) put(root.browser, name, api);
+	}
+	function defineNamespace(shim, { name, methods, events = [], extra = {} }) {
+		if (shim.chrome[name]) return;
+		const api = Object.assign({}, extra);
+		for (const method of methods) api[method] = nativeCall(shim, name + "." + method);
+		for (const event of events) api[event] = createEvent();
+		putNamespace(shim, name, api);
+	}
+	function defineBrowserNamespaces(shim) {
+		for (const spec of browserNamespaces(shim.runtime)) defineNamespace(shim, spec);
+	}
+	/**
+	* idle.onStateChanged, asked every so often while anyone listens, the way
+	* Chrome notices on its own.
+	*/
+	function addIdleStateEvent({ chrome, put, native }) {
+		if (!chrome.idle || chrome.idle.onStateChanged) return;
+		const changed = createEvent();
+		const add = changed.addListener;
+		let every = 60;
+		let state = "active";
+		let timer = null;
+		changed.addListener = (f) => {
+			add(f);
+			if (timer) return;
+			timer = setInterval(() => native("idle.queryState", [every]).then((now) => {
+				if (now === state) return;
+				state = now;
+				for (const g of changed.listeners) try {
+					g(now);
+				} catch (e) {
+					rethrowLater(e);
+				}
+			}).catch(() => {}), 15e3);
+		};
+		put(chrome.idle, "onStateChanged", changed);
+		put(chrome.idle, "setDetectionInterval", (seconds) => {
+			every = Math.max(15, Number(seconds) || 60);
+		});
+	}
+	function defineSystem(shim) {
+		const call = (api) => nativeCall(shim, api);
+		putNamespace(shim, "system", {
+			cpu: { getInfo: call("system.cpu.getInfo") },
+			memory: { getInfo: call("system.memory.getInfo") },
+			storage: {
+				getInfo: call("system.storage.getInfo"),
+				ejectDevice: refuse(shim, "system.storage.ejectDevice"),
+				getAvailableCapacity: refuse(shim, "system.storage.getAvailableCapacity"),
+				onAttached: createEvent(),
+				onDetached: createEvent()
+			},
+			display: {
+				getInfo: call("system.display.getInfo"),
+				onDisplayChanged: createEvent()
+			}
+		});
+	}
+	/** Members of namespaces WebKit has, answered by the browser. */
+	function addBrowserMembers(shim) {
+		const { chrome, runtime, put } = shim;
+		if (chrome.i18n && !chrome.i18n.detectLanguage) put(chrome.i18n, "detectLanguage", nativeCall(shim, "i18n.detectLanguage"));
+		if (runtime && !runtime.getContexts) put(runtime, "getContexts", nativeCall(shim, "runtime.getContexts"));
+	}
+
+//#endregion
+//#region src/extension-shims/settings.ts
+	function setting(shim, name) {
+		return {
+			get: nativeCall(shim, "setting.get:" + name),
+			set: nativeCall(shim, "setting.set:" + name),
+			clear: nativeCall(shim, "setting.clear:" + name),
+			onChange: createEvent()
+		};
+	}
+	function settings(shim, prefix, names) {
+		return Object.fromEntries(names.map((n) => [n, setting(shim, prefix + "." + n)]));
+	}
+	const PRIVACY_SETTINGS = {
+		services: [
+			"alternateErrorPagesEnabled",
+			"autofillAddressEnabled",
+			"autofillCreditCardEnabled",
+			"autofillEnabled",
+			"passwordSavingEnabled",
+			"safeBrowsingEnabled",
+			"safeBrowsingExtendedReportingEnabled",
+			"searchSuggestEnabled",
+			"spellingServiceEnabled",
+			"translationServiceEnabled"
+		],
+		network: ["networkPredictionEnabled", "webRTCIPHandlingPolicy"],
+		websites: [
+			"adMeasurementEnabled",
+			"doNotTrackEnabled",
+			"fledgeEnabled",
+			"hyperlinkAuditingEnabled",
+			"protectedContentEnabled",
+			"referrersEnabled",
+			"relatedWebsiteSetsEnabled",
+			"thirdPartyCookiesAllowed",
+			"topicsEnabled"
+		]
+	};
+	function definePrivacy(shim) {
+		putNamespace(shim, "privacy", {
+			services: settings(shim, "privacy.services", PRIVACY_SETTINGS.services),
+			network: settings(shim, "privacy.network", PRIVACY_SETTINGS.network),
+			websites: settings(shim, "privacy.websites", PRIVACY_SETTINGS.websites),
+			IPHandlingPolicy: {
+				DEFAULT: "default",
+				DEFAULT_PUBLIC_AND_PRIVATE_INTERFACES: "default_public_and_private_interfaces",
+				DEFAULT_PUBLIC_INTERFACE_ONLY: "default_public_interface_only",
+				DISABLE_NON_PROXIED_UDP: "disable_non_proxied_udp"
+			}
+		});
+	}
+	const CONTENT_SETTINGS = [
+		"automaticDownloads",
+		"autoVerify",
+		"camera",
+		"clipboard",
+		"cookies",
+		"images",
+		"javascript",
+		"location",
+		"microphone",
+		"notifications",
+		"plugins",
+		"popups",
+		"sound"
+	];
+	function contentSetting() {
+		return {
+			get: (_details, cb) => {
+				const v = { setting: "allow" };
+				if (cb) cb(v);
+				else return Promise.resolve(v);
+			},
+			set: (_details, cb) => {
+				if (cb) cb();
+				else return Promise.resolve();
+			},
+			clear: (_details, cb) => {
+				if (cb) cb();
+				else return Promise.resolve();
+			},
+			getResourceIdentifiers: (cb) => {
+				if (cb) cb([]);
+				else return Promise.resolve([]);
+			}
+		};
+	}
+	function defineContentSettings(shim) {
+		putNamespace(shim, "contentSettings", Object.fromEntries(CONTENT_SETTINGS.map((n) => [n, contentSetting()])));
+	}
+
+//#endregion
+//#region src/extension-shims/proxy.ts
+/** What a page load is asked as. */
+	const SAMPLE = "https://www.example.com/";
+	/** How often the listener is asked again. */
+	const EVERY = 2e3;
+	/** The extension's webRequest.onAuthRequired listeners (web-request.ts keeps them). */
+	const authListeners = /* @__PURE__ */ new Set();
+	/**
+	* A listener's answer (a proxy, a list of them to try in turn, or DIRECT) as
+	* the browser takes it: the first proxy it can use, or null for none.
+	*/
+	function proxyChoice(answer) {
+		const first = Array.isArray(answer) ? answer[0] : answer;
+		if (!first || typeof first !== "object") return null;
+		const info = first;
+		const kind = String(info.type ?? "").toLowerCase();
+		const type = kind === "http" || kind === "https" ? kind : kind === "socks" || kind === "socks5" ? "socks" : null;
+		const port = Number(info.port);
+		if (!type || typeof info.host !== "string" || !info.host || !Number.isInteger(port) || port < 1 || port > 65535) return null;
+		const choice = {
+			type,
+			host: info.host,
+			port
+		};
+		if (typeof info.username === "string" && typeof info.password === "string") {
+			choice.username = info.username;
+			choice.password = info.password;
+		} else if (typeof info.proxyAuthorizationHeader === "string") {
+			const basic = /^basic\s+(.+)$/i.exec(info.proxyAuthorizationHeader.trim());
+			try {
+				const words = basic?.[1] ? atob(basic[1]) : "";
+				const colon = words.indexOf(":");
+				if (colon > 0) {
+					choice.username = words.slice(0, colon);
+					choice.password = words.slice(colon + 1);
+				}
+			} catch {}
+		}
+		return choice;
+	}
+	/** A listener's answer, given by returning it, a promise, or (Chrome's asyncBlocking) a callback. */
+	function answerOf(listener, details) {
+		return new Promise((resolve) => {
+			const timer = setTimeout(() => resolve(void 0), 3e3);
+			const done = (value) => {
+				clearTimeout(timer);
+				resolve(value);
+			};
+			try {
+				const returned = listener(details, done);
+				if (returned !== void 0) Promise.resolve(returned).then(done, () => done(void 0));
+			} catch {
+				done(void 0);
+			}
+		});
+	}
+	/** The sign-in the extension gives for `choice`, asked as the proxy asking. */
+	async function signIn(choice) {
+		if (choice.username !== void 0) return choice;
+		for (const listener of authListeners) {
+			const given = (await answerOf(listener, {
+				requestId: "mote-proxy",
+				url: SAMPLE,
+				method: "GET",
+				frameId: 0,
+				parentFrameId: -1,
+				tabId: -1,
+				type: "main_frame",
+				timeStamp: Date.now(),
+				isProxy: true,
+				scheme: "basic",
+				realm: "",
+				challenger: {
+					host: choice.host,
+					port: choice.port
+				},
+				statusCode: 407,
+				statusLine: "HTTP/1.1 407 Proxy Authentication Required"
+			}))?.authCredentials;
+			if (typeof given?.username === "string" && typeof given.password === "string") return {
+				...choice,
+				username: given.username,
+				password: given.password
+			};
+		}
+		return choice;
+	}
+	function defineProxy(shim) {
+		const onRequest = createEvent();
+		putNamespace(shim, "proxy", {
+			settings: setting(shim, "proxy.settings"),
+			onRequest,
+			onError: createEvent(),
+			onProxyError: createEvent()
+		});
+		if (!shim.background) return;
+		/** What the browser was last told, as text; null before anything. */
+		let told = null;
+		/** The proxy last signed in for, so a sign-in is asked once per proxy. */
+		let signedFor = "";
+		let signed = null;
+		let timer;
+		const check = async () => {
+			let choice = null;
+			for (const listener of [...onRequest.listeners]) {
+				choice = proxyChoice(await answerOf(listener, {
+					requestId: "mote-proxy",
+					url: SAMPLE,
+					method: "GET",
+					frameId: 0,
+					parentFrameId: -1,
+					tabId: -1,
+					type: "main_frame",
+					timeStamp: Date.now()
+				}));
+				if (choice) break;
+			}
+			if (choice) {
+				const key = `${choice.type}://${choice.host}:${choice.port}`;
+				if (key !== signedFor || !signed) {
+					signedFor = key;
+					signed = await signIn(choice);
+				}
+				choice = signed;
+			}
+			const text = JSON.stringify(choice);
+			if (text === told) return;
+			told = text;
+			shim.native("proxy.apply", [choice]).catch(() => void 0);
+		};
+		const add = onRequest.addListener.bind(onRequest);
+		const remove = onRequest.removeListener.bind(onRequest);
+		onRequest.addListener = (listener) => {
+			add(listener);
+			timer ??= setInterval(() => void check(), EVERY);
+			check();
+		};
+		onRequest.removeListener = (listener) => {
+			remove(listener);
+			if (!onRequest.hasListeners() && timer !== void 0) {
+				clearInterval(timer);
+				timer = void 0;
+			}
+			check();
+		};
+	}
+
+//#endregion
 //#region src/extension-shims/web-request.ts
 	function fillWebRequest(shim, resourceTypes) {
 		fill(shim, "webRequest", {
@@ -1579,6 +2140,7 @@
 			if (!isEventName(key) || !target || typeof target.addListener !== "function") continue;
 			const add = target.addListener.bind(target);
 			put(target, "addListener", (listener, filter, spec) => {
+				if (key === "onAuthRequired") authListeners.add(listener);
 				const kept = withoutSocketPatterns(filter);
 				if (kept === null) return void 0;
 				filter = kept;
@@ -1594,6 +2156,13 @@
 					if (!isLateListenerError(e)) throw e;
 				}
 			});
+			if (key === "onAuthRequired") {
+				const remove = target.removeListener.bind(target);
+				put(target, "removeListener", (listener) => {
+					authListeners.delete(listener);
+					return remove(listener);
+				});
+			}
 		}
 	}
 
@@ -2114,327 +2683,6 @@
 				add(dispatch);
 			}
 		};
-	}
-
-//#endregion
-//#region src/extension-shims/namespaces.ts
-/** The namespaces answered by the browser, in the order they are defined. */
-	function browserNamespaces(runtime) {
-		return [
-			{
-				name: "bookmarks",
-				methods: [
-					"get",
-					"getChildren",
-					"getRecent",
-					"getSubTree",
-					"getTree",
-					"search",
-					"create",
-					"move",
-					"update",
-					"remove",
-					"removeTree"
-				],
-				events: [
-					"onCreated",
-					"onRemoved",
-					"onChanged",
-					"onMoved",
-					"onChildrenReordered",
-					"onImportBegan",
-					"onImportEnded"
-				]
-			},
-			{
-				name: "history",
-				methods: [
-					"search",
-					"getVisits",
-					"addUrl",
-					"deleteUrl",
-					"deleteRange",
-					"deleteAll"
-				],
-				events: ["onVisited", "onVisitRemoved"]
-			},
-			{
-				name: "downloads",
-				methods: [
-					"download",
-					"search",
-					"pause",
-					"resume",
-					"cancel",
-					"open",
-					"show",
-					"showDefaultFolder",
-					"erase",
-					"removeFile",
-					"getFileIcon"
-				],
-				events: [
-					"onCreated",
-					"onChanged",
-					"onErased",
-					"onDeterminingFilename"
-				]
-			},
-			{
-				name: "sidePanel",
-				methods: [
-					"open",
-					"setOptions",
-					"getOptions",
-					"setPanelBehavior",
-					"getPanelBehavior"
-				]
-			},
-			{
-				name: "offscreen",
-				methods: [
-					"createDocument",
-					"closeDocument",
-					"hasDocument"
-				],
-				extra: { Reason: new Proxy({}, { get: (_, key) => String(key) }) }
-			},
-			{
-				name: "tabGroups",
-				methods: [
-					"get",
-					"query",
-					"update",
-					"move"
-				],
-				events: [
-					"onCreated",
-					"onRemoved",
-					"onUpdated",
-					"onMoved"
-				],
-				extra: { TAB_GROUP_ID_NONE: -1 }
-			},
-			{
-				name: "fontSettings",
-				methods: [
-					"getFontList",
-					"getFont",
-					"setFont",
-					"clearFont",
-					"getDefaultFontSize",
-					"setDefaultFontSize",
-					"clearDefaultFontSize",
-					"getDefaultFixedFontSize",
-					"setDefaultFixedFontSize",
-					"clearDefaultFixedFontSize",
-					"getMinimumFontSize",
-					"setMinimumFontSize",
-					"clearMinimumFontSize"
-				],
-				events: [
-					"onFontChanged",
-					"onDefaultFontSizeChanged",
-					"onDefaultFixedFontSizeChanged",
-					"onMinimumFontSizeChanged"
-				]
-			},
-			{
-				name: "management",
-				methods: [
-					"getSelf",
-					"getAll",
-					"get",
-					"setEnabled",
-					"uninstallSelf"
-				],
-				events: [
-					"onInstalled",
-					"onUninstalled",
-					"onEnabled",
-					"onDisabled"
-				]
-			},
-			{
-				name: "notifications",
-				methods: [
-					"create",
-					"update",
-					"clear",
-					"getAll",
-					"getPermissionLevel"
-				],
-				events: [
-					"onClicked",
-					"onClosed",
-					"onButtonClicked",
-					"onPermissionLevelChanged",
-					"onShowSettings"
-				]
-			},
-			{
-				name: "tts",
-				methods: [
-					"speak",
-					"stop",
-					"pause",
-					"resume",
-					"isSpeaking",
-					"getVoices"
-				],
-				events: ["onVoicesChanged"]
-			},
-			{
-				name: "identity",
-				methods: [
-					"launchWebAuthFlow",
-					"getAuthToken",
-					"getProfileUserInfo",
-					"removeCachedAuthToken",
-					"clearAllCachedAuthTokens"
-				],
-				events: ["onSignInChanged"],
-				extra: { getRedirectURL: (path = "") => "https://" + runtime.id + ".chromiumapp.org/" + String(path).replace(/^\//, "") }
-			},
-			{
-				name: "search",
-				methods: ["query"]
-			},
-			{
-				name: "idle",
-				methods: ["queryState", "getAutoLockDelay"],
-				extra: { IdleState: {
-					ACTIVE: "active",
-					IDLE: "idle",
-					LOCKED: "locked"
-				} }
-			},
-			{
-				name: "power",
-				methods: [
-					"requestKeepAwake",
-					"releaseKeepAwake",
-					"reportActivity"
-				]
-			},
-			{
-				name: "browsingData",
-				methods: [
-					"remove",
-					"removeAppcache",
-					"removeCache",
-					"removeCacheStorage",
-					"removeCookies",
-					"removeDownloads",
-					"removeFileSystems",
-					"removeFormData",
-					"removeHistory",
-					"removeIndexedDB",
-					"removeLocalStorage",
-					"removePasswords",
-					"removeServiceWorkers",
-					"removeWebSQL",
-					"settings"
-				]
-			},
-			{
-				name: "sessions",
-				methods: [
-					"getRecentlyClosed",
-					"getDevices",
-					"restore"
-				],
-				events: ["onChanged"],
-				extra: { MAX_SESSION_RESULTS: 25 }
-			},
-			{
-				name: "topSites",
-				methods: ["get"]
-			},
-			{
-				name: "readingList",
-				methods: [
-					"query",
-					"addEntry",
-					"removeEntry",
-					"updateEntry"
-				],
-				events: [
-					"onEntryAdded",
-					"onEntryRemoved",
-					"onEntryUpdated"
-				]
-			}
-		];
-	}
-	/** Sets a whole namespace on `chrome`, and on `browser` when that is another object, unless it is there. */
-	function putNamespace({ root, chrome, put }, name, api) {
-		if (chrome[name]) return;
-		put(chrome, name, api);
-		if (root.browser && root.browser !== chrome && !root.browser[name]) put(root.browser, name, api);
-	}
-	function defineNamespace(shim, { name, methods, events = [], extra = {} }) {
-		if (shim.chrome[name]) return;
-		const api = Object.assign({}, extra);
-		for (const method of methods) api[method] = nativeCall(shim, name + "." + method);
-		for (const event of events) api[event] = createEvent();
-		putNamespace(shim, name, api);
-	}
-	function defineBrowserNamespaces(shim) {
-		for (const spec of browserNamespaces(shim.runtime)) defineNamespace(shim, spec);
-	}
-	/**
-	* idle.onStateChanged, asked every so often while anyone listens, the way
-	* Chrome notices on its own.
-	*/
-	function addIdleStateEvent({ chrome, put, native }) {
-		if (!chrome.idle || chrome.idle.onStateChanged) return;
-		const changed = createEvent();
-		const add = changed.addListener;
-		let every = 60;
-		let state = "active";
-		let timer = null;
-		changed.addListener = (f) => {
-			add(f);
-			if (timer) return;
-			timer = setInterval(() => native("idle.queryState", [every]).then((now) => {
-				if (now === state) return;
-				state = now;
-				for (const g of changed.listeners) try {
-					g(now);
-				} catch (e) {
-					rethrowLater(e);
-				}
-			}).catch(() => {}), 15e3);
-		};
-		put(chrome.idle, "onStateChanged", changed);
-		put(chrome.idle, "setDetectionInterval", (seconds) => {
-			every = Math.max(15, Number(seconds) || 60);
-		});
-	}
-	function defineSystem(shim) {
-		const call = (api) => nativeCall(shim, api);
-		putNamespace(shim, "system", {
-			cpu: { getInfo: call("system.cpu.getInfo") },
-			memory: { getInfo: call("system.memory.getInfo") },
-			storage: {
-				getInfo: call("system.storage.getInfo"),
-				ejectDevice: refuse(shim, "system.storage.ejectDevice"),
-				getAvailableCapacity: refuse(shim, "system.storage.getAvailableCapacity"),
-				onAttached: createEvent(),
-				onDetached: createEvent()
-			},
-			display: {
-				getInfo: call("system.display.getInfo"),
-				onDisplayChanged: createEvent()
-			}
-		});
-	}
-	/** Members of namespaces WebKit has, answered by the browser. */
-	function addBrowserMembers(shim) {
-		const { chrome, runtime, put } = shim;
-		if (chrome.i18n && !chrome.i18n.detectLanguage) put(chrome.i18n, "detectLanguage", nativeCall(shim, "i18n.detectLanguage"));
-		if (runtime && !runtime.getContexts) put(runtime, "getContexts", nativeCall(shim, "runtime.getContexts"));
 	}
 
 //#endregion
@@ -2979,104 +3227,6 @@
 				return port;
 			});
 		}
-	}
-
-//#endregion
-//#region src/extension-shims/settings.ts
-	function setting(shim, name) {
-		return {
-			get: nativeCall(shim, "setting.get:" + name),
-			set: nativeCall(shim, "setting.set:" + name),
-			clear: nativeCall(shim, "setting.clear:" + name),
-			onChange: createEvent()
-		};
-	}
-	function settings(shim, prefix, names) {
-		return Object.fromEntries(names.map((n) => [n, setting(shim, prefix + "." + n)]));
-	}
-	const PRIVACY_SETTINGS = {
-		services: [
-			"alternateErrorPagesEnabled",
-			"autofillAddressEnabled",
-			"autofillCreditCardEnabled",
-			"autofillEnabled",
-			"passwordSavingEnabled",
-			"safeBrowsingEnabled",
-			"safeBrowsingExtendedReportingEnabled",
-			"searchSuggestEnabled",
-			"spellingServiceEnabled",
-			"translationServiceEnabled"
-		],
-		network: ["networkPredictionEnabled", "webRTCIPHandlingPolicy"],
-		websites: [
-			"adMeasurementEnabled",
-			"doNotTrackEnabled",
-			"fledgeEnabled",
-			"hyperlinkAuditingEnabled",
-			"protectedContentEnabled",
-			"referrersEnabled",
-			"relatedWebsiteSetsEnabled",
-			"thirdPartyCookiesAllowed",
-			"topicsEnabled"
-		]
-	};
-	function definePrivacy(shim) {
-		putNamespace(shim, "privacy", {
-			services: settings(shim, "privacy.services", PRIVACY_SETTINGS.services),
-			network: settings(shim, "privacy.network", PRIVACY_SETTINGS.network),
-			websites: settings(shim, "privacy.websites", PRIVACY_SETTINGS.websites),
-			IPHandlingPolicy: {
-				DEFAULT: "default",
-				DEFAULT_PUBLIC_AND_PRIVATE_INTERFACES: "default_public_and_private_interfaces",
-				DEFAULT_PUBLIC_INTERFACE_ONLY: "default_public_interface_only",
-				DISABLE_NON_PROXIED_UDP: "disable_non_proxied_udp"
-			}
-		});
-	}
-	const CONTENT_SETTINGS = [
-		"automaticDownloads",
-		"autoVerify",
-		"camera",
-		"clipboard",
-		"cookies",
-		"images",
-		"javascript",
-		"location",
-		"microphone",
-		"notifications",
-		"plugins",
-		"popups",
-		"sound"
-	];
-	function contentSetting() {
-		return {
-			get: (_details, cb) => {
-				const v = { setting: "allow" };
-				if (cb) cb(v);
-				else return Promise.resolve(v);
-			},
-			set: (_details, cb) => {
-				if (cb) cb();
-				else return Promise.resolve();
-			},
-			clear: (_details, cb) => {
-				if (cb) cb();
-				else return Promise.resolve();
-			},
-			getResourceIdentifiers: (cb) => {
-				if (cb) cb([]);
-				else return Promise.resolve([]);
-			}
-		};
-	}
-	function defineContentSettings(shim) {
-		putNamespace(shim, "contentSettings", Object.fromEntries(CONTENT_SETTINGS.map((n) => [n, contentSetting()])));
-	}
-	function defineProxy(shim) {
-		putNamespace(shim, "proxy", {
-			settings: setting(shim, "proxy.settings"),
-			onProxyError: createEvent()
-		});
 	}
 
 //#endregion

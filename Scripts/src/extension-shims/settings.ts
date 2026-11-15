@@ -1,4 +1,4 @@
-// Chrome's settings objects (chrome.privacy, chrome.proxy): get, set and
+// Chrome's settings objects (chrome.privacy, chrome.proxy's in proxy.ts): get, set and
 // clear, answered by the browser, and an event. chrome.contentSettings
 // answers that everything is allowed.
 
@@ -117,8 +117,4 @@ export function defineContentSettings(shim: Shim): void {
     'contentSettings',
     Object.fromEntries(CONTENT_SETTINGS.map((n) => [n, contentSetting()])),
   );
-}
-
-export function defineProxy(shim: Shim): void {
-  putNamespace(shim, 'proxy', { settings: setting(shim, 'proxy.settings'), onProxyError: createEvent() });
 }

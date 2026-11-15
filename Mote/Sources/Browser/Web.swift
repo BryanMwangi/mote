@@ -49,6 +49,8 @@ enum Web {
         let config = WKWebViewConfiguration()
         config.websiteDataStore =
             store ?? (shy ? .nonPersistent() : MainActor.assumeIsolated { Spaces.store(for: space ?? Spaces.current) })
+        // Through an extension's proxy, while one is set.
+        MainActor.assumeIsolated { ExtensionProxy.dress(config.websiteDataStore) }
         // Extensions reach private tabs only when Settings › Extensions allows it,
         // and the controller has to be in place before the view exists.
         if #available(macOS 15.4, *), !shy || Storage.settings.bool(forKey: "extensions.private") {

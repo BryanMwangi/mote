@@ -89,6 +89,7 @@ public enum ChromeAPIRules {
     public static let gates: [String: String] = [
         "bookmarks": "bookmarks", "history": "history", "downloads": "downloads", "sessions": "sessions", "topSites": "topSites",
         "browsingData": "browsingData", "readingList": "readingList", "userScripts": "userScripts", "identity": "identity",
+        "proxy": "proxy",
     ]
 
     /// The permission an API call needs, if any.

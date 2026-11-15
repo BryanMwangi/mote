@@ -247,7 +247,16 @@ extension ChromeAPI {
             ]
         }
         Extensions.setSettings(mine, for: call.id)
+        if name == "proxy.settings" { ExtensionProxy.set(ExtensionProxy.choice(fromSetting: mine[name]), by: call.id) }
         call.owner.objectWillChange.send()
+        return nil
+    }
+
+    /// Firefox's proxy.onRequest, as proxy.ts asks it: the proxy for pages
+    /// now, or null for none.
+    static func proxy(_ call: ChromeCall) async throws -> Any? {
+        guard call.method == "apply" else { throw unavailable(call) }
+        ExtensionProxy.set(ExtensionProxy.choice(fromAnswer: call.first), by: call.id)
         return nil
     }
 }

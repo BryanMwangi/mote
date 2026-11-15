@@ -102,6 +102,7 @@ final class Extensions: NSObject, ObservableObject {
         let pages = setup.webViewConfiguration ?? WKWebViewConfiguration()
         // Otherwise WebKit's default store, not the browser's.
         pages.websiteDataStore = Storage.websites
+        ExtensionProxy.dress(pages.websiteDataStore)
         // The same as tabs, exactly: a page loading with another user agent
         // makes WebKit restart running workers, and it never restarts an
         // extension's. The shim tells extensions they're in Chrome.
@@ -183,6 +184,10 @@ final class Extensions: NSObject, ObservableObject {
             Self.everLoaded.insert(item.id)
             contexts[item.id] = context
             actionsChanged += 1
+            // The proxy it set before, through chrome.proxy.settings.
+            if let proxy = ExtensionProxy.choice(fromSetting: Self.settings(for: item.id)["proxy.settings"]) {
+                ExtensionProxy.set(proxy, by: item.id)
+            }
             return true
         } catch {
             NSLog("Extensions: couldn't load %@: %@", item.id, error.localizedDescription)
@@ -193,6 +198,7 @@ final class Extensions: NSObject, ObservableObject {
     func unload(_ id: String) {
         guard let context = contexts[id] else { return }
         try? controller.unload(context)
+        ExtensionProxy.release(id)
         // WebKit says its ports closed only on the next turn of the run loop.
         DispatchQueue.main.async { NativeMessaging.stopOrphans() }
         contexts[id] = nil

@@ -3,6 +3,7 @@
 import { resolved } from './callbacks';
 import { createEvent, isEventName, type Listener } from './events';
 import { fill } from './members';
+import { authListeners } from './proxy';
 import type { Shim } from './types';
 
 export function fillWebRequest(shim: Shim, resourceTypes: Record<string, string>): void {
@@ -81,6 +82,8 @@ export function mendRequestListeners({ chrome, put }: Shim): void {
     if (!isEventName(key) || !target || typeof target.addListener !== 'function') continue;
     const add = target.addListener.bind(target);
     put(target, 'addListener', (listener: Listener, filter?: RequestFilter, spec?: unknown) => {
+      // Also asked for a proxy's sign-in (proxy.ts), which WebKit doesn't ask it.
+      if (key === 'onAuthRequired') authListeners.add(listener);
       const kept = withoutSocketPatterns(filter);
       if (kept === null) return undefined;
       filter = kept;
@@ -101,5 +104,12 @@ export function mendRequestListeners({ chrome, put }: Shim): void {
       }
       return undefined;
     });
+    if (key === 'onAuthRequired') {
+      const remove = target.removeListener.bind(target);
+      put(target, 'removeListener', (listener: Listener) => {
+        authListeners.delete(listener);
+        return remove(listener);
+      });
+    }
   }
 }

@@ -64,7 +64,7 @@ enum ChromeAPI {
         "management": management, "runtime": runtime, "background": background, "debug": debug, "action": action,
         "permissions": permissions, "tabs": tabs, "search": search, "userScripts": userScripts, "fontSettings": fontSettings,
         "i18n": i18n, "notifications": notifications, "tts": tts, "idle": idle, "power": power, "system": system,
-        "tabGroups": tabGroups, "identity": identity, "setting": setting,
+        "tabGroups": tabGroups, "identity": identity, "setting": setting, "proxy": proxy,
     ]
 
     static func run(_ call: ChromeCall) async throws -> Any? {
