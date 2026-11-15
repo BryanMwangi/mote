@@ -526,11 +526,28 @@ final class PageView: WKWebView {
         if !sideButton(event) { super.otherMouseDown(with: event) }
     }
 
+    /// Back as Mote's Back goes: when there's no page before, to the tab that
+    /// opened this one, closing it (Browser.backCloses).
+    private var owner: (browser: Browser, tab: Tab)? {
+        guard let browser = Windows.shared.browser(for: window), let tab = browser.tab(for: self) else { return nil }
+        return (browser, tab)
+    }
+
+    var mayGoBack: Bool { canGoBack || owner.map { $0.browser.backCloses($0.tab) != nil } == true }
+
+    func back() {
+        guard let owner else {
+            goBack()
+            return
+        }
+        owner.browser.back(owner.tab)
+    }
+
     /// Back or forward for a side button; false for any other.
     @discardableResult
     func sideButton(_ event: NSEvent) -> Bool {
         switch event.buttonNumber {
-        case 3 where canGoBack: goBack()
+        case 3 where mayGoBack: back()
         case 4 where canGoForward: goForward()
         default: return false
         }
@@ -540,8 +557,8 @@ final class PageView: WKWebView {
     /// Logi Options+ sends its back and forward buttons as swipes, as Safari
     /// reads them: positive for back.
     override func swipe(with event: NSEvent) {
-        if event.deltaX > 0, canGoBack {
-            goBack()
+        if event.deltaX > 0, mayGoBack {
+            back()
         } else if event.deltaX < 0, canGoForward {
             goForward()
         } else {
@@ -682,7 +699,7 @@ final class PageView: WKWebView {
         case .changed:
             apply(
                 swipe.move(dx: event.scrollingDeltaX, dy: event.scrollingDeltaY, at: Date()) { [unowned self] back in
-                    back ? canGoBack : canGoForward
+                    back ? mayGoBack : canGoForward
                 })
         case .ended:
             apply(swipe.end(at: Date()))
@@ -706,7 +723,7 @@ final class PageView: WKWebView {
             case .tick(let armed):
                 Haptic.tick(armed ? .levelChange : .alignment)
             case .navigate(let back):
-                if back { goBack() } else { goForward() }
+                if back { self.back() } else { goForward() }
                 leaving = true
                 gestures += 1
                 let mine = gestures

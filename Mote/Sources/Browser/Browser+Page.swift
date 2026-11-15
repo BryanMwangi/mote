@@ -42,8 +42,11 @@ extension Browser {
     func toggleToolbar() {
         prefs.toolbarMode = prefs.toolbarMode == .shown ? .hover : .shown
     }
-    func back() {
-        guard let tab = active else { return }
+    func back() { if let tab = active { back(tab) } }
+
+    /// The page before, or the tab that opened this one, by any way of going
+    /// back: the button, a key, a mouse's side button, a swipe.
+    func back(_ tab: Tab) {
         if tab.canGoBack { return tab.back() }
         guard let opener = backCloses(tab) else { return }
         select(opener)
