@@ -13,7 +13,19 @@ final class WebPushService {
 
     /// The push server: Mozilla's, which speaks the open Web Push protocol to
     /// any client over a WebSocket.
+    ///
+    /// For now. Mote is to have its own way in: a serverless relay to Apple's
+    /// push service, with this server kept for builds that can't use it.
     private static let server = URL(string: "wss://push.services.mozilla.com/")!
+
+    /// Mote says who it is, so the server's people can see and reach it.
+    private static let session: URLSession = {
+        let configuration = URLSessionConfiguration.default
+        configuration.httpAdditionalHeaders = [
+            "User-Agent": "Mote/\(Updater.version) (+https://github.com/mote-browser/mote)"
+        ]
+        return URLSession(configuration: configuration)
+    }()
 
     nonisolated struct Subscription: Codable, Equatable, Sendable {
         /// The server's name for it.
@@ -43,6 +55,8 @@ final class WebPushService {
     private var whenReady: [() -> Void] = []
     private var retry: TimeInterval = 5
     private var pinger: Task<Void, Never>?
+    /// When the server last said anything.
+    private var lastHeard = Date.distantPast
 
     /// How the last pushes went, newest last, without their words: for the
     /// bench (`push`).
@@ -121,7 +135,7 @@ final class WebPushService {
 
     private func connect() {
         guard socket == nil else { return }
-        let made = URLSession.shared.webSocketTask(with: Self.server)
+        let made = Self.session.webSocketTask(with: Self.server)
         socket = made
         made.resume()
         send([
@@ -130,11 +144,27 @@ final class WebPushService {
         ])
         listen(made)
         pinger = Task { [weak self] in
-            // The server lets a quiet connection go; a ping keeps it.
+            // Two pings. Firefox's: a `{}` message after 30 minutes without a
+            // word from the server, answered within 10 seconds or the
+            // connection is made again (its dom.push.pingInterval and
+            // requestTimeout), so the server sees what it sees from Firefox.
+            // And a WebSocket ping every 3 minutes, which the socket itself
+            // answers: a connection quiet for about four minutes is let go
+            // without a word, and looks open while hearing nothing (measured:
+            // 240 s held, 280 s didn't).
             while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(300))
+                try? await Task.sleep(for: .seconds(180))
                 if Task.isCancelled { return }
-                self?.socket?.send(.string("{}")) { _ in }
+                made.sendPing { error in
+                    guard error != nil else { return }
+                    Task { @MainActor [weak self] in if self?.socket === made { self?.dropped() } }
+                }
+                guard let heard = self?.lastHeard, Date().timeIntervalSince(heard) >= 1800 else { continue }
+                let asked = Date()
+                self?.send([:])
+                try? await Task.sleep(for: .seconds(10))
+                guard let self, self.socket === made else { return }
+                if self.lastHeard < asked { self.dropped() }
             }
         }
     }
@@ -145,6 +175,7 @@ final class WebPushService {
                 guard let self, self.socket === made else { return }
                 switch result {
                 case .success(.string(let text)):
+                    self.lastHeard = Date()
                     if let message = (try? JSONSerialization.jsonObject(with: Data(text.utf8))) as? [String: Any] { self.heard(message) }
                     self.listen(made)
                 case .success:
