@@ -61,61 +61,93 @@ enum OpenFiles: String, CaseIterable, Identifiable {
     enum After: String, CaseIterable, Identifiable {
         case nothing, mote, app
         var id: String { rawValue }
-        var title: String {
-            switch self {
-            case .nothing: "Nothing"
-            case .mote: "Open in Mote"
-            case .app: "Open with its app"
-            }
-        }
+    }
+
+    /// The app that opens this kind now, by name; nil for none.
+    var openerName: String? {
+        opener.map { FileManager.default.displayName(atPath: $0.path).replacingOccurrences(of: ".app", with: "") }
     }
 
     var afterKey: String { "files.after.\(rawValue)" }
     var after: After { Storage.settings.string(forKey: afterKey).flatMap(After.init) ?? .nothing }
 }
 
-/// Settings › General › Files: a row per kind, with what opens it and what a
-/// finished download does.
+/// Settings › General › Files: which app opens each kind from Finder, and
+/// apart from that, what a finished download of each kind does.
 struct FilesSettings: View {
     /// Looked at again after Mote is made a default.
     @State private var looked = 0
 
     var body: some View {
-        SettingsSection("Files", note: "Mote opens these itself: PDFs in its reader, the rest in a tab.") {
+        SettingsSection("Opening files", note: "The app that opens each kind when you double-click one in Finder.") {
             ForEach(Array(OpenFiles.allCases.enumerated()), id: \.element) { index, kind in
                 if index > 0 { RowRule() }
-                Row(kind: kind, looked: $looked)
+                Opener(kind: kind, looked: $looked)
+            }
+        }
+        .id(looked)
+        SettingsSection(
+            "After a download", note: "What Mote does when a download finishes. Mote shows PDFs in its reader and the rest in a tab."
+        ) {
+            ForEach(Array(OpenFiles.allCases.enumerated()), id: \.element) { index, kind in
+                if index > 0 { RowRule() }
+                Downloaded(kind: kind)
+            }
+        }
+        .id(looked)
+    }
+
+    private struct Opener: View {
+        let kind: OpenFiles
+        @Binding var looked: Int
+
+        var body: some View {
+            SettingRow(
+                kind.title, kind.opensInMote ? "Opens in Mote" : "Opens in \(kind.openerName ?? "no app yet")", symbol: kind.symbol,
+                tint: Tint.blue
+            ) {
+                if kind.opensInMote {
+                    Label("Mote", systemImage: "checkmark").font(.system(size: 12)).foregroundStyle(.secondary)
+                } else {
+                    Pill("Open in Mote Instead") {
+                        Task {
+                            await kind.makeMoteDefault(); looked += 1
+                        }
+                    }
+                    .help("Makes Mote the app these open in from Finder")
+                }
             }
         }
     }
 
-    private struct Row: View {
+    private struct Downloaded: View {
         let kind: OpenFiles
-        @Binding var looked: Int
         @AppStorage private var after: String
 
-        init(kind: OpenFiles, looked: Binding<Int>) {
+        init(kind: OpenFiles) {
             self.kind = kind
-            _looked = looked
             _after = AppStorage(wrappedValue: OpenFiles.After.nothing.rawValue, kind.afterKey, store: Storage.settings)
         }
 
         var body: some View {
-            let opener = kind.opener.map { FileManager.default.displayName(atPath: $0.path).replacingOccurrences(of: ".app", with: "") }
-            SettingRow(kind.title, "Opens in \(opener ?? "nothing yet") · when downloaded:", symbol: kind.symbol, tint: Tint.blue) {
-                HStack(spacing: 8) {
-                    Picker("", selection: $after) {
-                        ForEach(OpenFiles.After.allCases) { Text($0.title).tag($0.rawValue) }
-                    }
-                    .labelsHidden()
-                    .pickerStyle(.menu)
-                    .fixedSize()
-                    if !kind.opensInMote {
-                        Pill("Make Default") { Task { await kind.makeMoteDefault(); looked += 1 } }
+            SettingRow(kind.title, "When one finishes downloading", symbol: kind.symbol, tint: Tint.blue) {
+                // “Its app” is Mote's own once Mote opens the kind.
+                let shown = Binding(
+                    get: { kind.opensInMote && after == OpenFiles.After.app.rawValue ? OpenFiles.After.mote.rawValue : after },
+                    set: { after = $0 })
+                Picker("", selection: shown) {
+                    Text("Just Download It").tag(OpenFiles.After.nothing.rawValue)
+                    Text("Open in Mote").tag(OpenFiles.After.mote.rawValue)
+                    // Its own app, by name; Mote's already above when that's Mote.
+                    if !kind.opensInMote, let name = kind.openerName {
+                        Text("Open in \(name)").tag(OpenFiles.After.app.rawValue)
                     }
                 }
+                .labelsHidden()
+                .pickerStyle(.menu)
+                // One width down the list, whichever app a row names.
+                .frame(width: 210)
             }
-            .id(looked)
         }
     }
 }
