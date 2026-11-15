@@ -154,6 +154,21 @@ extension Browser {
         return count
     }
 
+    /// A bookmarks file another browser exported (its HTML), in a folder
+    /// named after the file.
+    func takeBookmarksFile() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.html]
+        panel.message = "Choose a bookmarks file another browser exported"
+        guard panel.runModal() == .OK, let file = panel.url else { return }
+        let text = (try? String(contentsOf: file, encoding: .utf8)) ?? (try? String(contentsOf: file, encoding: .isoLatin1)) ?? ""
+        let found = BookmarkFile.bookmarks(in: text)
+        guard !found.isEmpty else { return announce("No bookmarks in \(file.lastPathComponent)") }
+        bookmarks.take(found, from: file.deletingPathExtension().lastPathComponent)
+        let count = BookmarkTree.count(found)
+        announce(count == 1 ? "1 bookmark from \(file.lastPathComponent)" : "\(count) bookmarks from \(file.lastPathComponent)")
+    }
+
     /// Brings in another browser's history, read off the main actor.
     func takePlaces(from source: ChromiumImporter.Source) async -> Int {
         let places = await Task.detached(priority: .userInitiated) { ChromiumImporter.places(in: source) }.value

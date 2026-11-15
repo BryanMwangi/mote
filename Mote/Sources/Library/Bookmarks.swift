@@ -19,6 +19,15 @@ final class Bookmarks: ObservableObject {
     func add(_ url: URL, title: String) { change { $0.add(url, title: title) } }
     func contains(_ url: URL) -> Bool { tree.contains(url) }
     func remove(_ id: Bookmark.ID) { change { $0.remove(id) } }
+    /// The row whose name is being typed, in the panel or the list.
+    @Published var renaming: Bookmark.ID?
+
+    /// A folder, at the top or inside `parent`, named as it's made.
+    func newFolder(in parent: Bookmark.ID? = nil) {
+        let folder = Bookmark.folder("New Folder", [])
+        if let parent { insert(folder, into: parent) } else { change { $0 = BookmarkTree([folder] + $0.roots) } }
+        renaming = folder.id
+    }
     /// Later copies of a page kept more than once: the first of each stays.
     var duplicates: Set<Bookmark.ID> { Set(tree.duplicates().flatMap { $0.dropFirst().map(\.id) }) }
     func removeDuplicates() { change { $0.removeDuplicates() } }

@@ -3,9 +3,9 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 /// The bookmark tree: folders open in place, rows drag between folders, and
-/// each row has a menu to open, move or remove it. Used by the toolbar's
-/// menu and the Bookmarks panel. A custom view rather than an NSMenu so rows
-/// can be dragged and have their own menus.
+/// each row has a menu to open, rename, move or remove it, and folders take
+/// new ones. Used by the toolbar's menu and the Bookmarks panel. A custom view
+/// rather than an NSMenu so rows can be dragged and have their own menus.
 struct BookmarkOutline: View {
     @ObservedObject var bookmarks: Bookmarks
     let open: (URL) -> Void
@@ -50,7 +50,7 @@ struct BookmarkOutline: View {
     private func row(_ node: Bookmark, depth: Int) -> some View {
         BookmarkRow(
             node: node, depth: depth, expanded: expanded.contains(node.id), dragging: dragging == node.id,
-            duplicate: duplicates.contains(node.id),
+            duplicate: duplicates.contains(node.id), renaming: bookmarks.renaming == node.id,
             destinations: BookmarkTree.folders(bookmarks.roots).filter { !node.holds($0.node.id) },
             act: { action in
                 switch action {
@@ -58,6 +58,14 @@ struct BookmarkOutline: View {
                 case .toggle: expanded.formSymmetricDifference([node.id])
                 case .move(let folder): bookmarks.move(node.id, into: folder)
                 case .remove: bookmarks.remove(node.id)
+                case .beginRename: bookmarks.renaming = node.id
+                case .rename(let title):
+                    let name = title.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !name.isEmpty, name != node.title { bookmarks.update(node.id, title: name, url: nil) }
+                    if bookmarks.renaming == node.id { bookmarks.renaming = nil }
+                case .newFolder:
+                    expanded.insert(node.id)
+                    bookmarks.newFolder(in: node.id)
                 }
             }
         )
@@ -100,8 +108,9 @@ struct BookmarkOutline: View {
 /// One row of the outline.
 private struct BookmarkRow: View {
     enum Action {
-        case open, toggle, remove
+        case open, toggle, remove, beginRename, newFolder
         case move(Bookmark.ID?)
+        case rename(String)
     }
 
     let node: Bookmark
@@ -110,11 +119,15 @@ private struct BookmarkRow: View {
     let dragging: Bool
     /// A later copy of a page kept before it.
     let duplicate: Bool
+    /// Its name is being typed.
+    let renaming: Bool
     /// Folders it can be moved into, with their depth.
     let destinations: [(node: Bookmark, depth: Int)]
     let act: (Action) -> Void
 
     @State private var hovering = false
+    @State private var name = ""
+    @FocusState private var typing: Bool
 
     static func indent(_ depth: Int) -> CGFloat { CGFloat(depth) * 18 }
 
@@ -132,14 +145,31 @@ private struct BookmarkRow: View {
                 Color.clear.frame(width: 10)
                 Mark(icon: Favicons.shared.cached(node.host ?? ""), letter: String((node.host ?? "•").prefix(1)).uppercased(), size: 15)
             }
-            Text(node.title).font(.system(size: 12.5)).foregroundStyle(Palette.ink).lineLimit(1)
+            if renaming {
+                TextField("Name", text: $name)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 12.5))
+                    .focused($typing)
+                    .onAppear {
+                        name = node.title
+                        typing = true
+                    }
+                    .onSubmit { act(.rename(name)) }
+                    // Escape keeps the name it had.
+                    .onExitCommand { act(.rename(node.title)) }
+                    .onChange(of: typing) { _, now in if !now { act(.rename(name)) } }
+            } else {
+                Text(node.title).font(.system(size: 12.5)).foregroundStyle(Palette.ink).lineLimit(1)
+            }
             Spacer(minLength: 8)
             if duplicate {
                 Text("Duplicate").font(.system(size: 11)).foregroundStyle(Palette.muted)
             }
             if hovering {
                 // Removing in one click, without the menu.
-                Button { act(.remove) } label: {
+                Button {
+                    act(.remove)
+                } label: {
                     Image(systemName: "trash").font(.system(size: 11)).foregroundStyle(Palette.muted).frame(width: 18, height: 18)
                         .contentShape(Rectangle())
                 }
@@ -168,6 +198,8 @@ private struct BookmarkRow: View {
             Button("Open") { act(.open) }
             Divider()
         }
+        Button("Rename…") { act(.beginRename) }
+        if node.isFolder { Button("New Folder Inside") { act(.newFolder) } }
         Menu("Move to") {
             Button("Top Level") { act(.move(nil)) }
             if !destinations.isEmpty {

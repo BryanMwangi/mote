@@ -59,10 +59,12 @@ struct BookmarksPanel: View {
             }
         } foot: {
             HStack(spacing: 8) {
-                Text("Bring in from").font(.system(size: 12)).foregroundStyle(Palette.muted)
+                Pill("New Folder") { bookmarks.newFolder() }
+                Text("Bring in from").font(.system(size: 12)).foregroundStyle(Palette.muted).padding(.leading, 4)
                 ForEach(ChromiumImporter.installed()) { source in
                     Pill(source.name) { browser.takeBookmarks(from: source) }
                 }
+                Pill("File…", action: browser.takeBookmarksFile)
                 Spacer()
                 let duplicates = bookmarks.duplicates.count
                 if duplicates > 0 {

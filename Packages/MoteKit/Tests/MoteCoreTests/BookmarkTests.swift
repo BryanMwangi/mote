@@ -176,3 +176,38 @@ struct DaysTests {
         #expect(days[0].day == Date(timeIntervalSince1970: 24 * hour))
     }
 }
+
+@Suite("Bookmark files")
+struct BookmarkFileTests {
+    @Test("Folders and sites, as browsers export them")
+    func exported() {
+        let html = """
+            <!DOCTYPE NETSCAPE-Bookmark-file-1>
+            <META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=UTF-8">
+            <TITLE>Bookmarks</TITLE>
+            <H1>Bookmarks</H1>
+            <DL><p>
+                <DT><H3 ADD_DATE="1" PERSONAL_TOOLBAR_FOLDER="true">Bookmarks bar</H3>
+                <DL><p>
+                    <DT><A HREF="https://a.com/" ADD_DATE="1" ICON="data:image/png;base64,AA">A &amp; B</A>
+                    <DT><H3>Inner</H3>
+                    <DL><p>
+                        <DT><A HREF="https://c.com/">C</A>
+                    </DL><p>
+                </DL><p>
+                <DT><A HREF="place:sort=8">Recent</A>
+                <DT><A href="https://d.com/x?y=1&amp;z=2">D</A>
+            </DL><p>
+            """
+        let found = BookmarkFile.bookmarks(in: html)
+        #expect(found.map(\.title) == ["Bookmarks bar", "D"])
+        #expect(found[0].children?.map(\.title) == ["A & B", "Inner"])
+        #expect(found[0].children?[1].children?.first?.url == "https://c.com/")
+        #expect(found[1].url == "https://d.com/x?y=1&z=2")
+    }
+
+    @Test("Not a bookmarks file: nothing")
+    func nothing() {
+        #expect(BookmarkFile.bookmarks(in: "<html><body>Hello</body></html>").isEmpty)
+    }
+}
