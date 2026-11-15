@@ -37,7 +37,11 @@ public struct AnthropicService: ChatService {
                         try Task.checkCancellation()
                         for event in try decoder.read(line) { continuation.yield(event) }
                     }
-                    guard decoder.paused, round < Self.continuations else { break }
+                    guard decoder.paused else { break }
+                    guard round < Self.continuations else {
+                        continuation.yield(.text("\n\n_Stopped after the search ran long; ask again to carry on._"))
+                        break
+                    }
                     said += decoder.blocks
                 }
                 continuation.finish()
@@ -107,6 +111,9 @@ public struct AnthropicDecoder: LineDecoder {
     private var partial: [Int: String] = [:]
     /// The server paused the turn (`pause_turn`); it goes on when sent again.
     public private(set) var paused = false
+    /// Tool calls whose input was cut off by the reply's length limit, by block index.
+    private var cut: Set<Int> = []
+    private var cutAny = false
 
     /// The blocks of the reply so far, in order.
     public var blocks: [JSON] { sent.keys.sorted().compactMap { sent[$0] } }
@@ -138,12 +145,27 @@ public struct AnthropicDecoder: LineDecoder {
             keep(json["delta"], at: index)
             return delta(json["delta"], at: index)
         case "content_block_stop":
-            if let whole = partial.removeValue(forKey: index), let input = JSON(parsing: whole) { sent[index]?.set("input", input) }
+            if let whole = partial.removeValue(forKey: index) {
+                if let input = JSON(parsing: whole) { sent[index]?.set("input", input) } else {
+                    cut.insert(index)
+                    cutAny = true
+                }
+            }
             return stopped(at: index)
         case "message_delta":
-            if json["delta"]?["stop_reason"]?.string == "pause_turn" { paused = true }
-            guard let output = json["usage"]?["output_tokens"]?.int else { return [] }
-            return [.usage(Usage(input: input, output: output))]
+            var events: [ChatEvent] = []
+            switch json["delta"]?["stop_reason"]?.string {
+            case "pause_turn": paused = true
+            // A cut-off tool call is told to the model; words cut off, to the person.
+            case "max_tokens" where !cutAny:
+                events.append(.text("\n\n_The reply reached its length limit and stopped here; ask to carry on._"))
+            case "refusal": events.append(.text("\n\n_The model declined to go on with this._"))
+            case "model_context_window_exceeded":
+                throw AIError.failed("The chat is too long for the model: summarise it with /compact, or start a new chat")
+            default: break
+            }
+            if let output = json["usage"]?["output_tokens"]?.int { events.append(.usage(Usage(input: input, output: output))) }
+            return events
         case "error":
             throw AIError.failed(json["error"]?["message"]?.string ?? "Anthropic reported an error")
         default:
@@ -224,7 +246,9 @@ public struct AnthropicDecoder: LineDecoder {
     /// with links to what it cites, the way the chat shows citations.
     private mutating func stopped(at index: Int) -> [ChatEvent] {
         if let call = calls.removeValue(forKey: index) {
-            return [.toolCall(ToolCall(id: call.id, name: call.name, input: sent[index]?["input"] ?? .object([:])))]
+            // Half an input isn't run; the tool loop says why instead.
+            let input = cut.remove(index) != nil ? ToolCall.cutOff : sent[index]?["input"] ?? .object([:])
+            return [.toolCall(ToolCall(id: call.id, name: call.name, input: input))]
         }
         if let search = searches.removeValue(forKey: index) {
             let query = JSON(parsing: search.query)?["query"]?.string

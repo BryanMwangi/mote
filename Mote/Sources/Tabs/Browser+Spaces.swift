@@ -260,28 +260,36 @@ extension Browser {
     /// same website data the page goes as it is; otherwise it opens again in
     /// the other space's data, signed in only as that space is, and its back
     /// history stays behind.
-    func move(_ tab: Tab, toSpace id: UUID) {
+    /// Returns the tab as it is in that space now, or nil if it didn't move.
+    @discardableResult
+    func move(_ tab: Tab, toSpace id: UUID) -> Tab? {
         guard usesSpaces, id != spaceID, let to = spaces.first(where: { $0.id == id }),
             let url = tab.pending ?? tab.address
-        else { return }
+        else { return nil }
+        let went: Tab
         var row = parked[id] ?? loadRow(id)
         tab.pin = nil
         tab.kept = false
         if sharesData(with: id) {
-            guard detach(tab) else { return }
+            guard detach(tab) else { return nil }
             row.tabs.append(tab)
+            went = tab
         } else {
             let moved = Tab(configuration: Web.configuration(space: id))
             prepare(moved)
             moved.restore(url: url, title: tab.title, name: tab.name)
+            // The chat about it goes with it, a reply under way included.
+            tab.handChat(to: moved)
             close(tab)
             row.tabs.append(moved)
+            went = moved
         }
         if row.active == nil { row.active = row.tabs.last?.id }
         parked[id] = row
         writeSession(now: true, space: id, tabs: row.tabs, active: row.active)
         writeSession(now: true)
         announce("Moved to \(to.name)")
+        return went
     }
 
     /// Deletes a space, its tabs and, unless it shared the first space's,

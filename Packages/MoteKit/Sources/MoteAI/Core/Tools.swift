@@ -56,6 +56,12 @@ public struct ToolCall: Equatable, Sendable {
         self.name = name
         self.input = input
     }
+
+    /// The input of a call the reply's length limit cut off: not run.
+    public static let cutOff: JSON = .object(["cut_off": .bool(true)])
+    static let cutOffOutput = ToolOutput(
+        "Your input for this tool was cut off at the reply's length limit, so it wasn't run. Send it again in smaller parts.",
+        outcome: .failed)
 }
 
 /// What a tool gives back: words, and a picture for one that looked (a screenshot).
@@ -75,10 +81,13 @@ public struct ToolOutput: Equatable, Sendable {
         self.detail = detail
     }
 
-    /// The line the chat shows under the step.
+    /// The line the chat shows under the step: the text's first line, and
+    /// when that leads into a list ("Moved to “Work”:"), the list after it.
     public var line: String {
-        let first = detail ?? text.split(separator: "\n", maxSplits: 1).first.map(String.init) ?? ""
-        return first.count > 240 ? String(first.prefix(239)) + "…" : first
+        let lines = text.split(separator: "\n").map { $0.hasPrefix("- ") ? String($0.dropFirst(2)) : String($0) }
+        let first = lines.first ?? ""
+        let said = detail ?? (first.hasSuffix(":") && lines.count > 1 ? first + " " + lines.dropFirst().joined(separator: ", ") : first)
+        return said.count > 240 ? String(said.prefix(239)) + "…" : said
     }
 }
 
@@ -126,11 +135,18 @@ public struct ToolLoop: ChatService {
 
     /// Told to the model with the tools, so it knows to use them.
     static func note(_ tools: [Tool]) -> String {
-        "You can use Mote's tools while you answer: " + tools.map(\.name).joined(separator: ", ")
-            + ". Use them when the question is about the person's tabs, spaces, a page, their history or bookmarks, or asks you to act in Mote or a page; Mote asks the person when it should."
-            + (tools.contains { $0.name == "run_script" }
-                ? " When no tool does what's asked in a page, read the page, then do it with a short run_script."
-                    + " For Mote itself, if no tool does it, say so plainly and name the setting or menu, rather than guessing." : "")
+        let names = Set(tools.map(\.name))
+        var note = "You can use Mote's tools while you answer: " + tools.map(\.name).joined(separator: ", ") + "."
+        note += " Use them when the question is about the person's tabs, spaces, a page, their history or bookmarks, or asks you to act in Mote or a page."
+        note += " Mote asks the person's permission before acting when it should, so don't ask for that yourself."
+        if names.contains("ask_person") {
+            note += " When what they want is unclear, or there's a real choice that's theirs to make, ask with ask_person rather than guessing."
+        }
+        if names.contains("run_script") {
+            note += " When no tool does what's asked in a page, read the page, then do it with a short run_script."
+            note += " For Mote itself, if no tool does it, say so plainly and name the setting or menu, rather than guessing."
+        }
+        return note
     }
 
     public func reply(to request: ChatRequest) -> AsyncThrowingStream<ChatEvent, Error> {
@@ -175,7 +191,7 @@ public struct ToolLoop: ChatService {
                     for (index, call) in calls.enumerated() {
                         let step = Activity(id: call.id, title: describe(call))
                         continuation.yield(.activity(step))
-                        let result = await run(call)
+                        let result = call.input == ToolCall.cutOff ? ToolCall.cutOffOutput : await run(call)
                         try Task.checkCancellation()
                         var done = step
                         done.done = true
@@ -232,6 +248,7 @@ extension ToolLoop {
         case "close_test_tabs": return "Closing test tabs"
         case "sign_in": return "Signing in"
         case "ask_for_credentials": return "Asking you to sign in"
+        case "ask_person": return "Asking you"
         case "add_bookmark": return "Bookmarking"
         case "organise_bookmarks": return "Tidying bookmarks"
         case "delete_history": return "Deleting history"

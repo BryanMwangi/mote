@@ -35,6 +35,9 @@ final class KeyRouter {
     }
 
     private func take(_ event: NSEvent) -> Bool {
+        // A sheet (the assistant asking to act, a save panel) has keys of its
+        // own: Escape there is its Cancel, not Stop for the window behind.
+        if event.window?.isSheet == true { return false }
         // Every window has a router, and each takes its own window's keys; the
         // main window's also takes those of the small windows below.
         let owner = Windows.shared.browser(for: event.window)

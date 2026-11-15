@@ -479,6 +479,15 @@ final class Tab: ObservableObject, Identifiable {
         return ensurePageChat()
     }
 
+    /// Gives this tab's chat to `other`, which takes this one's place:
+    /// closing this tab then leaves the chat, and any reply, going.
+    func handChat(to other: Tab) {
+        guard let chat = pageChat else { return }
+        other.share(chat)
+        other.chatOpen = chatOpen
+        pageChat = nil
+    }
+
     /// Takes over the chat another tab had, for one chat across the tabs.
     func share(_ chat: Conversation) {
         if pageChat !== chat { pageChat = chat }
@@ -948,7 +957,7 @@ final class Tab: ObservableObject, Identifiable {
         leaveChat()
         // The tab is going away: stop any reply still coming, but keep the
         // chat itself until the tab is released.
-        pageChat?.stop()
+        pageChat?.stop(why: "The tab this chat was about closed, which stopped your last reply.")
         letPageGo()
     }
 

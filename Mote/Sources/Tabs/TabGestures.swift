@@ -146,7 +146,8 @@ struct Reorderable: ViewModifier {
             withAnimation(Motion.settle) { drag = nil }
             away.browser.endDrag()
             Haptic.tick()
-            return away.browser.move(away.tab, toSpace: space)
+            away.browser.move(away.tab, toSpace: space)
+            return
         }
         let exit = filing?.browser.folderExit
         filing?.browser.folderExit = nil

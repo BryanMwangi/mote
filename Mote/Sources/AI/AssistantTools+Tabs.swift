@@ -44,7 +44,7 @@ extension AssistantTools {
                 description:
                     "Moves tabs: to another space (by name), another window (by number, or \"new\"), into a folder (id or name; made if there's no such name, and the tabs are pinned there), out of their folder but still pinned (out_of_folder), or back among the open tabs, unpinned (to_open_tabs). Asks first for spaces and windows.",
                 schema: object(
-                    "\(Self.tabsSchema),\"space\":{\"type\":\"string\"},\"window\":{\"type\":\"string\"},\(Self.folderSchema),\"out_of_folder\":{\"type\":\"boolean\"},\"to_open_tabs\":{\"type\":\"boolean\"},\(Self.dryRun)",
+                    "\(Self.tabsSchema),\"space\":{\"type\":\"string\",\"description\":\"The name of the space to move them to, as list_spaces gives it\"},\"window\":{\"type\":\"string\",\"description\":\"The window's number from list_tabs, or \\\"new\\\"\"},\(Self.folderSchema),\"out_of_folder\":{\"type\":\"boolean\"},\"to_open_tabs\":{\"type\":\"boolean\"},\(Self.dryRun)",
                     ["tabs"])),
             Tool(name: "pin_tabs", description: "Pins tabs, or unpins them (pinned: false).", schema: object("\(Self.tabsSchema),\"pinned\":{\"type\":\"boolean\"}", ["tabs"])),
             Tool(
@@ -352,17 +352,23 @@ extension AssistantTools {
                 return "There's no space called “\(name)”. Spaces: \(browser.spaces.map(\.name).joined(separator: ", "))."
             }
             let movable = found.filter { !$0.parked && $0.browser === browser && $0.space?.id != space.id }
-            if dry { return "Would move to “\(space.name)”:\n" + Self.lines(movable.map(\.tab)) }
-            guard await permit(.destructive, "Move \(tabs.count == 1 ? names : "\(tabs.count) tabs: \(names)") to “\(space.name)”?") else {
+            let left = found.filter { item in !movable.contains { $0.tab === item.tab } }.map(\.tab)
+            let notMoved = left.isEmpty ? "" : "\nNot moved (already in “\(space.name)”, or in another window or space):\n" + Self.lines(left)
+            guard !movable.isEmpty else { return "Nothing moved to “\(space.name)”." + notMoved + Self.missing(missing) }
+            if dry { return "Would move to “\(space.name)”:\n" + Self.lines(movable.map(\.tab)) + notMoved }
+            let moving = Self.names(movable.map(\.tab))
+            guard await permit(.destructive, "Move \(movable.count == 1 ? moving : "\(movable.count) tabs: \(moving)") to “\(space.name)”?") else {
                 return refused
             }
             let from = browser.spaceID
             let addresses = movable.compactMap { $0.tab.pending ?? $0.tab.address }
-            for item in movable { browser.move(item.tab, toSpace: space.id) }
-            var said = "Moved to “\(space.name)”:\n" + Self.lines(movable.map(\.tab))
-            let left = found.filter { item in !movable.contains { $0.tab === item.tab } }.map(\.tab)
-            if !left.isEmpty { said += "\nNot moved (already there, or in another window or space):\n" + Self.lines(left) }
-            said += record("Moved \(Self.names(movable.map(\.tab))) to “\(space.name)”") { [weak browser] in
+            // As they are in that space now: one that keeps its own data opens them afresh, with new ids.
+            let went = movable.compactMap { browser.move($0.tab, toSpace: space.id) }
+            guard !went.isEmpty else { return "Couldn't move them to “\(space.name)”: Mote's spaces may be off, or the tabs have no address." + notMoved }
+            var said = "Moved to “\(space.name)” (ids as they are there now):\n" + Self.lines(went)
+            if went.count < movable.count { said += "\nCouldn't move \(movable.count - went.count) of them." }
+            said += notMoved
+            said += record("Moved \(Self.names(went)) to “\(space.name)”") { [weak browser] in
                 guard let browser else { return "That window is closed." }
                 // By address: a space that keeps its own data made fresh tabs.
                 let there = browser.parked[space.id]?.tabs ?? []
