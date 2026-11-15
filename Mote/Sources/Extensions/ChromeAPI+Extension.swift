@@ -260,10 +260,34 @@ extension ChromeAPI {
     }
 
     /// Firefox's proxy.onRequest, as proxy.ts asks it: the proxy for pages
-    /// now, or null for none.
+    /// now, or null for none. For one given without a sign-in, what the
+    /// proxy asks one with, for the extension to answer.
+    /// chrome.proxy.settings' proxy is signed into the same way: `challenge`
+    /// says what it asks, `credentials` gives the extension's answer.
     static func proxy(_ call: ChromeCall) async throws -> Any? {
-        guard call.method == "apply" else { throw unavailable(call) }
-        ExtensionProxy.set(ExtensionProxy.choice(fromAnswer: call.first), by: call.id)
-        return nil
+        switch call.method {
+        case "apply":
+            let choice = ExtensionProxy.choice(fromAnswer: call.first)
+            ExtensionProxy.set(choice, by: call.id)
+            guard let choice, choice.username == nil else { return nil }
+            return await ExtensionProxy.challenge(of: choice)
+        case "challenge":
+            guard ExtensionProxy.owner == call.id, let current = ExtensionProxy.current, current.username == nil,
+                var asked = await ExtensionProxy.challenge(of: current)
+            else { return nil }
+            asked["host"] = current.host
+            asked["port"] = String(current.port)
+            return asked
+        case "credentials":
+            guard ExtensionProxy.owner == call.id, var current = ExtensionProxy.current, let user = call.option("username") as String?,
+                let password = call.option("password") as String?
+            else { return nil }
+            current.username = user
+            current.password = password
+            ExtensionProxy.set(current, by: call.id)
+            return nil
+        default:
+            throw unavailable(call)
+        }
     }
 }

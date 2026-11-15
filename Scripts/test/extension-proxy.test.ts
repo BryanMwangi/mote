@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { firefoxUserAgent } from '../src/extension-shims/firefox';
 import { proxyChoice } from '../src/extension-shims/proxy';
 
 describe('extension proxies', () => {
@@ -43,5 +44,15 @@ describe('extension proxies', () => {
     expect(proxyChoice({ type: 'http', host: 'h', port: 70_000 })).toBeNull();
     expect(proxyChoice(undefined)).toBeNull();
     expect(proxyChoice([])).toBeNull();
+  });
+});
+
+describe('Firefox add-ons', () => {
+  it("read Firefox's user agent, on this Mac", () => {
+    const safari =
+      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.1 Safari/605.1.15';
+    expect(firefoxUserAgent(safari, '140.0')).toBe(
+      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:140.0) Gecko/20100101 Firefox/140.0',
+    );
   });
 });

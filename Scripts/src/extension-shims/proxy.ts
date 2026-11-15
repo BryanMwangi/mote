@@ -25,6 +25,8 @@ export interface ProxyChoice {
 const SAMPLE = 'https://www.example.com/';
 /** How often the listener is asked again. */
 const EVERY = 2000;
+/** How long before a sign-in none gave is asked for again. */
+const SIGN_IN_AGAIN = 15_000;
 
 /** The extension's webRequest.onAuthRequired listeners (web-request.ts keeps them). */
 export const authListeners = new Set<Listener>();
@@ -87,9 +89,18 @@ function answerOf(listener: Listener, details: unknown): Promise<unknown> {
   });
 }
 
-/** The sign-in the extension gives for `choice`, asked as the proxy asking. */
-async function signIn(choice: ProxyChoice): Promise<ProxyChoice> {
-  if (choice.username !== undefined) return choice;
+/** What a proxy asks a sign-in with, as the browser finds it out. */
+interface Asked {
+  scheme?: string;
+  realm?: string;
+}
+
+/**
+ * The sign-in the extension gives for `choice`, asked as the proxy asking,
+ * with the scheme and realm it asks with (a listener may answer only its
+ * own realm); null when none gives one.
+ */
+async function signIn(choice: ProxyChoice, asked: Asked): Promise<ProxyChoice | null> {
   for (const listener of authListeners) {
     const answer = await answerOf(listener, {
       requestId: 'mote-proxy',
@@ -101,8 +112,8 @@ async function signIn(choice: ProxyChoice): Promise<ProxyChoice> {
       type: 'main_frame',
       timeStamp: Date.now(),
       isProxy: true,
-      scheme: 'basic',
-      realm: '',
+      scheme: asked.scheme || 'basic',
+      realm: asked.realm ?? '',
       challenger: { host: choice.host, port: choice.port },
       statusCode: 407,
       statusLine: 'HTTP/1.1 407 Proxy Authentication Required',
@@ -113,13 +124,37 @@ async function signIn(choice: ProxyChoice): Promise<ProxyChoice> {
       return { ...choice, username: given.username, password: given.password };
     }
   }
-  return choice;
+  return null;
+}
+
+/** The sign-in for a proxy set through chrome.proxy.settings, if it asks one. */
+async function signInToSet(shim: Shim): Promise<void> {
+  const asked = (await shim.native('proxy.challenge', []).catch(() => null)) as
+    | (Asked & { host: string; port: string })
+    | null;
+  if (!asked) return;
+  const given = await signIn({ type: 'https', host: asked.host, port: Number(asked.port) }, asked);
+  if (given)
+    await shim
+      .native('proxy.credentials', [{ username: given.username, password: given.password }])
+      .catch(() => undefined);
 }
 
 export function defineProxy(shim: Shim): void {
   const onRequest = createEvent();
+  const settings = setting(shim, 'proxy.settings');
+  if (shim.background) {
+    // A proxy set Chrome's way is signed into as Chrome would: the
+    // extension's onAuthRequired listeners asked when the proxy asks.
+    const set = settings.set;
+    settings.set = (...args: unknown[]) => {
+      const out = set(...args);
+      setTimeout(() => void signInToSet(shim), 500);
+      return out;
+    };
+  }
   putNamespace(shim, 'proxy', {
-    settings: setting(shim, 'proxy.settings'),
+    settings,
     onRequest,
     onError: createEvent(),
     onProxyError: createEvent(),
@@ -131,9 +166,23 @@ export function defineProxy(shim: Shim): void {
   /** The proxy last signed in for, so a sign-in is asked once per proxy. */
   let signedFor = '';
   let signed: ProxyChoice | null = null;
+  /** When a sign-in was last asked for and none came; asked again after a while. */
+  let triedAt = 0;
+  let checking = false;
   let timer: ReturnType<typeof setInterval> | undefined;
 
   const check = async () => {
+    // One at a time: finding out the proxy's sign-in takes a moment.
+    if (checking) return;
+    checking = true;
+    try {
+      await checkNow();
+    } finally {
+      checking = false;
+    }
+  };
+
+  const checkNow = async () => {
     let choice: ProxyChoice | null = null;
     for (const listener of [...onRequest.listeners]) {
       choice = proxyChoice(
@@ -152,11 +201,20 @@ export function defineProxy(shim: Shim): void {
     }
     if (choice) {
       const key = `${choice.type}://${choice.host}:${choice.port}`;
-      if (key !== signedFor || !signed) {
+      if (key !== signedFor) {
         signedFor = key;
-        signed = await signIn(choice);
+        signed = choice.username === undefined ? null : choice;
+        triedAt = 0;
       }
-      choice = signed;
+      if (!signed && Date.now() - triedAt > SIGN_IN_AGAIN) {
+        // Set without a sign-in, the browser answers with what the proxy
+        // asks one with, or nothing when it asks none.
+        triedAt = Date.now();
+        told = JSON.stringify(choice);
+        const asked = (await shim.native('proxy.apply', [choice]).catch(() => null)) as Asked | null;
+        signed = asked ? await signIn(choice, asked) : choice;
+      }
+      choice = signed ?? choice;
     }
     const text = JSON.stringify(choice);
     // Told when it changes, and once at the start, so a proxy left from

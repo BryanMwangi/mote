@@ -68,6 +68,65 @@ enum ExtensionProxy {
         return made
     }
 
+    // MARK: - The proxy's sign-in
+
+    /// What the proxy asks a sign-in with (its 407's Proxy-Authenticate):
+    /// the scheme and the realm, which an extension's onAuthRequired listener
+    /// may check before it answers; nil when it lets Mote through, or
+    /// doesn't answer. WebKit never brings a proxy's 407 to Mote, so it's
+    /// asked once here, a CONNECT without a sign-in.
+    nonisolated static func challenge(of choice: Choice) async -> [String: String]? {
+        guard choice.kind != .socks, let port = NWEndpoint.Port(rawValue: choice.port) else { return nil }
+        let connection = NWConnection(host: .init(choice.host), port: port, using: choice.kind == .https ? .tls : .tcp)
+        let queue = DispatchQueue(label: "io.github.mote-browser.proxy-challenge")
+        let head: String? = await withCheckedContinuation { done in
+            let once = Once(done)
+            connection.stateUpdateHandler = { state in
+                switch state {
+                case .ready:
+                    let ask = "CONNECT www.example.com:443 HTTP/1.1\r\nHost: www.example.com:443\r\n\r\n"
+                    connection.send(content: Data(ask.utf8), completion: .contentProcessed { _ in })
+                    connection.receive(minimumIncompleteLength: 1, maximumLength: 16_384) { data, _, _, _ in
+                        once.finish(data.map { String(decoding: $0, as: UTF8.self) })
+                    }
+                case .failed, .cancelled: once.finish(nil)
+                default: break
+                }
+            }
+            connection.start(queue: queue)
+            queue.asyncAfter(deadline: .now() + 8) { once.finish(nil) }
+        }
+        connection.cancel()
+        return head.flatMap(Self.challenge(inHead:))
+    }
+
+    /// The scheme and realm of a 407's Proxy-Authenticate.
+    nonisolated static func challenge(inHead head: String) -> [String: String]? {
+        let lines = head.components(separatedBy: "\r\n")
+        guard lines.first?.split(separator: " ").dropFirst().first == "407" else { return nil }
+        guard let line = lines.first(where: { $0.lowercased().hasPrefix("proxy-authenticate:") }) else {
+            return ["scheme": "basic", "realm": ""]
+        }
+        let value = line.drop { $0 != ":" }.dropFirst().trimmingCharacters(in: .whitespaces)
+        let scheme = value.prefix { $0 != " " }.lowercased()
+        let realm = value.firstMatch(of: /realm="([^"]*)"/.ignoresCase()).map { String($0.output.1) } ?? ""
+        return ["scheme": scheme, "realm": realm]
+    }
+
+    /// A continuation resumed once, by whichever comes first.
+    private nonisolated final class Once: @unchecked Sendable {
+        private var done: CheckedContinuation<String?, Never>?
+        private let lock = NSLock()
+        init(_ done: CheckedContinuation<String?, Never>) { self.done = done }
+        func finish(_ value: String?) {
+            lock.lock()
+            let waiting = done
+            done = nil
+            lock.unlock()
+            waiting?.resume(returning: value)
+        }
+    }
+
     // MARK: - What extensions say
 
     /// proxy.onRequest's answer for a page, as proxy.ts sends it: a proxy,

@@ -109,6 +109,13 @@ extension Browser {
         let failures = challenge.previousFailureCount
         guard Challenge.mayAskToSignIn(failures: failures) else { return done(.cancelAuthenticationChallenge, nil) }
         let space = challenge.protectionSpace
+        // An extension's proxy: its sign-in is the extension's to give, never a question.
+        if let proxy = ExtensionProxy.current, space.host.caseInsensitiveCompare(proxy.host) == .orderedSame {
+            guard failures == 0, let user = proxy.username, let password = proxy.password else {
+                return done(.cancelAuthenticationChallenge, nil)
+            }
+            return done(.useCredential, URLCredential(user: user, password: password, persistence: .forSession))
+        }
         var text = space.realm.map { "“\($0)”" } ?? "The site wants a name and a password."
         if failures > 0 { text += "\nThat wasn't accepted — try again." }
         let alert = Dialogs.alert("\(space.host) asks you to sign in", text, buttons: ["Sign In", "Cancel"])

@@ -1306,8 +1306,34 @@
 
 //#endregion
 //#region src/extension-shims/firefox.ts
+/** Firefox's user agent on this Mac, at `version`. */
+	function firefoxUserAgent(userAgent, version) {
+		const mac = /Mac OS X (\d+)[_.](\d+)/.exec(userAgent);
+		return `Mozilla/5.0 (Macintosh; Intel Mac OS X ${mac ? `${mac[1]}.${mac[2]}` : "10.15"}; rv:${version}) Gecko/20100101 Firefox/${version}`;
+	}
 	function presentAsFirefox(shim) {
 		if (!shim.config.firefox) return;
+		const { root, inContent, worker, config } = shim;
+		if (!inContent && typeof navigator !== "undefined" && !/ Firefox\//.test(navigator.userAgent)) {
+			const agent = firefoxUserAgent(navigator.userAgent, config.firefoxVersion);
+			const proto = typeof root.WorkerNavigator !== "undefined" && worker ? root.WorkerNavigator.prototype : typeof Navigator !== "undefined" ? Navigator.prototype : null;
+			try {
+				if (proto) {
+					Object.defineProperty(proto, "userAgent", {
+						get: () => agent,
+						configurable: true
+					});
+					Object.defineProperty(proto, "appVersion", {
+						get: () => "5.0 (Macintosh)",
+						configurable: true
+					});
+					Object.defineProperty(proto, "vendor", {
+						get: () => "",
+						configurable: true
+					});
+				}
+			} catch {}
+		}
 		fill(shim, "runtime", { getBrowserInfo: () => Promise.resolve({
 			name: "Firefox",
 			vendor: "Mozilla",
@@ -1915,6 +1941,8 @@
 	const SAMPLE = "https://www.example.com/";
 	/** How often the listener is asked again. */
 	const EVERY = 2e3;
+	/** How long before a sign-in none gave is asked for again. */
+	const SIGN_IN_AGAIN = 15e3;
 	/** The extension's webRequest.onAuthRequired listeners (web-request.ts keeps them). */
 	const authListeners = /* @__PURE__ */ new Set();
 	/**
@@ -1966,9 +1994,12 @@
 			}
 		});
 	}
-	/** The sign-in the extension gives for `choice`, asked as the proxy asking. */
-	async function signIn(choice) {
-		if (choice.username !== void 0) return choice;
+	/**
+	* The sign-in the extension gives for `choice`, asked as the proxy asking,
+	* with the scheme and realm it asks with (a listener may answer only its
+	* own realm); null when none gives one.
+	*/
+	async function signIn(choice, asked) {
 		for (const listener of authListeners) {
 			const given = (await answerOf(listener, {
 				requestId: "mote-proxy",
@@ -1980,8 +2011,8 @@
 				type: "main_frame",
 				timeStamp: Date.now(),
 				isProxy: true,
-				scheme: "basic",
-				realm: "",
+				scheme: asked.scheme || "basic",
+				realm: asked.realm ?? "",
 				challenger: {
 					host: choice.host,
 					port: choice.port
@@ -1995,12 +2026,35 @@
 				password: given.password
 			};
 		}
-		return choice;
+		return null;
+	}
+	/** The sign-in for a proxy set through chrome.proxy.settings, if it asks one. */
+	async function signInToSet(shim) {
+		const asked = await shim.native("proxy.challenge", []).catch(() => null);
+		if (!asked) return;
+		const given = await signIn({
+			type: "https",
+			host: asked.host,
+			port: Number(asked.port)
+		}, asked);
+		if (given) await shim.native("proxy.credentials", [{
+			username: given.username,
+			password: given.password
+		}]).catch(() => void 0);
 	}
 	function defineProxy(shim) {
 		const onRequest = createEvent();
+		const settings = setting(shim, "proxy.settings");
+		if (shim.background) {
+			const set = settings.set;
+			settings.set = (...args) => {
+				const out = set(...args);
+				setTimeout(() => void signInToSet(shim), 500);
+				return out;
+			};
+		}
 		putNamespace(shim, "proxy", {
-			settings: setting(shim, "proxy.settings"),
+			settings,
 			onRequest,
 			onError: createEvent(),
 			onProxyError: createEvent()
@@ -2011,8 +2065,20 @@
 		/** The proxy last signed in for, so a sign-in is asked once per proxy. */
 		let signedFor = "";
 		let signed = null;
+		/** When a sign-in was last asked for and none came; asked again after a while. */
+		let triedAt = 0;
+		let checking = false;
 		let timer;
 		const check = async () => {
+			if (checking) return;
+			checking = true;
+			try {
+				await checkNow();
+			} finally {
+				checking = false;
+			}
+		};
+		const checkNow = async () => {
 			let choice = null;
 			for (const listener of [...onRequest.listeners]) {
 				choice = proxyChoice(await answerOf(listener, {
@@ -2029,11 +2095,18 @@
 			}
 			if (choice) {
 				const key = `${choice.type}://${choice.host}:${choice.port}`;
-				if (key !== signedFor || !signed) {
+				if (key !== signedFor) {
 					signedFor = key;
-					signed = await signIn(choice);
+					signed = choice.username === void 0 ? null : choice;
+					triedAt = 0;
 				}
-				choice = signed;
+				if (!signed && Date.now() - triedAt > SIGN_IN_AGAIN) {
+					triedAt = Date.now();
+					told = JSON.stringify(choice);
+					const asked = await shim.native("proxy.apply", [choice]).catch(() => null);
+					signed = asked ? await signIn(choice, asked) : choice;
+				}
+				choice = signed ?? choice;
 			}
 			const text = JSON.stringify(choice);
 			if (text === told) return;
