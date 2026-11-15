@@ -30,9 +30,8 @@ struct ChatInput: NSViewRepresentable {
     func makeNSView(context: Context) -> NSScrollView {
         let scroll = NSTextView.scrollableTextView()
         scroll.drawsBackground = false
-        scroll.hasVerticalScroller = true
-        scroll.autohidesScrollers = true
-        scroll.scrollerStyle = .overlay
+        // Scrolls past eight lines, with no bar.
+        scroll.hasVerticalScroller = false
         let view = scroll.documentView as! NSTextView
         view.delegate = context.coordinator
         view.isRichText = false
