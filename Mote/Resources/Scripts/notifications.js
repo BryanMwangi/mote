@@ -12,6 +12,14 @@
 		tag: String(options.tag ?? ""),
 		silent: options.silent === true
 	});
+	/** Base64url, as push keys travel. */
+	const encode = (bytes) => btoa(String.fromCodePoint(...bytes)).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "");
+	const decode = (text) => Uint8Array.from(atob(text.replaceAll("-", "+").replaceAll("_", "/")), (c) => c.codePointAt(0) ?? 0);
+	const keyText = (key) => {
+		if (key == null) return "";
+		if (typeof key === "string") return key;
+		return encode(key instanceof ArrayBuffer ? new Uint8Array(key) : new Uint8Array(key.buffer, key.byteOffset, key.byteLength));
+	};
 	if (handler && !window.__moteNotifications) {
 		window.__moteNotifications = true;
 		const send = (message) => handler.postMessage(message).catch(() => void 0);
@@ -110,6 +118,90 @@
 			status.onchange = null;
 			return status;
 		};
+		if (typeof ServiceWorkerRegistration !== "undefined" && !("PushManager" in window)) {
+			class MotePushSubscription {
+				endpoint;
+				expirationTime = null;
+				options;
+				#scope;
+				#keys;
+				constructor(scope, made) {
+					this.#scope = scope;
+					this.endpoint = made.endpoint;
+					this.#keys = {
+						p256dh: made.p256dh,
+						auth: made.auth
+					};
+					this.options = {
+						userVisibleOnly: true,
+						applicationServerKey: made.key ? decode(made.key).buffer : null
+					};
+				}
+				getKey(name) {
+					const key = this.#keys[name];
+					return key ? decode(key).buffer : null;
+				}
+				toJSON() {
+					return {
+						endpoint: this.endpoint,
+						expirationTime: null,
+						keys: { ...this.#keys }
+					};
+				}
+				unsubscribe() {
+					return send({
+						kind: "unsubscribe",
+						scope: this.#scope
+					}).then((answer) => answer === true);
+				}
+			}
+			class MotePushManager {
+				static get supportedContentEncodings() {
+					return ["aes128gcm"];
+				}
+				#scope;
+				constructor(scope) {
+					this.#scope = scope;
+				}
+				async subscribe(options = {}) {
+					const made = await send({
+						kind: "subscribe",
+						scope: this.#scope,
+						key: keyText(options.applicationServerKey)
+					});
+					if (!made) throw new DOMException("Notifications are not allowed for this site.", "NotAllowedError");
+					return new MotePushSubscription(this.#scope, made);
+				}
+				async getSubscription() {
+					const made = await send({
+						kind: "subscription",
+						scope: this.#scope
+					});
+					return made ? new MotePushSubscription(this.#scope, made) : null;
+				}
+				async permissionState() {
+					await known;
+					return permission === "default" ? "prompt" : permission;
+				}
+			}
+			const managers = /* @__PURE__ */ new Map();
+			Object.defineProperty(ServiceWorkerRegistration.prototype, "pushManager", {
+				get() {
+					let manager = managers.get(this.scope);
+					if (!manager) {
+						manager = new MotePushManager(this.scope);
+						managers.set(this.scope, manager);
+					}
+					return manager;
+				},
+				configurable: true
+			});
+			for (const [name, value] of [["PushManager", MotePushManager], ["PushSubscription", MotePushSubscription]]) Object.defineProperty(window, name, {
+				value,
+				writable: true,
+				configurable: true
+			});
+		}
 		if (typeof ServiceWorkerRegistration !== "undefined") {
 			ServiceWorkerRegistration.prototype.showNotification = async function(title, options = {}) {
 				if (!await show(crypto.randomUUID(), title, options)) throw new TypeError("No permission to show notifications.");

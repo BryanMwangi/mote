@@ -9,7 +9,7 @@ import WebKit
 extension Bench {
     var chromeCommands: [String: Command] {
         [
-            "probe": Self.probe, "ui": Self.ui, "consent": Self.consent, "little": Self.little, "space": Self.space, "peek": Self.peek,
+            "probe": Self.probe, "push": { $0.answer(WebPushService.shared.report) }, "ui": Self.ui, "consent": Self.consent, "little": Self.little, "space": Self.space, "peek": Self.peek,
             "window": Self.window, "windows": Self.windows, "quit": Self.quit, "link": Self.link,
         ]
     }

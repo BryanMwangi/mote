@@ -117,6 +117,8 @@ final class SitePermissions {
 
     static func remember(_ host: String, _ kind: Kind, _ allowed: Bool?) {
         if let allowed { Storage.settings.set(allowed, forKey: kind.key(host)) } else { Storage.settings.removeObject(forKey: kind.key(host)) }
+        // No longer allowed to notify: its push subscriptions go too.
+        if kind == .notifications, allowed != true { Task { @MainActor in WebPushService.shared.forget(host: host) } }
     }
 
     /// Each site with an answer kept, by host.

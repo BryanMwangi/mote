@@ -34,6 +34,24 @@ const describe = (id: string, title: string, options: NotificationOptions): Reco
   silent: options.silent === true,
 });
 
+/** Base64url, as push keys travel. */
+const encode = (bytes: Uint8Array): string =>
+  btoa(String.fromCodePoint(...bytes))
+    .replaceAll('+', '-')
+    .replaceAll('/', '_')
+    .replace(/=+$/, '');
+const decode = (text: string): Uint8Array =>
+  Uint8Array.from(atob(text.replaceAll('-', '+').replaceAll('_', '/')), (c) => c.codePointAt(0) ?? 0);
+const keyText = (key: BufferSource | string | null | undefined): string => {
+  if (key == null) return '';
+  if (typeof key === 'string') return key;
+  return encode(
+    key instanceof ArrayBuffer
+      ? new Uint8Array(key)
+      : new Uint8Array(key.buffer, key.byteOffset, key.byteLength),
+  );
+};
+
 if (handler && !window.__moteNotifications) {
   window.__moteNotifications = true;
   const send = (message: Record<string, unknown>): Promise<unknown> =>
@@ -147,6 +165,102 @@ if (handler && !window.__moteNotifications) {
       status.onchange = null;
       return status;
     };
+  }
+
+  // The Push API, which WebKit doesn't give apps: Mote keeps a registration's
+  // subscription on a Web Push server and shows what the site pushes
+  // (WebPushService.swift). Only for a site allowed to notify.
+  if (typeof ServiceWorkerRegistration !== 'undefined' && !('PushManager' in window)) {
+    interface Subscribed {
+      endpoint: string;
+      p256dh: string;
+      auth: string;
+      key: string;
+    }
+    class MotePushSubscription {
+      readonly endpoint: string;
+      readonly expirationTime = null;
+      readonly options: { userVisibleOnly: boolean; applicationServerKey: ArrayBuffer | null };
+      readonly #scope: string;
+      readonly #keys: { p256dh: string; auth: string };
+
+      constructor(scope: string, made: Subscribed) {
+        this.#scope = scope;
+        this.endpoint = made.endpoint;
+        this.#keys = { p256dh: made.p256dh, auth: made.auth };
+        this.options = {
+          userVisibleOnly: true,
+          applicationServerKey: made.key ? (decode(made.key).buffer as ArrayBuffer) : null,
+        };
+      }
+
+      getKey(name: PushEncryptionKeyName): ArrayBuffer | null {
+        const key = this.#keys[name];
+        return key ? (decode(key).buffer as ArrayBuffer) : null;
+      }
+
+      toJSON(): PushSubscriptionJSON {
+        return { endpoint: this.endpoint, expirationTime: null, keys: { ...this.#keys } };
+      }
+
+      unsubscribe(): Promise<boolean> {
+        return send({ kind: 'unsubscribe', scope: this.#scope }).then((answer) => answer === true);
+      }
+    }
+
+    class MotePushManager {
+      static get supportedContentEncodings(): readonly string[] {
+        return ['aes128gcm'];
+      }
+
+      readonly #scope: string;
+
+      constructor(scope: string) {
+        this.#scope = scope;
+      }
+
+      async subscribe(options: PushSubscriptionOptionsInit = {}): Promise<MotePushSubscription> {
+        const made = (await send({
+          kind: 'subscribe',
+          scope: this.#scope,
+          key: keyText(options.applicationServerKey),
+        })) as Subscribed | null | undefined;
+        if (!made) throw new DOMException('Notifications are not allowed for this site.', 'NotAllowedError');
+        return new MotePushSubscription(this.#scope, made);
+      }
+
+      async getSubscription(): Promise<MotePushSubscription | null> {
+        const made = (await send({ kind: 'subscription', scope: this.#scope })) as
+          | Subscribed
+          | null
+          | undefined;
+        return made ? new MotePushSubscription(this.#scope, made) : null;
+      }
+
+      async permissionState(): Promise<PermissionState> {
+        await known;
+        return permission === 'default' ? 'prompt' : permission;
+      }
+    }
+
+    const managers = new Map<string, MotePushManager>();
+    Object.defineProperty(ServiceWorkerRegistration.prototype, 'pushManager', {
+      get(this: ServiceWorkerRegistration) {
+        let manager = managers.get(this.scope);
+        if (!manager) {
+          manager = new MotePushManager(this.scope);
+          managers.set(this.scope, manager);
+        }
+        return manager;
+      },
+      configurable: true,
+    });
+    for (const [name, value] of [
+      ['PushManager', MotePushManager],
+      ['PushSubscription', MotePushSubscription],
+    ] as const) {
+      Object.defineProperty(window, name, { value, writable: true, configurable: true });
+    }
   }
 
   // A site's service worker shows them for it; the page asks it to.

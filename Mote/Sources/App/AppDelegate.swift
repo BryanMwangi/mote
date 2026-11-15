@@ -14,6 +14,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         MainActor.assumeIsolated {
             WindowDressing.movableWhileMenusOpen()
             WebNotifications.shared.start()
+            WebPushService.shared.start()
         }
         // Links are taken straight from the Apple Event: through SwiftUI, every
         // link at launch would present the window again.

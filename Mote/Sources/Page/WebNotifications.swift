@@ -1,4 +1,5 @@
 import AppKit
+import MoteCore
 import UserNotifications
 import WebKit
 
@@ -50,6 +51,22 @@ final class WebNotifications: NSObject, UNUserNotificationCenterDelegate {
             NSLog("Notifications: macOS wouldn't show it (%@)", error.localizedDescription)
             return false
         }
+    }
+
+    /// Shows a site's pushed notification, which no tab sent: a click opens
+    /// `link`, one of the site's pages.
+    func show(push title: String, body: String, host: String, link: URL) async {
+        let center = UNUserNotificationCenter.current()
+        guard (try? await center.requestAuthorization(options: [.alert, .sound])) == true else { return }
+        let content = UNMutableNotificationContent()
+        content.title = title
+        content.subtitle = host
+        content.body = body
+        content.threadIdentifier = host
+        content.userInfo = ["link": link.absoluteString]
+        content.sound = .default
+        if let icon = Self.attachment(Favicons.shared.cached(host)) { content.attachments = [icon] }
+        try? await center.add(UNNotificationRequest(identifier: "push.\(UUID().uuidString)", content: content, trigger: nil))
     }
 
     /// Said once a launch: a site may notify, but macOS won't let Mote.
@@ -119,6 +136,7 @@ final class WebNotifications: NSObject, UNUserNotificationCenterDelegate {
         let tab = (info["tab"] as? String).flatMap(UUID.init(uuidString:))
         let page = info["page"] as? String
         if let tab, let page { Task { @MainActor in Self.open(tab, page) } }
+        if let link = (info["link"] as? String).flatMap(URL.init(string:)) { Task { @MainActor in WebPushService.open(link) } }
         done()
     }
 
@@ -184,6 +202,29 @@ final class NotificationRelay: NSObject, WKScriptMessageHandlerWithReply, TabRel
                     body: String((body["body"] as? String ?? "").prefix(1000)), tag: String((body["tag"] as? String ?? "").prefix(100)),
                     silent: body["silent"] as? Bool == true)
                 Task { replyHandler(await WebNotifications.shared.show(note, from: tab), nil) }
+            // The Push API (WebPushService), for a service worker registration's
+            // scope on this site.
+            case "subscribe", "subscription", "unsubscribe":
+                guard let scope = (body["scope"] as? String).flatMap(URL.init(string:)), scope.host() == host else {
+                    return replyHandler(nil, nil)
+                }
+                let push = WebPushService.shared
+                let reply = { (made: WebPushService.Subscription?) in
+                    replyHandler(
+                        made.map { ["endpoint": $0.endpoint, "p256dh": WebPush.base64url($0.keys.publicKey), "auth": WebPush.base64url($0.keys.auth), "key": $0.key ?? ""] },
+                        nil)
+                }
+                switch body["kind"] as? String {
+                case "subscribe":
+                    guard SitePermissions.remembered(host, .notifications) == true else { return replyHandler(nil, "NotAllowedError") }
+                    let key = (body["key"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+                    Task { reply(await push.subscribe(host: host, scope: scope.path, key: key)) }
+                case "subscription":
+                    reply(push.subscription(host: host, scope: scope.path))
+                default:
+                    push.unsubscribe(host: host, scope: scope.path)
+                    replyHandler(true, nil)
+                }
             case "close":
                 if let id = body["id"] as? String { WebNotifications.shared.close(id: id) }
                 replyHandler(true, nil)
