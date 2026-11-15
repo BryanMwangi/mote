@@ -52,6 +52,10 @@ public struct ClaudeCodeDecoder: LineDecoder {
     /// Some answer has been given; the next text block is a new paragraph.
     private var wrote = false
     private var blockStarted = false
+    /// How much the model last read in one call: the chat's size. The
+    /// result's usage adds up every call of the turn, so a turn of many
+    /// tools would look many times as long.
+    private var heard: Int?
 
     public init() {}
 
@@ -66,6 +70,7 @@ public struct ClaudeCodeDecoder: LineDecoder {
         case "stream_event":
             return streamed(json["event"])
         case "assistant":
+            if let usage = json["message"]?["usage"] { heard = Self.input(usage) }
             return described(json["message"]?["content"]?.array ?? [])
         case "user":
             return finishedTools(json["message"]?["content"]?.array ?? [], result: json["tool_use_result"])
@@ -94,6 +99,9 @@ public struct ClaudeCodeDecoder: LineDecoder {
             case "thinking_delta": return delta?["thinking"]?.string.flatMap { $0.isEmpty ? nil : [.reasoning($0)] } ?? []
             default: return []
             }
+        case "message_start":
+            if let usage = event["message"]?["usage"] { heard = Self.input(usage) }
+            return []
         case "content_block_start":
             let block = event["content_block"]
             if block?["type"]?.string == "text" { blockStarted = true }
@@ -182,11 +190,13 @@ public struct ClaudeCodeDecoder: LineDecoder {
         var events: [ChatEvent] = []
         if let id = json["session_id"]?.string { events += started(id) }
         if let usage = json["usage"] {
-            let input = ["input_tokens", "cache_creation_input_tokens", "cache_read_input_tokens"].compactMap { usage[$0]?.int }.reduce(
-                0, +)
-            events.append(.usage(Usage(input: input, output: usage["output_tokens"]?.int ?? 0, cost: json["total_cost_usd"]?.double)))
+            events.append(.usage(Usage(input: heard ?? Self.input(usage), output: usage["output_tokens"]?.int ?? 0, cost: json["total_cost_usd"]?.double)))
         }
         return events
+    }
+
+    private static func input(_ usage: JSON) -> Int {
+        ["input_tokens", "cache_creation_input_tokens", "cache_read_input_tokens"].compactMap { usage[$0]?.int }.reduce(0, +)
     }
 }
 

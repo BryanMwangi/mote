@@ -35,6 +35,16 @@ struct ClaudeCodeDecoderTests {
             ])
     }
 
+    @Test("Usage counts what the last call read, not every call of the turn added up")
+    func usageIsTheLastCall() throws {
+        let lines = [
+            #"{"type":"assistant","message":{"content":[],"usage":{"input_tokens":5,"cache_read_input_tokens":15000}},"parent_tool_use_id":null}"#,
+            #"{"type":"assistant","message":{"content":[],"usage":{"input_tokens":7,"cache_read_input_tokens":16000}},"parent_tool_use_id":null}"#,
+            #"{"type":"result","subtype":"success","is_error":false,"usage":{"input_tokens":12,"cache_read_input_tokens":31000,"output_tokens":9}}"#,
+        ]
+        #expect(try decode(ClaudeCodeDecoder(), lines) == [.usage(Usage(input: 16007, output: 9))])
+    }
+
     @Test("An error result fails the reply with its message")
     func errorResult() {
         let line = #"{"type":"result","subtype":"success","is_error":true,"result":"Invalid API key · Please run /login"}"#
