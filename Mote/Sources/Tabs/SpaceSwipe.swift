@@ -155,6 +155,7 @@ final class SpaceSwipe {
             // Which way the space's icon slides; a switch sets it itself.
             if card { browser.spaceStep = forward ? 1 : -1 }
             if !card { browser.switchSpace(to: browser.spaces[target].id, gliding: false) }
+            browser.swipeOffset.target = target
             browser.spaceSwipe += (forward ? 1 : -1) * page
         }
         browser.swipeOffset.ease()
@@ -307,6 +308,11 @@ final class SwipeOffset: ObservableObject {
     let shown = SwipeShown()
     /// Whether the change of `value` being made eases there, in the sidebar.
     fileprivate private(set) var easing = false
+    /// The page a switch is moving to, set before `value` is: the sidebar's
+    /// track goes there in the same step as its offset, rather than when
+    /// SwiftUI next draws. Apart, the offset measured from the old page showed
+    /// the space on its other side until the redraw caught up.
+    var target: Int?
 
     /// Back to rest, the whole space at once: a
     /// spring without bounce over a quarter second.
@@ -428,6 +434,10 @@ struct SwipeTrack: FillsRoom {
 
         private func move(to x: CGFloat) {
             guard let layer = host.layer else { return }
+            if let target = swipe.target {
+                swipe.target = nil
+                place(here: target, count: count)
+            }
             showRing(at: x)
             if x != 0, !swipe.shown.swiping { swipe.shown.swiping = true }
             // From where it shows, mid-ease, or where it was put.

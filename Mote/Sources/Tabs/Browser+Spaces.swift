@@ -37,6 +37,7 @@ extension Browser {
         }
         guard glides, let from, let to else { return }
         let page = prefs.sidebar ? prefs.sideWidth : ChromeLayout.strip
+        swipeOffset.target = to
         withTransaction(still) { spaceSwipe = (to > from ? 1 : -1) * page }
         swipeOffset.ease()
     }

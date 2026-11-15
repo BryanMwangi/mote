@@ -278,8 +278,12 @@ private struct SpacePage: View {
     /// from each other.
     @Environment(\.sidebarShowing) private var showing
 
-    private var tabs: [Tab] { live ? browser.tabs : browser.parked[space.id]?.tabs ?? [] }
-    private var active: Tab.ID? { live ? browser.activeID : browser.parked[space.id]?.active }
+    /// Its tabs are the window's own while it's the space showing, parked
+    /// otherwise; read from the browser, not `live`, which comes from the
+    /// pages around it and can be a draw behind as a switch is made.
+    private var front: Bool { space.id == browser.spaceID }
+    private var tabs: [Tab] { front ? browser.tabs : browser.parked[space.id]?.tabs ?? [] }
+    private var active: Tab.ID? { front ? browser.activeID : browser.parked[space.id]?.active }
 
     var body: some View {
         let tabs = tabs
