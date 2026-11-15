@@ -19,6 +19,8 @@ declare global {
   interface Window {
     /** Set once the script runs in this document. */
     __moteNotifications?: boolean;
+    /** What a site was told, set by Mote just before this script: its host and the answer. */
+    __moteNotify?: [string, NotificationPermission];
   }
 }
 
@@ -59,9 +61,13 @@ if (handler && !window.__moteNotifications) {
     // oxlint-disable-next-line unicorn/require-post-message-target-origin
     handler.postMessage(message).catch(() => undefined);
 
-  let permission: NotificationPermission = 'default';
+  // Known at once, for the site Mote armed this document for: sites read
+  // `Notification.permission` as they load, before any answer could come.
+  const told = window.__moteNotify;
+  delete window.__moteNotify;
+  let permission: NotificationPermission = told?.[0] === location.hostname ? told[1] : 'default';
   const known = send({ kind: 'state' }).then((answer) => {
-    if (answer === 'granted' || answer === 'denied') permission = answer;
+    if (answer === 'granted' || answer === 'denied' || answer === 'default') permission = answer;
   });
   const showing = new Map<string, MoteNotification>();
 

@@ -10,7 +10,10 @@ enum PageScripts {
     @MainActor
     /// `dev`: the page is a developer site the assistant may test, which gets
     /// the console and network hook (Scripts/src/dev-hooks.ts) in its own world.
-    static func all(hiding: ElementHidingStyle.Config, boost: String = "", ads: Bool = false, dev: Bool = false) -> [WKUserScript] {
+    /// `notify`: see `notifying(_:)`.
+    static func all(
+        hiding: ElementHidingStyle.Config, boost: String = "", ads: Bool = false, dev: Bool = false, notify: String = ""
+    ) -> [WKUserScript] {
         var scripts = [
             mote(ScrollRelay.script, at: .atDocumentEnd),
             mote(ElementPicker.picker, at: .atDocumentStart),
@@ -44,7 +47,11 @@ enum PageScripts {
         scripts.append(mote(LoadRelay.script, at: .atDocumentStart))
         // In the page's world, the only one that sees the site's media session.
         scripts.append(WKUserScript(source: MediaRelay.script, injectionTime: .atDocumentStart, forMainFrameOnly: true, in: .page))
-        // Notifications, which WebKit shows apps no way to give the page.
+        // Notifications, which WebKit shows apps no way to give the page; with
+        // what the site was told, so it reads right from the page's first line.
+        if !notify.isEmpty {
+            scripts.append(WKUserScript(source: notify, injectionTime: .atDocumentStart, forMainFrameOnly: true, in: .page))
+        }
         scripts.append(WKUserScript(source: NotificationRelay.script, injectionTime: .atDocumentStart, forMainFrameOnly: true, in: .page))
         if dev { scripts.append(WKUserScript(source: Self.devHooks, injectionTime: .atDocumentStart, forMainFrameOnly: true, in: .page)) }
         // An image on its own (a file dropped in, a download opened): on a
@@ -57,6 +64,17 @@ enum PageScripts {
     }
 
     private static let devHooks = InjectedScript.source("dev-hooks")
+
+    /// Whether the site at `url` may notify, for the notifications script to
+    /// know before the page's own scripts ask (sites check
+    /// `Notification.permission` as they load, and Mote's answer to a message
+    /// comes later). Only for that site: a redirect elsewhere asks as usual.
+    /// Empty when it was never asked.
+    @MainActor
+    static func notifying(_ url: URL?) -> String {
+        guard let host = url?.host(), let allowed = SitePermissions.remembered(host, .notifications) else { return "" }
+        return "window.__moteNotify = [\(Tab.jsonString(host)), \(allowed ? "'granted'" : "'denied'")];"
+    }
 
     /// Whether a page at `url` gets the developer hook: one of the developer
     /// sites, with Developer mode on or coding agents let in.

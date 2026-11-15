@@ -23,9 +23,11 @@
 	if (handler && !window.__moteNotifications) {
 		window.__moteNotifications = true;
 		const send = (message) => handler.postMessage(message).catch(() => void 0);
-		let permission = "default";
+		const told = window.__moteNotify;
+		delete window.__moteNotify;
+		let permission = told?.[0] === location.hostname ? told[1] : "default";
 		const known = send({ kind: "state" }).then((answer) => {
-			if (answer === "granted" || answer === "denied") permission = answer;
+			if (answer === "granted" || answer === "denied" || answer === "default") permission = answer;
 		});
 		const showing = /* @__PURE__ */ new Map();
 		const show = async (id, title, options) => {

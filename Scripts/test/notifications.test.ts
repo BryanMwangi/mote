@@ -17,6 +17,7 @@ class Registration {
 beforeAll(async () => {
   vi.stubGlobal('moteConfig', { handler: 'moteNotifications', clickEvent: 'mote-click' });
   vi.stubGlobal('ServiceWorkerRegistration', Registration);
+  window.__moteNotify = [location.hostname, 'granted'];
   Object.defineProperty(window, 'webkit', {
     configurable: true,
     value: {
@@ -26,6 +27,8 @@ beforeAll(async () => {
             sent.push(message);
             switch (message.kind) {
               case 'state':
+                // Later than the page's own scripts ask.
+                await new Promise((resolve) => setTimeout(resolve, 50));
                 return 'granted';
               case 'subscribe':
                 held = subscribed;
@@ -48,6 +51,13 @@ beforeAll(async () => {
 
 const manager = () =>
   (new Registration('https://example.com/scope/') as unknown as ServiceWorkerRegistration).pushManager;
+
+describe('the permission', () => {
+  it('is known from the first line, before Mote answers', () => {
+    expect(Notification.permission).toBe('granted');
+    expect(window.__moteNotify).toBeUndefined();
+  });
+});
 
 describe('the Push API', () => {
   it('passes the checks push libraries make before subscribing', () => {

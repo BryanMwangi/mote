@@ -186,10 +186,11 @@ final class NotificationRelay: NSObject, WKScriptMessageHandlerWithReply, TabRel
             case "state":
                 replyHandler(state(SitePermissions.remembered(host, .notifications)), nil)
             case "ask":
+                // Answered before: the same again, whatever window it's in.
+                if let kept = SitePermissions.remembered(host, .notifications) { return replyHandler(state(kept), nil) }
                 // Only when asked in answer to a click or a key: a site asking
                 // as it loads hears nothing yet.
-                guard let browser = Windows.shared.all.first(where: { $0.tab(for: web) != nil }),
-                    SitePermissions.remembered(host, .notifications) != nil || (web as? PageView)?.mayOpenWindow == true
+                guard let browser = Windows.shared.all.first(where: { $0.tab(for: web) != nil }), (web as? PageView)?.mayOpenWindow == true
                 else { return replyHandler("default", nil) }
                 browser.permissions.ask(.notifications, host: host, tab: tab.id) { replyHandler(state($0), nil) }
                 browser.bringOutQuestion(for: tab)
