@@ -464,11 +464,17 @@ final class Browser: NSObject, ObservableObject {
     }
 
     /// A space's essentials and pinned tabs, from its saved session, asleep:
-    /// what a new window shows of it.
-    func heldTabs(of space: UUID) -> [Tab] {
+    /// what a new window shows of it, on the pages this window left them at.
+    func heldTabs(of space: UUID, pages: [Session.Entry] = []) -> [Tab] {
         let saved = Session.read(space: space).tabs
         HeldSync.seed(saved, in: space)
         return saved.filter(\.isHeld).compactMap { entry -> Tab? in
+            var entry = entry
+            if entry.chat == nil, let page = pages.first(where: { $0.held != nil && $0.held == entry.held && $0.chat == nil }) {
+                entry.home = entry.home ?? entry.url
+                (entry.url, entry.title, entry.state, entry.used) = (page.url, page.title, page.state, page.used)
+                (entry.chatOpen, entry.pageChat) = (page.chatOpen, page.pageChat)
+            }
             let tab = Tab(configuration: Web.configuration(space: space))
             return restore(entry, in: tab) ? tab : nil
         }
@@ -638,7 +644,8 @@ final class Browser: NSObject, ObservableObject {
                 now: now, window: windowID, space: space,
                 .init(
                     tabs: kept.compactMap(entry(for:)), active: kept.firstIndex { $0.id == active } ?? 0, splits: savedSplits(kept),
-                    activeHeld: front?.held == true ? front?.heldID?.uuidString : nil))
+                    activeHeld: front?.held == true ? front?.heldID?.uuidString : nil,
+                    heldPages: tabs.filter(\.held).compactMap(entry(for:))))
             return
         }
         let kept = tabs.filter { entry(for: $0) != nil }
@@ -1026,7 +1033,7 @@ final class Browser: NSObject, ObservableObject {
             }
             let loose = made.compactMap(\.self)
             restoreSplits(saved.splits, made)
-            let held = heldTabs(of: space)
+            let held = heldTabs(of: space, pages: saved.heldPages ?? [])
             let front =
                 held.first { $0.heldID?.uuidString == saved.activeHeld && saved.activeHeld != nil }
                 ?? (loose.indices.contains(saved.active) ? loose[saved.active] : loose.first)

@@ -48,6 +48,9 @@ enum Session {
         /// A window opened since the main one, with one of the space's
         /// essentials or pinned tabs in front: its held id. Nil in older files.
         var activeHeld: String? = nil
+        /// Such a window's own pages in the space's essentials and pinned
+        /// tabs, matched by held id: where it left them. Nil in older files.
+        var heldPages: [Entry]? = nil
 
         static let empty = Saved(tabs: [], active: 0)
     }
