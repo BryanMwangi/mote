@@ -8,11 +8,15 @@ import SwiftUI
 struct Toolbar: View {
     @ObservedObject var browser: Browser
     @ObservedObject var prefs: Preferences
+    /// Out over the page ("On hover"): on the space's colours, as the sidebar is.
+    var floating = false
 
     var body: some View {
         Row(browser: browser, prefs: prefs)
             .background { DragStrip() }
-            .background(browser.active?.isStart == true ? Color.clear : browser.chromeGround)
+            .background {
+                if floating { SpaceBand(browser: browser) } else { browser.active?.isStart == true ? Color.clear : browser.chromeGround }
+            }
             .overlay(alignment: .bottom) {
                 if let tab = browser.active { Seam(tab: tab).allowsHitTesting(false) }
             }

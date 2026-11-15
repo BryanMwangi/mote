@@ -26,6 +26,20 @@ struct ChromeLayoutTests {
         #expect(chrome.corner == ChromeLayout.corner)
     }
 
+    @Test("With the sidebar on the right the card keeps its gap on the left and ends where the sidebar starts")
+    func sidebarOnRight() {
+        let chrome = ChromeLayout(
+            window: window, tabs: .sidebar, sideWidth: 240, folded: false, immersed: false, bookmarked: false, sideRight: true)
+        #expect(chrome.sidebar == CGRect(x: 1200 - 240, y: 0, width: 240, height: 800))
+        #expect(chrome.card == CGRect(x: gap, y: gap, width: 1200 - 240 - gap, height: 800 - 2 * gap))
+        // Beside the native sidebar, which takes its own width: flush on the right.
+        let native = ChromeLayout(
+            window: window, tabs: .sidebar, sideWidth: 0, folded: false, immersed: false, bookmarked: false, chatting: true, sideRight: true
+        )
+        #expect(native.card.minX == gap)
+        #expect(native.chatPanel?.maxX == 1200)
+    }
+
     @Test("A folded sidebar leaves the card inset evenly on every side")
     func foldedSidebar() {
         let chrome = layout(.sidebar, folded: true)

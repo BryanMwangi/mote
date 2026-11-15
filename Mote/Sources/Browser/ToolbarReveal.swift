@@ -16,7 +16,9 @@ struct ToolbarReveal: View {
     /// to a menu doesn't shut it.
     private static let grace = 0.35
 
-    private var watching: Bool { browser.toolbarOnHover }
+    /// The toolbar, or with no toolbar beside a sidebar on the right, the
+    /// traffic lights (Browser.lightsHide).
+    private var watching: Bool { browser.toolbarOnHover || browser.lightsHide }
 
     var body: some View {
         Color.clear

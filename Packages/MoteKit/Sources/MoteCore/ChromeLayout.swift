@@ -60,7 +60,8 @@ public struct ChromeLayout: Equatable, Sendable {
     ///     room, and the toolbar only floats over it when called for.
     public init(
         window: CGSize, tabs: Tabs, sideWidth: CGFloat, folded: Bool, immersed: Bool, bookmarked: Bool, chatting: Bool = false,
-        panelWidth: CGFloat = ChromeLayout.panel, bookmarksHeight: CGFloat = ChromeLayout.bookmarks, toolbar: Bool = true
+        panelWidth: CGFloat = ChromeLayout.panel, bookmarksHeight: CGFloat = ChromeLayout.bookmarks, toolbar: Bool = true,
+        sideRight: Bool = false
     ) {
         let whole = CGRect(origin: .zero, size: window)
         guard !immersed else {
@@ -76,10 +77,16 @@ public struct ChromeLayout: Equatable, Sendable {
         switch (tabs, folded) {
         case (.sidebar, false):
             // The sidebar keeps its own margin on the side of the card, so the card
-            // starts right where the sidebar ends.
-            let side = CGRect(x: 0, y: 0, width: sideWidth, height: window.height)
-            sidebar = side
-            left = side.maxX
+            // starts right where the sidebar ends, on whichever side it is.
+            if sideRight {
+                let side = CGRect(x: window.width - sideWidth, y: 0, width: sideWidth, height: window.height)
+                sidebar = side
+                right = side.minX
+            } else {
+                let side = CGRect(x: 0, y: 0, width: sideWidth, height: window.height)
+                sidebar = side
+                left = side.maxX
+            }
         case (.strip, false):
             // The active tab runs into the card, so there is no gap between the two.
             let band = CGRect(x: 0, y: 0, width: window.width, height: ChromeLayout.strip)
@@ -92,7 +99,9 @@ public struct ChromeLayout: Equatable, Sendable {
         // height, on the frame, and the card ends where the panel begins.
         var chatPanel: CGRect?
         if chatting {
-            let panel = CGRect(x: window.width - panelWidth, y: 0, width: panelWidth, height: window.height)
+            // Beside a sidebar on the right, the panel sits against it.
+            let edge = sideRight && sidebar != nil ? right : window.width
+            let panel = CGRect(x: edge - panelWidth, y: 0, width: panelWidth, height: window.height)
             chatPanel = panel
             right = panel.minX
         }

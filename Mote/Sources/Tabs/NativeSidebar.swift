@@ -138,6 +138,13 @@ struct NativeSidebar: NSViewControllerRepresentable {
                         .frame(width: ResizeGrip.width)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+                // The top edge's strip runs on across this pane (see LightsStrip).
+                .overlay(alignment: .top) {
+                    if browser.lightsHide, browser.toolbarRevealed, !browser.toolbarFloating {
+                        LightsStrip(browser: browser, lights: false)
+                    }
+                }
+                .animation(Motion.quick, value: browser.toolbarRevealed)
                 .ignoresSafeArea()
                 .clipped()
         }
