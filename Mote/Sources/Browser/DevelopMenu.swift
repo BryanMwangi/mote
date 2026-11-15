@@ -102,36 +102,15 @@ private struct UserAgentMenu: View {
     }
 }
 
-/// Open Page With's icons. SwiftUI leaves images out of menu-bar items, so
-/// they're put on after it updates the menu, as BookmarkMenu adds its items.
+/// Open Page With's icons.
 @MainActor
-final class DevelopMenuIcons {
-    static let shared = DevelopMenuIcons()
-    private let relay = MenuRelay()
-    private var observer: Any?
-
-    private var menu: NSMenu? {
-        NSApp.mainMenu?.items.first { $0.title == "Develop" }?.submenu?.items.first { $0.title == "Open Page With" }?.submenu
-    }
-
-    func start() {
-        guard observer == nil else { return }
-        relay.after = { menu in
+enum DevelopMenuIcons {
+    static let shared = MenuBarAdditions(
+        find: { NSApp.mainMenu?.items.first { $0.title == "Develop" }?.submenu?.items.first { $0.title == "Open Page With" }?.submenu },
+        after: { menu in
             let icons = Dictionary(OtherBrowsers.listed.map { ($0.title, $0.icon) }) { first, _ in first }
             for item in menu.items { item.image = icons[item.title] }
-        }
-        // SwiftUI puts its own delegate back whenever it updates the menu bar.
-        observer = NotificationCenter.default.addObserver(forName: NSApplication.didUpdateNotification, object: nil, queue: nil) {
-            [weak self] _ in
-            MainActor.assumeIsolated { self?.wrap() }
-        }
-    }
-
-    private func wrap() {
-        guard let menu, menu.delegate !== relay else { return }
-        relay.inner = menu.delegate
-        menu.delegate = relay
-    }
+        })
 }
 
 /// The other apps on this Mac that open web pages.

@@ -126,6 +126,58 @@ extension Extensions {
     func menuItems(for tab: Tab) -> [NSMenuItem] {
         guard shows(tab) else { return [] }
         let adapter = adapter(for: tab)
-        return contexts.values.flatMap { $0.menuItems(for: adapter) }
+        return contexts.values.flatMap { context in context.menuItems(for: adapter).map { Self.own($0, icon: icon(of: context)) } }
+    }
+
+    /// Extensions' entries WebKit put in a page's menu itself, each led by
+    /// its extension's icon, as Chrome shows them: found by the extension's
+    /// name on its submenu, or by the titles it gave its entries.
+    func ownItems(in menu: NSMenu) {
+        for (index, item) in menu.items.enumerated() where String(describing: type(of: item)).contains("WebExtensionMenuItem") {
+            let context = contexts.first { id, context in
+                item.submenu != nil
+                    ? context.webExtension.displayName == item.title
+                    : menuTitles[id, default: []].contains { Self.title($0, matches: item.title) }
+            }?.value
+            menu.removeItem(at: index)
+            menu.insertItem(Self.own(item, icon: context.flatMap(icon(of:))), at: index)
+        }
+    }
+
+    /// An entry's title as given (`%s` the selection) against one shown.
+    private static func title(_ given: String, matches shown: String) -> Bool {
+        let parts = given.replacingOccurrences(of: "&&", with: "&").components(separatedBy: "%s")
+        guard parts.count > 1 else { return given == shown || given.replacingOccurrences(of: "&", with: "") == shown }
+        return shown.hasPrefix(parts[0]) && shown.hasSuffix(parts[parts.count - 1])
+    }
+
+    private func icon(of context: WKWebExtensionContext) -> NSImage? {
+        let size = CGSize(width: 16, height: 16)
+        return context.action(for: activeAdapter)?.icon(for: size) ?? context.webExtension.icon(for: size)
+    }
+
+    /// Mote's copy of an extension's item, which runs the original: WebKit's
+    /// items put back their titles as the menu updates, and a picture that
+    /// isn't a symbol goes undrawn as an item's image, so the icon goes in a
+    /// title that's Mote's to keep (BookmarkMenu.title).
+    private static func own(_ item: NSMenuItem, icon: NSImage?) -> NSMenuItem {
+        if item.isSeparatorItem { return .separator() }
+        let made: NSMenuItem
+        if let submenu = item.submenu {
+            made = NSMenuItem(title: item.title, action: nil, keyEquivalent: "")
+            made.submenu = NSMenu(title: item.title)
+            made.submenu?.items = submenu.items.map { own($0, icon: nil) }
+        } else {
+            made = ActionItem(item.title) {
+                guard let action = item.action else { return }
+                NSApp.sendAction(action, to: item.target, from: item)
+            }
+            made.state = item.state
+            made.isEnabled = item.isEnabled
+        }
+        let picture = item.image.flatMap { $0.isTemplate ? nil : $0.copy() as? NSImage } ?? icon?.copy() as? NSImage
+        picture?.size = NSSize(width: 16, height: 16)
+        if let picture { made.attributedTitle = BookmarkMenu.title(item.title, icon: picture) } else { made.image = item.image }
+        return made
     }
 }

@@ -252,6 +252,13 @@ extension ChromeAPI {
         return nil
     }
 
+    /// The titles of an extension's context menu entries (menus.ts).
+    static func menus(_ call: ChromeCall) async throws -> Any? {
+        guard call.method == "titles" else { throw unavailable(call) }
+        call.owner.menuTitles[call.id] = (call.first as? [Any] ?? []).compactMap { $0 as? String }
+        return nil
+    }
+
     /// Firefox's proxy.onRequest, as proxy.ts asks it: the proxy for pages
     /// now, or null for none.
     static func proxy(_ call: ChromeCall) async throws -> Any? {

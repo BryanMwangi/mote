@@ -107,6 +107,7 @@ struct ContentView: View {
                 AppDelegate.hand(to: browser)
                 BookmarkMenu.shared.start(for: browser)
                 DevelopMenuIcons.shared.start()
+                HistoryMenuIcons.shared.start()
             }
             // A window opened since the main one takes its tabs with it.
             .onDisappear { Windows.shared.closed(browser) }

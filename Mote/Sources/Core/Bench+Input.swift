@@ -217,7 +217,15 @@ extension Bench {
                         // "Item", or "Submenu>Item".
                         let path = pick.split(separator: ">", maxSplits: 1).map(String.init)
                         guard let index = menu.items.firstIndex(where: { $0.title.hasPrefix(path[0]) }) else {
-                            picked = "no \(pick)"
+                            // What it has: ▣ an image (◻ a template one), ◧ an icon in the title.
+                            let has: [String] = menu.items.map { item in
+                                let image = item.image.map { $0.isTemplate ? "◻ " : "▣ " } ?? ""
+                                let titled = item.attributedTitle ?? NSAttributedString()
+                                let inTitle = titled.containsAttachments(in: NSRange(location: 0, length: titled.length)) ? "◧ " : ""
+                                let id = item.identifier.map { " [\($0.rawValue)]" } ?? ""
+                                return image + inTitle + item.title + id + " " + String(describing: type(of: item))
+                            }
+                            picked = "no \(pick); has \(has)"
                             return menu.cancelTracking()
                         }
                         menu.cancelTracking()
@@ -376,11 +384,15 @@ extension Bench {
             return call.fail("no \(title) menu")
         }
         NotificationCenter.default.post(name: NSMenu.didBeginTrackingNotification, object: main)
+        menu.delegate?.menuNeedsUpdate?(menu)
         menu.update()
-        let list = { (menu: NSMenu) in
-            menu.items.map { item in
+        let list = { (menu: NSMenu) -> [String] in
+            menu.items.map { item -> String in
                 guard !item.isSeparatorItem else { return "—" }
-                let marks = (item.state == .on ? "✓ " : "") + (item.image == nil ? "" : "▣ ")
+                // ▣ an image, ◧ an icon in the title (BookmarkMenu.title).
+                let titled = item.attributedTitle ?? NSAttributedString()
+                let inTitle: Bool = titled.containsAttachments(in: NSRange(location: 0, length: titled.length))
+                let marks = (item.state == .on ? "✓ " : "") + (item.image == nil ? "" : "▣ ") + (inTitle ? "◧ " : "")
                 return marks + name(item) + (item.isEnabled ? "" : " (off)")
             }
         }
@@ -394,7 +406,8 @@ extension Bench {
                 if index == steps.count - 1 { at.performActionForItem(at: found) } else if let sub = at.items[found].submenu { at = sub }
             }
         }
-        call.answer(["items": list(menu), "submenus": subs])
+        let delegate: String = menu.delegate.map { String(describing: type(of: $0)) } ?? "none"
+        call.answer(["items": list(menu), "submenus": subs, "delegate": delegate])
     }
 
     /// An item's title without the icon leading it (BookmarkMenu.title).

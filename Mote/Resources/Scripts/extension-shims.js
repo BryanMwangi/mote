@@ -2313,7 +2313,24 @@
 		}
 		return mended;
 	}
-	function mendMenus({ chrome, put, runtime }) {
+	/**
+	* The titles of the entries an extension has, told to the browser as they
+	* change: WebKit puts them in a page's menu without saying whose they are,
+	* and the browser leads each with its extension's icon, found by its title.
+	*/
+	function noteTitles(shim, titles) {
+		let told = "";
+		return (change) => {
+			change();
+			const list = [...new Set(titles.values())];
+			const text = JSON.stringify(list);
+			if (text === told) return;
+			told = text;
+			shim.native("menus.titles", [list]).catch(() => void 0);
+		};
+	}
+	function mendMenus(shim) {
+		const { chrome, put, runtime } = shim;
 		const version = (() => {
 			try {
 				return Number(runtime.getManifest().manifest_version) || 3;
@@ -2321,14 +2338,40 @@
 				return 3;
 			}
 		})();
+		const titles = /* @__PURE__ */ new Map();
+		const tell = noteTitles(shim, titles);
+		const keep = (id, title) => {
+			if (typeof title === "string") titles.set(id, title);
+		};
 		for (const name of ["contextMenus", "menus"]) {
 			const menus = chrome[name];
 			if (!menus || typeof menus.create !== "function") continue;
 			const create = menus.create.bind(menus);
-			put(menus, "create", (props, callback) => create(mendMenuProperties(props, version), callback));
+			put(menus, "create", (props, callback) => {
+				const id = create(mendMenuProperties(props, version), callback);
+				tell(() => keep(props?.id ?? id, props?.title));
+				return id;
+			});
+			if (typeof menus.remove === "function") {
+				const remove = menus.remove.bind(menus);
+				put(menus, "remove", (id, ...rest) => {
+					tell(() => titles.delete(id));
+					return remove(id, ...rest);
+				});
+			}
+			if (typeof menus.removeAll === "function") {
+				const removeAll = menus.removeAll.bind(menus);
+				put(menus, "removeAll", (...rest) => {
+					tell(() => titles.clear());
+					return removeAll(...rest);
+				});
+			}
 			if (typeof menus.update !== "function") continue;
 			const update = menus.update.bind(menus);
-			put(menus, "update", (id, props, callback) => update(id, mendMenuProperties(props, version), callback));
+			put(menus, "update", (id, props, callback) => {
+				tell(() => keep(id, props?.title));
+				return update(id, mendMenuProperties(props, version), callback);
+			});
 		}
 	}
 

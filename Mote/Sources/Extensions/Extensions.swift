@@ -29,6 +29,8 @@ final class Extensions: NSObject, ObservableObject {
     @Published var contexts: [String: WKWebExtensionContext] = [:]
     /// Goes up whenever a button's icon, badge or state may have changed.
     @Published var actionsChanged = 0
+    /// The titles each extension gave its context menu entries (menus.ts).
+    var menuTitles: [String: [String]] = [:]
     /// The id being installed.
     @Published var busy: String?
     /// Each extension's latest errors, oldest first.

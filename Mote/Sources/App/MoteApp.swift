@@ -225,21 +225,13 @@ private struct MenuBar: Commands {
     private var history: some View {
         Section("Recently Visited") {
             ForEach(browser.recentlyVisited) { place in
-                Button {
-                    browser.open(place.url, foreground: true)
-                } label: {
-                    PageMenuItem(title: place.title.isEmpty ? place.key : place.title, url: place.url)
-                }
+                Button(place.title.isEmpty ? place.key : place.title) { browser.open(place.url, foreground: true) }
             }
         }
         if !browser.ghosts.isEmpty {
             Section("Recently Closed") {
                 ForEach(browser.ghosts.reversed().prefix(10)) { ghost in
-                    Button {
-                        browser.reopen(ghost)
-                    } label: {
-                        PageMenuItem(title: ghost.label, url: ghost.url)
-                    }
+                    Button(ghost.label) { browser.reopen(ghost) }
                 }
             }
         }
@@ -252,29 +244,23 @@ private struct MenuBar: Commands {
     }
 }
 
-/// A page in a menu: its cached icon, if there is one, and its title.
-private struct PageMenuItem: View {
-    let title: String
-    let url: URL
-
-    var body: some View {
-        if let icon {
-            Label {
-                Text(title)
-            } icon: {
-                Image(nsImage: icon)
+/// The sites' icons on History's pages: SwiftUI leaves pictures out of the
+/// menu bar, so they go in after it, in the titles, as the bookmarks' do.
+@MainActor
+enum HistoryMenuIcons {
+    static let shared = MenuBarAdditions(
+        find: { NSApp.mainMenu?.items.first { $0.title == "History" }?.submenu },
+        after: { menu in
+            var hosts: [String: String] = [:]
+            for browser in Windows.shared.all {
+                for place in browser.recentlyVisited { hosts[place.title.isEmpty ? place.key : place.title] = place.url.host() }
+                for ghost in browser.ghosts { hosts[ghost.label] = ghost.url.host() }
             }
-        } else {
-            Text(title)
-        }
-    }
-
-    /// The site's icon at menu size: they're kept at 64 pt, so a copy is resized.
-    private var icon: NSImage? {
-        guard let host = url.host()?.lowercased(), let cached = Favicons.shared.cached(host), let small = cached.copy() as? NSImage else {
-            return nil
-        }
-        small.size = NSSize(width: 16, height: 16)
-        return small
-    }
+            for item in menu.items {
+                // Without the icon of a title already given one.
+                let title = item.title.trimmingCharacters(in: CharacterSet(charactersIn: "\u{FFFC}").union(.whitespaces))
+                guard let host = hosts[title] else { continue }
+                item.attributedTitle = BookmarkMenu.title(title, icon: BookmarkMenu.icon(host: host) ?? BookmarkMenu.globe)
+            }
+        })
 }

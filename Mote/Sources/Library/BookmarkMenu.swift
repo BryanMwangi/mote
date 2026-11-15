@@ -151,8 +151,20 @@ final class BookmarkMenu: NSObject, NSMenuDelegate {
             return image
         }
         if node.isFolder { return symbol("folder") }
-        guard let cached = node.host.flatMap(Favicons.shared.cached), let icon = cached.copy() as? NSImage else {
-            return symbol("globe")
+        return icon(host: node.host) ?? globe
+    }
+
+    /// A site's place until it has an icon.
+    static var globe: NSImage? {
+        let image = NSImage(systemSymbolName: "globe", accessibilityDescription: nil)
+        image?.isTemplate = true
+        return image
+    }
+
+    /// A site's cached icon at menu size, if there is one.
+    static func icon(host: String?) -> NSImage? {
+        guard let cached = host.map({ $0.lowercased() }).flatMap(Favicons.shared.cached), let icon = cached.copy() as? NSImage else {
+            return nil
         }
         icon.size = iconSize
         return icon
@@ -187,4 +199,43 @@ final class MenuRelay: NSObject, NSMenuDelegate {
     }
 
     nonisolated override func forwardingTarget(for selector: Selector!) -> Any? { inner }
+}
+
+/// What SwiftUI can't put in a menu-bar menu it makes (pictures), put in
+/// after each update through a relay in front of its delegate, which SwiftUI
+/// puts back whenever it updates the menu bar.
+@MainActor
+final class MenuBarAdditions {
+    private let relay = MenuRelay()
+    private let find: () -> NSMenu?
+    private var observers: [Any] = []
+
+    init(find: @escaping () -> NSMenu?, after: @escaping (NSMenu) -> Void) {
+        self.find = find
+        relay.after = after
+    }
+
+    func start() {
+        guard observers.isEmpty else { return }
+        let center = NotificationCenter.default
+        observers = [
+            center.addObserver(forName: NSApplication.didUpdateNotification, object: nil, queue: nil) { [weak self] _ in
+                MainActor.assumeIsolated { self?.wrap() }
+            },
+            // And as the menu bar opens, after SwiftUI's last word.
+            center.addObserver(forName: NSMenu.didBeginTrackingNotification, object: nil, queue: nil) { [weak self] note in
+                let tracked = (note.object as? NSMenu).map(ObjectIdentifier.init)
+                MainActor.assumeIsolated {
+                    if tracked == NSApp.mainMenu.map(ObjectIdentifier.init) { self?.wrap() }
+                }
+            },
+        ]
+        wrap()
+    }
+
+    private func wrap() {
+        guard let menu = find(), menu.delegate !== relay else { return }
+        relay.inner = menu.delegate
+        menu.delegate = relay
+    }
 }

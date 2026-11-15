@@ -60,13 +60,33 @@ function withoutFilePatterns<P extends MenuProperties>(props: P): P {
   for (const key of ['documentUrlPatterns', 'targetUrlPatterns']) {
     const patterns = props[key];
     if (!Array.isArray(patterns)) continue;
-    const kept = patterns.filter((p) => typeof p !== 'string' || p === '<all_urls>' || /^(\*|https?|wss?):/.test(p));
+    const kept = patterns.filter(
+      (p) => typeof p !== 'string' || p === '<all_urls>' || /^(\*|https?|wss?):/.test(p),
+    );
     if (kept.length) mended[key] = kept;
   }
   return mended as P;
 }
 
-export function mendMenus({ chrome, put, runtime }: Shim): void {
+/**
+ * The titles of the entries an extension has, told to the browser as they
+ * change: WebKit puts them in a page's menu without saying whose they are,
+ * and the browser leads each with its extension's icon, found by its title.
+ */
+function noteTitles(shim: Shim, titles: Map<unknown, string>): (change: () => void) => void {
+  let told = '';
+  return (change) => {
+    change();
+    const list = [...new Set(titles.values())];
+    const text = JSON.stringify(list);
+    if (text === told) return;
+    told = text;
+    void shim.native('menus.titles', [list]).catch(() => undefined);
+  };
+}
+
+export function mendMenus(shim: Shim): void {
+  const { chrome, put, runtime } = shim;
   const version = (() => {
     try {
       return Number(runtime.getManifest().manifest_version) || 3;
@@ -74,18 +94,40 @@ export function mendMenus({ chrome, put, runtime }: Shim): void {
       return 3;
     }
   })();
+  const titles = new Map<unknown, string>();
+  const tell = noteTitles(shim, titles);
+  const keep = (id: unknown, title: unknown) => {
+    if (typeof title === 'string') titles.set(id, title);
+  };
   for (const name of ['contextMenus', 'menus']) {
     const menus = chrome[name];
     if (!menus || typeof menus.create !== 'function') continue;
     const create = menus.create.bind(menus);
-    put(menus, 'create', (props: MenuProperties, callback?: unknown) =>
-      create(mendMenuProperties(props, version), callback),
-    );
+    put(menus, 'create', (props: MenuProperties, callback?: unknown) => {
+      const id = create(mendMenuProperties(props, version), callback);
+      tell(() => keep(props?.id ?? id, props?.title));
+      return id;
+    });
+    if (typeof menus.remove === 'function') {
+      const remove = menus.remove.bind(menus);
+      put(menus, 'remove', (id: unknown, ...rest: unknown[]) => {
+        tell(() => titles.delete(id));
+        return remove(id, ...rest);
+      });
+    }
+    if (typeof menus.removeAll === 'function') {
+      const removeAll = menus.removeAll.bind(menus);
+      put(menus, 'removeAll', (...rest: unknown[]) => {
+        tell(() => titles.clear());
+        return removeAll(...rest);
+      });
+    }
     // A WebKit without update still gets create mended, and the rest of the shim.
     if (typeof menus.update !== 'function') continue;
     const update = menus.update.bind(menus);
-    put(menus, 'update', (id: unknown, props: MenuProperties, callback?: unknown) =>
-      update(id, mendMenuProperties(props, version), callback),
-    );
+    put(menus, 'update', (id: unknown, props: MenuProperties, callback?: unknown) => {
+      tell(() => keep(id, props?.title));
+      return update(id, mendMenuProperties(props, version), callback);
+    });
   }
 }
