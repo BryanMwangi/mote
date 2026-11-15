@@ -191,33 +191,27 @@ struct ChatRow: View {
                 .lineLimit(1)
                 .truncationMode(.tail)
             Spacer(minLength: 8)
-            if hovering, let archive {
-                Button(action: archive) {
-                    Image(systemName: entry.archived == true ? "tray.and.arrow.up" : "archivebox")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(Palette.muted)
-                        .frame(width: 22, height: 22)
-                        .contentShape(Rectangle())
+            // Always laid out, shown on hover, so reaching for them never
+            // changes the row under the pointer; the time sits in their place.
+            ZStack(alignment: .trailing) {
+                if showsTime {
+                    Text(Date().timeIntervalSince(entry.updated) < 60 ? "Now" : When.said(entry.updated))
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(Palette.faint)
+                        .monospacedDigit()
+                        .opacity(hovering ? 0 : 1)
                 }
-                .buttonStyle(Pressed())
-                .help(entry.archived == true ? "Take out of the archive" : "Archive this chat")
-            }
-            if hovering {
-                Button(action: delete) {
-                    Image(systemName: "trash")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(Palette.muted)
-                        .frame(width: 22, height: 22)
-                        .contentShape(Rectangle())
+                HStack(spacing: 0) {
+                    if let archive {
+                        icon(entry.archived == true ? "tray.and.arrow.up" : "archivebox", act: archive)
+                            .help(entry.archived == true ? "Take out of the archive" : "Archive this chat")
+                    }
+                    icon("trash", act: delete)
+                        .help("Delete this chat")
+                        .accessibilityLabel("Delete")
                 }
-                .buttonStyle(Pressed())
-                .help("Delete this chat")
-                .accessibilityLabel("Delete")
-            } else if showsTime {
-                Text(Date().timeIntervalSince(entry.updated) < 60 ? "Now" : When.said(entry.updated))
-                    .font(.system(size: 11.5))
-                    .foregroundStyle(Palette.faint)
-                    .monospacedDigit()
+                .opacity(hovering ? 1 : 0)
+                .allowsHitTesting(hovering)
             }
         }
         .padding(.horizontal, 10)
@@ -225,16 +219,30 @@ struct ChatRow: View {
         .background(hovering ? Palette.hover : .clear, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
         .contentShape(Rectangle())
         .onTapGesture(perform: open)
-        .onHover { hovering = $0 }
+        // Over the whole row, the buttons included.
+        .onContinuousHover { phase in
+            let over = if case .active = phase { true } else { false }
+            if hovering != over { hovering = over }
+        }
         .contextMenu {
             Button("Open", action: open)
             if let archive { Button(entry.archived == true ? "Unarchive" : "Archive", action: archive) }
             Divider()
             Button("Delete", role: .destructive, action: delete)
         }
-        .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isButton)
         .accessibilityAction(named: "Delete", delete)
         .animation(Motion.hover, value: hovering)
+    }
+
+    private func icon(_ symbol: String, act: @escaping () -> Void) -> some View {
+        Button(action: act) {
+            Image(systemName: symbol)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(Palette.muted)
+                .frame(width: 22, height: 22)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(Pressed())
     }
 }
