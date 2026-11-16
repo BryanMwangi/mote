@@ -20,6 +20,7 @@ import { splitPermissions } from '../src/extension-shims/permissions';
 import { unnumber } from '../src/extension-shims/port-numbering';
 import { sentMessage } from '../src/extension-shims/replies';
 import { asJSON, plainItems } from '../src/extension-shims/storage';
+import { ownConstructors } from '../src/extension-shims/namespaces';
 import { tabsIn } from '../src/extension-shims/tabs';
 import { presentAsFirefox } from '../src/extension-shims/firefox';
 import type { Shim } from '../src/extension-shims/types';
@@ -380,5 +381,20 @@ describe('presentAsFirefox', () => {
     const { runtime, shim } = firefoxShim(false);
     presentAsFirefox(shim);
     expect(runtime.getBrowserInfo).toBeUndefined();
+  });
+});
+
+describe('extension namespaces', () => {
+  // A VPN keeps its proxy's sign-in on chrome.constructor.prototype; in
+  // WebKit that was Object.prototype, and every object carried it.
+  it('have a constructor of their own, so its prototype is not Object.prototype', () => {
+    const chrome: Record<string, unknown> = {};
+    ownConstructors(chrome);
+    (chrome.constructor as { prototype: Record<string, unknown> }).prototype.onAuthRequiredCreds = { u: 1 };
+    expect(({} as Record<string, unknown>).onAuthRequiredCreds).toBeUndefined();
+    expect(
+      (chrome.constructor as { prototype: Record<string, unknown> }).prototype.onAuthRequiredCreds,
+    ).toEqual({ u: 1 });
+    expect(Object.keys(chrome)).toEqual([]);
   });
 });

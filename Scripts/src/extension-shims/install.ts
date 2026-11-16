@@ -30,7 +30,13 @@ import {
 import { fillMenus, mendMenus } from './menus';
 import { createVerdicts } from './message-verdicts';
 import { createGather } from './messaging';
-import { addBrowserMembers, addIdleStateEvent, defineBrowserNamespaces, defineSystem } from './namespaces';
+import {
+  addBrowserMembers,
+  addIdleStateEvent,
+  defineBrowserNamespaces,
+  defineSystem,
+  ownConstructors,
+} from './namespaces';
 import { holdEarlyNativeMessages } from './native-ports';
 import { mendPermissions } from './permissions';
 import { mendPopup } from './popup';
@@ -80,6 +86,7 @@ export function install(root: Root, config: ShimConfig): void {
   };
 
   // Where WebKit's worker behaves unlike Chrome's, and what every context shares.
+  ownConstructors(chrome, root.browser);
   addInstallRoutes(shim);
   replaceWorkerWebSocket(shim);
   holdEarlyNativeMessages(shim);

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { firefoxUserAgent } from '../src/extension-shims/firefox';
-import { authListeners, defineProxy, proxyChoice, signIn } from '../src/extension-shims/proxy';
+import { authListeners, defineProxy, proxyChoice, samplePage, signIn } from '../src/extension-shims/proxy';
 import type { Shim } from '../src/extension-shims/types';
 
 describe('extension proxies', () => {
@@ -239,5 +239,23 @@ describe('what the browser tells a proxy extension', () => {
     expect(native).toHaveBeenCalledWith('proxy.credentials', [
       [{ host: 'vpn.example', port: 443, username: 'u', password: 'p' }],
     ]);
+  });
+});
+
+// Firefox asks proxy.onRequest about a tab's request with that tab's id.
+/** A shim whose tabs.query answers `tabs`. */
+const withTabs = (tabs: unknown[]) => ({ chrome: { tabs: { query: async () => tabs } } }) as unknown as Shim;
+
+describe('the page a proxy listener is asked about', () => {
+  it('is the tab in front, with its id, else the sample page', async () => {
+    const shim = withTabs;
+    expect(await samplePage(shim([{ id: 7, url: 'https://news.example/' }]))).toEqual({
+      url: 'https://news.example/',
+      tabId: 7,
+    });
+    expect(await samplePage(shim([{ id: 8, url: 'about:blank' }]))).toEqual({
+      url: 'https://www.example.com/',
+      tabId: -1,
+    });
   });
 });

@@ -261,3 +261,28 @@ export function addBrowserMembers(shim: Shim): void {
     put(chrome.i18n, 'detectLanguage', nativeCall(shim, 'i18n.detectLanguage'));
   if (runtime && !runtime.getContexts) put(runtime, 'getContexts', nativeCall(shim, 'runtime.getContexts'));
 }
+
+/** What `chrome` and `browser` are made by, for `ownConstructors`. */
+function ExtensionNamespace(): void {}
+
+/**
+ * `chrome` and `browser` with a constructor of their own. WebKit makes them
+ * plain objects, so `chrome.constructor.prototype` is Object.prototype, and
+ * an extension keeping something there (a VPN its proxy's sign-in) gives it
+ * to every object: WebKit then hands each object it's given an endless
+ * nest of that property, Chrome only an object's own, and the web process
+ * goes down, again each time the extension starts.
+ */
+export function ownConstructors(...spaces: unknown[]): void {
+  for (const space of spaces) {
+    if (!space || typeof space !== 'object' || (space as { constructor?: unknown }).constructor !== Object)
+      continue;
+    try {
+      Object.defineProperty(space, 'constructor', {
+        value: ExtensionNamespace,
+        configurable: true,
+        writable: true,
+      });
+    } catch {}
+  }
+}

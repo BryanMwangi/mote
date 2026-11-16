@@ -1842,6 +1842,28 @@
 		if (chrome.i18n && !chrome.i18n.detectLanguage) put(chrome.i18n, "detectLanguage", nativeCall(shim, "i18n.detectLanguage"));
 		if (runtime && !runtime.getContexts) put(runtime, "getContexts", nativeCall(shim, "runtime.getContexts"));
 	}
+	/** What `chrome` and `browser` are made by, for `ownConstructors`. */
+	function ExtensionNamespace() {}
+	/**
+	* `chrome` and `browser` with a constructor of their own. WebKit makes them
+	* plain objects, so `chrome.constructor.prototype` is Object.prototype, and
+	* an extension keeping something there (a VPN its proxy's sign-in) gives it
+	* to every object: WebKit then hands each object it's given an endless
+	* nest of that property, Chrome only an object's own, and the web process
+	* goes down, again each time the extension starts.
+	*/
+	function ownConstructors(...spaces) {
+		for (const space of spaces) {
+			if (!space || typeof space !== "object" || space.constructor !== Object) continue;
+			try {
+				Object.defineProperty(space, "constructor", {
+					value: ExtensionNamespace,
+					configurable: true,
+					writable: true
+				});
+			} catch {}
+		}
+	}
 
 //#endregion
 //#region src/extension-shims/settings.ts
@@ -2165,6 +2187,27 @@
 	async function signInNow(shim) {
 		await signInTo(shim, await shim.native("proxy.challenge", []).catch(() => null));
 	}
+	/**
+	* The page a listener is asked about: the tab in front, with its id, as
+	* Firefox asks about a tab's request — a listener may look its tab up
+	* (tabs.get) to decide; the sample page when no tab shows a website.
+	*/
+	async function samplePage(shim) {
+		try {
+			const tab = (await shim.chrome.tabs.query({
+				active: true,
+				lastFocusedWindow: true
+			})).find((t) => typeof t.id === "number" && /^https?:/.test(t.url ?? ""));
+			if (tab) return {
+				url: tab.url,
+				tabId: tab.id
+			};
+		} catch {}
+		return {
+			url: SAMPLE,
+			tabId: -1
+		};
+	}
 	/** Calls an event's listeners, each failure its own. */
 	function fire(event, ...args) {
 		for (const listener of [...event.listeners]) try {
@@ -2261,14 +2304,15 @@
 			checking = true;
 			try {
 				let choice = null;
+				const page = await samplePage(shim);
 				for (const listener of [...onRequest.listeners]) {
 					choice = proxyChoice(await answerOf(listener, {
 						requestId: String(nextRequest++),
-						url: SAMPLE,
+						url: page.url,
 						method: "GET",
 						frameId: 0,
 						parentFrameId: -1,
-						tabId: -1,
+						tabId: page.tabId,
 						type: "main_frame",
 						timeStamp: Date.now()
 					}));
@@ -4371,6 +4415,7 @@
 			native: (api, args) => runtime.sendNativeMessage(APPLICATION, nativeRequest(api, args)).then(replyValue),
 			withLastError: lastErrorReporter(runtime, put)
 		};
+		ownConstructors(chrome, root.browser);
 		addInstallRoutes(shim);
 		replaceWorkerWebSocket(shim);
 		holdEarlyNativeMessages(shim);

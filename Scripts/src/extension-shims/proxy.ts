@@ -176,7 +176,9 @@ async function signInTo(shim: Shim, asks: unknown): Promise<void> {
     // Test runs: why a proxy went without a sign-in.
     else if (shim.config?.verbose) {
       void shim
-        .native('debug.error', [`proxy sign-in: none of ${authListeners.size} listeners gave one for ${asked.host}`])
+        .native('debug.error', [
+          `proxy sign-in: none of ${authListeners.size} listeners gave one for ${asked.host}`,
+        ])
         .catch(() => undefined);
     }
   }
@@ -186,6 +188,23 @@ async function signInTo(shim: Shim, asks: unknown): Promise<void> {
 /** Whatever sign-in the extension's proxies still want. */
 async function signInNow(shim: Shim): Promise<void> {
   await signInTo(shim, await shim.native('proxy.challenge', []).catch(() => null));
+}
+
+/**
+ * The page a listener is asked about: the tab in front, with its id, as
+ * Firefox asks about a tab's request — a listener may look its tab up
+ * (tabs.get) to decide; the sample page when no tab shows a website.
+ */
+export async function samplePage(shim: Shim): Promise<{ url: string; tabId: number }> {
+  try {
+    const tabs = (await shim.chrome.tabs.query({ active: true, lastFocusedWindow: true })) as {
+      id?: number;
+      url?: string;
+    }[];
+    const tab = tabs.find((t) => typeof t.id === 'number' && /^https?:/.test(t.url ?? ''));
+    if (tab) return { url: tab.url as string, tabId: tab.id as number };
+  } catch {}
+  return { url: SAMPLE, tabId: -1 };
 }
 
 /** Calls an event's listeners, each failure its own. */
@@ -303,15 +322,16 @@ export function defineProxy(shim: Shim): void {
     checking = true;
     try {
       let choice: ProxyChoice | null = null;
+      const page = await samplePage(shim);
       for (const listener of [...onRequest.listeners]) {
         choice = proxyChoice(
           await answerOf(listener, {
             requestId: String(nextRequest++),
-            url: SAMPLE,
+            url: page.url,
             method: 'GET',
             frameId: 0,
             parentFrameId: -1,
-            tabId: -1,
+            tabId: page.tabId,
             type: 'main_frame',
             timeStamp: Date.now(),
           }),
