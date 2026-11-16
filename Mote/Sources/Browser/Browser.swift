@@ -20,6 +20,11 @@ final class Browser: NSObject, ObservableObject {
     @Published var activeID: Tab.ID? {
         didSet {
             guard oldValue != activeID else { return }
+            // A tab put away lets go of the cursor, as in Safari.
+            if let locked = pointerLocked, locked != activeID {
+                pointerLocked = nil
+                tab(locked)?.built?.evaluateJavaScript("document.exitPointerLock()")
+            }
             if let old = oldValue {
                 linkStatus.dismiss()
                 // Tab sleep measures idle time from the moment a tab stops showing.
@@ -253,6 +258,8 @@ final class Browser: NSObject, ObservableObject {
     private(set) lazy var touchBarItems = BrowserTouchBar(browser: self)
 
     var bag = Set<AnyCancellable>()
+    /// The tab holding the cursor (pointer lock), if one is.
+    var pointerLocked: Tab.ID?
     private var hush: Task<Void, Never>?
     private var saving: Task<Void, Never>?
     var zoomShown = 100

@@ -9,7 +9,8 @@ import WebKit
 extension Bench {
     var chromeCommands: [String: Command] {
         [
-            "probe": Self.probe, "push": { $0.answer(WebPushService.shared.report) }, "ui": Self.ui, "consent": Self.consent, "little": Self.little, "space": Self.space, "peek": Self.peek,
+            "probe": Self.probe, "push": { $0.answer(WebPushService.shared.report) }, "ui": Self.ui, "consent": Self.consent,
+            "little": Self.little, "space": Self.space, "peek": Self.peek,
             "window": Self.window, "windows": Self.windows, "quit": Self.quit, "link": Self.link,
         ]
     }
@@ -36,7 +37,8 @@ extension Bench {
             "transfers": browser.downloads.transfers.map {
                 "\($0.name) \($0.state.rawValue) \($0.received)/\($0.total)\($0.resumeData == nil ? "" : " resumable")"
             },
-            "keysQuieted": PageView.quieted, "peek": browser.peekTab?.address?.absoluteString ?? "", "folded": browser.folded,
+            "pointerLocked": browser.pointerLocked.map { "\($0)" } ?? "", "keysQuieted": PageView.quieted,
+            "peek": browser.peekTab?.address?.absoluteString ?? "", "folded": browser.folded,
             "peeking": browser.peeking, "toolbarMode": browser.prefs.toolbarMode.rawValue, "peekClick": browser.prefs.peekClick.rawValue,
             "spaceIndex": browser.spaces.firstIndex { $0.id == browser.spaceID } ?? -1,
             "settingsQuery": SettingsSearch.shared.query, "settingsFocusAsked": SettingsSearch.shared.focusAsked,

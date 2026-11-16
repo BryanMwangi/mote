@@ -232,9 +232,33 @@ extension Browser: WKNavigationDelegate, WKUIDelegate {
         bringOutQuestion(for: tab)
     }
 
+    // MARK: - Pointer lock
+
+    /// A page's requestPointerLock (a game, a 3D view): the cursor hidden and
+    /// held, the page given its movement. Granted to the tab in front of the
+    /// window in use, as Safari, Chrome and Firefox grant it; WebKit asks only
+    /// after a click or a key on the page. With word of how to let go.
+    @objc(_webViewDidRequestPointerLock:completionHandler:)
+    func webViewDidRequestPointerLock(_ webView: WKWebView, completionHandler: @escaping (Bool) -> Void) {
+        guard let tab = tab(for: webView), !tab.shy,
+            (tab.id == activeID && window?.isKeyWindow == true) || (tab.bench && Storage.testing)
+        else { return completionHandler(false) }
+        pointerLocked = tab.id
+        completionHandler(true)
+        announce(Announcement("Press Esc to show your cursor", symbol: "cursorarrow"))
+    }
+
+    /// Let go: Esc, the page's exitPointerLock, or the page going.
+    @objc(_webViewDidLosePointerLock:)
+    func webViewDidLosePointerLock(_ webView: WKWebView) {
+        if let tab = tab(for: webView), tab.id == pointerLocked { pointerLocked = nil }
+    }
+
     /// The page's speech recognition (`SpeechRecognition`), privately as for location.
     @objc(_webView:requestSpeechRecognitionPermissionForOrigin:decisionHandler:)
-    func webView(_ webView: WKWebView, requestSpeechRecognitionPermissionFor origin: WKSecurityOrigin, decisionHandler: @escaping (Bool) -> Void) {
+    func webView(
+        _ webView: WKWebView, requestSpeechRecognitionPermissionFor origin: WKSecurityOrigin, decisionHandler: @escaping (Bool) -> Void
+    ) {
         guard let tab = tab(for: webView), !origin.host.isEmpty else { return decisionHandler(false) }
         permissions.ask(.speech, host: origin.host, tab: tab.id, answer: decisionHandler)
         bringOutQuestion(for: tab)
