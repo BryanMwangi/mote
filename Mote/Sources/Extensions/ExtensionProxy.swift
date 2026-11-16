@@ -82,6 +82,7 @@ enum ExtensionProxy {
     static func setRequestAnswer(_ choice: ProxyChoice?, by id: String) {
         guard requestClaims[id] != choice else { return }
         requestClaims[id] = choice
+        routes = routes.filter { !$0.key.hasPrefix(id + " ") }
         settle()
     }
 
@@ -200,7 +201,8 @@ enum ExtensionProxy {
             Task { await ExtensionRelay.shared.closeMoved { await hops(for: $0) } }
         }
         tunnelsFor = plan == nil ? nil : holder
-        guard wasOn != (plan != nil) else { return }
+        // Stores on the relay from launch need nothing more.
+        guard wasOn != (plan != nil), !(relayAlways && relayPort != nil) else { return }
         used = true
         for store in stores.allObjects { dress(store) }
         restartNetwork()
@@ -226,29 +228,19 @@ enum ExtensionProxy {
         }
     }
 
-    /// Starts WebKit's network process over now, a few seconds after the last
-    /// time at the soonest; false when none runs.
-    @discardableResult
-    static func restartNetworkProcess() async -> Bool {
-        try? await Task.sleep(for: .seconds(max(0, 3 - Date().timeIntervalSince(lastRestart))))
-        return terminateNetworkProcess()
-    }
-
-    @discardableResult
-    private static func terminateNetworkProcess() -> Bool {
+    private static func terminateNetworkProcess() {
         let terminate = NSSelectorFromString("_terminateNetworkProcess")
         // Only one that's running: WebKit stops the app over one that isn't
         // (as at launch, before the first page).
         guard let store = stores.allObjects.first, store.responds(to: terminate),
             store.responds(to: NSSelectorFromString("_networkProcessExists")),
             store.value(forKey: "_networkProcessExists") as? Bool == true
-        else { return false }
+        else { return }
         lastRestart = Date()
         store.perform(terminate)
         // The new process is given each store's proxy as it last had one,
         // not none (measured): so every store is told again.
         for store in stores.allObjects { dress(store) }
-        return true
     }
 
     private static func describe(_ plan: Plan) -> String {
@@ -258,12 +250,32 @@ enum ExtensionProxy {
         }
     }
 
+    /// Whether some extension that's on may set a proxy: then every store
+    /// goes through the relay from launch, which sends pages direct while
+    /// none is set. WebKit's network process needn't start over when one is
+    /// (doing so closed every extension's IndexedDB, and broke a VPN's
+    /// background for the session); the relay closes its own tunnels.
+    private static let relayAlways: Bool = {
+        // From the list itself: the first store is dressed as Extensions starts.
+        let installed = (try? JSONDecoder().decode([InstalledExtension].self, from: Data(contentsOf: Extensions.list))) ?? []
+        return installed.contains { item in
+            guard item.enabled,
+                let data = try? Data(contentsOf: Extensions.folder(for: item.id).appendingPathComponent("manifest.json")),
+                let manifest = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+            else { return false }
+            let asked = (manifest["permissions"] as? [Any] ?? []) + (manifest["optional_permissions"] as? [Any] ?? [])
+            return asked.contains { $0 as? String == "proxy" }
+        }
+    }()
+
     /// A store pages are about to load in: through the relay, while a proxy is set.
     static func dress(_ store: WKWebsiteDataStore) {
         stores.add(store)
+        if relayAlways, relayPort == nil { relayPort = ExtensionRelay.shared.startNow() }
+        let relayed = relayAlways && relayPort != nil
         // Left alone while no extension has set one.
-        guard used else { return }
-        guard applied != nil, let relayPort, let port = NWEndpoint.Port(rawValue: relayPort) else {
+        guard used || relayed else { return }
+        guard applied != nil || relayed, let relayPort, let port = NWEndpoint.Port(rawValue: relayPort) else {
             store.proxyConfigurations = []
             return
         }
@@ -274,6 +286,13 @@ enum ExtensionProxy {
 
     /// Where a connection to `host` goes, the hops tried in turn (ExtensionRelay).
     static func hops(for host: String) async -> [ProxyHop] {
+        // A Firefox add-on's proxy.onRequest is asked about each host, as
+        // Firefox asks it about each request: it sends some direct (its own
+        // servers, which it signs in through), and a VPN whose sign-in went
+        // stale couldn't fetch a new one through its own proxy.
+        if let holder, requestClaims[holder] != nil, !ProxyRules.bypasses(host, []) {
+            if let routed = await route(host, by: holder) { return routed.map { [.proxy($0.server)] } ?? [.direct] }
+        }
         switch applied {
         case nil: return [.direct]
         case .fixed(let choice): return ProxyRules.bypasses(host, choice.bypass) ? [.direct] : [.proxy(choice.server)]
@@ -287,6 +306,43 @@ enum ExtensionProxy {
                 }
             }
         }
+    }
+
+    /// onRequest answers by extension and host, kept a little while.
+    private static var routes: [String: (choice: ProxyChoice?, at: Date)] = [:]
+    private static var routing: [Int: CheckedContinuation<ProxyChoice??, Never>] = [:]
+    private static var nextRoute = 0
+
+    /// What `id`'s proxy.onRequest answers for a page on `host`: a proxy,
+    /// nil for direct; `.none` when it can't be asked in time (the sample
+    /// page's answer stands).
+    private static func route(_ host: String, by id: String) async -> ProxyChoice?? {
+        let key = id + " " + host
+        if let known = routes[key], Date().timeIntervalSince(known.at) < 30 { return .some(known.choice) }
+        // Its background may still be starting (at launch): waited for a
+        // moment, as Firefox holds requests until an add-on can answer.
+        for _ in 0..<30 where ports[id]?.isDisconnected ?? true {
+            try? await Task.sleep(for: .milliseconds(100))
+        }
+        guard let port = ports[id], !port.isDisconnected else { return .none }
+        nextRoute += 1
+        let ask = nextRoute
+        port.sendMessage(["route": ["n": ask, "url": "https://\(host)/"]], completionHandler: nil)
+        let answer: ProxyChoice?? = await withCheckedContinuation { done in
+            routing[ask] = done
+            Task {
+                try? await Task.sleep(for: .seconds(2))
+                routing.removeValue(forKey: ask)?.resume(returning: .none)
+            }
+        }
+        if case .some(let choice) = answer { routes[key] = (choice, Date()) }
+        return answer
+    }
+
+    /// The shim's answer to a `route` question.
+    private static func routed(_ message: [String: Any]) {
+        guard let ask = (message["routed"] as? NSNumber)?.intValue, let done = routing.removeValue(forKey: ask) else { return }
+        done.resume(returning: .some(choice(fromAnswer: message["choice"])))
     }
 
     // MARK: - Sign-ins
@@ -304,36 +360,60 @@ enum ExtensionProxy {
         return holder.flatMap { signIns[$0]?[server.key] }
     }
 
-    /// The proxy refused `refused` (or wanted one): the holder's listeners
-    /// are asked for a sign-in, and the connection waits for it, ten
-    /// seconds at most, as Chrome holds a request on its 407. Nil when none
-    /// comes, or the same one again.
-    static func freshSignIn(
-        for server: Server, asked question: [String: String], refused: (user: String, password: String)?
-    ) async
-        -> (user: String, password: String)?
-    {
+    typealias SignIn = (user: String, password: String)
+
+    /// When the listeners last answered, by server.
+    private static var answered: [String: Date] = [:]
+
+    /// The proxy turned the connection away with a 407: the holder's
+    /// listeners are asked, as Firefox asks onAuthRequired on each 407, and
+    /// the connection waits for their answer, ten seconds at most, as Chrome
+    /// holds the request. Their answer, even the one just refused (a VPN
+    /// counts the questions and fetches new credentials after a couple);
+    /// nil when they give none.
+    static func freshSignIn(for server: Server, asked question: [String: String]) async -> SignIn? {
+        let key = server.key
+        // One question per proxy at a time, as Firefox queues a proxy's
+        // sign-ins: the connections that meet its 407 meanwhile take the
+        // same answer (a VPN counts the questions, and gives up after a few).
+        if let running = asking[key] { return await running.value }
+        let task = Task { await ask(server, question) }
+        asking[key] = task
+        let fresh = await task.value
+        asking[key] = nil
+        return fresh
+    }
+
+    private static var asking: [String: Task<SignIn?, Never>] = [:]
+
+    private static func ask(_ server: Server, _ question: [String: String]) async -> SignIn? {
         guard let holder else { return nil }
+        let key = server.key
         var question = question
         question["host"] = server.host
         question["port"] = String(server.port)
         question["type"] = server.kind.rawValue
-        asked[holder, default: [:]][server.key] = question
+        let since = Date()
+        asked[holder, default: [:]][key] = question
         askSignIn(holder)
-        let key = server.key
+        await answer(for: key, within: 10)
+        guard let at = answered[key], at >= since, self.holder == holder else {
+            NSLog("Extensions: %@ gave no sign-in for its proxy %@", holder, server.host)
+            return nil
+        }
+        return signIn(for: server)
+    }
+
+    /// Until the listeners answer for `key`, `seconds` at most.
+    private static func answer(for key: String, within seconds: Double) async {
         await withCheckedContinuation { done in
             awaiting[key, default: []].append(done)
             Task {
-                try? await Task.sleep(for: .seconds(10))
+                try? await Task.sleep(for: .seconds(seconds))
                 awaiting[key]?.forEach { $0.resume() }
                 awaiting[key] = nil
             }
         }
-        guard let fresh = signIn(for: server), fresh.user != refused?.user || fresh.password != refused?.password else {
-            NSLog("Extensions: %@ gave no sign-in for its proxy %@", holder, server.host)
-            return nil
-        }
-        return fresh
     }
 
     /// What `id`'s proxies asked a sign-in with, for its listeners to answer.
@@ -351,6 +431,7 @@ enum ExtensionProxy {
             for (key, question) in asked[id] ?? [:]
             where question["host"]?.caseInsensitiveCompare(host) == .orderedSame && Int(question["port"] ?? "") == port {
                 mine[key] = (user, password)
+                answered[key] = Date()
                 asked[id]?[key] = nil
                 awaiting[key]?.forEach { $0.resume() }
                 awaiting[key] = nil
@@ -417,6 +498,7 @@ enum ExtensionProxy {
                     if answer { port.sendMessage(SocketRelay.here, completionHandler: nil) }
                     return
                 }
+                if let told = message as? [String: Any], told["routed"] != nil { return routed(told) }
                 guard (message as? [String: Any])?["hello"] != nil else { return }
                 port.sendMessage(["ready": true], completionHandler: nil)
                 if let old = ports[id], old !== port, !old.isDisconnected { old.disconnect() }

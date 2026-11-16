@@ -2183,9 +2183,18 @@
 		}
 		if (given.length) await shim.native("proxy.credentials", [given]).catch(() => void 0);
 	}
+	/** The sign-in round under way, if one is: a second waits on it rather than asking again. */
+	let signingIn = null;
 	/** Whatever sign-in the extension's proxies still want. */
-	async function signInNow(shim) {
-		await signInTo(shim, await shim.native("proxy.challenge", []).catch(() => null));
+	function signInNow(shim) {
+		signingIn ??= (async () => {
+			try {
+				await signInTo(shim, await shim.native("proxy.challenge", []).catch(() => null));
+			} finally {
+				signingIn = null;
+			}
+		})();
+		return signingIn;
 	}
 	/**
 	* The page a listener is asked about: the tab in front, with its id, as
@@ -2246,7 +2255,11 @@
 			};
 			mine.onMessage.addListener((m) => {
 				ready = true;
-				if (m && typeof m === "object") heard(m);
+				if (m && typeof m === "object") heard(m, (message) => {
+					try {
+						mine.postMessage(message);
+					} catch {}
+				});
 			});
 			mine.onDisconnect.addListener(() => {
 				if (port === mine) port = null;
@@ -2266,7 +2279,11 @@
 			onProxyError
 		});
 		if (!shim.background || !asksFor(shim, "proxy")) return;
-		const connect = openPort(shim, (told) => {
+		const connect = openPort(shim, (told, reply) => {
+			if (told.route) routeFor(told.route).then((choice) => reply({
+				routed: told.route.n,
+				choice
+			}));
 			if (told.ready || told.signIn) signInNow(shim);
 			if (told.change) fire(settings.onChange, told.change);
 			if (told.error) {
@@ -2328,6 +2345,24 @@
 				checking = false;
 			}
 		};
+		/** The listeners' answer for a page at `url`, in the tab in front. */
+		async function routeFor(ask) {
+			const page = await samplePage(shim);
+			for (const listener of [...onRequest.listeners]) {
+				const choice = proxyChoice(await answerOf(listener, {
+					requestId: String(nextRequest++),
+					url: ask.url,
+					method: "GET",
+					frameId: 0,
+					parentFrameId: -1,
+					tabId: page.tabId,
+					type: "main_frame",
+					timeStamp: Date.now()
+				}));
+				if (choice) return choice;
+			}
+			return null;
+		}
 		const add = onRequest.addListener.bind(onRequest);
 		const remove = onRequest.removeListener.bind(onRequest);
 		onRequest.addListener = (listener) => {

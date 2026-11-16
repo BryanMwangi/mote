@@ -42,6 +42,47 @@ nonisolated final class ExtensionRelay: @unchecked Sendable {
     /// Where each tunnel goes: its host, and the hop it took.
     private var routes: [ObjectIdentifier: (host: String, hop: ProxyHop)] = [:]
 
+    /// Starts it now, on a port of its own, waiting a moment for it: at
+    /// launch, before the first page connects. Nil when it can't listen.
+    func startNow() -> UInt16? {
+        lock.lock()
+        if let port {
+            lock.unlock()
+            return port
+        }
+        lock.unlock()
+        for _ in 0..<5 {
+            guard let chosen = NWEndpoint.Port(rawValue: UInt16.random(in: 49_152...64_000)) else { continue }
+            let parameters = NWParameters.tcp
+            parameters.acceptLocalOnly = true
+            parameters.requiredLocalEndpoint = .hostPort(host: "127.0.0.1", port: chosen)
+            guard let listener = try? NWListener(using: parameters) else { continue }
+            let ready = DispatchSemaphore(value: 0)
+            let listening = Locked(false)
+            listener.newConnectionHandler = { [weak self] connection in self?.accept(connection) }
+            listener.stateUpdateHandler = { state in
+                switch state {
+                case .ready:
+                    listening.set(true)
+                    ready.signal()
+                case .failed, .cancelled: ready.signal()
+                default: break
+                }
+            }
+            listener.start(queue: queue)
+            guard ready.wait(timeout: .now() + 0.5) == .success, listening.get() else {
+                listener.cancel()
+                continue
+            }
+            lock.lock()
+            self.listener = listener
+            self.port = chosen.rawValue
+            lock.unlock()
+            return chosen.rawValue
+        }
+        return nil
+    }
+
     /// The port it listens on, started the first time.
     func start() async -> UInt16? {
         await withCheckedContinuation { done in
@@ -201,8 +242,9 @@ nonisolated final class ExtensionRelay: @unchecked Sendable {
             return await socks(server, host: host, port: port)
         case .proxy(let server):
             var signIn = await MainActor.run { ExtensionProxy.signIn(for: server) }
-            // A refused sign-in is asked for again once, as Chrome asks onAuthRequired on each 407.
-            for attempt in 0..<2 {
+            // Each 407 asks the extension again, as Firefox does, until it
+            // gives no sign-in (its way of cancelling) or a few have failed.
+            for _ in 0..<3 {
                 let connection = NWConnection(
                     host: .init(server.host), port: .init(rawValue: server.port) ?? 443, using: server.kind == .https ? .tls : .tcp)
                 guard await ready(connection) else { return .proxyDown }
@@ -220,13 +262,11 @@ nonisolated final class ExtensionRelay: @unchecked Sendable {
                 let status = answer.head.prefix { $0 != "\r" }.split(separator: " ").dropFirst().first
                 if status == "200" { return .open(connection, answer.rest) }
                 connection.cancel()
-                guard status == "407", attempt == 0, let asked = ExtensionProxy.challenge(inHead: answer.head) else { return .refused }
-                guard let fresh = await ExtensionProxy.freshSignIn(for: server, asked: asked, refused: signIn) else {
-                    await MainActor.run { ExtensionProxy.signInRefused() }
-                    return .refused
-                }
+                guard status == "407", let asked = ExtensionProxy.challenge(inHead: answer.head) else { return .refused }
+                guard let fresh = await ExtensionProxy.freshSignIn(for: server, asked: asked) else { break }
                 signIn = fresh
             }
+            await MainActor.run { ExtensionProxy.signInRefused() }
             return .refused
         }
     }
@@ -361,4 +401,13 @@ nonisolated final class ExtensionRelay: @unchecked Sendable {
             return waiting != nil
         }
     }
+}
+
+/// A value read and written across threads.
+nonisolated final class Locked<Value>: @unchecked Sendable {
+    private var value: Value
+    private let lock = NSLock()
+    init(_ value: Value) { self.value = value }
+    func get() -> Value { lock.withLock { value } }
+    func set(_ new: Value) { lock.withLock { value = new } }
 }

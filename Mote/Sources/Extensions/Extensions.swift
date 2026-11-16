@@ -226,12 +226,6 @@ final class Extensions: NSObject, ObservableObject {
         // Its proxy stays on while it starts again: pages keep their way.
         unload(id, keepingProxy: true)
         Task {
-            // Taken up again with its worker's registration as it is, WebKit
-            // doesn't start the worker (measured): it's removed, with the
-            // network process that holds it, and registers afresh.
-            if await ExtensionProxy.restartNetworkProcess() {
-                Self.forgetWorkerRegistrations(in: Storage.websites, of: id)
-            }
             guard await load(item) else { return ExtensionProxy.release(id) }
             guard let popup, let context = contexts[id] else { return }
             ExtensionPopup.shared.show(popup, for: context, from: anchor)
@@ -244,7 +238,7 @@ final class Extensions: NSObject, ObservableObject {
     /// good (measured: Urban VPN, 1clickVPN). Removed before extensions load,
     /// each worker registers afresh as its extension loads, as on install;
     /// the extensions' own storage stays.
-    static func forgetWorkerRegistrations(in store: WKWebsiteDataStore, of id: String? = nil) {
+    static func forgetWorkerRegistrations(in store: WKWebsiteDataStore) {
         let webkit = FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("WebKit/\(Bundle.main.bundleIdentifier ?? "io.github.mote-browser.mote")")
         let base =
@@ -253,9 +247,7 @@ final class Extensions: NSObject, ObservableObject {
         let marker = Data(Self.scheme.utf8)
         guard let walk = FileManager.default.enumerator(at: base, includingPropertiesForKeys: nil) else { return }
         for case let file as URL in walk where file.lastPathComponent == "origin" {
-            guard walk.level <= 4, let origin = try? Data(contentsOf: file), origin.range(of: marker) != nil,
-                id.map({ origin.range(of: Data($0.utf8)) != nil }) ?? true
-            else { continue }
+            guard walk.level <= 4, let origin = try? Data(contentsOf: file), origin.range(of: marker) != nil else { continue }
             let folder = file.deletingLastPathComponent()
             for item in (try? FileManager.default.contentsOfDirectory(atPath: folder.path)) ?? []
             where item == "ServiceWorkers" || item == "Scripts" || item.hasPrefix("ServiceWorkerRegistrations") {
