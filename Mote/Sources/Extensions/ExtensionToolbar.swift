@@ -61,19 +61,22 @@ struct ExtensionIcon: View {
     }
 }
 
-/// Beside the address: the extension with something for this page, if any
-/// (see `Extensions.pageAction`), and its popup hangs from it.
+/// Beside the address: the extensions in use there (see
+/// `Extensions.addressButtons`), each with its popup hanging from it.
 @available(macOS 15.4, *)
 struct PageActionButton: View {
     @ObservedObject var extensions: Extensions
+    @Environment(\.packedButtons) private var packed
+
+    private var side: CGFloat { packed ? Metrics.packedButton : Metrics.button }
 
     var body: some View {
-        if let button = extensions.pageAction {
+        ForEach(extensions.addressButtons) { button in
             Button {
                 extensions.press(button.id)
             } label: {
                 ExtensionIcon(button: button, size: 14)
-                    .frame(width: Metrics.button, height: Metrics.button)
+                    .frame(width: side, height: side)
                     .contentShape(Rectangle())
             }
             .buttonStyle(Pressed())

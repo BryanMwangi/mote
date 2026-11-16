@@ -12,12 +12,17 @@ struct Door: View {
     @Environment(\.isEnabled) private var enabled
     @Environment(\.controlSize) private var controlSize
 
+    @Environment(\.packedButtons) private var packed
+
+    /// Large in roomy places; packed beside the sidebar's address.
+    private var side: CGFloat { controlSize == .large ? 32 : packed ? Metrics.packedButton : Metrics.button }
+
     var body: some View {
         Button(action: act) {
             Image(systemName: icon)
                 .font(.system(size: controlSize == .large ? 14 : 12, weight: .medium))
                 .foregroundStyle(Palette.ink.opacity(on || hovering ? 0.85 : 0.6))
-                .frame(width: controlSize == .large ? 32 : Metrics.button, height: controlSize == .large ? 32 : Metrics.button)
+                .frame(width: side, height: side)
                 .background(Palette.veil.opacity(on ? 1.8 : hovering && enabled ? 1.2 : 0), in: Rounded.row)
                 .contentShape(Rounded.row)
         }
@@ -76,4 +81,9 @@ struct Ring: View {
             .animation(.linear(duration: 0.85).repeatForever(autoreverses: false), value: turned)
             .onAppear { turned = true }
     }
+}
+
+extension EnvironmentValues {
+    /// Buttons packed close beside the sidebar's address (Door, extensions' buttons).
+    @Entry var packedButtons = false
 }

@@ -22,7 +22,9 @@ struct PageButton: View {
             .background {
                 if #available(macOS 15.4, *) { PopupAnchor(id: Extensions.menuAnchor) }
             }
-            .menuPanel(isPresented: $open, edge: edge) { PagePanel(browser: browser) { open = false } }
+            .menuPanel(isPresented: $open, edge: edge) {
+                PagePanel(browser: browser) { open = false }.environment(\.packedButtons, false)
+            }
             .background { if asks { SiteQuestion(browser: browser, edge: edge) } }
             .onReceive(NotificationCenter.default.publisher(for: Self.ask)) { note in open = note.object as? Bool ?? true }
     }

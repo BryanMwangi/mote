@@ -22,9 +22,19 @@ extension Extensions {
         let pageAction: Bool
     }
 
-    /// The one extension with something for the page in front, shown
-    /// beside the address while its page action is on.
-    var pageAction: Button? { buttons.first { $0.pageAction && $0.enabled && $0.active } }
+    /// Beside the address: the extension whose proxy carries pages now, so
+    /// it's plain which VPN is on, then those with something for the page
+    /// in front (their page action on). As in Zen's address bar, which
+    /// holds its add-ons' buttons until they'd crowd out the address: a few
+    /// at most; the rest stay in the page panel.
+    var addressButtons: [Button] {
+        let all = buttons
+        let vpn = ExtensionProxy.inUse.flatMap { id in all.first { $0.id == id } }
+        let pages = all.filter { $0.pageAction && $0.enabled && $0.active && $0.id != vpn?.id }
+        return Array(((vpn.map { [$0] } ?? []) + pages).prefix(Self.mostBesideAddress))
+    }
+
+    static let mostBesideAddress = 3
 
     /// Where extensions' popups hang from: the page button (PagePanel.swift).
     static let menuAnchor = "__menu"

@@ -311,12 +311,18 @@ struct AddressPill: View {
             } else {
                 shown
             }
-            if !editing, browser.active?.isBlank == false {
-                Door(icon: "link", help: "Copy Address   ⇧⌘C", act: browser.copyAddress)
+            if !editing {
+                // Packed close, as in Zen's address bar: the address keeps the room.
+                HStack(spacing: 0) {
+                    if browser.active?.isBlank == false {
+                        Door(icon: "link", help: "Copy Address   ⇧⌘C", act: browser.copyAddress)
+                    }
+                    if let tab = browser.active { TranslateButton(browser: browser, tab: tab) }
+                    if browser.prefs.showsPageActions, #available(macOS 15.4, *) { PageActionButton(extensions: .shared) }
+                    PageButton(browser: browser, asks: browser.navInSidebar)
+                }
+                .environment(\.packedButtons, true)
             }
-            if !editing, let tab = browser.active { TranslateButton(browser: browser, tab: tab) }
-            if !editing, browser.prefs.showsPageActions, #available(macOS 15.4, *) { PageActionButton(extensions: .shared) }
-            if !editing { PageButton(browser: browser, asks: browser.navInSidebar) }
         }
         .padding(.trailing, 2)
         .frame(height: Self.height)

@@ -28,6 +28,8 @@ enum Metrics {
     static let row: CGFloat = 32
     /// A toolbar button.
     static let button: CGFloat = 28
+    /// A button packed among others beside the sidebar's address.
+    static let packedButton: CGFloat = 23
 }
 
 /// How things move. Springs that barely bounce, and short ease-outs for
