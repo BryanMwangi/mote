@@ -251,9 +251,10 @@ final class PageView: WKWebView {
         passwordItems(in: menu)
         // Extensions' items go last.
         guard #available(macOS 15.4, *) else { return }
-        Extensions.shared.ownItems(in: menu)
-        guard let tab = Extensions.shared.browser?.tab(for: self) else { return }
-        let items = Extensions.shared.menuItems(for: tab)
+        let tab = Extensions.shared.browser?.tab(for: self)
+        let placed = Extensions.shared.ownItems(in: menu, for: tab)
+        guard let tab else { return }
+        let items = Extensions.shared.menuItems(for: tab, except: placed)
         guard !items.isEmpty else { return }
         menu.addItem(.separator())
         items.forEach(menu.addItem)

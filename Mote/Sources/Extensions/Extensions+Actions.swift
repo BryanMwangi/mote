@@ -132,26 +132,37 @@ extension Extensions {
         contexts.values.first { $0.command(for: event) != nil }?.performCommand(for: event) ?? false
     }
 
-    /// What extensions add to a page's context menu.
-    func menuItems(for tab: Tab) -> [NSMenuItem] {
+    /// What extensions add to a page's context menu, but for those whose
+    /// entries WebKit put there itself (`ownItems`).
+    func menuItems(for tab: Tab, except placed: Set<String> = []) -> [NSMenuItem] {
         guard shows(tab) else { return [] }
         let adapter = adapter(for: tab)
-        return contexts.values.flatMap { context in context.menuItems(for: adapter).map { Self.own($0, icon: icon(of: context)) } }
+        return contexts.filter { !placed.contains($0.key) }.values.flatMap { context in
+            context.menuItems(for: adapter).map { Self.own($0, icon: icon(of: context)) }
+        }
     }
 
     /// Extensions' entries WebKit put in a page's menu itself, each led by
     /// its extension's icon, as Chrome shows them: found by the extension's
-    /// name on its submenu, or by the titles it gave its entries.
-    func ownItems(in menu: NSMenu) {
+    /// name on its submenu, by the titles of its own entries, or by the
+    /// titles it gave them. Returns the extensions found, which aren't
+    /// added again (a submenu named for the extension's short name, not its
+    /// full one, showed twice).
+    @discardableResult
+    func ownItems(in menu: NSMenu, for tab: Tab?) -> Set<String> {
+        let adapter = tab.map { self.adapter(for: $0) }
+        var placed: Set<String> = []
         for (index, item) in menu.items.enumerated() where String(describing: type(of: item)).contains("WebExtensionMenuItem") {
-            let context = contexts.first { id, context in
-                item.submenu != nil
-                    ? context.webExtension.displayName == item.title
-                    : menuTitles[id, default: []].contains { Self.title($0, matches: item.title) }
-            }?.value
+            let found = contexts.first { id, context in
+                if item.submenu != nil, context.webExtension.displayName == item.title { return true }
+                if let adapter, context.menuItems(for: adapter).contains(where: { $0.title == item.title }) { return true }
+                return menuTitles[id, default: []].contains { Self.title($0, matches: item.title) }
+            }
+            if let id = found?.key { placed.insert(id) }
             menu.removeItem(at: index)
-            menu.insertItem(Self.own(item, icon: context.flatMap(icon(of:))), at: index)
+            menu.insertItem(Self.own(item, icon: found.flatMap { icon(of: $0.value) }), at: index)
         }
+        return placed
     }
 
     /// An entry's title as given (`%s` the selection) against one shown.
