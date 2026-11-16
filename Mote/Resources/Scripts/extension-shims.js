@@ -1787,7 +1787,25 @@
 		putNamespace(shim, name, api);
 	}
 	function defineBrowserNamespaces(shim) {
-		for (const spec of browserNamespaces(shim.runtime)) defineNamespace(shim, spec);
+		const panel = hasSidePanel(shim);
+		for (const spec of browserNamespaces(shim.runtime)) {
+			if (spec.name === "sidePanel" && !panel) continue;
+			defineNamespace(shim, spec);
+		}
+	}
+	/**
+	* Whether the extension gets chrome.sidePanel: as in Chrome, only with the
+	* permission (or a panel in its manifest). Add-ons test for it and else
+	* open their page as a window; offered it, they asked for a panel they
+	* never had, and nothing opened.
+	*/
+	function hasSidePanel({ runtime }) {
+		try {
+			const manifest = runtime.getManifest();
+			return Boolean(manifest.side_panel) || (manifest.permissions ?? []).includes("sidePanel");
+		} catch {
+			return true;
+		}
 	}
 	/**
 	* idle.onStateChanged, asked every so often while anyone listens, the way

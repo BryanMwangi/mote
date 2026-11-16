@@ -999,7 +999,7 @@ final class Browser: NSObject, ObservableObject {
     /// front for a few seconds (see StageView.warm): the one just left, the
     /// one ⌃Tab goes to next, a row under the pointer. Two at most.
     func warm(_ tab: Tab?, for seconds: Double = 3) {
-        guard let tab, tab.id != activeID, !tab.asleep, !tab.isBlank, tab.built != nil else { return }
+        guard let tab, tab.id != activeID, !tab.asleep, !tab.isBlank, tab.built != nil, !showsInSplit(tab.id) else { return }
         if !warmTabs.contains(tab.id) { warmTabs = Array((warmTabs + [tab.id]).suffix(2)) }
         cooling[tab.id]?.cancel()
         cooling[tab.id] = Task { [weak self] in
@@ -1009,10 +1009,14 @@ final class Browser: NSObject, ObservableObject {
         }
     }
 
-    /// The warm tabs' pages, for the stage.
+    /// The warm tabs' pages, for the stage. Never a page on screen in the
+    /// split: a page is in one place at a time, and drawn behind the tab in
+    /// front it left its own pane blank.
     var warmPages: [NSView] {
-        warmTabs.compactMap(tab).filter { $0.id != activeID && !$0.asleep && !$0.floating }.compactMap(\.built)
+        warmTabs.compactMap(tab).filter { $0.id != activeID && !showsInSplit($0.id) && !$0.asleep && !$0.floating }.compactMap(\.built)
     }
+
+    private func showsInSplit(_ id: Tab.ID) -> Bool { shownSplit?.contains(id) == true }
 
     /// Drag and drop within the row; tabs stay in their section.
     func move(_ tab: Tab, to index: Int) {
@@ -1244,6 +1248,9 @@ final class Browser: NSObject, ObservableObject {
         closed.remove(ghost.id)
         // Through select(), which wakes it with its history.
         if let held = ghost.heldID, let tab = tabs.first(where: { $0.heldID == held }) {
+            // Closing sent it home; still resting, it comes back where it
+            // was, with its history, as any other tab ⌘⇧T reopens.
+            if tab.asleep { tab.restore(url: ghost.url, title: ghost.title, name: tab.name, state: ghost.state) }
             if front { select(tab) }
             return tab
         }

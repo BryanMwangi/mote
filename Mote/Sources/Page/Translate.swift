@@ -2,6 +2,7 @@ import Foundation
 import NaturalLanguage
 import SwiftUI
 import Translation
+import WebKit
 
 /// Translating a page when a page is in a language the user doesn't read,
 /// a quiet button beside the address translates it
@@ -12,16 +13,7 @@ extension Browser {
         tab.translation = nil
         tab.pageLanguage = nil
         guard prefs.offersTranslation, !tab.shy, let web = tab.built else { return }
-        // The start, middle and end: a page in your language can still hold a
-        // foreign article, past where its menus and headings end.
-        let sample = """
-            (() => {
-              const text = document.body ? document.body.innerText : '', n = 2000, mid = Math.floor(text.length / 2);
-              const parts = text.length <= 3 * n ? [text] : [text.slice(0, n), text.slice(mid - n / 2, mid + n / 2), text.slice(-n)];
-              return (document.documentElement.lang || '') + '\\n' + parts.join('\\n');
-            })()
-            """
-        web.evaluateInAppWorld(sample) { [weak self, weak tab] value in
+        web.evaluateInAppWorld(Self.languageSample) { [weak self, weak tab] value in
             guard let text = value as? String else { return }
             // Recognised off the main thread: it's a few milliseconds a page.
             Task {
@@ -30,6 +22,26 @@ extension Browser {
                 tab?.pageLanguage = code
             }
         }
+    }
+
+    /// What a page's language is told from: its lang attribute, and its text's
+    /// start, middle and end (a page in your language can still hold a
+    /// foreign article, past where its menus and headings end).
+    static let languageSample = """
+        (() => {
+          const text = document.body ? document.body.innerText : '', n = 2000, mid = Math.floor(text.length / 2);
+          const parts = text.length <= 3 * n ? [text] : [text.slice(0, n), text.slice(mid - n / 2, mid + n / 2), text.slice(-n)];
+          return (document.documentElement.lang || '') + '\\n' + parts.join('\\n');
+        })()
+        """
+
+    /// The language of a page in `web`, any language: for tabs.detectLanguage.
+    static func pageLanguage(in web: WKWebView) async -> String? {
+        let sample: String? = await withCheckedContinuation { done in
+            web.evaluateInAppWorld(languageSample) { done.resume(returning: $0 as? String) }
+        }
+        guard let sample else { return nil }
+        return await Task.detached(priority: .utility) { language(of: sample) }.value
     }
 
     /// The language a page's sample is in: one you don't read, when it's a

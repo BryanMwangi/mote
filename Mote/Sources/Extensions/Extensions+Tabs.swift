@@ -92,8 +92,10 @@ extension Extensions {
         controller.didOpenWindow(window(for: browser))
         windowWatches[key] = [
             // As tabs change, not after: nothing may see the old ones.
-            browser.$tabs.map { _ in () }.merge(with: browser.$parked.map { _ in () }, browser.$spaces.map { _ in () }, browser.$spaceID.map { _ in () })
-                .sink { [weak self] in self?.forgetShown() },
+            browser.$tabs.map { _ in () }.merge(
+                with: browser.$parked.map { _ in () }, browser.$spaces.map { _ in () }, browser.$spaceID.map { _ in () }
+            )
+            .sink { [weak self] in self?.forgetShown() },
             // After the change has landed: a space switch moves both at once.
             browser.$tabs.map { _ in () }.merge(with: browser.$parked.map { _ in () })
                 .receive(on: DispatchQueue.main)
@@ -205,6 +207,14 @@ final class ExtensionTab: NSObject, WKWebExtensionTab {
     func zoomFactor(for context: WKWebExtensionContext) -> Double { Double(page?.pageZoom ?? 1) }
     func size(for context: WKWebExtensionContext) -> CGSize { page?.bounds.size ?? .zero }
     func shouldGrantPermissionsOnUserGesture(for context: WKWebExtensionContext) -> Bool { true }
+
+    /// tabs.detectLanguage, as Mote tells a page's language for its own
+    /// translation. Unanswered, translators took every page for an unknown
+    /// language and wouldn't translate.
+    func detectWebpageLocale(for context: WKWebExtensionContext) async throws -> Locale? {
+        guard let page else { return nil }
+        return await Browser.pageLanguage(in: page).map { Locale(identifier: $0) }
+    }
 
     func setPinned(_ pinned: Bool, for context: WKWebExtensionContext) async throws {
         guard let tab, let browser, pinned != tab.held else { return }
