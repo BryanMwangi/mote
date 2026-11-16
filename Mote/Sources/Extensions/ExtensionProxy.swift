@@ -222,19 +222,33 @@ enum ExtensionProxy {
         restart = Task {
             try? await Task.sleep(for: .seconds(max(0.3, 3 - Date().timeIntervalSince(lastRestart))))
             guard !Task.isCancelled else { return }
-            let terminate = NSSelectorFromString("_terminateNetworkProcess")
-            // Only one that's running: WebKit stops the app over one that isn't
-            // (as at launch, before the first page).
-            guard let store = stores.allObjects.first, store.responds(to: terminate),
-                store.responds(to: NSSelectorFromString("_networkProcessExists")),
-                store.value(forKey: "_networkProcessExists") as? Bool == true
-            else { return }
-            lastRestart = Date()
-            store.perform(terminate)
-            // The new process is given each store's proxy as it last had one,
-            // not none (measured): so every store is told again.
-            for store in stores.allObjects { dress(store) }
+            terminateNetworkProcess()
         }
+    }
+
+    /// Starts WebKit's network process over now, a few seconds after the last
+    /// time at the soonest; false when none runs.
+    @discardableResult
+    static func restartNetworkProcess() async -> Bool {
+        try? await Task.sleep(for: .seconds(max(0, 3 - Date().timeIntervalSince(lastRestart))))
+        return terminateNetworkProcess()
+    }
+
+    @discardableResult
+    private static func terminateNetworkProcess() -> Bool {
+        let terminate = NSSelectorFromString("_terminateNetworkProcess")
+        // Only one that's running: WebKit stops the app over one that isn't
+        // (as at launch, before the first page).
+        guard let store = stores.allObjects.first, store.responds(to: terminate),
+            store.responds(to: NSSelectorFromString("_networkProcessExists")),
+            store.value(forKey: "_networkProcessExists") as? Bool == true
+        else { return false }
+        lastRestart = Date()
+        store.perform(terminate)
+        // The new process is given each store's proxy as it last had one,
+        // not none (measured): so every store is told again.
+        for store in stores.allObjects { dress(store) }
+        return true
     }
 
     private static func describe(_ plan: Plan) -> String {
