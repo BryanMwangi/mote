@@ -164,6 +164,7 @@ extension Extensions {
             source: source?.path, firefox: firefox)
         installed.removeAll { $0.id == id }
         installed.append(item)
+        ExtensionProxy.noteInstall(of: id)
         save()
         say(await load(item) ? "\(name) is installed" : "\(name) is installed, but WebKit couldn't start it")
     }
@@ -329,6 +330,7 @@ extension Extensions {
         forgetErrors(of: id)
         forgetLoads(of: id)
         Self.setSettings([:], for: id)
+        ExtensionProxy.forgetInstall(of: id)
         for key in ["extensions.granted.\(id)", Self.newTabKey(id)] { Storage.settings.removeObject(forKey: key) }
         installed.removeAll { $0.id == id }
         save()

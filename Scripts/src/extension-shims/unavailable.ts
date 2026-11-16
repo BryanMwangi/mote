@@ -29,6 +29,16 @@ function rules() {
   };
 }
 
+/** Whether the extension's manifest asks for `permission`. */
+export function asksFor({ runtime }: Shim, permission: string): boolean {
+  try {
+    const manifest = runtime.getManifest() as { permissions?: unknown[]; optional_permissions?: unknown[] };
+    return [...(manifest.permissions ?? []), ...(manifest.optional_permissions ?? [])].includes(permission);
+  } catch {
+    return false;
+  }
+}
+
 export function defineUnavailable(shim: Shim): void {
   putNamespace(shim, 'omnibox', {
     setDefaultSuggestion: () => {},
@@ -66,20 +76,24 @@ export function defineUnavailable(shim: Shim): void {
     },
     ...events('onEvent', 'onDetach'),
   });
-  putNamespace(shim, 'gcm', {
-    register: refuse(shim, 'gcm.register'),
-    unregister: refuse(shim, 'gcm.unregister'),
-    send: refuse(shim, 'gcm.send'),
-    ...events('onMessage', 'onMessagesDeleted', 'onSendError'),
-  });
-  putNamespace(shim, 'instanceID', {
-    getID: refuse(shim, 'instanceID.getID'),
-    getToken: refuse(shim, 'instanceID.getToken'),
-    deleteID: refuse(shim, 'instanceID.deleteID'),
-    deleteToken: refuse(shim, 'instanceID.deleteToken'),
-    getCreationTime: refuse(shim, 'instanceID.getCreationTime'),
-    onTokenRefresh: createEvent(),
-  });
+  // Only for an extension that asks for them, as in Chrome: code that binds
+  // every member it finds (Browsec's) takes their events for methods.
+  if (asksFor(shim, 'gcm')) {
+    putNamespace(shim, 'gcm', {
+      register: refuse(shim, 'gcm.register'),
+      unregister: refuse(shim, 'gcm.unregister'),
+      send: refuse(shim, 'gcm.send'),
+      ...events('onMessage', 'onMessagesDeleted', 'onSendError'),
+    });
+    putNamespace(shim, 'instanceID', {
+      getID: refuse(shim, 'instanceID.getID'),
+      getToken: refuse(shim, 'instanceID.getToken'),
+      deleteID: refuse(shim, 'instanceID.deleteID'),
+      deleteToken: refuse(shim, 'instanceID.deleteToken'),
+      getCreationTime: refuse(shim, 'instanceID.getCreationTime'),
+      onTokenRefresh: createEvent(),
+    });
+  }
   putNamespace(shim, 'declarativeContent', {
     onPageChanged: rules(),
     PageStateMatcher: function (this: object, o: object) {

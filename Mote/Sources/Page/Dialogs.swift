@@ -109,12 +109,9 @@ extension Browser {
         let failures = challenge.previousFailureCount
         guard Challenge.mayAskToSignIn(failures: failures) else { return done(.cancelAuthenticationChallenge, nil) }
         let space = challenge.protectionSpace
-        // An extension's proxy: its sign-in is the extension's to give, never a question.
-        if let proxy = ExtensionProxy.current, space.host.caseInsensitiveCompare(proxy.host) == .orderedSame {
-            guard failures == 0, let user = proxy.username, let password = proxy.password else {
-                return done(.cancelAuthenticationChallenge, nil)
-            }
-            return done(.useCredential, URLCredential(user: user, password: password, persistence: .forSession))
+        // The relay extensions' proxies go through (ExtensionRelay): Mote's own sign-in, never a question.
+        if #available(macOS 15.4, *), let credential = ExtensionProxy.relayCredential(host: space.host, port: space.port) {
+            return done(failures == 0 ? .useCredential : .cancelAuthenticationChallenge, credential)
         }
         var text = space.realm.map { "“\($0)”" } ?? "The site wants a name and a password."
         if failures > 0 { text += "\nThat wasn't accepted — try again." }

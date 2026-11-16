@@ -20,7 +20,7 @@ export function presentAsFirefox(shim: Shim): void {
   if (!inContent && typeof navigator !== 'undefined' && !/ Firefox\//.test(navigator.userAgent)) {
     const agent = firefoxUserAgent(navigator.userAgent, config.firefoxVersion);
     const proto =
-      typeof root.WorkerNavigator !== 'undefined' && worker
+      typeof root?.WorkerNavigator !== 'undefined' && worker
         ? root.WorkerNavigator.prototype
         : typeof Navigator !== 'undefined'
           ? Navigator.prototype

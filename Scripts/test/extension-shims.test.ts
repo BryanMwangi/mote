@@ -19,7 +19,7 @@ import { goesToApp, isPortProbe } from '../src/extension-shims/native-ports';
 import { splitPermissions } from '../src/extension-shims/permissions';
 import { unnumber } from '../src/extension-shims/port-numbering';
 import { sentMessage } from '../src/extension-shims/replies';
-import { plainItems } from '../src/extension-shims/storage';
+import { asJSON, plainItems } from '../src/extension-shims/storage';
 import { tabsIn } from '../src/extension-shims/tabs';
 import { presentAsFirefox } from '../src/extension-shims/firefox';
 import type { Shim } from '../src/extension-shims/types';
@@ -301,8 +301,20 @@ describe('Tabs and storage', () => {
   it('copies items without the plain prototype', () => {
     const items = Object.assign(Object.create(null), { a: 1 });
     expect(Object.getPrototypeOf(plainItems(items))).toBe(Object.prototype);
-    const plain = { a: 1 };
-    expect(plainItems(plain)).toBe(plain);
+    expect(plainItems({ a: 1, b: [2, { c: 3 }] })).toEqual({ a: 1, b: [2, { c: 3 }] });
+  });
+
+  // Chrome passes messages and stored items as JSON: a cycle throws, and a
+  // framework's reactive wrapper arrives as the plain data it wraps.
+  it('passes values as JSON, as Chrome does', () => {
+    const cyclic: Record<string, unknown> = { a: 1 };
+    cyclic.self = cyclic;
+    expect(() => asJSON(cyclic)).toThrow(TypeError);
+    const wrapped = new Proxy({ server: { host: 'h', port: 443 } }, {});
+    expect(asJSON(wrapped)).toEqual({ server: { host: 'h', port: 443 } });
+    expect(asJSON({ f: () => 1, d: undefined, n: 2 })).toEqual({ n: 2 });
+    expect(asJSON('text')).toBe('text');
+    expect(asJSON(undefined)).toBeUndefined();
   });
 });
 

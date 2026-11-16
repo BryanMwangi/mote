@@ -9,9 +9,11 @@
 // waits for ever.
 
 import { NO_RECEIVER } from './embedded';
+import { asJSON } from './storage';
 import type { Verdicts } from './message-verdicts';
 import type { Ping, ToFrame } from './messaging';
-import type { Callback, Shim } from './types';
+import type { Listener } from './events';
+import type { Callback, Shim, WebKitObject } from './types';
 
 export const PORT_CLOSED = 'The message port closed before a response was received.';
 
@@ -112,12 +114,19 @@ export function mendReplies(shim: Shim, verdicts: Verdicts): void {
           asking = false;
         });
     };
-    checkWorker = page ? check : nothing;
+    // Not from the background itself: a background page's message with
+    // no page open to hear it goes unanswered, and that's no sign of a
+    // background gone — taking it for one restarted the extension, and a
+    // VPN turned off came back on as it started.
+    checkWorker = page && !background ? check : nothing;
     put(runtime, 'sendMessage', (...args: unknown[]) => {
       const callback = typeof args[args.length - 1] === 'function' ? args.pop() : null;
       // Never heard back by the one that sends it, so said for it.
       if (!inContent) verdicts.tell(sentMessage(args), 'passes');
       checkWorker();
+      // The message (after an extension id, if one is given) as Chrome sends it.
+      const at = typeof args[0] === 'string' && args.length > 1 ? 1 : 0;
+      args[at] = asJSON(args[at]);
       const answer = send(...args).then((r) => {
         if (r !== undefined) heard = Date.now();
         return r;
@@ -183,6 +192,7 @@ export function mendReplies(shim: Shim, verdicts: Verdicts): void {
           callback = options;
           options = undefined;
         }
+        message = asJSON(message);
         const p = options === undefined ? send(tabId, message) : send(tabId, message, options);
         return replied(shim, background ? alsoFramed(p, tabId, message, options) : p, callback, NO_RECEIVER);
       },
@@ -197,8 +207,53 @@ export function mendReplies(shim: Shim, verdicts: Verdicts): void {
         port.onMessage.addListener(() => {
           heard = Date.now();
         });
+        postsAsJSON(shim, port);
       } catch {}
       return port;
     });
+  }
+}
+
+/** Ports whose prototype posts as JSON already. */
+const jsonProtos = new WeakSet<object>();
+
+/**
+ * Every port's postMessage, through the prototype they share, sends as
+ * Chrome does (see asJSON): an extension's background page posts on ports
+ * it is handed, and WebKit's web process goes down over a message with a
+ * cycle in it, again each time the page starts over.
+ */
+export function postsAsJSON({ put }: Shim, port: WebKitObject): void {
+  const proto = port && Object.getPrototypeOf(port);
+  if (!proto || jsonProtos.has(proto) || typeof proto.postMessage !== 'function') return;
+  jsonProtos.add(proto);
+  const post = proto.postMessage;
+  put(proto, 'postMessage', function (this: WebKitObject, message: unknown) {
+    return post.call(this, asJSON(message));
+  });
+}
+
+/** Ports handed to onConnect listeners post as JSON too. */
+export function jsonConnectedPorts(shim: Shim): void {
+  const event = shim.runtime && shim.runtime.onConnect;
+  if (!event || typeof event.addListener !== 'function') return;
+  const add = event.addListener.bind(event);
+  const remove = event.removeListener.bind(event);
+  const wrapped = new WeakMap<Listener, Listener>();
+  shim.put(event, 'addListener', (listener: Listener) => {
+    let w = wrapped.get(listener);
+    if (!w) {
+      w = (port: WebKitObject, ...rest: unknown[]) => {
+        postsAsJSON(shim, port);
+        return listener(port, ...rest);
+      };
+      wrapped.set(listener, w);
+    }
+    return add(w);
+  });
+  shim.put(event, 'removeListener', (listener: Listener) => remove(wrapped.get(listener) ?? listener));
+  if (typeof event.hasListener === 'function') {
+    const has = event.hasListener.bind(event);
+    shim.put(event, 'hasListener', (listener: Listener) => has(wrapped.get(listener) ?? listener));
   }
 }

@@ -6,6 +6,7 @@
 import { URL } from './captured';
 import { rethrowLater, type Listener } from './events';
 import { messageKey, type Verdicts } from './message-verdicts';
+import { asJSON } from './storage';
 import type { Shim, WebKitObject } from './types';
 
 /** How long a page that has nothing to say waits before saying so. */
@@ -224,10 +225,16 @@ export function createGather(shim: Shim, verdicts: Verdicts) {
     const dispatch = function (message: any, sender: WebKitObject, respond: SendResponse) {
       let settled = false;
       const sendResponse: SendResponse = (value) => {
-        if (!settled) {
-          settled = true;
-          respond(value);
+        if (settled) return;
+        settled = true;
+        // As JSON, as Chrome sends it (see asJSON); one it can't send is no answer.
+        let plain: unknown;
+        try {
+          plain = asJSON(value);
+        } catch (e) {
+          rethrowLater(e);
         }
+        respond(plain);
       };
       // Only the worker answers; any other page stays out of it.
       if (message && message.__motePing === true) {

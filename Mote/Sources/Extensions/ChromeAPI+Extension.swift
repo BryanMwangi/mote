@@ -240,6 +240,9 @@ extension ChromeAPI {
         switch parts[0] {
         case "setting.set": mine[name] = call.options["value"]
         case "setting.clear": mine[name] = nil
+        // The value in effect, and who controls it: the newest install that set one.
+        case _ where name == "proxy.settings":
+            return ExtensionProxy.state(for: call.id)
         default:
             return [
                 "value": mine[name] ?? ChromeAPIRules.defaultSetting(name, savesPasswords: call.browser.prefs.savesPasswords),
@@ -247,7 +250,7 @@ extension ChromeAPI {
             ]
         }
         Extensions.setSettings(mine, for: call.id)
-        if name == "proxy.settings" { ExtensionProxy.set(ExtensionProxy.choice(fromSetting: mine[name]), by: call.id) }
+        if name == "proxy.settings" { await ExtensionProxy.setSetting(mine[name], by: call.id) }
         call.owner.objectWillChange.send()
         return nil
     }
@@ -259,32 +262,20 @@ extension ChromeAPI {
         return nil
     }
 
-    /// Firefox's proxy.onRequest, as proxy.ts asks it: the proxy for pages
-    /// now, or null for none. For one given without a sign-in, what the
-    /// proxy asks one with, for the extension to answer.
-    /// chrome.proxy.settings' proxy is signed into the same way: `challenge`
-    /// says what it asks, `credentials` gives the extension's answer.
+    /// The proxy's part of proxy.ts. `apply`: Firefox's proxy.onRequest
+    /// answer for pages now, or null for none. `challenge`: what the
+    /// extension's proxies asked a sign-in with, for its listeners to
+    /// answer (`apply` answers the same). `credentials`: their sign-ins.
     static func proxy(_ call: ChromeCall) async throws -> Any? {
         switch call.method {
         case "apply":
-            let choice = ExtensionProxy.choice(fromAnswer: call.first)
-            ExtensionProxy.set(choice, by: call.id)
-            guard let choice, choice.username == nil else { return nil }
-            return await ExtensionProxy.challenge(of: choice)
+            ExtensionProxy.setRequestAnswer(ExtensionProxy.choice(fromAnswer: call.first), by: call.id)
+            return ExtensionProxy.asks(for: call.id)
         case "challenge":
-            guard ExtensionProxy.owner == call.id, let current = ExtensionProxy.current, current.username == nil,
-                var asked = await ExtensionProxy.challenge(of: current)
-            else { return nil }
-            asked["host"] = current.host
-            asked["port"] = String(current.port)
-            return asked
+            return ExtensionProxy.asks(for: call.id)
         case "credentials":
-            guard ExtensionProxy.owner == call.id, var current = ExtensionProxy.current, let user = call.option("username") as String?,
-                let password = call.option("password") as String?
-            else { return nil }
-            current.username = user
-            current.password = password
-            ExtensionProxy.set(current, by: call.id)
+            let given = call.first as? [[String: Any]] ?? (call.first as? [String: Any]).map { [$0] } ?? []
+            ExtensionProxy.signIn(given, by: call.id)
             return nil
         default:
             throw unavailable(call)

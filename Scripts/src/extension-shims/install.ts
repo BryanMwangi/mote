@@ -35,7 +35,7 @@ import { holdEarlyNativeMessages } from './native-ports';
 import { mendPermissions } from './permissions';
 import { mendPopup } from './popup';
 import { numberOwnPorts } from './port-numbering';
-import { mendReplies } from './replies';
+import { jsonConnectedPorts, mendReplies } from './replies';
 import { defineProxy } from './proxy';
 import { defineContentSettings, definePrivacy } from './settings';
 import { fillStorage, storePlainItems } from './storage';
@@ -94,6 +94,7 @@ export function install(root: Root, config: ShimConfig): void {
   // Messages between the extension's own pages and its worker.
   forwardThroughWorker(shim);
   mendReplies(shim, verdicts);
+  jsonConnectedPorts(shim);
   gather(runtime && runtime.onMessage, true);
   gather(runtime && runtime.onMessageExternal);
 

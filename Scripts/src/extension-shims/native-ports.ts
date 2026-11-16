@@ -11,6 +11,7 @@
 
 import { APPLICATION } from './callbacks';
 import type { Listener } from './events';
+import { asJSON } from './storage';
 import type { Shim, WebKitObject } from './types';
 
 /** What the shim and the browser say on a native port (NativeMessaging.swift), never the app. */
@@ -127,6 +128,7 @@ export function holdEarlyNativeMessages({ worker, runtime, chrome, put, kept }: 
       state = goesToApp(this, toPages) ? start(this) : { held: null };
       ports.set(this, state);
     }
+    message = asJSON(message);
     if (state.held) {
       state.held.push(message);
       return undefined;

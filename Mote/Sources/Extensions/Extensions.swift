@@ -132,10 +132,13 @@ final class Extensions: NSObject, ObservableObject {
     /// One at a time: started together, WebKit fails some workers and never
     /// tries them again.
     private func loadAll() async {
+        // The proxy extensions set before, in effect before their workers start.
+        await ExtensionProxy.restore(installed.filter(\.enabled).map(\.id))
         for item in installed where item.enabled {
             await load(item)
             if contexts[item.id]?.webExtension.hasBackgroundContent == true { try? await Task.sleep(for: .milliseconds(400)) }
         }
+        ExtensionProxy.keepOnly(Set(contexts.keys))
         checkForUpdates()
     }
 
@@ -186,10 +189,8 @@ final class Extensions: NSObject, ObservableObject {
             Self.everLoaded.insert(item.id)
             contexts[item.id] = context
             actionsChanged += 1
-            // The proxy it set before, through chrome.proxy.settings.
-            if let proxy = ExtensionProxy.choice(fromSetting: Self.settings(for: item.id)["proxy.settings"]) {
-                ExtensionProxy.set(proxy, by: item.id)
-            }
+            // The proxy it set before, or a sign-in awaited from it.
+            ExtensionProxy.loaded(item.id)
             return true
         } catch {
             NSLog("Extensions: couldn't load %@: %@", item.id, error.localizedDescription)
@@ -197,10 +198,10 @@ final class Extensions: NSObject, ObservableObject {
         }
     }
 
-    func unload(_ id: String) {
+    func unload(_ id: String, keepingProxy: Bool = false) {
         guard let context = contexts[id] else { return }
         try? controller.unload(context)
-        ExtensionProxy.release(id)
+        if !keepingProxy { ExtensionProxy.release(id) }
         // WebKit says its ports closed only on the next turn of the run loop.
         DispatchQueue.main.async { NativeMessaging.stopOrphans() }
         contexts[id] = nil
@@ -221,9 +222,11 @@ final class Extensions: NSObject, ObservableObject {
         noteError("restarted the extension: \(reason)", for: id)
         let popup = ExtensionPopup.shared.extensionID == id ? ExtensionPopup.shared.view?.url : nil
         let anchor = anchor(for: id)
-        unload(id)
+        // Its proxy stays on while it starts again: pages keep their way.
+        unload(id, keepingProxy: true)
         Task {
-            guard await load(item), let popup, let context = contexts[id] else { return }
+            guard await load(item) else { return ExtensionProxy.release(id) }
+            guard let popup, let context = contexts[id] else { return }
             ExtensionPopup.shared.show(popup, for: context, from: anchor)
         }
     }

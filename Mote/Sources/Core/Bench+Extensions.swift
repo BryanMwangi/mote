@@ -100,8 +100,11 @@ private enum BenchExtensions {
     /// An error with what lies under it and whatever else it carries.
     /// By domain and code only: WebKit's extension errors can carry objects
     /// in their userInfo that crash when read.
+    /// Its domain and code, what it says, and what caused it: a worker's
+    /// own error is found there.
     private static func explain(_ error: NSError) -> String {
-        "\(error.domain) \(error.code)"
+        let cause = (error.userInfo[NSUnderlyingErrorKey] as? NSError).map { " (\($0.localizedDescription))" } ?? ""
+        return "\(error.domain) \(error.code): \(error.localizedDescription)\(cause)"
     }
 
     /// Answers every question from now on (yes or no), or asks again; and

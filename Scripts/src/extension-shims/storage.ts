@@ -15,11 +15,20 @@ export function fillStorage(shim: Shim): void {
   });
 }
 
-/** Items as WebKit stores them: a plain object copy of one with another prototype. */
+/**
+ * A value as Chrome passes it between an extension's contexts and keeps it
+ * in storage: through JSON. WebKit takes the object as it is, and one with a
+ * cycle or a framework's reactive wrappers in it brings down its web
+ * process, over and over as the page tries again; through JSON it's plain
+ * data, and a cycle throws, as in Chrome.
+ */
+export function asJSON(value: unknown): unknown {
+  return value === null || typeof value !== 'object' ? value : JSON.parse(JSON.stringify(value));
+}
+
+/** Items as WebKit stores them: plain data (see `asJSON`), also from an object with another prototype. */
 export function plainItems(items: unknown): unknown {
-  return items && typeof items === 'object' && Object.getPrototypeOf(items) !== Object.prototype
-    ? Object.assign({}, items)
-    : items;
+  return asJSON(items);
 }
 
 /**

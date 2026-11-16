@@ -87,10 +87,12 @@ export function mendRequestListeners({ chrome, put }: Shim): void {
       const kept = withoutSocketPatterns(filter);
       if (kept === null) return undefined;
       filter = kept;
-      // Added after a worker's startup, WebKit refuses it; Chrome takes
-      // it. It isn't heard, but neither does it stop the code that added
-      // it — a listener for every request can't join the late list
-      // (it would wake the worker for all of them).
+      // WebKit refuses some that Chrome takes: one added after a worker's
+      // startup, and any in a worker at all ("Non-persistent background
+      // content cannot listen to webRequest events"), where Chrome's MV3
+      // VPNs add theirs. It isn't heard, but neither does it stop the code
+      // that added it, which would stop the worker; a proxy's sign-in is
+      // still asked of onAuthRequired's (proxy.ts).
       try {
         if (!Array.isArray(spec)) return add(listener, filter);
         try {
@@ -99,9 +101,7 @@ export function mendRequestListeners({ chrome, put }: Shim): void {
           if (isLateListenerError(e)) throw e;
           return add(listener, filter);
         }
-      } catch (e) {
-        if (!isLateListenerError(e)) throw e;
-      }
+      } catch {}
       return undefined;
     });
     if (key === 'onAuthRequired') {

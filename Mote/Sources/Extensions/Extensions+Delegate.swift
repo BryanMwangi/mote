@@ -118,6 +118,7 @@ extension Extensions: WKWebExtensionControllerDelegate {
     ) async throws {
         switch port.applicationIdentifier {
         case ExtensionSocket.name: ExtensionSocket.connect(port, from: extensionContext.uniqueIdentifier)
+        case ExtensionProxy.portName: ExtensionProxy.connect(port, from: extensionContext.uniqueIdentifier)
         // The shim opens this one only to see how ports behave, and closes it.
         case ExtensionShims.application: return
         default: try NativeMessaging.connect(port, from: extensionContext.uniqueIdentifier)

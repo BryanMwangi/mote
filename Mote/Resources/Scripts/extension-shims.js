@@ -1316,7 +1316,7 @@
 		const { root, inContent, worker, config } = shim;
 		if (!inContent && typeof navigator !== "undefined" && !/ Firefox\//.test(navigator.userAgent)) {
 			const agent = firefoxUserAgent(navigator.userAgent, config.firefoxVersion);
-			const proto = typeof root.WorkerNavigator !== "undefined" && worker ? root.WorkerNavigator.prototype : typeof Navigator !== "undefined" ? Navigator.prototype : null;
+			const proto = typeof root?.WorkerNavigator !== "undefined" && worker ? root.WorkerNavigator.prototype : typeof Navigator !== "undefined" ? Navigator.prototype : null;
 			try {
 				if (proto) {
 					Object.defineProperty(proto, "userAgent", {
@@ -1936,27 +1936,132 @@
 	}
 
 //#endregion
+//#region src/extension-shims/unavailable.ts
+	function events(...names) {
+		return Object.fromEntries(names.map((n) => [n, createEvent()]));
+	}
+	/**
+	* Rules that show a button on matching pages: every button is always
+	* shown in Mote, so there is nothing for them to do.
+	*/
+	function rules() {
+		return {
+			addRules: (r, cb) => {
+				if (cb) cb(r || []);
+			},
+			removeRules: (_ids, cb) => {
+				if (cb) cb();
+			},
+			getRules: (ids, cb) => {
+				const f = typeof ids === "function" ? ids : cb;
+				if (f) f([]);
+			}
+		};
+	}
+	/** Whether the extension's manifest asks for `permission`. */
+	function asksFor({ runtime }, permission) {
+		try {
+			const manifest = runtime.getManifest();
+			return [...manifest.permissions ?? [], ...manifest.optional_permissions ?? []].includes(permission);
+		} catch {
+			return false;
+		}
+	}
+	function defineUnavailable(shim) {
+		putNamespace(shim, "omnibox", {
+			setDefaultSuggestion: () => {},
+			...events("onInputStarted", "onInputChanged", "onInputEntered", "onInputCancelled", "onDeleteSuggestion")
+		});
+		putNamespace(shim, "tabCapture", {
+			capture: refuse(shim, "tabCapture.capture"),
+			getMediaStreamId: refuse(shim, "tabCapture.getMediaStreamId"),
+			getCapturedTabs: (cb) => {
+				if (cb) cb([]);
+				else return Promise.resolve([]);
+			},
+			onStatusChanged: createEvent()
+		});
+		putNamespace(shim, "desktopCapture", {
+			chooseDesktopMedia: (_sources, tab, cb) => {
+				const f = typeof tab === "function" ? tab : cb;
+				if (f) setTimeout(() => f("", {}));
+				return 1;
+			},
+			cancelChooseDesktopMedia: () => {},
+			DesktopCaptureSourceType: {
+				SCREEN: "screen",
+				WINDOW: "window",
+				TAB: "tab",
+				AUDIO: "audio"
+			}
+		});
+		putNamespace(shim, "pageCapture", { saveAsMHTML: refuse(shim, "pageCapture.saveAsMHTML") });
+		putNamespace(shim, "debugger", {
+			attach: refuse(shim, "debugger.attach"),
+			detach: refuse(shim, "debugger.detach"),
+			sendCommand: refuse(shim, "debugger.sendCommand"),
+			getTargets: (cb) => {
+				if (cb) cb([]);
+				else return Promise.resolve([]);
+			},
+			...events("onEvent", "onDetach")
+		});
+		if (asksFor(shim, "gcm")) {
+			putNamespace(shim, "gcm", {
+				register: refuse(shim, "gcm.register"),
+				unregister: refuse(shim, "gcm.unregister"),
+				send: refuse(shim, "gcm.send"),
+				...events("onMessage", "onMessagesDeleted", "onSendError")
+			});
+			putNamespace(shim, "instanceID", {
+				getID: refuse(shim, "instanceID.getID"),
+				getToken: refuse(shim, "instanceID.getToken"),
+				deleteID: refuse(shim, "instanceID.deleteID"),
+				deleteToken: refuse(shim, "instanceID.deleteToken"),
+				getCreationTime: refuse(shim, "instanceID.getCreationTime"),
+				onTokenRefresh: createEvent()
+			});
+		}
+		putNamespace(shim, "declarativeContent", {
+			onPageChanged: rules(),
+			PageStateMatcher: function(o) {
+				Object.assign(this, o);
+			},
+			ShowAction: function() {},
+			ShowPageAction: function() {},
+			SetIcon: function(o) {
+				Object.assign(this, o);
+			},
+			RequestContentScript: function(o) {
+				Object.assign(this, o);
+			}
+		});
+	}
+
+//#endregion
 //#region src/extension-shims/proxy.ts
 /** What a page load is asked as. */
 	const SAMPLE = "https://www.example.com/";
 	/** How often the listener is asked again. */
 	const EVERY = 2e3;
-	/** How long before a sign-in none gave is asked for again. */
-	const SIGN_IN_AGAIN = 15e3;
+	/** The native app name the browser hears this port on (ExtensionProxy.portName). */
+	const PROXY_APPLICATION = "mote.proxy";
 	/** The extension's webRequest.onAuthRequired listeners (web-request.ts keeps them). */
 	const authListeners = /* @__PURE__ */ new Set();
 	/**
 	* A listener's answer (a proxy, a list of them to try in turn, or DIRECT) as
-	* the browser takes it: the first proxy it can use, or null for none.
+	* the browser takes it: the first proxy, or null for none. As in Firefox
+	* (ProxyChannelFilter), an answer it can't use means none, never a stalled
+	* request: SOCKS4 and MASQUE, which Network can't speak, among them.
 	*/
 	function proxyChoice(answer) {
 		const first = Array.isArray(answer) ? answer[0] : answer;
 		if (!first || typeof first !== "object") return null;
 		const info = first;
 		const kind = String(info.type ?? "").toLowerCase();
-		const type = kind === "http" || kind === "https" ? kind : kind === "socks" || kind === "socks5" ? "socks" : null;
+		const type = kind === "http" || kind === "proxy" ? "http" : kind === "https" ? kind : kind === "socks" || kind === "socks5" ? "socks" : null;
 		const port = Number(info.port);
-		if (!type || typeof info.host !== "string" || !info.host || !Number.isInteger(port) || port < 1 || port > 65535) return null;
+		if (!type || typeof info.host !== "string" || !info.host || /\s/.test(info.host) || type === "socks" && info.proxyAuthorizationHeader != null || !Number.isInteger(port) || port < 1 || port > 65535) return null;
 		const choice = {
 			type,
 			host: info.host,
@@ -1995,14 +2100,22 @@
 		});
 	}
 	/**
-	* The sign-in the extension gives for `choice`, asked as the proxy asking,
-	* with the scheme and realm it asks with (a listener may answer only its
-	* own realm); null when none gives one.
+	* Each ask is a request of its own, as in Chrome: a listener that refuses a
+	* request id it has answered before (thinking its sign-in failed) answers
+	* the next one.
 	*/
-	async function signIn(choice, asked) {
-		for (const listener of authListeners) {
+	let nextRequest = Math.floor(Math.random() * 1e6) + 1e6;
+	/**
+	* The extension's sign-in for a proxy, asked as the proxy asking, with the
+	* scheme and realm it asks with (a listener may answer only its own realm);
+	* null when none gives one.
+	*/
+	async function signIn(asked) {
+		const port = Number(asked.port);
+		const type = asked.type || "https";
+		for (const listener of [...authListeners]) {
 			const given = (await answerOf(listener, {
-				requestId: "mote-proxy",
+				requestId: String(nextRequest++),
 				url: SAMPLE,
 				method: "GET",
 				frameId: 0,
@@ -2014,104 +2127,162 @@
 				scheme: asked.scheme || "basic",
 				realm: asked.realm ?? "",
 				challenger: {
-					host: choice.host,
-					port: choice.port
+					host: asked.host,
+					port
+				},
+				proxyInfo: {
+					host: asked.host,
+					port,
+					type,
+					username: "",
+					proxyDNS: false,
+					failoverTimeout: 10
 				},
 				statusCode: 407,
 				statusLine: "HTTP/1.1 407 Proxy Authentication Required"
 			}))?.authCredentials;
 			if (typeof given?.username === "string" && typeof given.password === "string") return {
-				...choice,
+				host: asked.host,
+				port,
 				username: given.username,
 				password: given.password
 			};
 		}
 		return null;
 	}
-	/** The sign-in for a proxy set through chrome.proxy.settings, if it asks one. */
-	async function signInToSet(shim) {
-		const asked = await shim.native("proxy.challenge", []).catch(() => null);
-		if (!asked) return;
-		const given = await signIn({
-			type: "https",
-			host: asked.host,
-			port: Number(asked.port)
-		}, asked);
-		if (given) await shim.native("proxy.credentials", [{
-			username: given.username,
-			password: given.password
-		}]).catch(() => void 0);
+	/** Signs in to each proxy asked, and gives the browser what came. */
+	async function signInTo(shim, asks) {
+		if (!Array.isArray(asks) || !asks.length) return;
+		const given = [];
+		for (const asked of asks) {
+			const one = await signIn(asked);
+			if (one) given.push(one);
+			else if (shim.config?.verbose) shim.native("debug.error", [`proxy sign-in: none of ${authListeners.size} listeners gave one for ${asked.host}`]).catch(() => void 0);
+		}
+		if (given.length) await shim.native("proxy.credentials", [given]).catch(() => void 0);
+	}
+	/** Whatever sign-in the extension's proxies still want. */
+	async function signInNow(shim) {
+		await signInTo(shim, await shim.native("proxy.challenge", []).catch(() => null));
+	}
+	/** Calls an event's listeners, each failure its own. */
+	function fire(event, ...args) {
+		for (const listener of [...event.listeners]) try {
+			listener(...args);
+		} catch (e) {
+			setTimeout(() => {
+				throw e;
+			});
+		}
+	}
+	/**
+	* The port the browser tells the worker things on, opened while the
+	* extension holds a proxy (the browser closes one that holds none). WebKit
+	* drops what a worker posts on a port it has only just opened, so the
+	* greeting is said again until the browser answers.
+	*/
+	function openPort(shim, heard) {
+		let port = null;
+		return () => {
+			if (port || typeof shim.runtime?.connectNative !== "function") return;
+			let ready = false;
+			let tries = 0;
+			try {
+				port = shim.runtime.connectNative(PROXY_APPLICATION);
+			} catch {
+				port = null;
+				return;
+			}
+			const mine = port;
+			const again = () => {
+				if (ready || port !== mine || tries++ >= 20) return;
+				try {
+					mine.postMessage({ hello: true });
+				} catch {}
+				setTimeout(again, 100 * Math.min(tries, 5));
+			};
+			mine.onMessage.addListener((m) => {
+				ready = true;
+				if (m && typeof m === "object") heard(m);
+			});
+			mine.onDisconnect.addListener(() => {
+				if (port === mine) port = null;
+			});
+			again();
+		};
 	}
 	function defineProxy(shim) {
 		const onRequest = createEvent();
+		const onError = createEvent();
+		const onProxyError = createEvent();
 		const settings = setting(shim, "proxy.settings");
-		if (shim.background) {
-			const set = settings.set;
-			settings.set = (...args) => {
-				const out = set(...args);
-				setTimeout(() => void signInToSet(shim), 500);
-				return out;
-			};
-		}
 		putNamespace(shim, "proxy", {
 			settings,
 			onRequest,
-			onError: createEvent(),
-			onProxyError: createEvent()
+			onError,
+			onProxyError
 		});
-		if (!shim.background) return;
+		if (!shim.background || !asksFor(shim, "proxy")) return;
+		const connect = openPort(shim, (told) => {
+			if (told.ready || told.signIn) signInNow(shim);
+			if (told.change) fire(settings.onChange, told.change);
+			if (told.error) {
+				fire(onProxyError, told.error);
+				fire(onError, new Error(told.error.error || "Proxy error"));
+			}
+		});
+		const set = settings.set;
+		const after = () => {
+			connect();
+			signInNow(shim);
+		};
+		settings.set = (...args) => {
+			const last = args.length - 1;
+			const callback = args[last];
+			if (typeof callback === "function") {
+				args[last] = (...result) => {
+					after();
+					return callback(...result);
+				};
+				return set(...args);
+			}
+			const out = set(...args);
+			Promise.resolve(out).then(after, () => void 0);
+			return out;
+		};
+		connect();
+		setTimeout(() => void signInNow(shim), 1500);
 		/** What the browser was last told, as text; null before anything. */
 		let told = null;
-		/** The proxy last signed in for, so a sign-in is asked once per proxy. */
-		let signedFor = "";
-		let signed = null;
-		/** When a sign-in was last asked for and none came; asked again after a while. */
-		let triedAt = 0;
 		let checking = false;
 		let timer;
 		const check = async () => {
 			if (checking) return;
 			checking = true;
 			try {
-				await checkNow();
+				let choice = null;
+				for (const listener of [...onRequest.listeners]) {
+					choice = proxyChoice(await answerOf(listener, {
+						requestId: String(nextRequest++),
+						url: SAMPLE,
+						method: "GET",
+						frameId: 0,
+						parentFrameId: -1,
+						tabId: -1,
+						type: "main_frame",
+						timeStamp: Date.now()
+					}));
+					if (choice) break;
+				}
+				const text = JSON.stringify(choice);
+				if (text === told) return;
+				told = text;
+				const asks = await shim.native("proxy.apply", [choice]).catch(() => null);
+				if (choice) connect();
+				await signInTo(shim, asks);
 			} finally {
 				checking = false;
 			}
-		};
-		const checkNow = async () => {
-			let choice = null;
-			for (const listener of [...onRequest.listeners]) {
-				choice = proxyChoice(await answerOf(listener, {
-					requestId: "mote-proxy",
-					url: SAMPLE,
-					method: "GET",
-					frameId: 0,
-					parentFrameId: -1,
-					tabId: -1,
-					type: "main_frame",
-					timeStamp: Date.now()
-				}));
-				if (choice) break;
-			}
-			if (choice) {
-				const key = `${choice.type}://${choice.host}:${choice.port}`;
-				if (key !== signedFor) {
-					signedFor = key;
-					signed = choice.username === void 0 ? null : choice;
-					triedAt = 0;
-				}
-				if (!signed && Date.now() - triedAt > SIGN_IN_AGAIN) {
-					triedAt = Date.now();
-					told = JSON.stringify(choice);
-					const asked = await shim.native("proxy.apply", [choice]).catch(() => null);
-					signed = asked ? await signIn(choice, asked) : choice;
-				}
-				choice = signed ?? choice;
-			}
-			const text = JSON.stringify(choice);
-			if (text === told) return;
-			told = text;
-			shim.native("proxy.apply", [choice]).catch(() => void 0);
 		};
 		const add = onRequest.addListener.bind(onRequest);
 		const remove = onRequest.removeListener.bind(onRequest);
@@ -2225,9 +2396,7 @@
 						if (isLateListenerError(e)) throw e;
 						return add(listener, filter);
 					}
-				} catch (e) {
-					if (!isLateListenerError(e)) throw e;
-				}
+				} catch {}
 			});
 			if (key === "onAuthRequired") {
 				const remove = target.removeListener.bind(target);
@@ -2588,6 +2757,52 @@
 	}
 
 //#endregion
+//#region src/extension-shims/storage.ts
+	function fillStorage(shim) {
+		fill(shim, "storage", {
+			managed: {
+				get: resolved({}),
+				getBytesInUse: resolved(0),
+				onChanged: createEvent()
+			},
+			AccessLevel: {
+				TRUSTED_CONTEXTS: "TRUSTED_CONTEXTS",
+				TRUSTED_AND_UNTRUSTED_CONTEXTS: "TRUSTED_AND_UNTRUSTED_CONTEXTS"
+			}
+		});
+	}
+	/**
+	* A value as Chrome passes it between an extension's contexts and keeps it
+	* in storage: through JSON. WebKit takes the object as it is, and one with a
+	* cycle or a framework's reactive wrappers in it brings down its web
+	* process, over and over as the page tries again; through JSON it's plain
+	* data, and a cycle throws, as in Chrome.
+	*/
+	function asJSON(value) {
+		return value === null || typeof value !== "object" ? value : JSON.parse(JSON.stringify(value));
+	}
+	/** Items as WebKit stores them: plain data (see `asJSON`), also from an object with another prototype. */
+	function plainItems(items) {
+		return asJSON(items);
+	}
+	/**
+	* Items built with Object.create(null) — Chrome stores them, WebKit
+	* throws that an object is expected.
+	*/
+	function storePlainItems({ chrome, put }) {
+		for (const area of [
+			"local",
+			"sync",
+			"session"
+		]) {
+			const store = chrome.storage && chrome.storage[area];
+			if (!store || typeof store.set !== "function") continue;
+			const set = store.set.bind(store);
+			put(store, "set", (items, ...rest) => set(plainItems(items), ...rest));
+		}
+	}
+
+//#endregion
 //#region src/extension-shims/messaging.ts
 /** How long a page that has nothing to say waits before saying so. */
 	const SILENCE_MS = 1e4;
@@ -2750,10 +2965,15 @@
 			const dispatch = function(message, sender, respond) {
 				let settled = false;
 				const sendResponse = (value) => {
-					if (!settled) {
-						settled = true;
-						respond(value);
+					if (settled) return;
+					settled = true;
+					let plain;
+					try {
+						plain = asJSON(value);
+					} catch (e) {
+						rethrowLater(e);
 					}
+					respond(plain);
 				};
 				if (message && message.__motePing === true) {
 					if (background) {
@@ -2877,6 +3097,7 @@
 				state = goesToApp(this, toPages) ? start(this) : { held: null };
 				ports.set(this, state);
 			}
+			message = asJSON(message);
 			if (state.held) {
 				state.held.push(message);
 				return;
@@ -3277,11 +3498,13 @@
 					asking = false;
 				});
 			};
-			checkWorker = page ? check : nothing;
+			checkWorker = page && !background ? check : nothing;
 			put(runtime, "sendMessage", (...args) => {
 				const callback = typeof args[args.length - 1] === "function" ? args.pop() : null;
 				if (!inContent) verdicts.tell(sentMessage(args), "passes");
 				checkWorker();
+				const at = typeof args[0] === "string" && args.length > 1 ? 1 : 0;
+				args[at] = asJSON(args[at]);
 				return replied(shim, send(...args).then((r) => {
 					if (r !== void 0) heard = Date.now();
 					return r;
@@ -3326,6 +3549,7 @@
 					callback = options;
 					options = void 0;
 				}
+				message = asJSON(message);
 				const p = options === void 0 ? send(tabId, message) : send(tabId, message, options);
 				return replied(shim, background ? alsoFramed(p, tabId, message, options) : p, callback, NO_RECEIVER);
 			});
@@ -3339,45 +3563,51 @@
 					port.onMessage.addListener(() => {
 						heard = Date.now();
 					});
+					postsAsJSON(shim, port);
 				} catch {}
 				return port;
 			});
 		}
 	}
-
-//#endregion
-//#region src/extension-shims/storage.ts
-	function fillStorage(shim) {
-		fill(shim, "storage", {
-			managed: {
-				get: resolved({}),
-				getBytesInUse: resolved(0),
-				onChanged: createEvent()
-			},
-			AccessLevel: {
-				TRUSTED_CONTEXTS: "TRUSTED_CONTEXTS",
-				TRUSTED_AND_UNTRUSTED_CONTEXTS: "TRUSTED_AND_UNTRUSTED_CONTEXTS"
-			}
+	/** Ports whose prototype posts as JSON already. */
+	const jsonProtos = /* @__PURE__ */ new WeakSet();
+	/**
+	* Every port's postMessage, through the prototype they share, sends as
+	* Chrome does (see asJSON): an extension's background page posts on ports
+	* it is handed, and WebKit's web process goes down over a message with a
+	* cycle in it, again each time the page starts over.
+	*/
+	function postsAsJSON({ put }, port) {
+		const proto = port && Object.getPrototypeOf(port);
+		if (!proto || jsonProtos.has(proto) || typeof proto.postMessage !== "function") return;
+		jsonProtos.add(proto);
+		const post = proto.postMessage;
+		put(proto, "postMessage", function(message) {
+			return post.call(this, asJSON(message));
 		});
 	}
-	/** Items as WebKit stores them: a plain object copy of one with another prototype. */
-	function plainItems(items) {
-		return items && typeof items === "object" && Object.getPrototypeOf(items) !== Object.prototype ? Object.assign({}, items) : items;
-	}
-	/**
-	* Items built with Object.create(null) — Chrome stores them, WebKit
-	* throws that an object is expected.
-	*/
-	function storePlainItems({ chrome, put }) {
-		for (const area of [
-			"local",
-			"sync",
-			"session"
-		]) {
-			const store = chrome.storage && chrome.storage[area];
-			if (!store || typeof store.set !== "function") continue;
-			const set = store.set.bind(store);
-			put(store, "set", (items, ...rest) => set(plainItems(items), ...rest));
+	/** Ports handed to onConnect listeners post as JSON too. */
+	function jsonConnectedPorts(shim) {
+		const event = shim.runtime && shim.runtime.onConnect;
+		if (!event || typeof event.addListener !== "function") return;
+		const add = event.addListener.bind(event);
+		const remove = event.removeListener.bind(event);
+		const wrapped = /* @__PURE__ */ new WeakMap();
+		shim.put(event, "addListener", (listener) => {
+			let w = wrapped.get(listener);
+			if (!w) {
+				w = (port, ...rest) => {
+					postsAsJSON(shim, port);
+					return listener(port, ...rest);
+				};
+				wrapped.set(listener, w);
+			}
+			return add(w);
+		});
+		shim.put(event, "removeListener", (listener) => remove(wrapped.get(listener) ?? listener));
+		if (typeof event.hasListener === "function") {
+			const has = event.hasListener.bind(event);
+			shim.put(event, "hasListener", (listener) => has(wrapped.get(listener) ?? listener));
 		}
 	}
 
@@ -3578,98 +3808,6 @@
 		mendArgs(chrome.contextMenus && chrome.contextMenus.onClicked, [1]);
 		mendArgs(chrome.menus && chrome.menus.onClicked, [1]);
 		mendArgs(chrome.commands && chrome.commands.onCommand, [1]);
-	}
-
-//#endregion
-//#region src/extension-shims/unavailable.ts
-	function events(...names) {
-		return Object.fromEntries(names.map((n) => [n, createEvent()]));
-	}
-	/**
-	* Rules that show a button on matching pages: every button is always
-	* shown in Mote, so there is nothing for them to do.
-	*/
-	function rules() {
-		return {
-			addRules: (r, cb) => {
-				if (cb) cb(r || []);
-			},
-			removeRules: (_ids, cb) => {
-				if (cb) cb();
-			},
-			getRules: (ids, cb) => {
-				const f = typeof ids === "function" ? ids : cb;
-				if (f) f([]);
-			}
-		};
-	}
-	function defineUnavailable(shim) {
-		putNamespace(shim, "omnibox", {
-			setDefaultSuggestion: () => {},
-			...events("onInputStarted", "onInputChanged", "onInputEntered", "onInputCancelled", "onDeleteSuggestion")
-		});
-		putNamespace(shim, "tabCapture", {
-			capture: refuse(shim, "tabCapture.capture"),
-			getMediaStreamId: refuse(shim, "tabCapture.getMediaStreamId"),
-			getCapturedTabs: (cb) => {
-				if (cb) cb([]);
-				else return Promise.resolve([]);
-			},
-			onStatusChanged: createEvent()
-		});
-		putNamespace(shim, "desktopCapture", {
-			chooseDesktopMedia: (_sources, tab, cb) => {
-				const f = typeof tab === "function" ? tab : cb;
-				if (f) setTimeout(() => f("", {}));
-				return 1;
-			},
-			cancelChooseDesktopMedia: () => {},
-			DesktopCaptureSourceType: {
-				SCREEN: "screen",
-				WINDOW: "window",
-				TAB: "tab",
-				AUDIO: "audio"
-			}
-		});
-		putNamespace(shim, "pageCapture", { saveAsMHTML: refuse(shim, "pageCapture.saveAsMHTML") });
-		putNamespace(shim, "debugger", {
-			attach: refuse(shim, "debugger.attach"),
-			detach: refuse(shim, "debugger.detach"),
-			sendCommand: refuse(shim, "debugger.sendCommand"),
-			getTargets: (cb) => {
-				if (cb) cb([]);
-				else return Promise.resolve([]);
-			},
-			...events("onEvent", "onDetach")
-		});
-		putNamespace(shim, "gcm", {
-			register: refuse(shim, "gcm.register"),
-			unregister: refuse(shim, "gcm.unregister"),
-			send: refuse(shim, "gcm.send"),
-			...events("onMessage", "onMessagesDeleted", "onSendError")
-		});
-		putNamespace(shim, "instanceID", {
-			getID: refuse(shim, "instanceID.getID"),
-			getToken: refuse(shim, "instanceID.getToken"),
-			deleteID: refuse(shim, "instanceID.deleteID"),
-			deleteToken: refuse(shim, "instanceID.deleteToken"),
-			getCreationTime: refuse(shim, "instanceID.getCreationTime"),
-			onTokenRefresh: createEvent()
-		});
-		putNamespace(shim, "declarativeContent", {
-			onPageChanged: rules(),
-			PageStateMatcher: function(o) {
-				Object.assign(this, o);
-			},
-			ShowAction: function() {},
-			ShowPageAction: function() {},
-			SetIcon: function(o) {
-				Object.assign(this, o);
-			},
-			RequestContentScript: function(o) {
-				Object.assign(this, o);
-			}
-		});
 	}
 
 //#endregion
@@ -4245,6 +4383,7 @@
 		if (inContent) return;
 		forwardThroughWorker(shim);
 		mendReplies(shim, verdicts);
+		jsonConnectedPorts(shim);
 		gather(runtime && runtime.onMessage, true);
 		gather(runtime && runtime.onMessageExternal);
 		defineBrowserNamespaces(shim);
