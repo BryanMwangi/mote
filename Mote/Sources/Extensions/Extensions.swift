@@ -101,6 +101,7 @@ final class Extensions: NSObject, ObservableObject {
                 .default()
             }
         setup.defaultWebsiteDataStore = Storage.websites
+        Self.forgetWorkerRegistrations(in: setup.defaultWebsiteDataStore)
         let pages = setup.webViewConfiguration ?? WKWebViewConfiguration()
         // Otherwise WebKit's default store, not the browser's.
         pages.websiteDataStore = Storage.websites
@@ -228,6 +229,30 @@ final class Extensions: NSObject, ObservableObject {
             guard await load(item) else { return ExtensionProxy.release(id) }
             guard let popup, let context = contexts[id] else { return }
             ExtensionPopup.shared.show(popup, for: context, from: anchor)
+        }
+    }
+
+    /// WebKit keeps each extension's worker registered between launches, and
+    /// a registration it went stale on (after a quit or a crash while the
+    /// worker ran) never starts the worker again: the popup waits on it for
+    /// good (measured: Urban VPN, 1clickVPN). Removed before extensions load,
+    /// each worker registers afresh as its extension loads, as on install;
+    /// the extensions' own storage stays.
+    static func forgetWorkerRegistrations(in store: WKWebsiteDataStore) {
+        let webkit = FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("WebKit/\(Bundle.main.bundleIdentifier ?? "io.github.mote-browser.mote")")
+        let base =
+            store.identifier.map { webkit.appendingPathComponent("WebsiteDataStore/\($0.uuidString.lowercased())") }
+            ?? webkit.appendingPathComponent("WebsiteData/Default")
+        let marker = Data(Self.scheme.utf8)
+        guard let walk = FileManager.default.enumerator(at: base, includingPropertiesForKeys: nil) else { return }
+        for case let file as URL in walk where file.lastPathComponent == "origin" {
+            guard walk.level <= 4, let origin = try? Data(contentsOf: file), origin.range(of: marker) != nil else { continue }
+            let folder = file.deletingLastPathComponent()
+            for item in (try? FileManager.default.contentsOfDirectory(atPath: folder.path)) ?? []
+            where item == "ServiceWorkers" || item == "Scripts" || item.hasPrefix("ServiceWorkerRegistrations") {
+                try? FileManager.default.removeItem(at: folder.appendingPathComponent(item))
+            }
         }
     }
 
