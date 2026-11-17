@@ -190,9 +190,12 @@ final class ExtensionTab: NSObject, WKWebExtensionTab {
     private var browser: Browser? { tab.flatMap(owner.holder(of:)) }
     private var page: WKWebView? { tab?.built }
 
-    func window(for context: WKWebExtensionContext) -> (any WKWebExtensionWindow)? { browser.map(owner.window(for:)) }
+    func window(for context: WKWebExtensionContext) -> (any WKWebExtensionWindow)? {
+        browser.map(owner.window(for:)) ?? tab.flatMap { owner.popupWindows[$0.id] }
+    }
 
     func indexInWindow(for context: WKWebExtensionContext) -> Int {
+        if let tab, owner.popupWindows[tab.id] != nil { return 0 }
         guard let tab, let browser else { return NSNotFound }
         return owner.place(of: tab, in: browser) ?? NSNotFound
     }

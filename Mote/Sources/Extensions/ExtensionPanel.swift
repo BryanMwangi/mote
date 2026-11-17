@@ -32,7 +32,7 @@ final class ExtensionPanels {
         web.uiDelegate = page
         web.navigationDelegate = page
         web.setValue(false, forKey: "drawsBackground")
-        web.load(URLRequest(url: context.baseURL.appendingPathComponent(path.trimmingCharacters(in: CharacterSet(charactersIn: "/")))))
+        web.load(URLRequest(url: Self.url(of: path, in: context)))
         pages[key] = page
         Extensions.shared.controller.didOpenTab(page)
         return web
@@ -55,10 +55,17 @@ final class ExtensionPanels {
         for browser in Windows.shared.all { browser.closePanel(id: "ext:" + id) }
     }
 
+    /// A panel's page from its manifest path, which may carry a query
+    /// (`popup/index.html?uilocation=sidebar`).
+    static func url(of path: String, in context: WKWebExtensionContext) -> URL {
+        let relative = path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        return URL(string: relative, relativeTo: context.baseURL)?.absoluteURL ?? context.baseURL.appendingPathComponent(relative)
+    }
+
     /// A new path for an open panel: shown at once.
     func reload(extension id: String, path: String) {
         guard let context = Extensions.shared.contexts[id] else { return }
-        let url = context.baseURL.appendingPathComponent(path.trimmingCharacters(in: CharacterSet(charactersIn: "/")))
+        let url = Self.url(of: path, in: context)
         for (key, page) in pages where key.panel == "ext:" + id && page.web?.url != url { page.web?.load(URLRequest(url: url)) }
     }
 }

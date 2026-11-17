@@ -96,6 +96,13 @@ struct ExtensionActions: View {
     let extensions: Extensions
 
     var body: some View {
+        // As Chrome's: its side panel (or Firefox sidebar), whatever its
+        // button does.
+        if let context = extensions.contexts[id], ExtensionShims.panelPath(for: id, tab: nil, context: context) != nil {
+            let open = extensions.front?.shownPanels.contains { $0.id == "ext:" + id } == true
+            Button(open ? "Close Side Panel" : "Open Side Panel") { ExtensionShims.togglePanel(context, owner: extensions) }
+            Divider()
+        }
         if extensions.contexts[id]?.optionsPageURL != nil { Button("Options…") { extensions.openOptions(id) } }
         Button("Reload") { extensions.reload(id) }
         Divider()

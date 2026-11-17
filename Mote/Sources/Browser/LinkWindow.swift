@@ -30,6 +30,10 @@ final class LinkWindow: NSObject, NSWindowDelegate {
     private var space: UUID?
     /// A page's pop-up: it stays a window, closed by the page or ⌘W.
     let popup: Bool
+    /// Told as it closes: an extension's window goes from WebKit's list.
+    var closed: (() -> Void)?
+    /// For an extension's window: its frame and focus.
+    var nsWindow: NSWindow { window }
 
     /// `front: false` makes it without showing it, for the bench.
     static func show(_ url: URL, for browser: Browser, front: Bool = true) {
@@ -54,23 +58,35 @@ final class LinkWindow: NSObject, NSWindowDelegate {
     /// size the page asked for, where it asked, else over the window it came
     /// from.
     static func popUp(_ tab: Tab, for browser: Browser, features: WKWindowFeatures, over opener: NSWindow?) {
-        browser.prepare(tab)
         let size = NSSize(
             width: features.width.map { CGFloat($0.doubleValue) } ?? 500,
             height: features.height.map { CGFloat($0.doubleValue) } ?? 600)
+        let spot = features.x.flatMap { x in features.y.map { NSPoint(x: x.doubleValue, y: $0.doubleValue) } }
+        popUp(tab, for: browser, size: size, at: spot, over: opener)
+    }
+
+    /// A pop-up's window at `size`, its top left at `spot` (from the
+    /// screen's top left) if given, else over `opener`: a page's, or an
+    /// extension's (chrome.windows.create with type popup).
+    @discardableResult
+    static func popUp(
+        _ tab: Tab, for browser: Browser, size: NSSize, at spot: NSPoint?, over opener: NSWindow?, front: Bool = true
+    )
+        -> LinkWindow
+    {
+        browser.prepare(tab)
         let little = LinkWindow(tab: tab, browser: browser, popup: true, size: size)
         all.append(little)
         let window = little.window
-        if let screen = opener?.screen ?? NSScreen.main, let x = features.x, let y = features.y {
-            // The page measures from the screen's top left.
-            let top = screen.frame.maxY - CGFloat(y.doubleValue)
-            window.setFrameTopLeftPoint(NSPoint(x: screen.frame.minX + CGFloat(x.doubleValue), y: top))
+        if let screen = opener?.screen ?? NSScreen.main, let spot {
+            window.setFrameTopLeftPoint(NSPoint(x: screen.frame.minX + spot.x, y: screen.frame.maxY - spot.y))
         } else if let opener {
             window.setFrameOrigin(NSPoint(x: opener.frame.midX - window.frame.width / 2, y: opener.frame.midY - window.frame.height / 2))
         } else {
             window.center()
         }
-        window.makeKeyAndOrderFront(nil)
+        if front { window.makeKeyAndOrderFront(nil) } else { window.orderFront(nil) }
+        return little
     }
 
     static func owning(_ window: NSWindow?) -> LinkWindow? {
@@ -142,6 +158,7 @@ final class LinkWindow: NSObject, NSWindowDelegate {
     func windowWillClose(_ notification: Notification) {
         if !kept { tab.close() }
         Self.all.removeAll { $0 === self }
+        closed?()
     }
 }
 

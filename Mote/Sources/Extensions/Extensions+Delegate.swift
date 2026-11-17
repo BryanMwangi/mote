@@ -30,11 +30,15 @@ extension Extensions: WKWebExtensionControllerDelegate {
         return adapter(for: tab)
     }
 
-    /// `chrome.windows.create`: a Mote window with those tabs.
+    /// `chrome.windows.create`: a Mote window with those tabs; a popup one
+    /// in a small window of its own, as the browsers show them.
     func webExtensionController(
         _ controller: WKWebExtensionController, openNewWindowUsing configuration: WKWebExtension.WindowConfiguration,
         for extensionContext: WKWebExtensionContext
     ) async throws -> (any WKWebExtensionWindow)? {
+        if configuration.windowType == .popup, configuration.tabURLs.count <= 1, let browser = front {
+            return popUp(configuration, from: browser)
+        }
         let browser = Windows.shared.open(private: configuration.shouldBePrivate)
         let blank = browser.active
         for (index, page) in configuration.tabURLs.enumerated() { browser.open(page, foreground: index == 0, atEnd: true) }
@@ -124,4 +128,57 @@ extension Extensions: WKWebExtensionControllerDelegate {
         default: try NativeMessaging.connect(port, from: extensionContext.uniqueIdentifier)
         }
     }
+}
+
+// MARK: - Popup windows
+
+@available(macOS 15.4, *)
+extension Extensions {
+    /// An extension's popup window: its one page in a small window, sized as
+    /// asked (else 500 × 600), over the browser it came from.
+    fileprivate func popUp(_ configuration: WKWebExtension.WindowConfiguration, from browser: Browser) -> ExtensionPopupWindow {
+        let url = configuration.tabURLs.first
+        let tab = Tab(configuration: url.flatMap(Browser.extensionConfiguration(for:)))
+        let frame = configuration.frame
+        let size = NSSize(
+            width: frame.width.isFinite && frame.width > 0 ? frame.width : 500,
+            height: frame.height.isFinite && frame.height > 0 ? frame.height : 600)
+        let spot = frame.origin.x.isFinite && frame.origin.y.isFinite ? frame.origin : nil
+        let little = LinkWindow.popUp(
+            tab, for: browser, size: size, at: spot, over: browser.window, front: configuration.shouldBeFocused)
+        if let url { tab.go(to: url) }
+        let made = ExtensionPopupWindow(little: little, owner: self)
+        popupWindows[tab.id] = made
+        little.closed = { [weak self, weak made] in
+            guard let self, let made else { return }
+            self.popupWindows[tab.id] = nil
+            self.controller.didCloseWindow(made)
+        }
+        controller.didOpenWindow(made)
+        return made
+    }
+}
+
+/// An extension's popup window as WebKit sees it: one tab, its own.
+@available(macOS 15.4, *)
+@MainActor
+final class ExtensionPopupWindow: NSObject, WKWebExtensionWindow {
+    private weak var little: LinkWindow?
+    private unowned let owner: Extensions
+
+    init(little: LinkWindow, owner: Extensions) {
+        self.little = little
+        self.owner = owner
+    }
+
+    private var tab: ExtensionTab? { little.map { owner.adapter(for: $0.tab) } }
+
+    func tabs(for context: WKWebExtensionContext) -> [any WKWebExtensionTab] { tab.map { [$0] } ?? [] }
+    func activeTab(for context: WKWebExtensionContext) -> (any WKWebExtensionTab)? { tab }
+    func windowType(for context: WKWebExtensionContext) -> WKWebExtension.WindowType { .popup }
+    func windowState(for context: WKWebExtensionContext) -> WKWebExtension.WindowState { .normal }
+    func isPrivate(for context: WKWebExtensionContext) -> Bool { false }
+    func frame(for context: WKWebExtensionContext) -> CGRect { little?.nsWindow.frame ?? .zero }
+    func focus(for context: WKWebExtensionContext) async throws { little?.nsWindow.makeKeyAndOrderFront(nil) }
+    func close(for context: WKWebExtensionContext) async throws { little?.close() }
 }

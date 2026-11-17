@@ -43,6 +43,8 @@ final class Extensions: NSObject, ObservableObject {
 
     // Windows and their tabs as extensions see them (Extensions+Tabs), by browser.
     var adapters: [Tab.ID: ExtensionTab] = [:]
+    /// Extensions' popup windows (windows.create), by their one tab.
+    var popupWindows: [Tab.ID: ExtensionPopupWindow] = [:]
     var orders: [ObjectIdentifier: [Tab.ID]] = [:]
     var windows: [ObjectIdentifier: ExtensionWindow] = [:]
     var windowWatches: [ObjectIdentifier: [AnyCancellable]] = [:]

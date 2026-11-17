@@ -68,7 +68,7 @@ extension ChromeAPI {
             if let shown = path ?? ExtensionShims.defaultPanel(call.context) { ExtensionPanels.shared.reload(extension: id, path: shown) }
         case "getPanel":
             let path = ExtensionShims.panelPath(for: id, tab: nil, context: call.context) ?? ""
-            return call.context.baseURL.appendingPathComponent(path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))).absoluteString
+            return ExtensionPanels.url(of: path, in: call.context).absoluteString
         case "setTitle", "setIcon": return nil
         case "getTitle": return call.context.webExtension.displayName ?? ""
         default: throw unavailable(call)
