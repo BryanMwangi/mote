@@ -106,6 +106,7 @@ enum ToolbarMode: String, CaseIterable, Identifiable, Storable {
 
 extension Look: Storable {}
 extension SearchEngine: Storable {}
+extension PanelSide: Storable {}
 
 /// The settings. Each is kept in the settings store under its key; `init`
 /// says which key, and what else follows a change.
@@ -133,6 +134,12 @@ final class Preferences: ObservableObject {
     /// Set by dragging the page chat panel's edge; it docks on the window's
     /// trailing edge, the mirror of the sidebar.
     @Published var chatWidth: CGFloat
+    /// The side of the window the chat docks on, always at its edge.
+    @Published var chatSide: PanelSide
+    /// Other side panels' widths and sides, by panel id (Browser+Panels);
+    /// one without a side opens on the chat's.
+    @Published var panelWidths: [String: CGFloat]
+    @Published var panelSides: [String: PanelSide]
     /// The chat sidebar shows this site (an AI app's address) instead of
     /// Mote's own chat; empty for Mote's.
     @Published var chatSite: String
@@ -283,6 +290,9 @@ final class Preferences: ObservableObject {
         aiSignIn = store.value("ai.signIn", or: "")
         agentsUseMote = store.value("ai.agents", or: false)
         chatWidth = min(Metrics.chatMax, max(Metrics.chatMin, store.value("chat.width", or: Metrics.chat)))
+        chatSide = store.value("chat.side", or: .right)
+        panelWidths = store.value("panel.widths", or: [:])
+        panelSides = store.value("panel.sides", or: [:])
         // Installs from before the welcome existed already have settings, and skip it.
         welcomed = store.value("welcomed", or: false) || store.object(forKey: "glyph") != nil
         glyph = store.value("glyph", or: .letters)
@@ -372,6 +382,9 @@ final class Preferences: ObservableObject {
         keep($stripFolded, "strip.folded")
         keep($sideWidth, "sidebar.width")
         keep($chatWidth, "chat.width")
+        keep($chatSide, "chat.side")
+        keep($panelWidths, "panel.widths")
+        keep($panelSides, "panel.sides")
         keep($chatSite, "ai.sidebar.site")
         keep($oneChat, "ai.oneChat")
         keep($aiReads, "ai.tools.read")

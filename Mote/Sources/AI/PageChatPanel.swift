@@ -15,6 +15,7 @@ struct PageChatPanel: View {
     @ObservedObject var browser: Browser
     @ObservedObject var tab: Tab
     let toolbarTop: CGFloat
+    var place = PanelPlace(side: .right, outermost: true)
 
     /// The brand moment on opening: a short breath of the logo's light.
     @State private var glowing = false
@@ -59,38 +60,33 @@ struct PageChatPanel: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .safeAreaInset(edge: .top, spacing: 0) {
-            HStack {
+            PanelHeader {
                 Spacer(minLength: 0)
                 // Earlier chats, each back on the tab it was about.
                 if browser.prefs.chatSite.isEmpty {
                     Door(icon: "square.and.pencil", help: "New chat   /new") { browser.newPageChat() }
                     Door(icon: "clock.arrow.circlepath", help: "Earlier chats") { showsChats.toggle() }
                         .popover(isPresented: $showsChats, arrowEdge: .bottom) {
-                            ChatsPage(browser: browser, inPanel: true, didOpen: { showsChats = false }, newChat: {
-                                showsChats = false
-                                browser.newPageChat()
-                            })
-                                .frame(width: 360, height: 460)
+                            ChatsPage(
+                                browser: browser, inPanel: true, didOpen: { showsChats = false },
+                                newChat: {
+                                    showsChats = false
+                                    browser.newPageChat()
+                                }
+                            )
+                            .frame(width: 360, height: 460)
                         }
+                }
+                let left = browser.prefs.chatSide == .left
+                Door(icon: left ? "arrow.right.to.line" : "arrow.left.to.line", help: left ? "Move to Right" : "Move to Left") {
+                    browser.run(.chatSide)
                 }
                 Door(icon: "xmark", help: "Close page chat   ⇧⌘A") {
                     browser.togglePageChat()
                 }
             }
-            .controlSize(.large)
-            .padding(.horizontal, 6)
-            .frame(height: ChromeLayout.toolbar)
-            // Frosted, so the chat scrolling under it doesn't run into the buttons.
-            .background(.ultraThinMaterial)
-            .overlay(alignment: .bottom) { Rectangle().fill(Palette.hairline).frame(height: 1) }
         }
-        // On a card a little in from the edges, its top level with the page's,
-        // its buttons inside it: the space's colours ring it and come through
-        // faintly, the words stay readable.
-        .background(Self.scrim, in: RoundedRectangle(cornerRadius: ChromeLayout.corner, style: .continuous))
-        .clipShape(RoundedRectangle(cornerRadius: ChromeLayout.corner, style: .continuous))
-        .padding([.bottom, .trailing, .leading], ChromeLayout.gap)
-        .padding(.top, max(toolbarTop, ChromeLayout.gap))
+        .panelCard(toolbarTop: toolbarTop, place: place)
         .background {
             // The window's frame, with the space's colours through it, as the
             // sidebar it mirrors; the ask glow gathers behind on opening.

@@ -137,8 +137,10 @@ enum ExtensionShims {
 
     // MARK: - Remembered between calls
 
-    /// Each extension's side panel page, and whether its button opens it.
-    static var panelPath: [String: String] = [:]
+    /// Each extension's side panel page (setOptions), for every tab and for
+    /// single tabs, and whether its button opens it.
+    static var panelPaths: [String: String] = [:]
+    static var panelTabPaths: [String: [Tab.ID: String]] = [:]
     static var panelOnClick: Set<String> = []
     /// Offscreen documents; Chrome allows one per extension.
     static var offscreen: [String: WKWebView] = [:]
@@ -158,14 +160,36 @@ enum ExtensionShims {
         }
     }
 
+    /// The manifest's panel: Chrome's side_panel, or Firefox's sidebar_action.
     static func defaultPanel(_ context: WKWebExtensionContext) -> String? {
-        (context.webExtension.manifest["side_panel"] as? [String: Any])?["default_path"] as? String
+        let manifest = context.webExtension.manifest
+        return (manifest["side_panel"] as? [String: Any])?["default_path"] as? String
+            ?? (manifest["sidebar_action"] as? [String: Any])?["default_panel"] as? String
     }
 
-    /// Mote has no side panel: it opens as a tab.
-    static func openPanel(_ context: WKWebExtensionContext, owner: Extensions) {
-        guard let path = panelPath[context.uniqueIdentifier] ?? defaultPanel(context) else { return }
-        owner.browser?.open(
-            context.baseURL.appendingPathComponent(path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))), foreground: true)
+    /// The page an extension's panel shows for `tab` (nil: every tab).
+    static func panelPath(for id: String, tab: Tab.ID?, context: WKWebExtensionContext) -> String? {
+        tab.flatMap { panelTabPaths[id]?[$0] } ?? panelPaths[id] ?? defaultPanel(context)
+    }
+
+    /// Opens an extension's panel in the window `tab` is in (else the one
+    /// in front): for that tab alone when it was given a page of its own,
+    /// else for the whole window, as in Chrome.
+    static func openPanel(_ context: WKWebExtensionContext, owner: Extensions, tab: Tab? = nil) {
+        let id = context.uniqueIdentifier
+        guard let browser = tab.flatMap(owner.holder(of:)) ?? owner.front,
+            panelPath(for: id, tab: tab?.id, context: context) != nil
+        else { return }
+        let own = tab.flatMap { panelTabPaths[id]?[$0.id] } != nil
+        browser.open(SidePanel(kind: .extension(id), tab: own ? tab?.id : nil))
+    }
+
+    static func togglePanel(_ context: WKWebExtensionContext, owner: Extensions) {
+        let id = context.uniqueIdentifier
+        guard let browser = owner.front else { return }
+        if browser.panel(id: "ext:" + id) != nil, browser.shownPanels.contains(where: { $0.id == "ext:" + id }) {
+            return browser.closePanel(id: "ext:" + id)
+        }
+        openPanel(context, owner: owner, tab: browser.active)
     }
 }

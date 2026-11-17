@@ -1,7 +1,7 @@
 // Whole namespaces WebKit lacks, answered by the browser: each method is a
 // native request named `namespace.method` (ExtensionShims.run in Swift).
 
-import { nativeCall, refuse } from './callbacks';
+import { nativeCall, refuse, withCallback } from './callbacks';
 import { createEvent, rethrowLater, type ShimEvent } from './events';
 import type { Shim } from './types';
 
@@ -72,7 +72,7 @@ export function browserNamespaces(runtime: { id: string }): NamespaceSpec[] {
     },
     {
       name: 'sidePanel',
-      methods: ['open', 'setOptions', 'getOptions', 'setPanelBehavior', 'getPanelBehavior'],
+      methods: ['open', 'close', 'setOptions', 'getOptions', 'setPanelBehavior', 'getPanelBehavior'],
     },
     {
       name: 'offscreen',
@@ -201,6 +201,44 @@ export function defineBrowserNamespaces(shim: Shim): void {
   for (const spec of browserNamespaces(shim.runtime)) {
     if (spec.name === 'sidePanel' && !panel) continue;
     defineNamespace(shim, spec);
+  }
+  if (panel) namesPanelTabs(shim, 'sidePanel', ['open', 'close', 'setOptions', 'getOptions']);
+  if (hasSidebar(shim)) {
+    defineNamespace(shim, {
+      name: 'sidebarAction',
+      methods: ['open', 'close', 'toggle', 'isOpen', 'setPanel', 'getPanel', 'setTitle', 'getTitle', 'setIcon'],
+    });
+  }
+}
+
+/**
+ * Panel calls naming a tab also give its place among the window's tabs
+ * (`moteTabIndex`): the browser doesn't see WebKit's tab ids.
+ */
+function namesPanelTabs(shim: Shim, name: string, methods: string[]): void {
+  const api = shim.chrome[name];
+  const tabs = shim.chrome.tabs;
+  if (!api || !tabs || typeof tabs.get !== 'function') return;
+  for (const method of methods) {
+    api[method] = withCallback(shim, async (options?: unknown, ...rest: unknown[]) => {
+      const given = options && typeof options === 'object' ? (options as Record<string, unknown>) : null;
+      if (given && typeof given.tabId === 'number') {
+        try {
+          const tab = await tabs.get(given.tabId);
+          if (tab && typeof tab.index === 'number') options = { ...given, moteTabIndex: tab.index };
+        } catch {}
+      }
+      return shim.native(name + '.' + method, options === undefined ? rest : [options, ...rest]);
+    });
+  }
+}
+
+/** Firefox's sidebar, for add-ons that have one. */
+function hasSidebar({ runtime }: Shim): boolean {
+  try {
+    return Boolean(runtime.getManifest().sidebar_action);
+  } catch {
+    return false;
   }
 }
 

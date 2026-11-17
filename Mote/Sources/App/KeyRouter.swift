@@ -1,8 +1,8 @@
 import AppKit
-import WebKit
 import MoteAI
 import MoteCore
 import SwiftUI
+import WebKit
 
 /// The window's keyboard shortcuts. The page's web view takes most keys as
 /// first responder, so a local monitor sees them first. Which command a key
@@ -154,7 +154,7 @@ final class KeyRouter {
             // panel itself. It sits above the page but under the sheets and
             // overlays earlier in the list, so those close first.
             (!inPage && browser.active?.pageChat?.busy == true, { browser.active?.pageChat?.stop() }),
-            (!inPage && browser.chatting, browser.togglePageChat),
+            (!inPage && browser.chatting, { browser.closePanel(id: SidePanel.chat.id) }),
         ]
         guard let step = steps.first(where: \.0) else { return false }
         step.1()

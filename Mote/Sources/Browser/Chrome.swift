@@ -66,7 +66,7 @@ extension Browser {
     func layout(in window: CGSize, nativeSidebar: Bool = false) -> ChromeLayout {
         ChromeLayout(
             window: window, tabs: prefs.sidebar ? .sidebar : .strip, sideWidth: nativeSidebar ? 0 : prefs.sideWidth, folded: folded,
-            immersed: active?.immersed == true, bookmarked: bookmarksShown, chatting: chatting, panelWidth: prefs.chatWidth,
+            immersed: active?.immersed == true, bookmarked: bookmarksShown, panels: active?.immersed == true ? [] : panelSlots,
             bookmarksHeight: ChromeLayout.bookmarks + (active?.isStart == true ? 12 : 0), toolbar: toolbarDocked,
             sideRight: prefs.sideRight)
     }
@@ -99,19 +99,37 @@ struct ChromeDetail: View {
             let layout = browser.layout(in: geo.size, nativeSidebar: true)
             ZStack(alignment: .topLeading) {
                 // The chat about the page, the mirror of the sidebar: full window
-                // height on the trailing edge, outside the card, so the card gives
+                // height at its side's edge, outside the card, so the card gives
                 // up the width it takes and keeps its rounded corners. Like the
                 // sidebar it stays in the tree while a page shows, just slid off
                 // the window, so the slide back costs no first frames; it moves on
                 // the sidebar's own fold spring.
                 if browser.active?.immersed != true, let tab = browser.active, !tab.isBlank || tab.chatOpen {
-                    let docked = layout.chatPanel != nil
-                    PageChatPanel(browser: browser, tab: tab, toolbarTop: layout.card.minY)
-                        .frame(width: prefs.chatWidth, height: geo.size.height)
-                        .offset(x: docked ? geo.size.width - prefs.chatWidth : geo.size.width + ChromeLayout.gap)
-                        .allowsHitTesting(docked)
-                        .accessibilityHidden(!docked)
-                        .transition(.move(edge: .trailing))
+                    let docked = layout.frame(of: SidePanel.chat.id)
+                    let left = prefs.chatSide == .left
+                    let away = left ? -prefs.chatWidth - ChromeLayout.gap : geo.size.width + ChromeLayout.gap
+                    PageChatPanel(
+                        browser: browser, tab: tab, toolbarTop: layout.card.minY,
+                        place: layout.place(of: SidePanel.chat.id, side: prefs.chatSide)
+                    )
+                    .frame(width: prefs.chatWidth, height: geo.size.height)
+                    .offset(x: docked?.minX ?? away)
+                    .allowsHitTesting(docked != nil)
+                    .accessibilityHidden(docked == nil)
+                    .transition(.move(edge: left ? .leading : .trailing))
+                }
+
+                // The other side panels, beside the card or the chat.
+                ForEach(browser.shownPanels.filter { $0.kind != .chat }) { panel in
+                    if let frame = layout.frame(of: panel.id) {
+                        PanelHost(
+                            browser: browser, panel: panel, toolbarTop: layout.card.minY,
+                            place: layout.place(of: panel.id, side: browser.side(of: panel))
+                        )
+                        .frame(width: frame.width, height: frame.height)
+                        .offset(x: frame.minX)
+                        .transition(.move(edge: browser.side(of: panel) == .left ? .leading : .trailing))
+                    }
                 }
 
                 // With the sidebar on the right, the traffic lights stay at the
@@ -140,12 +158,17 @@ struct ChromeDetail: View {
                         .transition(.move(edge: .top).combined(with: .opacity))
                 }
 
-                // The same handle mirrored on the panel's edge: dragging the gap
+                // The same handle on each panel's inner edge: dragging the gap
                 // between card and panel is what resizes the panel.
-                if let panel = layout.chatPanel {
-                    ResizeGrip(prefs: prefs, edge: .trailing) { browser.togglePageChat() }
-                        .frame(width: ResizeGrip.width, height: panel.height)
-                        .offset(x: panel.minX - ResizeGrip.over)
+                ForEach(layout.panels, id: \.id) { placed in
+                    let left = placed.side == .left
+                    let chat = placed.id == SidePanel.chat.id
+                    ResizeGrip(prefs: prefs, edge: chat ? .trailing : .panel(placed.id), mirrored: chat == left) {
+                        browser.closePanel(id: placed.id)
+                    }
+                    .frame(width: ResizeGrip.width, height: placed.frame.height)
+                    .offset(
+                        x: (left ? placed.frame.maxX : placed.frame.minX) - (left ? ResizeGrip.width - ResizeGrip.over : ResizeGrip.over))
                 }
             }
             .frame(width: geo.size.width, height: geo.size.height, alignment: .topLeading)
@@ -180,6 +203,7 @@ struct ChromeDetail: View {
         .ignoresSafeArea()
         .animation(Motion.glide, value: prefs.sidebar)
         .animation(Motion.fold, value: browser.chatting)
+        .animation(Motion.fold, value: browser.sidePanels)
         .animation(.easeOut(duration: 0.12), value: browser.active?.immersed)
         .animation(Motion.quick, value: browser.toolbarRevealed)
     }
@@ -426,9 +450,10 @@ private struct PageCard: View {
 /// view's cursor rects beside it, and the drag must keep tracking once the
 /// pointer leaves the handle.
 struct ResizeGrip: FillsRoom {
-    /// Which of the two docks the handle belongs to.
-    enum Edge {
-        case leading, trailing
+    /// Which dock the handle belongs to: the sidebar, the chat, or another
+    /// side panel by its id (Browser+Panels).
+    enum Edge: Equatable {
+        case leading, trailing, panel(String)
     }
 
     /// Width of the handle, and how far of it lies over the card.
@@ -465,9 +490,19 @@ struct ResizeGrip: FillsRoom {
         private var most: CGFloat { edge == .leading ? Metrics.sideMax : Metrics.chatMax }
         /// The width on its double-click default.
         private var usual: CGFloat { edge == .leading ? Metrics.side : Metrics.chat }
-        private func width(_ prefs: Preferences) -> CGFloat { edge == .leading ? prefs.sideWidth : prefs.chatWidth }
+        private func width(_ prefs: Preferences) -> CGFloat {
+            switch edge {
+            case .leading: prefs.sideWidth
+            case .trailing: prefs.chatWidth
+            case .panel(let id): prefs.panelWidths[id] ?? Metrics.chat
+            }
+        }
         private func setWidth(_ value: CGFloat, of prefs: Preferences) {
-            if edge == .leading { prefs.sideWidth = value } else { prefs.chatWidth = value }
+            switch edge {
+            case .leading: prefs.sideWidth = value
+            case .trailing: prefs.chatWidth = value
+            case .panel(let id): prefs.panelWidths[id] = value
+            }
         }
 
         override var mouseDownCanMoveWindow: Bool { false }
@@ -501,10 +536,10 @@ struct ResizeGrip: FillsRoom {
         override func mouseDragged(with event: NSEvent) {
             guard let prefs, let start else { return }
             NSCursor.resizeLeftRight.set()
-            // The leading handle grows as the pointer moves right; the trailing
-            // one, mirrored, grows as it moves left.
+            // The sidebar's and a panel's handle grow as the pointer moves
+            // right, the chat's as it moves left; mirrored, the other way.
             let travel = event.locationInWindow.x - start.x
-            wanted = (edge == .leading) != mirrored ? start.width + travel : start.width - travel
+            wanted = (edge != .trailing) != mirrored ? start.width + travel : start.width - travel
             let held = min(most, max(least, wanted))
             guard held != width(prefs) else { return }
             var still = Transaction()

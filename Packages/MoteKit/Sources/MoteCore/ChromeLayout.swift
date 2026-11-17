@@ -29,18 +29,21 @@ public struct ChromeLayout: Equatable, Sendable {
     public static let strip: CGFloat = 43
     /// Height of the bookmarks bar under the toolbar.
     public static let bookmarks: CGFloat = 30
-    /// Default width of the chat panel docked on the window's trailing edge.
+    /// Default width of a side panel.
     public static let panel: CGFloat = 360
 
     /// The card: toolbar, bookmarks bar and page.
     public let card: CGRect
     /// The page, inside the card, under the toolbar and bookmarks bar.
     public let page: CGRect
-    /// The chat panel docked on the window's trailing edge, the mirror of the
-    /// sidebar: full window height, outside the card, or nil when it is not
-    /// shown. The card gives up the width the panel takes; the page keeps the
-    /// whole card, which stays rounded.
-    public let chatPanel: CGRect?
+    /// The side panels docked on the window's edges, the mirror of the
+    /// sidebar: full window height, outside the card, from each side's outer
+    /// edge inwards. The card gives up the width they take; the page keeps
+    /// the whole card, which stays rounded.
+    public let panels: [PlacedPanel]
+
+    /// Where the panel `id` is, when it's shown.
+    public func frame(of id: String) -> CGRect? { panels.first { $0.id == id }?.frame }
     public let corner: CGFloat
     /// Heights of the bars at the top of the card; zero when hidden.
     public let toolbar: CGFloat
@@ -54,18 +57,18 @@ public struct ChromeLayout: Equatable, Sendable {
     ///   - folded: the sidebar or strip is put away (it may still peek out over the card).
     ///   - immersed: a page is in full-screen video; the card fills the window bare.
     ///   - bookmarked: the bookmarks bar is shown.
-    ///   - chatting: the chat panel is docked on the window's trailing edge.
-    ///   - panelWidth: the docked chat panel's width; the card gives it up.
+    ///   - panels: the side panels docked on the window's edges, in the
+    ///     order they opened (PanelSlot.fromEdge); the card gives up their width.
     ///   - toolbar: the toolbar sits on the card; otherwise the page takes its
     ///     room, and the toolbar only floats over it when called for.
     public init(
-        window: CGSize, tabs: Tabs, sideWidth: CGFloat, folded: Bool, immersed: Bool, bookmarked: Bool, chatting: Bool = false,
-        panelWidth: CGFloat = ChromeLayout.panel, bookmarksHeight: CGFloat = ChromeLayout.bookmarks, toolbar: Bool = true,
+        window: CGSize, tabs: Tabs, sideWidth: CGFloat, folded: Bool, immersed: Bool, bookmarked: Bool, panels slots: [PanelSlot] = [],
+        bookmarksHeight: CGFloat = ChromeLayout.bookmarks, toolbar: Bool = true,
         sideRight: Bool = false
     ) {
         let whole = CGRect(origin: .zero, size: window)
         guard !immersed else {
-            self.init(card: whole, corner: 0, toolbar: 0, bookmarks: 0, sidebar: nil, strip: nil, chatPanel: nil)
+            self.init(card: whole, corner: 0, toolbar: 0, bookmarks: 0, sidebar: nil, strip: nil, panels: [])
             return
         }
         let gap = ChromeLayout.gap
@@ -95,26 +98,32 @@ public struct ChromeLayout: Equatable, Sendable {
         case (_, true):
             break
         }
-        // The chat panel mirrors the sidebar on the window's trailing edge: full
-        // height, on the frame, and the card ends where the panel begins.
-        var chatPanel: CGRect?
-        if chatting {
-            // Beside a sidebar on the right, the panel sits against it.
-            let edge = sideRight && sidebar != nil ? right : window.width
-            let panel = CGRect(x: edge - panelWidth, y: 0, width: panelWidth, height: window.height)
-            chatPanel = panel
-            right = panel.minX
+        // The panels mirror the sidebar on the window's edges: full height, on
+        // the frame, and the card ends where they begin. Beside a sidebar on
+        // the same side, they sit against it.
+        var panels: [PlacedPanel] = []
+        var outer = sidebar != nil && !sideRight ? left : 0
+        for slot in PanelSlot.fromEdge(slots, on: .left) {
+            panels.append(PlacedPanel(id: slot.id, side: .left, frame: CGRect(x: outer, y: 0, width: slot.width, height: window.height)))
+            outer += slot.width
+            left = outer
+        }
+        outer = sidebar != nil && sideRight ? right : window.width
+        for slot in PanelSlot.fromEdge(slots, on: .right) {
+            outer -= slot.width
+            panels.append(PlacedPanel(id: slot.id, side: .right, frame: CGRect(x: outer, y: 0, width: slot.width, height: window.height)))
+            right = outer
         }
         right = max(left, right)
         bottom = max(top, bottom)
         let card = CGRect(x: left, y: top, width: right - left, height: bottom - top)
         self.init(
             card: card, corner: ChromeLayout.corner, toolbar: toolbar ? ChromeLayout.toolbar : 0,
-            bookmarks: bookmarked ? bookmarksHeight : 0, sidebar: sidebar, strip: strip, chatPanel: chatPanel)
+            bookmarks: bookmarked ? bookmarksHeight : 0, sidebar: sidebar, strip: strip, panels: panels)
     }
 
     private init(
-        card: CGRect, corner: CGFloat, toolbar: CGFloat, bookmarks: CGFloat, sidebar: CGRect?, strip: CGRect?, chatPanel: CGRect?
+        card: CGRect, corner: CGFloat, toolbar: CGFloat, bookmarks: CGFloat, sidebar: CGRect?, strip: CGRect?, panels: [PlacedPanel]
     ) {
         self.card = card
         self.corner = corner
@@ -122,7 +131,7 @@ public struct ChromeLayout: Equatable, Sendable {
         self.bookmarks = bookmarks
         self.sidebar = sidebar
         self.strip = strip
-        self.chatPanel = chatPanel
+        self.panels = panels
         let top = min(card.height, toolbar + bookmarks)
         page = CGRect(x: card.minX, y: card.minY + top, width: card.width, height: card.height - top)
     }

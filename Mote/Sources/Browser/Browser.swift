@@ -260,6 +260,9 @@ final class Browser: NSObject, ObservableObject {
     var bag = Set<AnyCancellable>()
     /// The tab holding the cursor (pointer lock), if one is.
     var pointerLocked: Tab.ID?
+    /// The window's open side panels other than the chat, in the order they
+    /// opened (Browser+Panels).
+    @Published var sidePanels: [SidePanel] = []
     private var hush: Task<Void, Never>?
     private var saving: Task<Void, Never>?
     var zoomShown = 100
@@ -1071,6 +1074,7 @@ final class Browser: NSObject, ObservableObject {
         guard let index = row.index(of: tab.id) else { return }
         if floating == tab.id { land() }
         permissions.drop(tab: tab.id)
+        dropPanels(of: tab.id)
 
         if tab.held {
             remember(tab, at: index)

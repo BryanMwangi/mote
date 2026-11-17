@@ -72,7 +72,7 @@ public enum ShortcutID: String, CaseIterable, Codable, CodingKeyRepresentable, S
     case newWindow, newPrivateWindow, newPrivateTab
     // Page
     case back, forward, reload, reloadFromOrigin, reader, find, findNext, findPrevious, print, savePage, screenshot
-    case floatVideo, pauseSound, pageChat, hideElements, hiddenElements, zoomIn, zoomOut, actualSize
+    case floatVideo, pauseSound, pageChat, chatSide, hideElements, hiddenElements, zoomIn, zoomOut, actualSize
     // View
     case toggleSidebar, foldTabs, compactMode, toggleToolbar
     // Spaces
@@ -97,7 +97,7 @@ public enum ShortcutID: String, CaseIterable, Codable, CodingKeyRepresentable, S
             .tabs
         case .newWindow, .newPrivateWindow, .newPrivateTab: .windows
         case .back, .forward, .reload, .reloadFromOrigin, .reader, .find, .findNext, .findPrevious, .print, .savePage, .screenshot,
-            .floatVideo, .pauseSound, .pageChat, .hideElements, .hiddenElements, .zoomIn, .zoomOut, .actualSize:
+            .floatVideo, .pauseSound, .pageChat, .chatSide, .hideElements, .hiddenElements, .zoomIn, .zoomOut, .actualSize:
             .page
         case .toggleSidebar, .foldTabs, .compactMode, .toggleToolbar: .view
         case .previousSpace, .nextSpace: .spaces
@@ -143,6 +143,7 @@ public enum ShortcutID: String, CaseIterable, Codable, CodingKeyRepresentable, S
         case .floatVideo: "Float Video"
         case .pauseSound: "Stop Sound in Tab"
         case .pageChat: "Chat about This Page"
+        case .chatSide: "Move Chat to Other Side"
         case .hideElements: "Hide Elements"
         case .hiddenElements: "Hidden on This Site"
         case .zoomIn: "Zoom In"
@@ -244,6 +245,7 @@ public enum ShortcutID: String, CaseIterable, Codable, CodingKeyRepresentable, S
         case .inspectSources: [.cmd("z", option: true)]
         case .textDirection: [.cmd("x", shift: true)]
         case .inspectStorage, .processes: []
+        case .chatSide: [.ctrlOpt("a")]
         }
     }
 
@@ -284,6 +286,7 @@ public enum ShortcutID: String, CaseIterable, Codable, CodingKeyRepresentable, S
         case .foldTabs: .foldTabs
         case .compactMode: .compactMode
         case .toggleToolbar: .toggleToolbar
+        case .chatSide: .chatSide
         case .previousSpace: .stepSpace(-1)
         case .nextSpace: .stepSpace(1)
         case .splitGrid: .split(.grid)

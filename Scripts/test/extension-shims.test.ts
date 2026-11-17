@@ -20,7 +20,7 @@ import { splitPermissions } from '../src/extension-shims/permissions';
 import { unnumber } from '../src/extension-shims/port-numbering';
 import { sentMessage } from '../src/extension-shims/replies';
 import { asJSON, plainItems } from '../src/extension-shims/storage';
-import { ownConstructors } from '../src/extension-shims/namespaces';
+import { defineBrowserNamespaces, ownConstructors } from '../src/extension-shims/namespaces';
 import { tabsIn } from '../src/extension-shims/tabs';
 import { presentAsFirefox } from '../src/extension-shims/firefox';
 import type { Shim } from '../src/extension-shims/types';
@@ -396,5 +396,44 @@ describe('extension namespaces', () => {
       (chrome.constructor as { prototype: Record<string, unknown> }).prototype.onAuthRequiredCreds,
     ).toEqual({ u: 1 });
     expect(Object.keys(chrome)).toEqual([]);
+  });
+});
+
+describe('Side panels', () => {
+  const fake = (manifest: Record<string, unknown>, tabs?: unknown) => {
+    const chrome: Record<string, any> = tabs ? { tabs } : {};
+    const native = vi.fn(async () => null);
+    const shim = {
+      root: { chrome },
+      chrome,
+      put: (o: any, k: string, v: unknown) => {
+        o[k] = v;
+      },
+      native,
+      runtime: { id: 'x', getManifest: () => manifest },
+      withLastError: () => undefined,
+    } as unknown as Shim;
+    defineBrowserNamespaces(shim);
+    return { chrome, native };
+  };
+
+  it('offers chrome.sidePanel only with the permission or a panel, as Chrome does', () => {
+    expect(fake({ permissions: ['storage'] }).chrome.sidePanel).toBeUndefined();
+    expect(fake({ permissions: ['sidePanel'] }).chrome.sidePanel).toBeDefined();
+    expect(fake({ side_panel: { default_path: 'p.html' } }).chrome.sidePanel).toBeDefined();
+  });
+
+  it("offers Firefox's sidebarAction only to add-ons with a sidebar", () => {
+    expect(fake({}).chrome.sidebarAction).toBeUndefined();
+    expect(fake({ sidebar_action: { default_panel: 's.html' } }).chrome.sidebarAction.toggle).toBeTypeOf('function');
+  });
+
+  it("names a tab by its place among the window's tabs", async () => {
+    const tabs = { get: vi.fn(async () => ({ id: 7, index: 3 })) };
+    const { chrome, native } = fake({ permissions: ['sidePanel'] }, tabs);
+    await chrome.sidePanel.open({ tabId: 7 });
+    expect(native).toHaveBeenCalledWith('sidePanel.open', [{ tabId: 7, moteTabIndex: 3 }]);
+    await chrome.sidePanel.close({ windowId: 1 });
+    expect(native).toHaveBeenCalledWith('sidePanel.close', [{ windowId: 1 }]);
   });
 });

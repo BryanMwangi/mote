@@ -82,8 +82,10 @@ extension Extensions {
         let tab = activeAdapter
         if let tab { context.userGesturePerformed(in: tab) }
         let popsUp = context.action(for: tab)?.presentsPopup == true
-        // sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).
-        if ExtensionShims.panelOnClick.contains(id), !popsUp { return ExtensionShims.openPanel(context, owner: self) }
+        // sidePanel.setPanelBehavior({ openPanelOnActionClick: true }), or a
+        // Firefox sidebar with no button of its own: the button toggles it.
+        let sidebarOnly = context.webExtension.manifest["sidebar_action"] != nil && context.webExtension.manifest["browser_action"] == nil
+        if ExtensionShims.panelOnClick.contains(id) || sidebarOnly, !popsUp { return ExtensionShims.togglePanel(context, owner: self) }
         // The popup directly: WebKit would build its own first, and swapping
         // it drops the new popup's first messages to the worker.
         if popsUp, let page = popup(of: context) { return ExtensionPopup.shared.show(page, for: context, from: anchor(for: id)) }
@@ -127,9 +129,21 @@ extension Extensions {
         return parts.url ?? url
     }
 
-    /// Runs the extension command bound to this key, if there is one.
+    /// Runs the extension command bound to this key, if there is one. A
+    /// Firefox add-on's `_execute_sidebar_action` opens or closes its panel.
     func take(_ event: NSEvent) -> Bool {
-        contexts.values.first { $0.command(for: event) != nil }?.performCommand(for: event) ?? false
+        let held = event.modifierFlags
+        let typed = event.charactersIgnoringModifiers ?? ""
+        let sidebar = contexts.values.first { context in
+            ExtensionShortcut.suggested(for: "_execute_sidebar_action", in: context.webExtension.manifest)?.matches(
+                key: typed, command: held.contains(.command), shift: held.contains(.shift), option: held.contains(.option),
+                control: held.contains(.control)) == true
+        }
+        if let sidebar {
+            ExtensionShims.togglePanel(sidebar, owner: self)
+            return true
+        }
+        return contexts.values.first { $0.command(for: event) != nil }?.performCommand(for: event) ?? false
     }
 
     /// What extensions add to a page's context menu, but for those whose

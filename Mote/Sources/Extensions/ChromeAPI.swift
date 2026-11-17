@@ -60,7 +60,7 @@ enum ChromeAPI {
     /// Each namespace's handler.
     private static let handlers: [Substring: Handler] = [
         "bookmarks": bookmarks, "history": history, "downloads": downloads, "sessions": sessions, "topSites": topSites,
-        "readingList": readingList, "browsingData": browsingData, "sidePanel": sidePanel, "offscreen": offscreen,
+        "readingList": readingList, "browsingData": browsingData, "sidePanel": sidePanel, "sidebarAction": sidebarAction, "offscreen": offscreen,
         "management": management, "runtime": runtime, "background": background, "debug": debug, "action": action,
         "permissions": permissions, "tabs": tabs, "search": search, "userScripts": userScripts, "fontSettings": fontSettings,
         "i18n": i18n, "notifications": notifications, "tts": tts, "idle": idle, "power": power, "system": system,

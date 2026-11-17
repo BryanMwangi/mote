@@ -78,6 +78,8 @@ COMMANDS = {
     "ext-press": ("id", "press its button"),
     "ext-page": ("id [path]", "one of its pages in a bench tab → tab id, for eval"),
     "ext-popup": ("id js", "run JavaScript in its popup while it's open"),
+    "ext-panel": ("id js", "run JavaScript in its side panel while it's open"),
+    "panel": ("id what", "test run: a side panel (chat, or an extension's id) open, close, left or right"),
     "ext-shot": ("id path:path", "a picture of its popup while it's open"),
     "ext-reload": ("id", "load it again (a folder one is copied in afresh)"),
     "ext-enable": ("id on|off", "switch it on or off"),
@@ -330,7 +332,7 @@ def show(verb, answer):
         print(answer["path"])
     elif verb in ("open", "ext-page"):
         print(answer["id"])
-    elif verb in ("eval", "ext-popup"):
+    elif verb in ("eval", "ext-popup", "ext-panel"):
         value = answer.get("value")
         print(value if isinstance(value, str) else json.dumps(value, ensure_ascii=False, indent=2))
     elif verb == "tabs":

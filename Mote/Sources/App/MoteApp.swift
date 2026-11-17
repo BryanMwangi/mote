@@ -182,6 +182,10 @@ private struct MenuBar: Commands {
         )
         .keyboardShortcut(keys(.pageChat))
         .disabled(!browser.pageChatPossible)
+        Button(browser.prefs.chatSide == .left ? "Move Chat to Right" : "Move Chat to Left") {
+            browser.run(.chatSide)
+        }
+        .keyboardShortcut(keys(.chatSide))
         Divider()
         Button("Boost This Site…", action: browser.boostSite).disabled(blank)
         Button("Hide Elements…", action: browser.toggleHiding).keyboardShortcut(keys(.hideElements))

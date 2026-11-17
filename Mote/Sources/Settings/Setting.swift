@@ -53,6 +53,15 @@ extension URL: Storable {
 }
 
 /// Choices are kept by their raw name.
+/// A record of settings by name, each kept as its own kind is.
+extension Dictionary: Storable where Key == String, Value: Storable {
+    init?(stored: Any) {
+        guard let all = stored as? [String: Any] else { return nil }
+        self = all.compactMapValues { Value(stored: $0) }
+    }
+    var stored: Any { mapValues(\.stored) }
+}
+
 extension Storable where Self: RawRepresentable, RawValue == String {
     init?(stored: Any) {
         guard let raw = stored as? String else { return nil }

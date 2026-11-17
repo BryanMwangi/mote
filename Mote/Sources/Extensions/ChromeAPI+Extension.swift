@@ -8,15 +8,32 @@ import WebKit
 
 @available(macOS 15.4, *)
 extension ChromeAPI {
-    // MARK: - sidePanel (a tab in Mote)
+    // MARK: - sidePanel, and Firefox's sidebarAction (the window's side panels)
+
+    /// The tab a call names: the shim sends its place among the window's
+    /// tabs (`moteTabIndex`), as Mote doesn't see WebKit's tab ids.
+    private static func panelTab(_ call: ChromeCall) -> Tab? {
+        guard let index: Int = call.option("moteTabIndex"), let browser = call.owner.front else { return nil }
+        let tabs = call.owner.visibleTabs(in: browser)
+        return tabs.indices.contains(index) ? tabs[index] : nil
+    }
 
     static func sidePanel(_ call: ChromeCall) async throws -> Any? {
         let id = call.id
+        let tab = panelTab(call)
         switch call.method {
         case "setOptions":
-            if let path: String = call.option("path") { ExtensionShims.panelPath[id] = path }
+            if let path: String = call.option("path") {
+                if let tab { ExtensionShims.panelTabPaths[id, default: [:]][tab.id] = path } else { ExtensionShims.panelPaths[id] = path }
+                ExtensionPanels.shared.reload(extension: id, path: path)
+            }
+            if call.option("enabled") == false {
+                for browser in Windows.shared.all {
+                    if let open = browser.panel(id: "ext:" + id), tab == nil || open.tab == tab?.id { browser.closePanel(id: open.id) }
+                }
+            }
         case "getOptions":
-            return ["enabled": true, "path": ExtensionShims.panelPath[id] ?? ExtensionShims.defaultPanel(call.context) ?? ""]
+            return ["enabled": true, "path": ExtensionShims.panelPath(for: id, tab: tab?.id, context: call.context) ?? ""]
         case "setPanelBehavior":
             if let on: Bool = call.option("openPanelOnActionClick") {
                 if on { ExtensionShims.panelOnClick.insert(id) } else { ExtensionShims.panelOnClick.remove(id) }
@@ -24,9 +41,37 @@ extension ChromeAPI {
         case "getPanelBehavior":
             return ["openPanelOnActionClick": ExtensionShims.panelOnClick.contains(id)]
         case "open":
-            ExtensionShims.openPanel(call.context, owner: call.owner)
+            ExtensionShims.openPanel(call.context, owner: call.owner, tab: tab)
+        case "close":
+            for browser in Windows.shared.all { browser.closePanel(id: "ext:" + id) }
         default:
             throw unavailable(call)
+        }
+        return nil
+    }
+
+    static func sidebarAction(_ call: ChromeCall) async throws -> Any? {
+        let id = call.id
+        let shown = call.owner.front?.shownPanels.contains { $0.id == "ext:" + id } == true
+        switch call.method {
+        case "open": ExtensionShims.openPanel(call.context, owner: call.owner, tab: call.owner.front?.active)
+        case "close": call.owner.front?.closePanel(id: "ext:" + id)
+        case "toggle": ExtensionShims.togglePanel(call.context, owner: call.owner)
+        case "isOpen": return shown
+        case "setPanel":
+            // A page of the add-on's, by its whole address or its path; none
+            // puts the manifest's back.
+            let base = call.context.baseURL.absoluteString
+            let given: String? = call.option("panel")
+            let path = given.map { $0.hasPrefix(base) ? String($0.dropFirst(base.count)) : $0 }
+            ExtensionShims.panelPaths[id] = path
+            if let shown = path ?? ExtensionShims.defaultPanel(call.context) { ExtensionPanels.shared.reload(extension: id, path: shown) }
+        case "getPanel":
+            let path = ExtensionShims.panelPath(for: id, tab: nil, context: call.context) ?? ""
+            return call.context.baseURL.appendingPathComponent(path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))).absoluteString
+        case "setTitle", "setIcon": return nil
+        case "getTitle": return call.context.webExtension.displayName ?? ""
+        default: throw unavailable(call)
         }
         return nil
     }

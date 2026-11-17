@@ -8,7 +8,8 @@ import WebKit
 extension Bench {
     var extensionCommands: [String: Command] {
         let verbs = [
-            "extensions", "ext-add", "ext-folder", "ext-press", "ext-remove", "ext-reload", "ext-page", "ext-popup", "ext-menu",
+            "extensions", "ext-add", "ext-folder", "ext-press", "ext-remove", "ext-reload", "ext-page", "ext-popup", "ext-panel", "panel",
+            "ext-menu",
             "ext-shot",
             "ext-answer", "ext-enable",
         ]
@@ -65,6 +66,33 @@ private enum BenchExtensions {
                     call.answer(["value": BenchWire.plain(value)])
                 }
             }
+        case "ext-panel":
+            guard let panel = ExtensionPanels.shared.web(of: id, in: call.browser) else {
+                return call.fail("no panel open for that extension")
+            }
+            panel.evaluateJavaScript(request.string("js") ?? "document.title") { value, error in
+                MainActor.assumeIsolated {
+                    if let error { return call.fail(error.localizedDescription) }
+                    call.answer(["value": BenchWire.plain(value)])
+                }
+            }
+        case "panel":
+            guard call.testRun() else { return }
+            let browser = call.browser
+            let panel = id == "chat" ? SidePanel.chat : SidePanel(kind: .extension(id))
+            switch request.string("what") {
+            case "open":
+                if panel.kind == .chat {
+                    browser.open(panel)
+                } else if let context = extensions.contexts[id] {
+                    ExtensionShims.openPanel(context, owner: extensions, tab: browser.active)
+                }
+            case "close": browser.closePanel(id: panel.id)
+            case "left": browser.move(panel, to: .left)
+            case "right": browser.move(panel, to: .right)
+            default: return call.fail("open, close, left or right")
+            }
+            call.answer(["panels": browser.shownPanels.map(\.id)])
         case "ext-page":
             // One of its pages in a bench tab, where `eval` has its APIs.
             guard let context = extensions.contexts[id] else { return call.fail("no such extension loaded") }

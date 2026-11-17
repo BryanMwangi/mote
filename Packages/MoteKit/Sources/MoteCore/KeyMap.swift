@@ -30,7 +30,7 @@ public enum KeyMap {
         case editAddress, switcher, pasteAndGo, copyAddress, copyLinks
         case find, findAgain(backwards: Bool)
         case print, pauseSound, floatVideo
-        case pageChat
+        case pageChat, chatSide
         case toggleSidebar, foldTabs
         case bookmark, history, downloads, settings
         case hideElements, hiddenElements, undoHiding

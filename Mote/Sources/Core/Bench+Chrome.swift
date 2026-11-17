@@ -37,7 +37,10 @@ extension Bench {
             "transfers": browser.downloads.transfers.map {
                 "\($0.name) \($0.state.rawValue) \($0.received)/\($0.total)\($0.resumeData == nil ? "" : " resumable")"
             },
-            "pointerLocked": browser.pointerLocked.map { "\($0)" } ?? "", "keysQuieted": PageView.quieted,
+            "pointerLocked": browser.pointerLocked.map { "\($0)" } ?? "",
+            "panels": browser.layout(in: AppDelegate.window?.contentView?.bounds.size ?? .zero, nativeSidebar: true).panels.map {
+                ["id": $0.id, "side": $0.side.rawValue, "frame": [$0.frame.minX, $0.frame.minY, $0.frame.width, $0.frame.height]]
+            }, "keysQuieted": PageView.quieted,
             "peek": browser.peekTab?.address?.absoluteString ?? "", "folded": browser.folded,
             "peeking": browser.peeking, "toolbarMode": browser.prefs.toolbarMode.rawValue, "peekClick": browser.prefs.peekClick.rawValue,
             "spaceIndex": browser.spaces.firstIndex { $0.id == browser.spaceID } ?? -1,
