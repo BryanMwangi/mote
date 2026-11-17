@@ -56,7 +56,7 @@ enum AppMenu {
                     "Open Profile", "person.crop.circle",
                     ([nil] + profiles.list.map(\.id)).map { id in
                         let item = ActionItem(profiles.name(of: id)) { profiles.open(id) }
-                        item.image = profiles.image(of: id, size: 16)
+                        item.image = profiles.icons[id]
                         item.isEnabled = id != Storage.profile
                         return item
                     }

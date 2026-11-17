@@ -18,7 +18,7 @@ struct MoteApp: App {
         // there by its tab in front (Browser.followTitle), and the Dock brings
         // the main one back.
         .commandsRemoved()
-        .commands { MenuBar(main: browser, visits: browser.history, prefs: browser.prefs) }
+        .commands { MenuBar(main: browser, visits: browser.history, prefs: browser.prefs, profiles: .shared) }
 
         // Windows opened since the main one (⌘N, a link), each with its own
         // browser (Windows.swift). They come back at launch through the
@@ -48,6 +48,8 @@ private struct MenuBar: Commands {
     @ObservedObject var visits: History
     /// For Show Develop menu.
     @ObservedObject var prefs: Preferences
+    /// For Open Profile's avatars.
+    @ObservedObject var profiles: Profiles
 
     private var browser: Browser { focused ?? main }
 
@@ -134,14 +136,14 @@ private struct MenuBar: Commands {
             Button("Passwords…") { browser.logins.managing = true }.keyboardShortcut(keys(.passwords))
             // Another profile, as its own Mote (see Profiles).
             Menu("Open Profile") {
-                ForEach([nil] + Profiles.shared.list.map(\.id), id: \.self) { id in
+                ForEach([nil] + profiles.list.map(\.id), id: \.self) { id in
                     Button {
-                        Profiles.shared.open(id)
+                        profiles.open(id)
                     } label: {
                         Label {
-                            Text(Profiles.shared.name(of: id))
+                            Text(profiles.name(of: id))
                         } icon: {
-                            Image(nsImage: Profiles.shared.image(of: id, size: 16))
+                            if let icon = profiles.icons[id] { Image(nsImage: icon) }
                         }
                     }
                     .disabled(Storage.profile == id)

@@ -48,8 +48,9 @@ final class Updater: ObservableObject {
     private var installsOnItsOwn: Bool { settings.object(forKey: Self.installKey) as? Bool ?? true }
     private let settings: UserDefaults
     private let enabled: Bool
-    private let fetch: () async throws -> AppRelease
-    private let installer: @Sendable (AppRelease) async throws -> Void
+    /// Main-actor, as ChatView.beforeSend is, for macOS 14.
+    private let fetch: @MainActor () async throws -> AppRelease
+    private let installer: @MainActor @Sendable (AppRelease) async throws -> Void
 
     /// What the window hears about.
     enum News {
@@ -69,8 +70,8 @@ final class Updater: ObservableObject {
 
     init(
         settings: UserDefaults = Storage.settings, enabled: Bool = Updater.enabled,
-        latest: @escaping () async throws -> AppRelease = Updater.latest,
-        installer: @escaping @Sendable (AppRelease) async throws -> Void = UpdateInstaller.install
+        latest: @escaping @MainActor () async throws -> AppRelease = Updater.latest,
+        installer: @escaping @MainActor @Sendable (AppRelease) async throws -> Void = UpdateInstaller.install
     ) {
         self.settings = settings
         self.enabled = enabled

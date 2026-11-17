@@ -14,8 +14,10 @@ struct ChatView<Accessory: View, Start: View>: View {
     @ViewBuilder let accessory: () -> Accessory
     @ViewBuilder let start: () -> Start
     /// Run before a question goes, so the page chat can share the page on its
-    /// first turn; the question waits for it.
-    var beforeSend: (() async -> Void)? = nil
+    /// first turn; the question waits for it. Main-actor, not nonisolated:
+    /// a nonisolated async function type's metadata needs macOS 15's Swift
+    /// runtime, and SwiftUI reads it from the view's fields on macOS 14 too.
+    var beforeSend: (@MainActor () async -> Void)? = nil
     /// The surface the conversation reads on: the card for a chat in a tab, the
     /// window frame for the page chat docked on it, the mirror of the sidebar.
     var ground: Color = Palette.ground

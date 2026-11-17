@@ -60,12 +60,21 @@ final class Profiles: ObservableObject {
     @Published private(set) var list: [Profile]
     /// The first profile's avatar, kept beside the list.
     @Published private(set) var base: Avatar
+    /// Each profile's avatar at menu size, nil the first's. Drawn on the
+    /// main queue after a change, never in a view's body: an ImageRenderer
+    /// run during SwiftUI's update crashes it on macOS 14.
+    @Published private(set) var icons: [String?: NSImage] = [:]
+    private var drawing: AnyCancellable?
     private let file = JSONFile<[Profile]>(at: Storage.base.appending(path: "profiles.json"))
     private let baseFile = JSONFile<Avatar>(at: Storage.base.appending(path: "profile.json"))
 
     private init() {
         list = file.load() ?? []
         base = baseFile.load() ?? Avatar(symbol: "person.fill", color: "#ff8558")
+        drawing = $list.combineLatest($base).receive(on: DispatchQueue.main).sink { [weak self] list, _ in
+            guard let self else { return }
+            icons = Dictionary(uniqueKeysWithValues: ([nil] + list.map(\.id)).map { ($0, image(of: $0, size: 16)) })
+        }
     }
 
     /// This Mote's profile's name; the first is "Default".
