@@ -302,9 +302,16 @@ final class Assistant {
         } else if let tools = AssistantTools.current(chat: chat, driver: provider.name) {
             // Mote's own tools: the model asks, Mote does it, the model goes on.
             // An agent on the Mac runs them itself, from Mote over MCP.
-            let server = provider.agent != nil ? await MoteMCP.shared.start() : nil
-            if server != nil { MoteMCP.shared.tools = tools }
-            service = ToolLoop(service: service, tools: tools.list, server: server, describe: AssistantTools.describe) { call in
+            let overMCP = provider.agent != nil
+            let server = overMCP ? await MoteMCP.shared.server(for: tools) : nil
+            // Sub-agents run on the same model, without the tools loop around it.
+            let (base, driver) = (service, provider.name)
+            tools.spawn = { task in
+                await AssistantTools.runAgent(task, through: base, model: model, overMCP: overMCP, chat: chat, driver: driver)
+            }
+            service = ToolLoop(
+                service: service, tools: tools.list, server: server, describe: AssistantTools.describe, together: ["spawn_agent"]
+            ) { call in
                 await tools.run(call)
             }
         }

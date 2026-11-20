@@ -120,15 +120,18 @@ public struct ToolLoop: ChatService {
     let run: @Sendable (ToolCall) async -> ToolOutput
     /// An agent's: it reaches the tools here itself, and the loop only tells it so.
     let server: ToolServer?
+    /// Tools whose calls in one round run at once (sub-agents), not one after another.
+    let together: Set<String>
     static let rounds = 40
 
     public init(
         service: any ChatService, tools: [Tool], server: ToolServer? = nil, describe: @escaping @Sendable (ToolCall) -> String,
-        run: @escaping @Sendable (ToolCall) async -> ToolOutput
+        together: Set<String> = [], run: @escaping @Sendable (ToolCall) async -> ToolOutput
     ) {
         self.service = service
         self.tools = tools
         self.server = server
+        self.together = together
         self.describe = describe
         self.run = run
     }
@@ -159,7 +162,7 @@ public struct ToolLoop: ChatService {
         }
         let request = told
         let (stream, continuation) = AsyncThrowingStream<ChatEvent, Error>.makeStream()
-        let (service, tools, describe, run) = (service, tools, describe, run)
+        let (service, tools, describe, run, together) = (service, tools, describe, run, together)
         let task = Task {
             do {
                 var request = request
@@ -188,10 +191,28 @@ public struct ToolLoop: ChatService {
                         finished = true
                         break
                     }
+                    // Calls that may run together do, when the round is all of them.
+                    var ready: [String: ToolOutput] = [:]
+                    if calls.count > 1, calls.allSatisfy({ together.contains($0.name) && $0.input != ToolCall.cutOff }) {
+                        for call in calls { continuation.yield(.activity(Activity(id: call.id, title: describe(call)))) }
+                        ready = await withTaskGroup(of: (String, ToolOutput).self) { group in
+                            for call in calls { group.addTask { (call.id, await run(call)) } }
+                            var all: [String: ToolOutput] = [:]
+                            for await (id, output) in group { all[id] = output }
+                            return all
+                        }
+                    }
                     for (index, call) in calls.enumerated() {
                         let step = Activity(id: call.id, title: describe(call))
-                        continuation.yield(.activity(step))
-                        let result = call.input == ToolCall.cutOff ? ToolCall.cutOffOutput : await run(call)
+                        if ready[call.id] == nil { continuation.yield(.activity(step)) }
+                        let result: ToolOutput
+                        if call.input == ToolCall.cutOff {
+                            result = ToolCall.cutOffOutput
+                        } else if let done = ready[call.id] {
+                            result = done
+                        } else {
+                            result = await run(call)
+                        }
                         try Task.checkCancellation()
                         var done = step
                         done.done = true
@@ -221,6 +242,9 @@ extension ToolLoop {
     public static func title(of name: String, input: JSON?) -> String {
         let site = input?["url"]?.string.flatMap(URL.init(string:)).map { Source(url: $0, title: "").site }
         switch name {
+        case "spawn_agent":
+            let task = input?["task"]?.string.map { $0.split(whereSeparator: \.isNewline).first.map(String.init) ?? $0 } ?? ""
+            return task.isEmpty ? "A sub-agent at work" : "Agent: " + (task.count > 70 ? String(task.prefix(69)) + "…" : task)
         case "list_tabs": return "Looking at your tabs"
         case "read_tab": return "Reading a tab"
         case "read_page": return site.map { "Reading \($0)" } ?? "Reading a page"

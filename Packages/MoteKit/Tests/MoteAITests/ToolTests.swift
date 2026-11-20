@@ -40,6 +40,23 @@ struct ToolTests {
         #expect(!events.contains { if case .toolCall = $0 { true } else { false } })
     }
 
+    @Test("Calls of a tool that runs together run at once, and come back in the order asked")
+    func together() async throws {
+        let spawn = Tool(name: "spawn_agent", description: "A sub-agent")
+        let calls = ["a", "b", "c"].map { ToolCall(id: $0, name: "spawn_agent", input: .object(["task": .string($0)])) }
+        let service = RoleService { request in request.exchanges.isEmpty ? calls.map { .toolCall($0) } : [.text("Done.")] }
+        let ran = Ran()
+        let loop = ToolLoop(service: service, tools: [spawn], describe: { _ in "Agent" }, together: ["spawn_agent"]) { called in
+            await ran.add("start " + called.id)
+            // Each waits for the others to have started: one after another, they never would.
+            for _ in 0..<100 where await ran.names.count < 3 { try? await Task.sleep(for: .milliseconds(5)) }
+            return ToolOutput((await ran.names.count == 3 ? "with the others " : "alone ") + called.id)
+        }
+        _ = try await collect(loop.reply(to: ChatRequest(model: "m", messages: [Message(role: .user, text: "Go")])))
+        #expect(await ran.names.count == 3)
+        #expect(service.requests[1].exchanges.map(\.result) == ["with the others a", "with the others b", "with the others c"])
+    }
+
     @Test("Anthropic is sent the tools, and each call with its result")
     func anthropicRequest() throws {
         let body = try #require(json(AnthropicService(base: URL(string: "https://x")!, key: "k").request(for: asked())))

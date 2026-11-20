@@ -533,6 +533,13 @@ public final class Conversation: Identifiable {
 
     nonisolated static let batching: Duration = .milliseconds(100)
 
+    /// Tokens spent for this turn outside its own reply (a sub-agent's): they
+    /// count toward the turn and the chat, not the reply's last round.
+    public func count(_ spent: Usage) {
+        turnSpent = turnSpent + spent
+        chatSpent = chatSpent + spent
+    }
+
     /// Signs the reply with the route's author and asks for it with everything
     /// before it.
     private func request(for route: Route) -> ChatRequest {

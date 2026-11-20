@@ -54,6 +54,9 @@ final class AssistantTools {
     let outside: Bool
     /// This turn, for undoing all it did together (AssistantLedger).
     let turn = UUID()
+    /// Starts a sub-agent on a task (see AssistantTools+Agents); nil for a
+    /// sub-agent's own tools, and an outside agent's.
+    var spawn: ((String) async -> ToolOutput)?
     /// Sites this chat may act on without asking again.
     private static var trusted: [UUID: Set<String>] = [:]
 
@@ -96,6 +99,7 @@ final class AssistantTools {
         outside
             ? tabTools + pageTools + pdfTools + workTools + devTools
             : tabTools + spaceTools + pageTools + pdfTools + workTools + signInTools + devTools + dataTools + ledgerTools + askTools
+                + agentTools
     }
 
     /// The step's line in the chat.
@@ -124,6 +128,7 @@ final class AssistantTools {
     static let longest = 40_000
 
     private func dispatch(_ call: ToolCall) async -> ToolOutput {
+        if let said = await runAgents(call) { return said }
         if let said = await runDev(call) { return said }
         if let said = await runTab(call) { return ToolOutput(said) }
         if let said = await runPage(call) { return ToolOutput(said) }

@@ -12,8 +12,18 @@ import Network
 final class MoteMCP {
     static let shared = MoteMCP()
 
-    /// The tools for the turn under way, set as it's asked.
-    var tools: AssistantTools?
+    /// Each turn's tools, by the token its agent was given: chats running at
+    /// once, and an agent's sub-agents, each reach their own. The newest few.
+    private var turns: [(token: String, tools: AssistantTools)] = []
+
+    /// Where an agent finds `tools`, with a token of their own; nil until listening.
+    func server(for tools: AssistantTools) async -> ToolServer? {
+        guard let base = await start() else { return nil }
+        let token = UUID().uuidString + UUID().uuidString
+        turns.append((token, tools))
+        if turns.count > 32 { turns.removeFirst(turns.count - 32) }
+        return ToolServer(url: base.url, token: token)
+    }
     private var listener: NWListener?
     private let token = UUID().uuidString + UUID().uuidString
     private var port: UInt16?
@@ -143,8 +153,9 @@ final class MoteMCP {
 
     private func answer(_ request: HTTPRequest) async -> (String, Data) {
         let said = request.headers["authorization"]
-        // Mote's own agents for a turn, or an agent from outside while that's on.
-        let fromOutside = said != "Bearer \(token)"
+        // Mote's own agents, each turn by its token, or an agent from outside while that's on.
+        let turn = turns.last { said == "Bearer \($0.token)" }?.tools
+        let fromOutside = turn == nil
         if fromOutside {
             guard outsideListener != nil, said == "Bearer \(outsideToken)" else { return ("401 Unauthorized", Data()) }
         }
@@ -165,14 +176,14 @@ final class MoteMCP {
                 "capabilities": ["tools": [:] as [String: Any]], "serverInfo": ["name": "Mote", "version": "1"],
             ]
         case "tools/list":
-            let serving = fromOutside ? AssistantTools.outside(driver: outsideName) : tools
+            let serving = fromOutside ? AssistantTools.outside(driver: outsideName) : turn
             result = ["tools": (serving?.list ?? []).map { ["name": $0.name, "description": $0.description, "inputSchema": $0.schema] }]
         case "tools/call":
             let params = message["params"] as? [String: Any]
             let name = params?["name"] as? String ?? ""
             let arguments = (params?["arguments"]).flatMap { try? JSONSerialization.data(withJSONObject: $0) }
             let input = arguments.flatMap { JSON(parsing: String(decoding: $0, as: UTF8.self)) } ?? .object([:])
-            guard let serving = fromOutside ? AssistantTools.outside(driver: outsideName) : tools else {
+            guard let serving = fromOutside ? AssistantTools.outside(driver: outsideName) : turn else {
                 result = ["content": [["type": "text", "text": "Mote's tools are off."]], "isError": true]
                 break
             }
