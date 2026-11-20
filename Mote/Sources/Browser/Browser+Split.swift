@@ -99,6 +99,7 @@ extension Browser {
         guard splittable(target) else { return }
         if activeID != target.id { select(target) }
         let tab = Tab()
+        prepare(tab)
         insert(tab, at: placeForNew())
         // Beside a pinned tab, pinned in its folder too.
         if target.kept {

@@ -68,7 +68,7 @@ extension Browser {
                 if tab.folder != folder { tab.folder = folder }
                 held.append(tab)
             } else {
-                let tab = Tab(configuration: Web.configuration(space: space))
+                let tab = Tab(configuration: Web.configuration(space: space, profile: entry.profile))
                 if restore(entry, in: tab) { held.append(tab) }
             }
         }

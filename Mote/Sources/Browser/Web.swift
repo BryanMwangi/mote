@@ -45,10 +45,19 @@ enum Web {
     /// store; a private tab gets a store that keeps nothing, or `store`, its
     /// private opener's, so a followed link keeps that page's session.
     /// `space` is the tab's space when it isn't the current one.
-    static func configuration(shy: Bool = false, space: UUID? = nil, store: WKWebsiteDataStore? = nil) -> WKWebViewConfiguration {
+    /// `profile`: the tab lives in that profile whatever its space's (see
+    /// Profiles.store); "" for the default profile's.
+    static func configuration(
+        shy: Bool = false, space: UUID? = nil, store: WKWebsiteDataStore? = nil, profile: String? = nil
+    ) -> WKWebViewConfiguration {
         let config = WKWebViewConfiguration()
         config.websiteDataStore =
-            store ?? (shy ? .nonPersistent() : MainActor.assumeIsolated { Spaces.store(for: space ?? Spaces.current) })
+            store
+            ?? (shy
+                ? .nonPersistent()
+                : MainActor.assumeIsolated {
+                    profile.map { Profiles.shared.store(for: $0) } ?? Spaces.store(for: space ?? Spaces.current)
+                })
         // Through an extension's proxy, while one is set.
         if #available(macOS 15.4, *) { MainActor.assumeIsolated { ExtensionProxy.dress(config.websiteDataStore) } }
         // Extensions reach private tabs only when Settings › Extensions allows it,

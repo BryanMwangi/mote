@@ -19,10 +19,12 @@ final class History: ObservableObject {
     /// included, so the recent list is kept until history changes.
     private var latest: [Entry]?
     private var saving: Task<Void, Never>?
-    private let file = JSONFile<[HistoryIndex.Visit]>("history.json")
+    private let file: JSONFile<[HistoryIndex.Visit]>
 
-    init() {
-        if let visits = file.load() { index = HistoryIndex(visits: visits) }
+    /// This Mote's, or a profile's at `file` (a container's).
+    init(at file: URL? = nil) {
+        self.file = file.map { JSONFile(at: $0) } ?? JSONFile("history.json")
+        if let visits = self.file.load() { index = HistoryIndex(visits: visits) }
     }
 
     // MARK: - Writing

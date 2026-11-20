@@ -206,6 +206,17 @@ final class Tab: ObservableObject, Identifiable {
     var monogram: String { chat != nil && isBlank ? "✦" : TabLabel.monogram(for: address) }
     var store: WKWebsiteDataStore { configuration.websiteDataStore }
 
+    /// The profile this tab lives in, as a container; nil for the default.
+    var profile: String? { Profiles.shared.profile(of: store) }
+
+    /// Its profile when that isn't its space's ("" the default's): what a
+    /// session keeps, and links from it follow.
+    func profileOverride(in space: UUID) -> String? {
+        guard !shy else { return nil }
+        let own = profile ?? ""
+        return own == (Spaces.profiles[space] ?? "") ? nil : own
+    }
+
     /// Made with the extension controller, which can't be added later.
     @available(macOS 15.4, *)
     var carriesExtensions: Bool { configuration.webExtensionController != nil }

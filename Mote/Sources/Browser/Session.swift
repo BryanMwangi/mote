@@ -31,6 +31,9 @@ enum Session {
         /// nil in older files and for tabs without.
         var chatOpen: Bool?
         var pageChat: String?
+        /// The profile it lives in when not its space's ("" the default);
+        /// nil in older files and for the others.
+        var profile: String?
     }
 
     /// A tab's back and forward pages, for the session: WebKit's own record,

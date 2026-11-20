@@ -14,11 +14,20 @@ enum Spaces {
     static var current = Space.firstID
     /// Spaces using the first space's store (see `Space.sharesSignIns`).
     static var sharing: Set<UUID> = []
+    /// Spaces whose tabs live in a profile (see `Space.profile`), by profile id.
+    static var profiles: [UUID: String] = [:]
     /// One store per space: WebKit only shares processes between views using
     /// the same store object.
     private static var stores: [UUID: WKWebsiteDataStore] = [:]
 
+    /// The spaces' shared stores and profiles, as saved.
+    static func know(_ spaces: [Space]) {
+        sharing = SpaceList(saved: spaces).sharing
+        profiles = Dictionary(uniqueKeysWithValues: spaces.compactMap { space in space.profile.map { (space.id, $0) } })
+    }
+
     static func store(for id: UUID) -> WKWebsiteDataStore {
+        if let profile = profiles[id] { return Profiles.shared.store(for: profile) }
         if id == Space.firstID || sharing.contains(id) { return Storage.websites }
         if let store = stores[id] { return store }
         let store = WKWebsiteDataStore(forIdentifier: id)

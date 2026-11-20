@@ -752,6 +752,16 @@ private struct SideRow: View {
             } else {
                 if icons, !tab.isBlank || tab.isStart {
                     Mark(icon: tab.icon, letter: tab.monogram, size: 16, dim: tab.asleep && tab.held, mote: tab.isStart)
+                        // In another profile than its space's: that profile's colour, at the corner.
+                        .overlay(alignment: .bottomTrailing) {
+                            if let profile = tab.profileOverride(in: browser.home(of: tab)) {
+                                Circle().fill(Color(hex: Profiles.shared.avatar(of: profile.isEmpty ? nil : profile).color) ?? .gray)
+                                    .frame(width: 7, height: 7)
+                                    .overlay(Circle().strokeBorder(Palette.frame, lineWidth: 1.2))
+                                    .offset(x: 3, y: 3)
+                                    .help("In \(Profiles.shared.name(of: profile.isEmpty ? nil : profile))")
+                            }
+                        }
                 }
                 TabMarks(tab: tab, colour: colour)
                 Text(tab.label).font(TextStyle.body.font).lineLimit(1).truncationMode(.tail).foregroundStyle(colour)

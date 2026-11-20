@@ -16,6 +16,9 @@ public struct Space: Codable, Identifiable, Equatable, Sendable {
     public var downloads: String?
     public var origin: String?
     public var theme: SpaceTheme?
+    /// The profile its tabs live in, as a container: its sign-ins and history.
+    /// nil, the default profile's (or the space's own website data).
+    public var profile: String?
 
     public init(
         id: UUID, name: String, icon: String? = nil, sharesSignIns: Bool? = nil, downloads: String? = nil, origin: String? = nil

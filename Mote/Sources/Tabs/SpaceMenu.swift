@@ -62,6 +62,18 @@ enum SpaceMenu {
                 Prompt.folder { browser.setSpaceDownloads(here.id, to: $0) }
             })
         if folder != nil { items.append(item("Use the Downloads Folder in Settings") { browser.setSpaceDownloads(here.id, to: nil) }) }
+        // Profiles as containers: the space's tabs live in one.
+        if !Profiles.shared.list.isEmpty, !Profiles.shared.ownMote {
+            let profiles = NSMenu()
+            for id in [nil] + Profiles.shared.list.map(\.id) {
+                let pick = item(Profiles.shared.name(of: id)) { browser.setProfile(id, ofSpace: here.id) }
+                pick.state = here.profile == id ? .on : .off
+                profiles.addItem(pick)
+            }
+            let holder = NSMenuItem(title: "Profile", action: nil, keyEquivalent: "")
+            holder.submenu = profiles
+            items.append(holder)
+        }
         items.append(item("Unload “\(here.name)”") { browser.unload(space: here.id) })
         if browser.spaces.count > 1 { items.append(item("Unload Other Spaces") { browser.unloadOtherSpaces() }) }
         items.append(.separator())

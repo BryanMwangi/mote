@@ -769,6 +769,7 @@ private struct ProfileRows: View {
     @ObservedObject private var profiles = Profiles.shared
     /// The profile being made (`making`) or changed.
     @State private var editing: Editing?
+    @AppStorage("profiles.ownMote", store: Storage.settings) private var ownMote = false
 
     private struct Editing {
         let id: String?
@@ -779,14 +780,19 @@ private struct ProfileRows: View {
     var body: some View {
         SettingsSection(
             "Profiles",
-            note:
-                "Each profile is its own Mote: its own tabs, history, passwords, sign-ins and extensions. A new one starts with these settings."
+            note: ownMote
+                ? "Each profile is its own Mote: its own tabs, history, passwords, sign-ins and extensions. A new one starts with these settings."
+                : "Profiles live side by side in this Mote, each with its own sign-ins and history: give a space one from its menu, or open any tab in one."
         ) {
             ProfileRow(id: nil, editing: { editing = Editing(id: nil, making: false) })
             ForEach(profiles.list) { profile in
                 RowRule()
                 ProfileRow(id: profile.id, editing: { editing = Editing(id: profile.id, making: false) })
             }
+            RowRule()
+            SettingRow(
+                "Open profiles as their own Mote", "Each in a window of its own, with its own tabs, passwords and extensions",
+                symbol: "macwindow.on.rectangle", tint: Tint.indigo, keywords: ["containers", "separate"], on: $ownMote)
             RowRule()
             HStack {
                 Spacer()

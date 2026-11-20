@@ -1,5 +1,6 @@
 import AppKit
 import Combine
+import MoteCore
 import SwiftUI
 import WebKit
 
@@ -75,6 +76,44 @@ final class Profiles: ObservableObject {
             guard let self else { return }
             icons = Dictionary(uniqueKeysWithValues: ([nil] + list.map(\.id)).map { ($0, image(of: $0, size: 16)) })
         }
+    }
+
+    // MARK: - Containers
+
+    /// Profiles open in their own Mote instead of as containers in this one
+    /// (Settings › Profiles). Off: a profile is a store tabs and spaces use here.
+    var ownMote: Bool { Storage.settings.bool(forKey: "profiles.ownMote") }
+
+    /// One store per profile: WebKit only shares processes between views
+    /// using the same store object. The one its own Mote uses, so its
+    /// sign-ins come along. "" is the default profile's.
+    private var stores: [String: WKWebsiteDataStore] = [:]
+
+    func store(for id: String) -> WKWebsiteDataStore {
+        let id = id == Storage.profile ? "" : id
+        if id.isEmpty { return Storage.websites }
+        if let store = stores[id] { return store }
+        let store = WKWebsiteDataStore(forIdentifier: Storage.profileStore(1, id))
+        stores[id] = store
+        return store
+    }
+
+    /// The profile a store is: nil for the default (this Mote's own).
+    func profile(of store: WKWebsiteDataStore) -> String? {
+        // By its identifier: WebKit hands back another object for the same store.
+        guard let id = store.identifier else { return nil }
+        return list.first { $0.id != Storage.profile && Storage.profileStore(1, $0.id) == id }?.id
+    }
+
+    /// Each profile's history, as a container here; nil, the default's.
+    private var histories: [String: History] = [:]
+
+    func history(for id: String?) -> History {
+        guard let id, !id.isEmpty, id != Storage.profile else { return AppState.shared.history }
+        if let history = histories[id] { return history }
+        let history = History(at: folder(of: id).appending(path: "history.json"))
+        histories[id] = history
+        return history
     }
 
     /// This Mote's profile's name; the first is "Default".
@@ -165,8 +204,17 @@ final class Profiles: ObservableObject {
         UserDefaults.standard.setPersistentDomain(settings.merging(["welcomed": true]) { $1 }, forName: to)
     }
 
-    /// A profile as its own Mote, as Firefox's -P does: nil for the first.
+    /// A profile: a new tab in it here, or its own Mote when profiles open
+    /// that way (or it has things to bring in, which its Mote does). nil for the first.
     func open(_ id: String?, importing: String? = nil) {
+        if !ownMote, importing == nil, let browser = Browser.front ?? Windows.shared.main {
+            return browser.openTab(inProfile: id ?? "")
+        }
+        openOwn(id, importing: importing)
+    }
+
+    /// A profile as its own Mote, as Firefox's -P does: nil for the first.
+    func openOwn(_ id: String?, importing: String? = nil) {
         let setup = NSWorkspace.OpenConfiguration()
         setup.createsNewApplicationInstance = true
         var environment = ProcessInfo.processInfo.environment.filter { $0.key == "MOTE_PROBE" }
@@ -180,6 +228,15 @@ final class Profiles: ObservableObject {
     /// its website and extension data. Not the one running here.
     func delete(_ id: String) {
         guard id != Storage.profile else { return }
+        // Its spaces and tabs here go back to the default profile first.
+        if let browser = Windows.shared.all.first {
+            for space in browser.spaces where space.profile == id { browser.setProfile(nil, ofSpace: space.id) }
+        }
+        for browser in Windows.shared.all {
+            for tab in browser.tabs where tab.profile == id { browser.move(tab, toProfile: "") }
+        }
+        stores[id] = nil
+        histories[id] = nil
         list.removeAll { $0.id == id }
         file.save(list)
         try? FileManager.default.removeItem(at: Storage.base.appending(path: "Profiles/\(id)"))

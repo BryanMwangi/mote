@@ -185,7 +185,7 @@ final class Browser: NSObject, ObservableObject {
     /// All spaces, the current one, and the parked rows of the others (see
     /// Spaces.swift).
     @Published var spaces = Spaces.read() {
-        didSet { Spaces.sharing = SpaceList(saved: spaces).sharing }
+        didSet { Spaces.know(spaces) }
     }
     @Published var spaceID = Space.firstID
     /// The other spaces' tabs. Published so extensions keep up with them.
@@ -474,7 +474,7 @@ final class Browser: NSObject, ObservableObject {
             for tab in Windows.shared.all.flatMap(\.tabs) where tab.address?.host()?.lowercased() == host { tab.icon = image }
         }
         Spaces.sweep()
-        Spaces.sharing = SpaceList(saved: spaces).sharing
+        Spaces.know(spaces)
     }
 
     /// A space's essentials and pinned tabs, from its saved session, asleep:
@@ -489,7 +489,7 @@ final class Browser: NSObject, ObservableObject {
                 (entry.url, entry.title, entry.state, entry.used) = (page.url, page.title, page.state, page.used)
                 (entry.chatOpen, entry.pageChat) = (page.chatOpen, page.pageChat)
             }
-            let tab = Tab(configuration: Web.configuration(space: space))
+            let tab = Tab(configuration: Web.configuration(space: space, profile: entry.profile))
             return restore(entry, in: tab) ? tab : nil
         }
     }
@@ -515,7 +515,8 @@ final class Browser: NSObject, ObservableObject {
         let saved = Session.read(space: spaceID)
         HeldSync.seed(saved.tabs, in: spaceID)
         let made = saved.tabs.map { entry -> Tab? in
-            let tab = Tab()
+            // In the profile it was in, when that isn't the space's.
+            let tab = entry.profile.map { Tab(configuration: Web.configuration(profile: $0)) } ?? Tab()
             return restore(entry, in: tab) ? tab : nil
         }
         let restored = made.compactMap(\.self)
@@ -688,7 +689,8 @@ final class Browser: NSObject, ObservableObject {
             url: url.absoluteString, title: tab.title, pin: tab.pin, kept: tab.kept ? true : nil, name: tab.name, held: held, home: home,
             folder: tab.kept ? tab.folder?.uuidString : nil, used: tab.touched, state: Session.keptState(tab.history),
             chatOpen: tab.chatOpen ? true : nil,
-            pageChat: tab.pageChat.flatMap { $0.messages.isEmpty ? nil : $0.id.uuidString })
+            pageChat: tab.pageChat.flatMap { $0.messages.isEmpty ? nil : $0.id.uuidString },
+            profile: tab.profileOverride(in: self.home(of: tab)))
     }
 
     // MARK: - Merging spaces
@@ -715,7 +717,7 @@ final class Browser: NSObject, ObservableObject {
         let present = Set(staying.compactMap { ($0.pending ?? $0.address)?.absoluteString })
         var arriving: [Tab] = []
         for entry in leaving.tabs.compactMap(entry(for:)) where entry.chat != nil || !present.contains(entry.url) {
-            let tab = Tab(configuration: Web.configuration(space: target))
+            let tab = Tab(configuration: Web.configuration(space: target, profile: entry.profile))
             if restore(entry, in: tab) { arriving.append(tab) }
         }
         merged.tabs = arriving.count
@@ -822,6 +824,9 @@ final class Browser: NSObject, ObservableObject {
                 privateTab()
             } else if let source, source.shy, page == nil {
                 Tab(shy: true, configuration: Web.configuration(shy: true, store: source.store))
+            } else if let source, page == nil, let profile = source.profileOverride(in: spaceID) {
+                // From a tab in another profile than its space's: in that profile too.
+                Tab(configuration: Web.configuration(profile: profile))
             } else {
                 Tab(configuration: page)
             }
@@ -1057,7 +1062,7 @@ final class Browser: NSObject, ObservableObject {
             // The space's held tabs, and this window's own open ones.
             let saved = Session.read(window: windowID, space: space)
             let made = saved.tabs.map { entry -> Tab? in
-                let tab = Tab(configuration: Web.configuration(space: space))
+                let tab = Tab(configuration: Web.configuration(space: space, profile: entry.profile))
                 return restore(entry, in: tab) ? tab : nil
             }
             let loose = made.compactMap(\.self)
@@ -1072,7 +1077,7 @@ final class Browser: NSObject, ObservableObject {
         let saved = Session.read(space: space)
         HeldSync.seed(saved.tabs, in: space)
         let made = saved.tabs.map { entry -> Tab? in
-            let tab = Tab(configuration: Web.configuration(space: space))
+            let tab = Tab(configuration: Web.configuration(space: space, profile: entry.profile))
             return restore(entry, in: tab) ? tab : nil
         }
         let row = made.compactMap(\.self)
@@ -1310,7 +1315,8 @@ final class Browser: NSObject, ObservableObject {
                     shy: true, bench: tab.bench,
                     configuration: page ?? Web.configuration(shy: true, store: tab.store.isPersistent ? nil : tab.store))
             } else {
-                Tab(bench: tab.bench, configuration: page)
+                // Leaving an extension page, back in the profile it was in.
+                Tab(bench: tab.bench, configuration: page ?? Web.configuration(profile: tab.profileOverride(in: spaceID)))
             }
         prepare(fresh)
         // The tab continues, so it keeps its panel's open state; the chat

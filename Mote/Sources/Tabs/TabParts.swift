@@ -209,6 +209,16 @@ struct TabMenu: View {
             }
             .disabled(tab.isBlank)
         }
+        // Profiles as containers: the page again in another's sign-ins.
+        if !Profiles.shared.list.isEmpty, !Profiles.shared.ownMote, !tab.shy {
+            Menu("Open in Profile") {
+                ForEach([""] + Profiles.shared.list.map(\.id), id: \.self) { id in
+                    Button(Profiles.shared.name(of: id.isEmpty ? nil : id)) { browser.move(tab, toProfile: id) }
+                        .disabled((tab.profile ?? "") == id)
+                }
+            }
+            .disabled(tab.isBlank)
+        }
         SplitItems(browser: browser, tab: tab)
         Divider()
         Button("Rename") { browser.beginTabRename(tab) }

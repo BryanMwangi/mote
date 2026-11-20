@@ -334,7 +334,8 @@ extension Browser: WKNavigationDelegate, WKUIDelegate {
         tab.settleSignIn()
         // The icon is fetched even when icons are hidden; they may be turned on later.
         Favicons.shared.fetch(for: tab)
-        if !tab.shy, !tab.bench { history.record(url, title: tab.title) }
+        // Into the history of the profile it lives in.
+        if !tab.shy, !tab.bench { Profiles.shared.history(for: tab.profile).record(url, title: tab.title) }
         noteLanguage(of: tab)
     }
 
