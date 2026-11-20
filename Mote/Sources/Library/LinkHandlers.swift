@@ -45,7 +45,7 @@ enum LinkHandlers {
     private static let offeredKey = "links.offered"
 
     /// The schemes listed in Settings before any a site has tried.
-    static let common = ["mailto", "tel", "sms", "facetime", "webcal", "zoommtg", "slack", "msteams"]
+    static let common = ["mailto", "tel", "sms", "facetime", "webcal"]
     /// Schemes sites have tried to open, each with the last site that did.
     private static let seenKey = "links.seen"
 
