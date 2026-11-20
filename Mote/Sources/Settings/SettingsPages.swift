@@ -11,6 +11,8 @@ struct GeneralSettings: View {
     // Asked when the page shows, not each time it's made: one asks Launch
     // Services, the other looks on disk.
     @State private var isDefault = false
+    /// Settings › Files and applications, open.
+    @State private var managingFiles = false
     var body: some View {
         content.onAppear {
             isDefault = AppDelegate.isDefault
@@ -149,12 +151,14 @@ struct GeneralSettings: View {
             }
             RowRule()
             SettingRow(
-                "Ask every time", "Pick a place and a name for each file", symbol: "questionmark.folder", tint: Tint.teal,
-                on: $prefs.asksWhereToSave)
+                "Files and applications", "Choose how Mote handles links, downloaded files and content", symbol: "doc.on.doc",
+                tint: Tint.teal,
+                keywords: ["links", "mailto", "mail", "pdf", "images", "default app", "ask where to save", "open with", "handlers"]
+            ) {
+                Pill("Manage…") { managingFiles = true }
+            }
         }
-
-        FilesSettings()
-        LinkSettings()
+        .sheet(isPresented: $managingFiles) { FilesAndAppsSheet(prefs: prefs) }
 
         SettingsSection("Under the hood") {
             SettingRow(

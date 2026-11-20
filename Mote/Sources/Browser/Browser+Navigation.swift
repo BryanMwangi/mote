@@ -84,6 +84,8 @@ extension Browser: WKNavigationDelegate, WKUIDelegate {
     /// asking first as Safari does, except for clicked mail and phone links.
     func handOff(_ url: URL, clicked: Bool, mainFrame: Bool, from webView: WKWebView) {
         guard NavigationPolicy.mayHandOff(mainFrame: mainFrame, clicked: clicked) else { return }
+        // Kept, with the site that asked, for Settings › Files and applications.
+        LinkHandlers.seen(url.scheme ?? "", from: webView.url?.host())
         let handler = LinkHandlers.handler(for: url.scheme ?? "")
         switch handler {
         case .web(let template):

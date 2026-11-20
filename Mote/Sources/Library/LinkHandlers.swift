@@ -44,8 +44,55 @@ enum LinkHandlers {
     /// Web services sites offered (registerProtocolHandler), by scheme: their names and templates.
     private static let offeredKey = "links.offered"
 
-    /// The schemes listed in Settings, before any a site offered.
+    /// The schemes listed in Settings before any a site has tried.
     static let common = ["mailto", "tel", "sms", "facetime", "webcal", "zoommtg", "slack", "msteams"]
+    /// Schemes sites have tried to open, each with the last site that did.
+    private static let seenKey = "links.seen"
+
+    /// Every scheme to list: the common ones, those set, and those sites tried.
+    static var schemes: [String] {
+        let set = (Storage.settings.dictionary(forKey: key) ?? [:]).keys
+        let seen = (Storage.settings.dictionary(forKey: seenKey) ?? [:]).keys
+        return common + Set(set).union(seen).subtracting(common).sorted()
+    }
+
+    /// A site tried to open a link of `scheme`: kept, to list and choose for.
+    static func seen(_ scheme: String, from host: String?) {
+        let scheme = scheme.lowercased()
+        guard !scheme.isEmpty, scheme.count < 64 else { return }
+        var all = Storage.settings.dictionary(forKey: seenKey) ?? [:]
+        all[scheme] = host ?? ""
+        Storage.settings.set(all, forKey: seenKey)
+    }
+
+    /// The last site that tried to open a link of `scheme`.
+    static func askedBy(_ scheme: String) -> String? {
+        (Storage.settings.dictionary(forKey: seenKey)?[scheme] as? String).flatMap { $0.isEmpty ? nil : $0 }
+    }
+
+    /// The Mac's app for `scheme`, by name; nil for none, or Mote.
+    static func systemApp(for scheme: String) -> String? {
+        guard let app = URL(string: scheme + ":x").flatMap(NSWorkspace.shared.urlForApplication(toOpen:)),
+            app.standardizedFileURL != Bundle.main.bundleURL.standardizedFileURL
+        else { return nil }
+        return FileManager.default.displayName(atPath: app.path).replacingOccurrences(of: ".app", with: "")
+    }
+
+    static func appName(_ id: String) -> String? {
+        NSWorkspace.shared.urlForApplication(withBundleIdentifier: id).map {
+            FileManager.default.displayName(atPath: $0.path).replacingOccurrences(of: ".app", with: "")
+        }
+    }
+
+    /// Mail links from other apps come to Mote, for what's chosen for mailto.
+    static var moteTakesMail: Bool {
+        URL(string: "mailto:x").flatMap(NSWorkspace.shared.urlForApplication(toOpen:))?.standardizedFileURL
+            == Bundle.main.bundleURL.standardizedFileURL
+    }
+
+    static func takeMail() async {
+        try? await NSWorkspace.shared.setDefaultApplication(at: Bundle.main.bundleURL, toOpenURLsWithScheme: "mailto")
+    }
 
     /// Web mail ready to choose for mailto.
     static let webMail: [(name: String, template: String)] = [
@@ -133,118 +180,6 @@ final class ProtocolHandlerRelay: NSObject, WKScriptMessageHandler, TabRelay {
         MainActor.assumeIsolated {
             guard let tab, let web = tab.built, message.webView === web else { return }
             LinkHandlers.offer(scheme: scheme, template: template, from: web.url, over: web)
-        }
-    }
-}
-
-/// Settings › General › Links: what opens each kind of link Mote doesn't load.
-struct LinkSettings: View {
-    /// Looked at again after Mote is made the default for mail.
-    @State private var looked = 0
-
-    var body: some View {
-        SettingsSection("Links", note: "What opens links to mail, calls and other apps, which Mote doesn't open itself.") {
-            ForEach(Array(LinkHandlers.common.enumerated()), id: \.element) { index, scheme in
-                if index > 0 { RowRule() }
-                Row(scheme: scheme)
-            }
-            RowRule()
-            SettingRow(
-                "Mail links from other apps", mailIsMote ? "Open here, as set above" : "Open in \(mailAppName ?? "no app yet")",
-                symbol: "envelope", tint: Tint.blue
-            ) {
-                if mailIsMote {
-                    Label("Mote", systemImage: "checkmark").font(.system(size: 12)).foregroundStyle(.secondary)
-                } else {
-                    Pill("Send to Mote") {
-                        Task {
-                            if let mail = URL(string: "mailto:") {
-                                try? await NSWorkspace.shared.setDefaultApplication(at: Bundle.main.bundleURL, toOpenURLsWithScheme: mail.scheme ?? "mailto")
-                            }
-                            looked += 1
-                        }
-                    }
-                    .help("Makes Mote the app mail links open in, then what's chosen above for mailto opens them")
-                }
-            }
-        }
-        .id(looked)
-    }
-
-    private var mailApp: URL? { URL(string: "mailto:x").flatMap { NSWorkspace.shared.urlForApplication(toOpen: $0) } }
-    private var mailIsMote: Bool { mailApp?.standardizedFileURL == Bundle.main.bundleURL.standardizedFileURL }
-    private var mailAppName: String? { mailApp.map { FileManager.default.displayName(atPath: $0.path).replacingOccurrences(of: ".app", with: "") } }
-
-    private struct Row: View {
-        let scheme: String
-        @State private var choice: String = ""
-
-        var body: some View {
-            SettingRow(scheme + ":", detail, symbol: symbol, tint: Tint.blue) {
-                Picker("", selection: $choice) {
-                    Text(systemTitle).tag("")
-                    Text("Always Ask").tag("ask")
-                    let services = LinkHandlers.services(for: scheme)
-                    if !services.isEmpty {
-                        Divider()
-                        ForEach(services, id: \.template) { Text($0.name).tag("web:" + $0.template) }
-                    }
-                    if case .app(let id) = LinkHandlers.handler(for: scheme) {
-                        Divider()
-                        Text(appName(id) ?? id).tag("app:" + id)
-                    }
-                    Divider()
-                    Text("Other App…").tag("pick")
-                }
-                .labelsHidden()
-                .fixedSize()
-                .onChange(of: choice) { _, now in
-                    if now == "pick" { return pickApp() }
-                    LinkHandlers.set(LinkHandler(saved: now) ?? .system, for: scheme)
-                }
-            }
-            .onAppear { choice = LinkHandlers.handler(for: scheme).saved ?? "" }
-        }
-
-        private var system: URL? { URL(string: scheme + ":x").flatMap { NSWorkspace.shared.urlForApplication(toOpen: $0) } }
-        private var systemTitle: String {
-            guard let system, system.standardizedFileURL != Bundle.main.bundleURL.standardizedFileURL else { return "No App" }
-            return FileManager.default.displayName(atPath: system.path).replacingOccurrences(of: ".app", with: "")
-        }
-        private var detail: String {
-            switch LinkHandlers.handler(for: scheme) {
-            case .system: system == nil ? "No app opens these yet" : "The Mac's app for them"
-            case .ask: "Asks which, each time"
-            case .app(let id): "Opens in \(appName(id) ?? id)"
-            case .web: "Opens in a tab"
-            }
-        }
-        private var symbol: String {
-            switch scheme {
-            case "mailto": "envelope"
-            case "tel", "facetime": "phone"
-            case "sms": "message"
-            case "webcal": "calendar"
-            default: "link"
-            }
-        }
-
-        private func appName(_ id: String) -> String? {
-            NSWorkspace.shared.urlForApplication(withBundleIdentifier: id).map {
-                FileManager.default.displayName(atPath: $0.path).replacingOccurrences(of: ".app", with: "")
-            }
-        }
-
-        private func pickApp() {
-            let panel = NSOpenPanel()
-            panel.allowedContentTypes = [.application]
-            panel.directoryURL = URL(fileURLWithPath: "/Applications")
-            if panel.runModal() == .OK, let app = panel.url, let id = Bundle(url: app)?.bundleIdentifier {
-                LinkHandlers.set(.app(id), for: scheme)
-                choice = "app:" + id
-            } else {
-                choice = LinkHandlers.handler(for: scheme).saved ?? ""
-            }
         }
     }
 }
