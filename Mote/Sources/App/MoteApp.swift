@@ -142,19 +142,21 @@ private struct MenuBar: Commands {
             Button("Settings…") { browser.tuning = true }.keyboardShortcut(keys(.settings))
             Button("Welcome…") { browser.welcoming = true }
             Button("Passwords…") { browser.logins.managing = true }.keyboardShortcut(keys(.passwords))
-            // Another profile, as its own Mote (see Profiles).
-            Menu("Open Profile") {
-                ForEach([nil] + profiles.list.map(\.id), id: \.self) { id in
-                    Button {
-                        profiles.open(id)
-                    } label: {
-                        Label {
-                            Text(profiles.name(of: id))
-                        } icon: {
-                            if let icon = profiles.icons[id] { Image(nsImage: icon) }
+            // Another profile: a tab in it, or its own Mote (see Profiles). Only once there is one.
+            if !profiles.list.isEmpty {
+                Menu("Open Profile") {
+                    ForEach([nil] + profiles.list.map(\.id), id: \.self) { id in
+                        Button {
+                            profiles.open(id)
+                        } label: {
+                            Label {
+                                Text(profiles.name(of: id))
+                            } icon: {
+                                if let icon = profiles.icons[id] { Image(nsImage: icon) }
+                            }
                         }
+                        .disabled(profiles.ownMote && Storage.profile == id)
                     }
-                    .disabled(Storage.profile == id)
                 }
             }
         }

@@ -57,7 +57,7 @@ enum AppMenu {
                     ([nil] + profiles.list.map(\.id)).map { id in
                         let item = ActionItem(profiles.name(of: id)) { profiles.open(id) }
                         item.image = profiles.icons[id]
-                        item.isEnabled = id != Storage.profile
+                        item.isEnabled = !profiles.ownMote || id != Storage.profile
                         return item
                     }
                 ))

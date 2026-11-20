@@ -404,7 +404,11 @@ private struct IconButton: View {
 /// Clicking spaces' icons selects them: one can be deleted, several merged.
 private struct SpaceRows: View {
     @ObservedObject var browser: Browser
+    @ObservedObject private var profiles = Profiles.shared
     @State private var picked: Set<UUID> = []
+
+    /// Profiles to choose from: only once there's more than one, living here.
+    private var profileChoices: [String?] { profiles.list.isEmpty || profiles.ownMote ? [] : [nil] + profiles.list.map(\.id) }
 
     /// What's picked of what's still there.
     private var chosen: [Space] { browser.spaces.filter { picked.contains($0.id) } }
@@ -420,6 +424,28 @@ private struct SpaceRows: View {
                 }
                 Spacer(minLength: 12)
                 HStack(spacing: 2) {
+                    if !profileChoices.isEmpty {
+                        Menu {
+                            ForEach(profileChoices, id: \.self) { id in
+                                Button {
+                                    browser.setProfile(id, ofSpace: space.id)
+                                } label: {
+                                    if space.profile == id {
+                                        Label(profiles.name(of: id), systemImage: "checkmark")
+                                    } else {
+                                        Text(profiles.name(of: id))
+                                    }
+                                }
+                            }
+                        } label: {
+                            ProfileAvatar(id: space.profile, size: 18, profiles: profiles)
+                        }
+                        .menuStyle(.borderlessButton)
+                        .menuIndicator(.hidden)
+                        .fixedSize()
+                        .help("The profile its tabs live in: \(profiles.name(of: space.profile))")
+                        .padding(.trailing, 4)
+                    }
                     Door(icon: "pencil", help: "Rename") { SpaceMenu.rename(space, in: browser) }
                     iconMenu(for: space)
                     Door(icon: "chevron.up", help: "Move up") { browser.moveSpace(space.id, to: index - 1) }
@@ -430,7 +456,7 @@ private struct SpaceRows: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
-            .settingsSearch([space.name, "space"])
+            .settingsSearch([space.name, "space", "profile"])
         }
         RowRule()
         HStack(spacing: 8) {
@@ -496,8 +522,8 @@ private struct SpaceRows: View {
 
     private func detail(_ space: Space, at index: Int) -> String {
         let data =
-            space.isFirst
-            ? "Mote's main sign-ins" : space.ownData ? "Its own sign-ins" : "Shares the main sign-ins"
+            space.profile.map { "In \(Profiles.shared.name(of: $0))" }
+            ?? (space.isFirst ? "Mote's main sign-ins" : space.ownData ? "Its own sign-ins" : "Shares the main sign-ins")
         let key = index < 9 ? " · ⌃\(index + 1)" : ""
         return (space.id == browser.spaceID ? "Showing · " : "") + data + key
     }
