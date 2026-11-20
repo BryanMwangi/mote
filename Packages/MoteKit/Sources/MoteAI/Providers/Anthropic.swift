@@ -53,22 +53,29 @@ public struct AnthropicService: ChatService {
         return stream
     }
 
+    /// How many of a turn's screenshots go back with each round.
+    static let picturesKept = 2
+
     /// The request for `chat`, carrying on from `said`: what a paused reply
     /// has said so far, as the API's own blocks.
     func request(for chat: ChatRequest, saying said: [JSON] = []) -> URLRequest {
         var messages: [Any] = chat.messages.filter { !$0.text.isEmpty }.map { ["role": $0.role.rawValue, "content": $0.text] }
-        for exchange in chat.exchanges {
+        // Only the newest pictures are sent again: each round would otherwise
+        // carry every screenshot of the turn, and the model has seen the rest.
+        let pictured = chat.exchanges.indices.filter { chat.exchanges[$0].image != nil }.suffix(Self.picturesKept)
+        for (index, exchange) in chat.exchanges.enumerated() {
             var asked: [Any] = exchange.said.isEmpty ? [] : [["type": "text", "text": exchange.said]]
             asked.append(["type": "tool_use", "id": exchange.call.id, "name": exchange.call.name, "input": exchange.call.input.plain])
             messages.append(["role": "assistant", "content": asked])
             // A picture goes back with the words, as the model can see it.
             var result: Any = exchange.result
-            if let image = exchange.image {
+            if let image = exchange.image, pictured.contains(index) {
                 result = [
                     ["type": "text", "text": exchange.result],
                     ["type": "image", "source": ["type": "base64", "media_type": "image/jpeg", "data": image.base64EncodedString()]],
                 ]
             }
+            if exchange.image != nil, !pictured.contains(index) { result = exchange.result + " (Its screenshot was shown earlier.)" }
             messages.append(["role": "user", "content": [["type": "tool_result", "tool_use_id": exchange.call.id, "content": result]]])
         }
         if !said.isEmpty { messages.append(["role": "assistant", "content": said.map(\.plain)]) }

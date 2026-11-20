@@ -869,8 +869,11 @@ final class Browser: NSObject, ObservableObject {
 
     /// Opens a bookmark and closes the bookmark menu and manager.
     func pickBookmark(_ url: URL, as opening: LinkOpening? = nil) {
-        bookmarking = false
-        bookmarksOpen = false
+        // Opened behind, the list stays for the next.
+        if opening != .tab(background: true) {
+            bookmarking = false
+            bookmarksOpen = false
+        }
         if let opening { open(url, as: opening, from: active) } else { visit(url) }
     }
 

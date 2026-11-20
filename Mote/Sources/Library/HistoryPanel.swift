@@ -72,7 +72,8 @@ struct HistoryPanel: View {
 
     /// Opens an entry: here, or as a menu item asks.
     private func open(_ entry: History.Entry, _ opening: LinkOpening?) {
-        browser.recalling = false
+        // Opened behind, the panel stays for the next.
+        if opening != .tab(background: true) { browser.recalling = false }
         if let opening { return browser.open(entry.url, as: opening, from: browser.active) }
         if let tab = browser.active { tab.go(to: entry.url) } else { browser.open(entry.url, foreground: true) }
     }

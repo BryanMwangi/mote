@@ -170,6 +170,9 @@ final class Preferences: ObservableObject {
     @Published var bookmarksBar: Bool
     /// The Develop menu in the menu bar, with the inspector's commands from View.
     @Published var developerMenu: Bool
+    /// The Web Inspector reads pages' source maps. Off for a dev bundle with a
+    /// huge one, which the inspector takes minutes to read.
+    @Published var sourceMaps: Bool
     /// The tab's reading bar.
     @Published var showsReading: Bool
     /// The toolbar shows the page's whole address; off, only its site.
@@ -302,6 +305,7 @@ final class Preferences: ObservableObject {
         spaceMarks = store.value("spaces.marks", or: .icons)
         bookmarksBar = store.value("bookmarks.bar", or: false)
         developerMenu = store.value("develop.menu", or: false)
+        sourceMaps = store.value("develop.sourceMaps", or: true)
         showsReading = store.value("tabs.reading", or: true)
         showsFullAddress = store.value("address.full", or: true)
         engine = store.value("search.engine", or: .standard)
@@ -403,6 +407,7 @@ final class Preferences: ObservableObject {
         keep($spaceMarks, "spaces.marks")
         keep($bookmarksBar, "bookmarks.bar")
         keep($developerMenu, "develop.menu")
+        keep($sourceMaps, "develop.sourceMaps")
         keep($showsReading, "tabs.reading")
         keep($showsFullAddress, "address.full")
         keep($engine, "search.engine")

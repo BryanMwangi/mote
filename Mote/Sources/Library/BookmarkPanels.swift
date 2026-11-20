@@ -16,7 +16,7 @@ struct BookmarksDropdown: View {
                 ScrollView {
                     BookmarkOutline(bookmarks: bookmarks) { picked, opening in
                         browser.pickBookmark(picked, as: opening)
-                        done()
+                        if opening != .tab(background: true) { done() }
                     }
                     .padding(6)
                 }

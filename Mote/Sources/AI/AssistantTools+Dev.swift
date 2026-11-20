@@ -231,7 +231,10 @@ extension AssistantTools {
             shot = .visible
         }
         let image: NSImage? = await withCheckedContinuation { done in tab.picture(shot) { done.resume(returning: $0) } }
-        guard let image, let jpeg = Self.jpeg(image) else { return ToolOutput("The picture couldn't be taken; the page may still be loading.") }
+        // Shrunk and encoded off the main thread: a tall page is a big picture.
+        let cg = image?.cgImage(forProposedRect: nil, context: nil, hints: nil)
+        let jpeg = await Task.detached(priority: .userInitiated) { cg.flatMap(Self.jpeg) }.value
+        guard let image, let jpeg else { return ToolOutput("The picture couldn't be taken; the page may still be loading.") }
         if input["save"]?.bool == true { tab.screenshot(shot) }
         let size = "\(Int(image.size.width))×\(Int(image.size.height))"
         let device = tab.device.map { ", as \($0.name)" } ?? ""
@@ -239,18 +242,21 @@ extension AssistantTools {
     }
 
     /// At most 1600 wide and 7800 tall, as a model takes them.
-    private static func jpeg(_ image: NSImage) -> Data? {
-        guard let cg = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return nil }
+    nonisolated private static func jpeg(_ cg: CGImage) -> Data? {
         let scale = min(1, 1600 / CGFloat(cg.width), 7800 / CGFloat(cg.height))
-        let size = CGSize(width: CGFloat(cg.width) * scale, height: CGFloat(cg.height) * scale)
-        guard let bitmap = NSBitmapImageRep(
-            bitmapDataPlanes: nil, pixelsWide: Int(size.width), pixelsHigh: Int(size.height), bitsPerSample: 8, samplesPerPixel: 4,
-            hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)
+        let width = Int(CGFloat(cg.width) * scale)
+        let height = Int(CGFloat(cg.height) * scale)
+        guard width > 0, height > 0,
+            let context = CGContext(
+                data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(),
+                bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue)
         else { return nil }
-        NSGraphicsContext.saveGraphicsState()
-        NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: bitmap)
-        NSGraphicsContext.current?.cgContext.draw(cg, in: CGRect(origin: .zero, size: size))
-        NSGraphicsContext.restoreGraphicsState()
-        return bitmap.representation(using: .jpeg, properties: [.compressionFactor: 0.75])
+        context.interpolationQuality = .high
+        context.draw(cg, in: CGRect(x: 0, y: 0, width: width, height: height))
+        guard let small = context.makeImage() else { return nil }
+        let data = NSMutableData()
+        guard let destination = CGImageDestinationCreateWithData(data, "public.jpeg" as CFString, 1, nil) else { return nil }
+        CGImageDestinationAddImage(destination, small, [kCGImageDestinationLossyCompressionQuality: 0.75] as CFDictionary)
+        return CGImageDestinationFinalize(destination) ? data as Data : nil
     }
 }

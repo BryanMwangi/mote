@@ -12,12 +12,15 @@ extension Browser {
     /// ⌥⌘I.
     func toggleInspector() {
         guard let inspector = inspector() else { return }
-        inspector.unpublished(Self.inspectorShows(inspector) ? "close" : "show")
+        let shows = Self.inspectorShows(inspector)
+        inspector.unpublished(shows ? "close" : "show")
+        if !shows { syncSourceMaps() }
     }
 
     /// ⌥⌘J: the inspector at its console.
     func showConsole() {
         inspector()?.unpublished("showConsole")
+        syncSourceMaps()
     }
 
     /// ⌥⌘C: the inspector, picking an element on the page.
@@ -25,6 +28,17 @@ extension Browser {
         guard let inspector = inspector() else { return }
         if !Self.inspectorShows(inspector) { inspector.unpublished("show") }
         inspector.unpublished("toggleElementSelection")
+        syncSourceMaps()
+    }
+
+    /// Develop › Source Maps in Inspector, told to the inspector of the tab in
+    /// front, which keeps it for every inspector after (its own setting).
+    func syncSourceMaps() {
+        guard let inspector = inspector() else { return }
+        let on = prefs.sourceMaps
+        Self.run(
+            "WI.settings && WI.settings.sourceMapsEnabled ? (WI.settings.sourceMapsEnabled.value = \(on), true) : false", in: inspector,
+            tries: 30)
     }
 
     /// The inspector at one of its panels (Network ⌥⌘E, Sources ⌥⌘Z, Storage),
@@ -33,18 +47,21 @@ extension Browser {
     func showInspector(_ panel: InspectorPanel) {
         guard let inspector = inspector() else { return }
         if !Self.inspectorShows(inspector) { inspector.unpublished("show") }
-        Self.show(panel, in: inspector, tries: 30)
+        syncSourceMaps()
+        let call = "WI.show\(panel.rawValue)Tab"
+        Self.run("typeof \(call) === 'function' ? (\(call)(), true) : false", in: inspector, tries: 30)
     }
 
-    private static func show(_ panel: InspectorPanel, in inspector: NSObject, tries: Int) {
+    /// Runs `script` in the inspector's own page once it has loaded: until it
+    /// answers true, a tenth of a second apart, `tries` times.
+    private static func run(_ script: String, in inspector: NSObject, tries: Int) {
         let again = {
             guard tries > 0 else { return }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { show(panel, in: inspector, tries: tries - 1) }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { run(script, in: inspector, tries: tries - 1) }
         }
         guard let front = inspector.unpublishedObject("inspectorWebView") as? WKWebView else { return again() }
-        let call = "WI.show\(panel.rawValue)Tab"
-        front.evaluateJavaScript("typeof \(call) === 'function' ? (\(call)(), true) : false") { shown, _ in
-            MainActor.assumeIsolated { if shown as? Bool != true { again() } }
+        front.evaluateJavaScript(script) { done, _ in
+            MainActor.assumeIsolated { if done as? Bool != true { again() } }
         }
     }
 
