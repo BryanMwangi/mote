@@ -318,38 +318,42 @@ private struct SpacePage: View {
                             listed(loose, scrolls: true)
                         }
                     }
-                        .floatingScrollBar()
-                        .coordinateSpace(name: Self.viewport)
-                        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { viewport = $0 }
-                        // The selected tab scrolled out of sight: a way back to it.
-                        .overlay(alignment: activeAway == .top ? .top : .bottom) {
-                            if live, let away = activeAway, let id = active {
-                                Button {
-                                    withAnimation(Motion.glide) { scroller.scrollTo(id, anchor: .center) }
-                                } label: {
-                                    Image(systemName: away == .top ? "arrow.up" : "arrow.down")
-                                        .font(.system(size: 10, weight: .semibold))
-                                        .foregroundStyle(Palette.ink)
-                                        .frame(width: 26, height: 26)
-                                        .bubble(shadow: 0.1, radius: 8)
-                                }
-                                .buttonStyle(.plain)
-                                .help("Back to the selected tab")
-                                .padding(6)
-                                .transition(.opacity.combined(with: .scale(scale: 0.8)))
+                    .floatingScrollBar()
+                    .coordinateSpace(name: Self.viewport)
+                    .onGeometryChange(for: CGFloat.self) {
+                        $0.size.height
+                    } action: {
+                        viewport = $0
+                    }
+                    // The selected tab scrolled out of sight: a way back to it.
+                    .overlay(alignment: activeAway == .top ? .top : .bottom) {
+                        if live, let away = activeAway, let id = active {
+                            Button {
+                                withAnimation(Motion.glide) { scroller.scrollTo(id, anchor: .center) }
+                            } label: {
+                                Image(systemName: away == .top ? "arrow.up" : "arrow.down")
+                                    .font(.system(size: 10, weight: .semibold))
+                                    .foregroundStyle(Palette.ink)
+                                    .frame(width: 26, height: 26)
+                                    .bubble(shadow: 0.1, radius: 8)
                             }
+                            .buttonStyle(.plain)
+                            .help("Back to the selected tab")
+                            .padding(6)
+                            .transition(.opacity.combined(with: .scale(scale: 0.8)))
                         }
-                        .animation(Motion.quick, value: activeAway)
-                        // Within the space only: a switch moves the page whole,
-                        // and the page coming in is already where it was left.
-                        .onChange(of: browser.activeID) { old, id in
-                            guard live, let id, tabs.contains(where: { $0.id == old }) else { return }
-                            withAnimation(Motion.glide) { scroller.scrollTo(id) }
-                        }
-                        .onChange(of: live) { _, now in
-                            if now, let id = active { scroller.scrollTo(id, anchor: .center) }
-                        }
-                        .onAppear { if let id = active { scroller.scrollTo(id, anchor: .center) } }
+                    }
+                    .animation(Motion.quick, value: activeAway)
+                    // Within the space only: a switch moves the page whole,
+                    // and the page coming in is already where it was left.
+                    .onChange(of: browser.activeID) { old, id in
+                        guard live, let id, tabs.contains(where: { $0.id == old }) else { return }
+                        withAnimation(Motion.glide) { scroller.scrollTo(id) }
+                    }
+                    .onChange(of: live) { _, now in
+                        if now, let id = active { scroller.scrollTo(id, anchor: .center) }
+                    }
+                    .onAppear { if let id = active { scroller.scrollTo(id, anchor: .center) } }
                 }
             }
         }
@@ -363,7 +367,8 @@ private struct SpacePage: View {
             browser: browser, tab: tab, live: tab.id == active, renaming: renaming,
             draft: renaming ? browser.tabDraft : "", refusals: renaming ? browser.field.refusals : 0,
             icons: prefs.glyph == .icons, showsReading: prefs.showsReading,
-            preview: live && tab.id == active ? browser.peekTab : nil, carded: live && showing && browser.siteCardRow == tab.id, picks: browser.picks)
+            preview: live && tab.id == active ? browser.peekTab : nil, carded: live && showing && browser.siteCardRow == tab.id,
+            picks: browser.picks)
     }
 
     /// The line between the pinned tabs and the others.
@@ -416,41 +421,41 @@ private struct SpacePage: View {
                         case .tab(let id, let depth):
                             if let tab = kept.first(where: { $0.id == id }) {
                                 Group {
-                                if depth == 0, let index = unfiled.firstIndex(where: { $0.id == id }) {
-                                    row(tab)
-                                        .background { splitBox(at: index, in: unfiled) }
-                                        // Places count among the pinned tabs, after the essentials.
-                                        .modifier(
-                                            Reorderable(
-                                                id: tab.id, index: index, places: 0..<unfiled.count,
-                                                lattice: .column(step: Self.row + Self.gap),
-                                                space: "kept", drag: $keptDrag, away: (browser, tab), filing: (browser, tab)
-                                            ) { target in
-                                                // To where the tab now in that place sits among all the pinned ones.
-                                                let place = kept.firstIndex { $0.id == unfiled[target].id } ?? target
-                                                browser.move(tab, to: place + browser.essentialCount)
-                                            })
-                                } else if let home = tab.folder, case let siblings = kept.filter({ $0.folder == home }),
-                                    let index = siblings.firstIndex(where: { $0.id == id })
-                                {
-                                    // Among its folder's own tabs, which sit together.
-                                    row(tab)
-                                        .background { splitBox(at: index, in: siblings) }
-                                        .modifier(
-                                            Reorderable(
-                                                id: tab.id, index: index, places: 0..<siblings.count,
-                                                lattice: .column(step: Self.row + Self.gap), space: "kept",
-                                                drag: Binding(get: { folderDrags[home] }, set: { folderDrags[home] = $0 }),
-                                                away: (browser, tab), filing: (browser, tab)
-                                            ) { target in
-                                                let place = kept.firstIndex { $0.id == siblings[target].id } ?? target
-                                                browser.move(tab, to: place + browser.essentialCount)
-                                            }
-                                        )
-                                        .padding(.leading, CGFloat(depth) * Self.indent)
-                                } else {
-                                    row(tab).padding(.leading, CGFloat(depth) * Self.indent)
-                                }
+                                    if depth == 0, let index = unfiled.firstIndex(where: { $0.id == id }) {
+                                        row(tab)
+                                            .background { splitBox(at: index, in: unfiled) }
+                                            // Places count among the pinned tabs, after the essentials.
+                                            .modifier(
+                                                Reorderable(
+                                                    id: tab.id, index: index, places: 0..<unfiled.count,
+                                                    lattice: .column(step: Self.row + Self.gap),
+                                                    space: "kept", drag: $keptDrag, away: (browser, tab), filing: (browser, tab)
+                                                ) { target in
+                                                    // To where the tab now in that place sits among all the pinned ones.
+                                                    let place = kept.firstIndex { $0.id == unfiled[target].id } ?? target
+                                                    browser.move(tab, to: place + browser.essentialCount)
+                                                })
+                                    } else if let home = tab.folder, case let siblings = kept.filter({ $0.folder == home }),
+                                        let index = siblings.firstIndex(where: { $0.id == id })
+                                    {
+                                        // Among its folder's own tabs, which sit together.
+                                        row(tab)
+                                            .background { splitBox(at: index, in: siblings) }
+                                            .modifier(
+                                                Reorderable(
+                                                    id: tab.id, index: index, places: 0..<siblings.count,
+                                                    lattice: .column(step: Self.row + Self.gap), space: "kept",
+                                                    drag: Binding(get: { folderDrags[home] }, set: { folderDrags[home] = $0 }),
+                                                    away: (browser, tab), filing: (browser, tab)
+                                                ) { target in
+                                                    let place = kept.firstIndex { $0.id == siblings[target].id } ?? target
+                                                    browser.move(tab, to: place + browser.essentialCount)
+                                                }
+                                            )
+                                            .padding(.leading, CGFloat(depth) * Self.indent)
+                                    } else {
+                                        row(tab).padding(.leading, CGFloat(depth) * Self.indent)
+                                    }
                                 }
                                 // For scrolling to it, as to the open tabs.
                                 .id(tab.id)
@@ -466,7 +471,8 @@ private struct SpacePage: View {
                 if live && showing {
                     let step = Self.row + Self.gap
                     let head = CGFloat(lines.count - unfiled.count) * step
-                    ListSpot { [weak browser] in browser?.keptSpot = $0 }.frame(height: max(0, CGFloat(unfiled.count) * step - Self.gap)).offset(y: head)
+                    ListSpot { [weak browser] in browser?.keptSpot = $0 }.frame(height: max(0, CGFloat(unfiled.count) * step - Self.gap))
+                        .offset(y: head)
                     if case .kept(let place) = browser.folderExit {
                         DropLine().offset(y: head + CGFloat(min(place, unfiled.count)) * step - Self.gap / 2 - 1)
                     }
@@ -672,7 +678,9 @@ private struct PinSquare: View {
                 if hovering || overMinus, !tab.asleep, !lettering {
                     // Small to look at, easy to hit: the press takes a square
                     // well past the circle.
-                    Button { browser.close(tab) } label: {
+                    Button {
+                        browser.close(tab)
+                    } label: {
                         Image(systemName: "minus")
                             .font(.system(size: 7, weight: .bold))
                             .foregroundStyle(Palette.muted)
@@ -907,6 +915,8 @@ private struct PreviewMark: View {
 /// A folder among the pinned tabs; a click opens or closes it, and
 /// its menu renames, nests, unloads, unpacks or deletes it.
 private struct FolderRow: View {
+    /// A line of the list a closed folder shows: one PopoverLine.
+    private static let previewLine: CGFloat = 28
     let browser: Browser
     let folder: Folder
     /// The showing space's; another's, during a swipe, is only drawn.
@@ -978,21 +988,29 @@ private struct FolderRow: View {
             if !Task.isCancelled { listing = true }
         }
         .menuPanel(isPresented: $listing, edge: .trailing, keyboard: false) {
-            // Its subfolders' tabs too; a long list scrolls rather than running off the screen.
+            // Its subfolders' tabs too, a line each. Past a height (a dozen
+            // lines, or less of a short screen) it scrolls, with no bar.
             let family = Folder.family(of: folder.id, in: browser.folders)
             let inside = browser.tabs.filter { $0.folder.map(family.contains) ?? false }
-            ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
-                    ForEach(inside) { tab in
-                        PopoverLine(tab.label, image: tab.icon) {
-                            listing = false
-                            browser.select(tab)
-                        }
+            let lines = VStack(alignment: .leading, spacing: 0) {
+                ForEach(inside) { tab in
+                    PopoverLine(tab.label, image: tab.icon) {
+                        listing = false
+                        browser.select(tab)
                     }
                 }
-                .padding(6)
             }
-            .frame(width: 240, height: min(CGFloat(inside.count) * 28 + 12, (NSScreen.main?.visibleFrame.height ?? 800) * 0.6))
+            .lineLimit(1)
+            .padding(6)
+            let tallest = min(Self.previewLine * 12, (NSScreen.main?.visibleFrame.height ?? 800) * 0.6) + 12
+            Group {
+                if CGFloat(inside.count) * Self.previewLine + 12 > tallest {
+                    ScrollView(showsIndicators: false) { lines }.scrollIndicators(.never).frame(height: tallest)
+                } else {
+                    lines
+                }
+            }
+            .frame(width: 240)
             .onHover { overList = $0 }
         }
         .contextMenu {
