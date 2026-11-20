@@ -10,13 +10,29 @@ struct HistoryPanel: View {
     /// The days on show, worked out again only when history or the search changes.
     @State private var days: [Days.Group<History.Entry>] = []
     @State private var clearing = false
+    /// Whose history: each profile living here keeps its own (nil, the default's).
+    @State private var profile: String?
+    @ObservedObject private var profiles = Profiles.shared
+
+    private var history: History { profiles.history(for: profile) }
 
     private var pages: Int { days.reduce(0) { $0 + $1.items.count } }
 
     var body: some View {
         Plate("History", width: 600, close: { browser.recalling = false }) {
             VStack(alignment: .leading, spacing: 14) {
-                SearchField(text: $browser.historyQuery, prompt: "Search everywhere you have been", focus: $searching)
+                HStack(spacing: 8) {
+                    SearchField(text: $browser.historyQuery, prompt: "Search everywhere you have been", focus: $searching)
+                    // Only with another profile living here.
+                    if !profiles.list.isEmpty, !profiles.ownMote {
+                        Picker("", selection: $profile) {
+                            ForEach([nil] + profiles.list.map(\.id), id: \.self) { Text(profiles.name(of: $0)).tag($0) }
+                        }
+                        .labelsHidden()
+                        .fixedSize()
+                        .help("Whose history")
+                    }
+                }
                 if days.isEmpty {
                     Card { EmptyState(browser.historyQuery.isEmpty ? "Nothing yet." : "Nothing matches.") }
                 } else {
@@ -44,6 +60,9 @@ struct HistoryPanel: View {
             refresh()
         }
         .onChange(of: browser.historyQuery) { refresh() }
+        .onChange(of: profile) { refresh() }
+        // The profile of the tab in front, to begin with.
+        .onAppear { profile = browser.active?.profile }
     }
 
     /// Lazy: a long history is too slow to lay out all at once. Each day is
@@ -79,12 +98,12 @@ struct HistoryPanel: View {
     }
 
     private func forget(_ entry: History.Entry) {
-        browser.history.remove(entry.key)
+        history.remove(entry.key)
         refresh()
     }
 
     private func refresh() {
-        days = Days.group(browser.history.entries(matching: browser.historyQuery), by: \.last)
+        days = Days.group(history.entries(matching: browser.historyQuery), by: \.last)
     }
 }
 
