@@ -96,6 +96,9 @@ final class Browser: NSObject, ObservableObject {
         }
     }
     @Published var peeking = false
+    /// The folders closed in this window: each window opens and closes its
+    /// own, starting from how they were last left (see toggleFolder).
+    @Published var closedFolders = Set(FolderStore.shared.bySpace.values.joined().filter(\.collapsed).map(\.id))
     /// See `warm(_:)`.
     @Published private(set) var warmTabs: [Tab.ID] = []
     private var cooling: [Tab.ID: Task<Void, Never>] = [:]
@@ -222,8 +225,9 @@ final class Browser: NSObject, ObservableObject {
     /// The page area, where a dragged tab's place is measured (see SplitStage).
     weak var stageView: NSView?
 
-    /// File names extensions asked for their downloads.
-    var namedDownloads: [URL: String] = [:]
+    /// Downloads extensions asked for: the name each wants (a path inside
+    /// the downloads folder, "images/a.jpg"), and whether to ask where.
+    var namedDownloads: [URL: (name: String?, asks: Bool)] = [:]
     /// Downloads in progress; tabs with one don't sleep.
     var downloading: [WKDownload] = []
     /// Idle tab sleep timer and memory pressure source (see Browser+TabSleep.swift).
@@ -864,10 +868,10 @@ final class Browser: NSObject, ObservableObject {
     }
 
     /// Opens a bookmark and closes the bookmark menu and manager.
-    func pickBookmark(_ url: URL) {
+    func pickBookmark(_ url: URL, as opening: LinkOpening? = nil) {
         bookmarking = false
         bookmarksOpen = false
-        visit(url)
+        if let opening { open(url, as: opening, from: active) } else { visit(url) }
     }
 
     /// ⌘D.
@@ -932,13 +936,21 @@ final class Browser: NSObject, ObservableObject {
         floatActiveVideo()
         // Opened from a tab with its chat open (a link, the assistant): the
         // chat comes along, open, rather than closing as the new tab shows.
-        let carriesChat = left.map { $0 !== tab && $0.chatOpen } ?? false
-        if carriesChat, let chat = left?.pageChat, tab.pageChat == nil { tab.share(chat) }
-        if carriesChat { tab.chatOpen = true }
+        let carriesChat = carryChat(from: left, to: tab)
         activeID = tab.id
         editing = false
         field.clear()
         if carriesChat { syncPageChat() }
+    }
+
+    /// `left`'s open chat goes along to `tab`, open. `tab` keeps a chat of
+    /// its own unless `replacing`. Whether it went.
+    @discardableResult
+    func carryChat(from left: Tab?, to tab: Tab, replacing: Bool = false) -> Bool {
+        guard let left, left !== tab, left.chatOpen else { return false }
+        if let chat = left.pageChat, replacing || tab.pageChat == nil { tab.share(chat) }
+        tab.chatOpen = true
+        return true
     }
 
     /// Loads `url` in `tab` and puts the field away.

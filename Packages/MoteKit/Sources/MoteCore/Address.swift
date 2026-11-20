@@ -22,6 +22,8 @@ public enum Address {
         if lowercased.hasPrefix("about:") || lowercased.hasPrefix("data:") {
             return URL(string: text)
         }
+        // A mail address to write to: whatever opens mail links takes it.
+        if lowercased.hasPrefix("mailto:"), text.dropFirst(7).contains("@") { return URL(string: text) }
 
         let authority = text.prefix { $0 != "/" && $0 != "?" && $0 != "#" }
         guard !authority.contains("@") else { return nil }

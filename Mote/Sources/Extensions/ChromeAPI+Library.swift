@@ -1,5 +1,6 @@
 import AppKit
 import MoteCore
+import UniformTypeIdentifiers
 import WebKit
 
 // The person's bookmarks, history, downloads and closed tabs, for extensions
@@ -128,13 +129,16 @@ extension ChromeAPI {
         switch call.method {
         case "download":
             guard let url = (call.option("url") as String?).flatMap(URL.init(string:)) else { throw Refusal("No url to download") }
+            let name = (call.option("filename") as String?).flatMap(Self.downloadPath)
+            // The file itself (a zip the extension made of many): written here,
+            // with no page to fetch it through.
+            if url.scheme?.lowercased() == "data" {
+                return try Self.save(data: url, as: name, overwrite: call.option("conflictAction") == "overwrite", in: browser)
+            }
             guard let page = browser.active?.built ?? browser.tabs.lazy.compactMap(\.built).first else {
                 throw Refusal("No page to download through")
             }
-            // Only the name, never a path.
-            if let name: String = call.option("filename"), !name.isEmpty {
-                browser.namedDownloads[url] = (name as NSString).lastPathComponent
-            }
+            browser.namedDownloads[url] = (name, call.option("saveAs") ?? false)
             browser.keep(await page.startDownload(using: URLRequest(url: url)))
             return browser.downloads.kept.count + 1
         case "search":
@@ -160,6 +164,36 @@ extension ChromeAPI {
         default:
             throw unavailable(call)
         }
+    }
+
+    /// A name an extension asked for, as a path inside the downloads folder:
+    /// its folders kept, never leaving it ("..", a leading "/").
+    static func downloadPath(_ name: String) -> String? {
+        let parts = name.split(separator: "/").map(String.init).filter { !$0.isEmpty && $0 != "." && $0 != ".." }
+        return parts.isEmpty ? nil : parts.joined(separator: "/")
+    }
+
+    /// A data: URL written as a file in the downloads folder, under `name`
+    /// or one its type suggests; another of the same name kept unless `overwrite`.
+    static func save(data url: URL, as name: String?, overwrite: Bool, in browser: Browser) throws -> Int {
+        let text = url.absoluteString
+        guard let comma = text.firstIndex(of: ","), let colon = text.firstIndex(of: ":") else { throw Refusal("Not a data: URL") }
+        let meta = text[text.index(after: colon)..<comma]
+        let payload = String(text[text.index(after: comma)...])
+        let bytes = meta.hasSuffix(";base64") ? Data(base64Encoded: payload) : payload.removingPercentEncoding.map { Data($0.utf8) }
+        guard let bytes else { throw Refusal("Couldn't read the download") }
+        let type = meta.split(separator: ";").first.map(String.init).flatMap { UTType(mimeType: $0) }
+        let named = name ?? "download" + (type?.preferredFilenameExtension.map { "." + $0 } ?? "")
+        let folder = browser.downloadsFolder
+        let free = overwrite ? named : Clippings.freeName(named) { FileManager.default.fileExists(atPath: folder.appendingPathComponent($0).path) }
+        let file = folder.appendingPathComponent(free)
+        try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try bytes.write(to: file, options: .atomic)
+        browser.downloads.add(DownloadRecord(name: file.lastPathComponent, from: "", path: file.path, date: Date()))
+        DownloadDrop.fly(FileKind.icon(named: free), in: browser.window)
+        browser.announce("Downloaded \(file.lastPathComponent)")
+        // The newest is first in the list (see search).
+        return 1
     }
 
     // MARK: - sessions

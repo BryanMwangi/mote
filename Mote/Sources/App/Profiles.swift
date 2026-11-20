@@ -91,14 +91,19 @@ final class Profiles: ObservableObject {
         avatar(of: id).image.flatMap { NSImage(contentsOf: folder(of: id).appending(path: $0)) }
     }
 
-    /// A new profile, with the first's settings, opened at once.
+    /// A new profile, with the first's settings, opened at once unless not `opening`.
     /// `importing`: another browser's things for it to bring once it opens (see importOnLaunch).
-    func add(named name: String, avatar: Avatar, picture: NSImage? = nil, importing: String? = nil) {
+    func add(named name: String, avatar: Avatar, picture: NSImage? = nil, importing: String? = nil, opening: Bool = true) {
         let id = String(UUID().uuidString.prefix(8)).lowercased()
         list.append(Profile(id: id, name: name.isEmpty ? "Profile" : name, avatar: avatar))
         if let picture { keep(picture, for: id) }
         file.save(list)
         copySettings(to: id)
+        guard opening else {
+            // Brought in the first time it opens, however it's opened.
+            if let importing, let suite = Storage.suite(for: id) { UserDefaults(suiteName: suite)?.set(importing, forKey: "import.pending") }
+            return
+        }
         open(id, importing: importing)
     }
 
@@ -152,11 +157,12 @@ final class Profiles: ObservableObject {
     /// keeps (window frames), nor which space was in front, nor the bench.
     private func copySettings(to id: String) {
         let from = Storage.suite(for: nil) ?? Bundle.main.bundleIdentifier ?? ""
-        guard let to = Storage.suite(for: id), var settings = UserDefaults.standard.persistentDomain(forName: from) else { return }
-        settings = settings.filter { key, _ in
+        guard let to = Storage.suite(for: id) else { return }
+        let settings = (UserDefaults.standard.persistentDomain(forName: from) ?? [:]).filter { key, _ in
             !["NS", "Apple", "com.apple", "space.current", "bench", "Sparkle"].contains { key.hasPrefix($0) }
         }
-        UserDefaults.standard.setPersistentDomain(settings, forName: to)
+        // Made from the welcome, before it was through: no welcome of its own.
+        UserDefaults.standard.setPersistentDomain(settings.merging(["welcomed": true]) { $1 }, forName: to)
     }
 
     /// A profile as its own Mote, as Firefox's -P does: nil for the first.

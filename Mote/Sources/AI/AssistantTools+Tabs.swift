@@ -181,7 +181,12 @@ extension AssistantTools {
     func bringForward(_ found: Found) {
         found.browser.window?.makeKeyAndOrderFront(nil)
         if found.parked, let space = found.space { found.browser.switchSpace(to: space.id) }
+        // The chat doing the work stays in view on the tab it went to.
+        let left = found.browser.active
         found.browser.select(found.tab)
+        if let chat, left?.pageChat?.id == chat, found.browser.carryChat(from: left, to: found.tab, replacing: true) {
+            found.browser.syncPageChat()
+        }
     }
 
     // MARK: - Closing and reopening

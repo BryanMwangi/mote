@@ -9,7 +9,9 @@ import SwiftUI
 /// conversation (its quick actions), and `accessory` sits above the composer
 /// (its context chip). A blank tab's chat leaves both empty.
 struct ChatView<Accessory: View, Start: View>: View {
-    @ObservedObject var browser: Browser
+    /// Not observed: the browser changes all the time, and the chat would
+    /// redraw with it. What the chat shows of it is read where it's used.
+    let browser: Browser
     let conversation: Conversation
     @ViewBuilder let accessory: () -> Accessory
     @ViewBuilder let start: () -> Start
@@ -31,9 +33,12 @@ struct ChatView<Accessory: View, Start: View>: View {
     /// /new and /clear: a fresh chat where this one is.
     var newChat: (() -> Void)? = nil
 
-    @State private var draft = ""
+    /// Held apart from the view, so typing redraws only the composer.
+    @State private var draft = Draft()
     @State private var inputHeight = ChatInput.line
     @State private var focus = 0
+    /// /usage: what the chat has spent, over the composer until closed.
+    @State private var showsUsage = false
     /// How far the end of the conversation is below the view: only which
     /// zone, so scrolling changes it a few times rather than every frame.
     @State private var distance = ScrollDistance.end
@@ -63,12 +68,14 @@ struct ChatView<Accessory: View, Start: View>: View {
                         .transition(.scale(scale: 0.8).combined(with: .opacity))
                     }
                     VStack(spacing: 10) {
+                        if showsUsage { UsageCard(conversation: conversation) { showsUsage = false }.frame(maxWidth: Self.column) }
                         accessory()
                         if !conversation.mentions.isEmpty { mentioned(conversation) }
                         ChatTray(conversation: conversation).frame(maxWidth: Self.column)
                         ChatComposer(
-                            browser: browser, conversation: conversation, draft: $draft, height: $inputHeight, focus: focus,
-                            mentionables: mentionables, choseMention: chose, send: send
+                            browser: browser, conversation: conversation,
+                            draft: Binding(get: { draft.text }, set: { draft.text = $0 }), height: $inputHeight, focus: focus,
+                            mentionables: { mentionables }, choseMention: chose, send: send
                         )
                         .frame(maxWidth: Self.column)
                     }
@@ -103,12 +110,19 @@ struct ChatView<Accessory: View, Start: View>: View {
 
     /// The messages, the working line, and room at the end for what sits over it.
     private var transcript: some View {
-        VStack(alignment: .leading, spacing: 26) {
-            if conversation.messages.isEmpty { start() }
-            ForEach(Array(conversation.messages.enumerated()), id: \.element.id) { index, message in
-                row(index, message)
+        let messages = conversation.messages
+        // Where the chat was summarised, before the first message after.
+        let summarisedAt = conversation.summarised > 0 && conversation.summarised < messages.count ? messages[conversation.summarised].id : nil
+        return VStack(alignment: .leading, spacing: 26) {
+            if messages.isEmpty { start() }
+            // Built as they scroll into view: a long chat lays out only what shows.
+            LazyVStack(alignment: .leading, spacing: 26) {
+                ForEach(messages) { message in
+                    row(message, last: message.id == messages.last?.id, summarisedBefore: message.id == summarisedAt)
+                }
             }
             Status(browser: browser, conversation: conversation, retry: retry)
+            TokenLine(prefs: browser.prefs, conversation: conversation)
             if conversation.summarised == conversation.messages.count, conversation.summarised > 0, let summary = conversation.summary {
                 SummaryDivider(summary: summary)
             }
@@ -129,10 +143,8 @@ struct ChatView<Accessory: View, Start: View>: View {
     }
 
     @ViewBuilder
-    private func row(_ index: Int, _ message: Message) -> some View {
-        let last = message.id == conversation.messages.last?.id
-        // Where the chat was summarised, before the first message after.
-        if index == conversation.summarised, index > 0, let summary = conversation.summary {
+    private func row(_ message: Message, last: Bool, summarisedBefore: Bool) -> some View {
+        if summarisedBefore, let summary = conversation.summary {
             SummaryDivider(summary: summary)
         }
         MessageRow(message: message, last: last, streaming: last && conversation.busy).equatable()
@@ -160,10 +172,11 @@ struct ChatView<Accessory: View, Start: View>: View {
     private var actions: ChatActions { ChatActions(retry: retry) }
 
     private func send() {
-        let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        let text = draft.text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
-        draft = ""
+        draft.text = ""
         if text == Skill.compact.prompt { return Assistant.shared.compact(conversation) }
+        if text == Skill.usage.prompt { return withAnimation(Motion.quick) { showsUsage = true } }
         if text == Skill.new.prompt || text == Skill.clear.prompt { return (newChat ?? browser.newAskingTab)() }
         guard let beforeSend else { return Assistant.shared.ask(text, in: conversation) }
         Task {
@@ -178,7 +191,7 @@ struct ChatView<Accessory: View, Start: View>: View {
     /// send or edit. Reported taken so the panel does not put it back.
     private func take() {
         guard let seed, !seed.isEmpty else { return }
-        draft = seed
+        draft.text = seed
         Task { @MainActor in took() }
     }
 
@@ -632,7 +645,8 @@ private struct ChatComposer: View {
     @Binding var height: CGFloat
     let focus: Int
     /// The other tabs the @-picker offers, and what to do when one is chosen.
-    let mentionables: [MentionMenu.Candidate]
+    /// Asked for only when the @ picker shows.
+    let mentionables: () -> [MentionMenu.Candidate]
     let choseMention: (MentionMenu.Candidate) -> Void
     let send: () -> Void
     @State private var selection = ComposerSelection()
@@ -655,7 +669,7 @@ private struct ChatComposer: View {
     /// The tabs the mention being typed offers, if one is.
     private var matches: [MentionMenu.Candidate] {
         guard menu == .mentions, let query = MentionMenu.query(in: draft) else { return [] }
-        return MentionMenu.matching(query, in: mentionables)
+        return MentionMenu.matching(query, in: mentionables())
     }
 
     private var pickerItems: [ComposerPickerItem] {
@@ -906,6 +920,68 @@ private struct ModeChip: View {
         case .asks: "It asks before acting in pages. Switch this chat to Auto with ⇧⇥."
         case .auto: "Auto: it acts without asking, in this chat; Undo puts it back. Only deleting history still asks. Plan next with ⇧⇥."
         case .plan: "Plan: it only looks, then gives a plan to run. Back to Asks with ⇧⇥."
+        }
+    }
+}
+
+/// The composer's text, kept outside the chat view: only what reads it redraws.
+@Observable
+private final class Draft {
+    var text = ""
+}
+
+/// Tokens as people read them: 1,234 or 12.3k.
+private func tokens(_ count: Int) -> String {
+    count < 10_000 ? count.formatted() : (Double(count) / 1000).formatted(.number.precision(.fractionLength(1))) + "k"
+}
+
+private func spentLine(_ spent: Usage) -> String {
+    var line = "\(tokens(spent.input)) in · \(tokens(spent.output)) out"
+    if let cost = spent.cost { line += " · " + cost.formatted(.currency(code: "USD").precision(.fractionLength(2...4))) }
+    return line
+}
+
+/// What the reply under way has spent so far, round by round, while it
+/// works (Settings › AI › Show token count).
+private struct TokenLine: View {
+    @ObservedObject var prefs: Preferences
+    let conversation: Conversation
+
+    var body: some View {
+        if prefs.showsTokens, conversation.busy, let spent = conversation.turnSpent {
+            Text(spentLine(spent)).font(.system(size: 11.5)).foregroundStyle(Palette.faint).monospacedDigit()
+                .transition(.opacity)
+        }
+    }
+}
+
+/// /usage: the last reply's tokens and the whole chat's.
+private struct UsageCard: View {
+    let conversation: Conversation
+    let close: () -> Void
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                row("Last reply", conversation.turnSpent)
+                row("This chat", conversation.chatSpent)
+                if conversation.chatSpent == nil {
+                    Text("Nothing counted yet: some models don't say what they spent.").font(.system(size: 11.5)).foregroundStyle(Palette.muted)
+                }
+            }
+            Spacer(minLength: 0)
+            Button(action: close) { Image(systemName: "xmark").font(.system(size: 10, weight: .semibold)) }
+                .buttonStyle(.plain).foregroundStyle(Palette.muted).help("Close")
+        }
+        .padding(12)
+        .bubble(shadow: 0.08, radius: 12)
+        .transition(.opacity.combined(with: .offset(y: 6)))
+    }
+
+    private func row(_ title: String, _ spent: Usage?) -> some View {
+        HStack(spacing: 8) {
+            Text(title).font(.system(size: 12.5, weight: .medium)).foregroundStyle(Palette.ink)
+            Text(spent.map(spentLine) ?? "—").font(.system(size: 12.5)).foregroundStyle(Palette.muted).monospacedDigit()
         }
     }
 }

@@ -50,8 +50,11 @@ public enum Skill {
     public static let new = Item(command: "new", title: "New chat", prompt: "/new")
     public static let clear = Item(command: "clear", title: "Clear: a new chat", prompt: "/clear")
 
+    /// What the chat has spent, in tokens: shown, not sent.
+    public static let usage = Item(command: "usage", title: "Token usage", prompt: "/usage")
+
     /// The built-ins, in the order the picker shows them.
-    public static let all: [Item] = [summary, eli5, keypoints, actions, compact, new, clear]
+    public static let all: [Item] = [summary, eli5, keypoints, actions, compact, new, clear, usage]
 
     /// The skills whose command starts with `query`, case-insensitively. A
     /// blank query offers them all, in order.

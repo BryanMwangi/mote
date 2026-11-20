@@ -14,8 +14,8 @@ struct BookmarksDropdown: View {
                 Text("No bookmarks yet").font(.system(size: 12.5)).foregroundStyle(Palette.muted).padding(14)
             } else {
                 ScrollView {
-                    BookmarkOutline(bookmarks: bookmarks) { picked in
-                        browser.pickBookmark(picked)
+                    BookmarkOutline(bookmarks: bookmarks) { picked, opening in
+                        browser.pickBookmark(picked, as: opening)
                         done()
                     }
                     .padding(6)
@@ -51,7 +51,7 @@ struct BookmarksPanel: View {
             } else {
                 ScrollView(showsIndicators: false) {
                     Card {
-                        BookmarkOutline(bookmarks: bookmarks, open: browser.pickBookmark).padding(6)
+                        BookmarkOutline(bookmarks: bookmarks) { browser.pickBookmark($0, as: $1) }.padding(6)
                     }
                     .padding(.bottom, 2)
                 }

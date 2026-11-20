@@ -8,7 +8,8 @@ import UniformTypeIdentifiers
 /// rather than an NSMenu so rows can be dragged and have their own menus.
 struct BookmarkOutline: View {
     @ObservedObject var bookmarks: Bookmarks
-    let open: (URL) -> Void
+    /// A page, here (nil) or as a menu item asks.
+    let open: (URL, LinkOpening?) -> Void
 
     @State private var expanded: Set<Bookmark.ID> = []
     @State private var dragging: Bookmark.ID?
@@ -54,7 +55,8 @@ struct BookmarkOutline: View {
             destinations: BookmarkTree.folders(bookmarks.roots).filter { !node.holds($0.node.id) },
             act: { action in
                 switch action {
-                case .open: if let url = node.url.flatMap(URL.init(string:)) { open(url) }
+                case .open: if let url = node.url.flatMap(URL.init(string:)) { open(url, nil) }
+                case .openAs(let opening): if let url = node.url.flatMap(URL.init(string:)) { open(url, opening) }
                 case .toggle: expanded.formSymmetricDifference([node.id])
                 case .move(let folder): bookmarks.move(node.id, into: folder)
                 case .remove: bookmarks.remove(node.id)
@@ -109,6 +111,7 @@ struct BookmarkOutline: View {
 private struct BookmarkRow: View {
     enum Action {
         case open, toggle, remove, beginRename, newFolder
+        case openAs(LinkOpening)
         case move(Bookmark.ID?)
         case rename(String)
     }
@@ -196,6 +199,10 @@ private struct BookmarkRow: View {
     private var menu: some View {
         if !node.isFolder {
             Button("Open") { act(.open) }
+            Button("Open in New Tab") { act(.openAs(.tab(background: false))) }
+            Button("Open in Background") { act(.openAs(.tab(background: true))) }
+            Button("Open in New Window") { act(.openAs(.window(private: false))) }
+            Button("Open in Private Window") { act(.openAs(.window(private: true))) }
             Divider()
         }
         Button("Rename…") { act(.beginRename) }

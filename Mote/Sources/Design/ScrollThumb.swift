@@ -27,9 +27,17 @@ extension View {
     var room: CGFloat = 0
     var scroll: (CGFloat) -> Void = { _ in }
 
-    func moving(_ moving: Bool) {
-        // Rows passing under the pointer meanwhile don't light up (see ScrollHover).
-        ScrollHover.moving = moving
+    /// Whether this list told ScrollHover it was moving, to undo it.
+    private var quieting = false
+
+    func moving(_ moving: Bool, byHand: Bool) {
+        // Rows passing under the pointer meanwhile don't light up (see ScrollHover);
+        // only for a scroll by hand: a chat following its reply scrolls all the
+        // time, and would keep every row in the window from lighting up.
+        if byHand != quieting {
+            quieting = byHand
+            ScrollHover.moving = byHand
+        }
         hiding?.cancel()
         if moving {
             shown = true
@@ -55,7 +63,11 @@ private struct FloatingScrollBar: ViewModifier {
             .scrollIndicators(.never)
             .scrollPosition($position)
             .onAppear { place.scroll = { [$position] y in $position.wrappedValue.scrollTo(y: y) } }
-            .onScrollPhaseChange { _, phase in place.moving(phase != .idle) }
+            .onScrollPhaseChange { _, phase in
+                place.moving(phase != .idle, byHand: phase == .interacting || phase == .tracking || phase == .decelerating)
+            }
+            // Gone mid-scroll (a panel closing), it lets hovering go again.
+            .onDisappear { place.moving(false, byHand: false) }
             .onScrollGeometryChange(for: ClosedRange<CGFloat>?.self) { geometry in
                 let whole = geometry.contentSize.height
                 let seen = geometry.containerSize.height

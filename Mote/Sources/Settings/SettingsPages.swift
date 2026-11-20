@@ -154,6 +154,7 @@ struct GeneralSettings: View {
         }
 
         FilesSettings()
+        LinkSettings()
 
         SettingsSection("Under the hood") {
             SettingRow(

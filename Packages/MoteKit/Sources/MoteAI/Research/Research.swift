@@ -167,11 +167,12 @@ public struct Research: ChatService {
             for try await event in service.reply(to: asking) {
                 switch event {
                 case .text(let more): found.add(more)
-                case .source: emit(event)
+                // Their tokens count toward the turn's too.
+                case .source, .usage: emit(event)
                 case .activity(var activity):
                     activity.id = "\(id)-\(activity.id)"
                     emit(.activity(activity))
-                case .session, .reasoning, .usage, .toolCall: break
+                case .session, .reasoning, .toolCall: break
                 }
             }
         }

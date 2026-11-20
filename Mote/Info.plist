@@ -46,6 +46,15 @@
 				<string>https</string>
 			</array>
 		</dict>
+		<!-- Mail links, for the web mail chosen in Settings › General › Links. -->
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>Mail link</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>mailto</string>
+			</array>
+		</dict>
 	</array>
 	<!-- macOS lists an app under Desktop & Dock › Default web browser only when
 	     it claims public.xhtml as well as public.html. -->

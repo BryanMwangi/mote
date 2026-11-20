@@ -35,7 +35,16 @@ enum FolderExit: Equatable {
 /// Folders of pinned tabs made from the plus menu or a tab's
 /// menu, collapsed with a click, renamed, unpacked or deleted from their own.
 extension Browser {
-    var folders: [Folder] { FolderStore.shared.folders(in: spaceID) }
+    var folders: [Folder] { folders(in: spaceID) }
+
+    /// A space's folders, open or closed as in this window.
+    func folders(in space: UUID) -> [Folder] {
+        FolderStore.shared.folders(in: space).map { folder in
+            var folder = folder
+            folder.collapsed = closedFolders.contains(folder.id)
+            return folder
+        }
+    }
 
     /// A new folder (inside `parent`), named at once; `tab` goes in it.
     func newFolder(in parent: UUID? = nil, with tab: Tab? = nil) {
@@ -178,14 +187,20 @@ extension Browser {
         }
     }
 
+    /// Opens or closes a folder in this window only. The store keeps how
+    /// it was left, for windows opened later and the next launch.
     func toggleFolder(_ id: UUID) {
+        let closed = !closedFolders.contains(id)
+        if closed { closedFolders.insert(id) } else { closedFolders.remove(id) }
         FolderStore.shared.change(spaceID) { folders in
-            if let at = folders.firstIndex(where: { $0.id == id }) { folders[at].collapsed.toggle() }
+            if let at = folders.firstIndex(where: { $0.id == id }) { folders[at].collapsed = closed }
         }
     }
 
-    /// Collapse All Folders, or Expand All.
+    /// Collapse All Folders, or Expand All, in this window.
     func collapseFolders(_ collapsed: Bool) {
+        let ids = FolderStore.shared.folders(in: spaceID).map(\.id)
+        if collapsed { closedFolders.formUnion(ids) } else { closedFolders.subtract(ids) }
         FolderStore.shared.change(spaceID) { folders in
             for at in folders.indices { folders[at].collapsed = collapsed }
         }
@@ -227,7 +242,13 @@ extension Browser {
 
     /// The folders as Move to Folder › lists them, each with its depth.
     var folderChoices: [(folder: Folder, depth: Int)] {
-        Folder.outline(folders, tabs: [(id: UUID, folder: UUID?)](), active: nil).compactMap { line in
+        // Every folder, closed ones' folders too.
+        let folders = FolderStore.shared.folders(in: spaceID).map { folder in
+            var folder = folder
+            folder.collapsed = false
+            return folder
+        }
+        return Folder.outline(folders, tabs: [(id: UUID, folder: UUID?)](), active: nil).compactMap { line in
             guard case .folder(let id, let depth) = line, let folder = folders.first(where: { $0.id == id }) else { return nil }
             return (folder, depth)
         }

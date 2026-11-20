@@ -179,20 +179,23 @@ struct ImportForm: View {
         sources.filter { $0.isBrowser && $0.browser == source.browser && $0.id != source.id && imported[$0.id] == nil }
     }
 
-    /// Each into a Mote profile of its own, named after it, which brings its
-    /// things once it opens (see importOnLaunch).
+    /// Each into a Mote profile of its own, named after it, made without
+    /// opening: a window for each, while importing here, was in the way. Each
+    /// brings its things the first time it opens (see importOnLaunch).
     private func bringOthers(of source: ImportSource) {
         guard everyProfile else { return }
         for other in siblings(of: source) {
             let wanted = kinds.intersection(other.kinds).map(\.rawValue).joined(separator: ",")
             Profiles.shared.add(
-                named: other.profileName, avatar: .init(symbol: "person.fill", color: "#6cbad9"), importing: "\(other.id)|\(wanted)")
+                named: other.profileName, avatar: .init(symbol: "person.fill", color: "#6cbad9"), importing: "\(other.id)|\(wanted)",
+                opening: false)
             imported[other.id] = ImportTally()
         }
     }
 
     private func run() {
         guard let source else { return }
+        let others = everyProfile ? siblings(of: source).map(\.profileName) : []
         bringOthers(of: source)
         if ownProfile {
             Profiles.shared.add(
@@ -227,6 +230,10 @@ struct ImportForm: View {
                 imported[source.id] = brought
                 tally = brought
                 asking = false
+                if !others.isEmpty {
+                    trouble =
+                        "\(ListFormatter.localizedString(byJoining: others)) became profiles of their own, under Open Profile; each brings its things the first time it opens."
+                }
             } catch ImportTrouble.primaryPassword {
                 asking = true
                 trouble = primaryPassword.isEmpty ? "\(source.browser) keeps its passwords behind a primary password." : "That isn't it."
@@ -254,10 +261,12 @@ extension Browser {
     /// A profile made from another browser's (see ImportForm) brings its
     /// things in once it opens: MOTE_IMPORT is the source's id and the kinds.
     func importOnLaunch() {
-        guard let asked = ProcessInfo.processInfo.environment["MOTE_IMPORT"], Storage.profile != nil,
-            !Storage.settings.bool(forKey: "import.launched")
+        // Asked for as it was opened, or when it was made without opening.
+        guard let asked = ProcessInfo.processInfo.environment["MOTE_IMPORT"] ?? Storage.settings.string(forKey: "import.pending"),
+            Storage.profile != nil, !Storage.settings.bool(forKey: "import.launched")
         else { return }
         Storage.settings.set(true, forKey: "import.launched")
+        Storage.settings.removeObject(forKey: "import.pending")
         let parts = asked.split(separator: "|", maxSplits: 1).map(String.init)
         guard let source = ImportSource.found().first(where: { $0.id == parts.first }) else { return }
         let kinds = Set((parts.count > 1 ? parts[1] : "").split(separator: ",").compactMap { ImportKind(rawValue: String($0)) })

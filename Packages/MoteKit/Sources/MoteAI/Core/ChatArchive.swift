@@ -33,6 +33,8 @@ public struct SavedChat: Codable, Equatable, Sendable {
     public var originHeld: String?
     /// Put away: listed apart, under Archived, until asked in again.
     public var archived: Bool?
+    /// Every token the chat has spent; nil in older files.
+    public var spent: Usage?
 
     public init(id: UUID, messages: [Message], sessions: [String: Session] = [:], created: Date, updated: Date) {
         self.id = id

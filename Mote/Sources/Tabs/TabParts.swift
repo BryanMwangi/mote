@@ -172,7 +172,7 @@ struct SplitItems: View {
             }
             Button("Remove from Split View") { browser.unsplit(tab: tab.id) }
             Button("Unsplit All") { browser.unsplit(group: group) }
-        } else if !tab.held {
+        } else if browser.splittable(tab) {
             Button("Split with Current Tab") { browser.splitWithActive(tab) }
                 .disabled(tab.id == browser.activeID || browser.active.map(browser.splittable) != true)
             Button("Split with New Tab") { browser.splitWithNew(beside: tab) }

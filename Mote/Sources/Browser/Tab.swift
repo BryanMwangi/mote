@@ -239,6 +239,7 @@ final class Tab: ObservableObject, Identifiable {
     private let mediaRelay = MediaRelay()
     private let notifications = NotificationRelay()
     private let loadRelay = LoadRelay()
+    private let protocolHandlers = ProtocolHandlerRelay()
     private let sound = AudioWatch()
     private var watches: [NSKeyValueObservation] = []
     /// This site's hidden elements, for the next document.
@@ -291,13 +292,16 @@ final class Tab: ObservableObject, Identifiable {
         controller.add(hovered, contentWorld: .defaultClient, name: HoveredLink.name)
         controller.add(mediaRelay, contentWorld: .page, name: MediaRelay.name)
         controller.addScriptMessageHandler(notifications, contentWorld: .page, name: NotificationRelay.name)
+        controller.add(protocolHandlers, contentWorld: .page, name: ProtocolHandlerRelay.name)
         AdBlocker.shared.protect(controller)
 
         built = web
         if device != nil || userAgent != nil { emulate() }
         // After `built`: the form relay starts watching full screen on the view
         // it finds there.
-        let relays: [TabRelay] = [scroll, hider, forms, images, store_, middle, hovered, mediaRelay, loadRelay, notifications]
+        let relays: [TabRelay] = [
+            scroll, hider, forms, images, store_, middle, hovered, mediaRelay, loadRelay, notifications, protocolHandlers,
+        ]
         for relay in relays { relay.tab = self }
         if muted { PageAudio.mute(true, web) }
         arm(hiding: hiding)
@@ -490,7 +494,13 @@ final class Tab: ObservableObject, Identifiable {
 
     /// Takes over the chat another tab had, for one chat across the tabs.
     func share(_ chat: Conversation) {
-        if pageChat !== chat { pageChat = chat }
+        guard pageChat !== chat else { return }
+        pageChat = chat
+        // About this tab now: opened again later, it comes back here.
+        if !shy, chat.sidebar, let here = pending ?? address {
+            chat.origin = here
+            chat.originHeld = held ? heldID : nil
+        }
     }
 
     /// Shares `page` with this tab's chat, making the chat if it must.

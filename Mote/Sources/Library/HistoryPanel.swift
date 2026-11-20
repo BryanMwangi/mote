@@ -46,7 +46,8 @@ struct HistoryPanel: View {
         .onChange(of: browser.historyQuery) { refresh() }
     }
 
-    /// Lazy: a long history is too slow to lay out all at once.
+    /// Lazy: a long history is too slow to lay out all at once. Each day is
+    /// one card behind its rows, as Passwords: rows drawn bare scroll smoothly.
     private var list: some View {
         ScrollView(showsIndicators: false) {
             LazyVStack(alignment: .leading, spacing: 0) {
@@ -54,13 +55,12 @@ struct HistoryPanel: View {
                     Caption(When.day(day.day))
                         .padding(.top, day.day == days.first?.day ? 0 : 14)
                         .padding(.bottom, 6)
-                    ForEach(Array(day.items.enumerated()), id: \.element.id) { index, entry in
-                        PlaceRow(entry: entry, first: index == 0, last: index == day.items.count - 1) {
-                            browser.recalling = false
-                            browser.active?.go(to: entry.url)
-                        } forget: {
-                            browser.history.remove(entry.key)
-                            refresh()
+                    Card {
+                        LazyVStack(spacing: 0) {
+                            ForEach(day.items) { entry in
+                                if entry.id != day.items.first?.id { Rule() }
+                                PlaceRow(entry: entry, open: open, forget: forget)
+                            }
                         }
                     }
                 }
@@ -68,6 +68,18 @@ struct HistoryPanel: View {
             .padding(.bottom, 2)
         }
         .frame(maxHeight: 420)
+    }
+
+    /// Opens an entry: here, or as a menu item asks.
+    private func open(_ entry: History.Entry, _ opening: LinkOpening?) {
+        browser.recalling = false
+        if let opening { return browser.open(entry.url, as: opening, from: browser.active) }
+        if let tab = browser.active { tab.go(to: entry.url) } else { browser.open(entry.url, foreground: true) }
+    }
+
+    private func forget(_ entry: History.Entry) {
+        browser.history.remove(entry.key)
+        refresh()
     }
 
     private func refresh() {
@@ -109,75 +121,49 @@ private struct ClearOptions: View {
     }
 }
 
-/// A place in the list. Each day's rows together look like one card: the
-/// first rounds its top corners, the last its bottom ones.
+/// A place in the list: a click opens it here; its menu opens it elsewhere.
 private struct PlaceRow: View {
     let entry: History.Entry
-    let first: Bool
-    let last: Bool
-    let go: () -> Void
-    let forget: () -> Void
+    /// nil: here.
+    let open: (History.Entry, LinkOpening?) -> Void
+    let forget: (History.Entry) -> Void
 
     @State private var hovering = false
 
     var body: some View {
-        let slice = CardSlice(top: first, bottom: last)
-        VStack(spacing: 0) {
-            if !first { Rule() }
-            HStack(spacing: 12) {
-                Mark(
-                    icon: Favicons.shared.cached(entry.url.host()?.lowercased() ?? ""),
-                    letter: entry.key.first.map { String($0).uppercased() } ?? "•", size: 16)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(entry.title.isEmpty ? entry.key : entry.title).font(.system(size: 13)).foregroundStyle(Palette.ink).lineLimit(1)
-                    Text(entry.key).font(.system(size: 11.5)).foregroundStyle(Palette.muted).lineLimit(1).truncationMode(.middle)
-                }
-                Spacer(minLength: 8)
-                if hovering {
-                    Quick("Remove", tint: .red.opacity(0.75), act: forget)
-                } else {
-                    Text(When.clock(entry.last)).font(.system(size: 11.5)).foregroundStyle(Palette.muted).monospacedDigit()
-                }
+        HStack(spacing: 12) {
+            Mark(
+                icon: Favicons.shared.cached(entry.url.host()?.lowercased() ?? ""),
+                letter: entry.key.first.map { String($0).uppercased() } ?? "•", size: 16)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(entry.title.isEmpty ? entry.key : entry.title).font(.system(size: 13)).foregroundStyle(Palette.ink).lineLimit(1)
+                Text(entry.key).font(.system(size: 11.5)).foregroundStyle(Palette.muted).lineLimit(1).truncationMode(.middle)
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 9)
-            .background(hovering ? Palette.hover : .clear)
-            .contentShape(Rectangle())
-            .onTapGesture(perform: go)
-            .onHover { hovering = $0 }
+            Spacer(minLength: 8)
+            if hovering {
+                Quick("Remove", tint: .red.opacity(0.75)) { forget(entry) }
+            } else {
+                Text(When.clock(entry.last)).font(.system(size: 11.5)).foregroundStyle(Palette.muted).monospacedDigit()
+            }
         }
-        .background(Palette.ground)
-        .clipShape(slice)
-        // The border reaches a point past shared edges and is clipped there, so
-        // only the sides and the card's rounded ends are drawn.
-        .overlay(
-            slice.strokeBorder(Palette.hairline, lineWidth: 1)
-                .padding(.top, first ? 0 : -1)
-                .padding(.bottom, last ? 0 : -1)
-                .clipped()
-        )
-        .animation(Motion.quick, value: hovering)
-    }
-}
-
-/// A slice of a rounded card: rounded at the top, the bottom, both or neither.
-private nonisolated struct CardSlice: InsettableShape {
-    let top: Bool
-    let bottom: Bool
-    var inset: CGFloat = 0
-
-    func path(in rect: CGRect) -> Path {
-        let radius = 11 - inset
-        return UnevenRoundedRectangle(
-            topLeadingRadius: top ? radius : 0, bottomLeadingRadius: bottom ? radius : 0,
-            bottomTrailingRadius: bottom ? radius : 0, topTrailingRadius: top ? radius : 0, style: .continuous
-        )
-        .path(in: rect.insetBy(dx: inset, dy: inset))
-    }
-
-    func inset(by amount: CGFloat) -> CardSlice {
-        var copy = self
-        copy.inset += amount
-        return copy
+        .padding(.horizontal, 14)
+        .padding(.vertical, 9)
+        .background(hovering ? Palette.hover : .clear)
+        .contentShape(Rectangle())
+        .onTapGesture { open(entry, nil) }
+        // Not lit by rows passing under the pointer as the list scrolls.
+        .rowHover { hovering = $0 }
+        .contextMenu {
+            Button("Open") { open(entry, nil) }
+            Button("Open in New Tab") { open(entry, .tab(background: false)) }
+            Button("Open in Background") { open(entry, .tab(background: true)) }
+            Button("Open in New Window") { open(entry, .window(private: false)) }
+            Button("Open in Private Window") { open(entry, .window(private: true)) }
+            Divider()
+            Button("Copy Link") { Downloads.copy(entry.url) }
+            Divider()
+            Button("Remove") { forget(entry) }
+        }
+        .help(entry.url.absoluteString)
     }
 }

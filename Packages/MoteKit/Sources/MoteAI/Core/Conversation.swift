@@ -70,6 +70,10 @@ public final class Conversation: Identifiable {
     public private(set) var activities: [Activity] = []
     /// What the last reply cost.
     public private(set) var usage: Usage?
+    /// Spent on the turn under way (or the last), every round of it; and on
+    /// the whole chat, kept with it. `usage` is only the latest round.
+    public private(set) var turnSpent: Usage?
+    public private(set) var chatSpent: Usage?
     /// The page the person has shared with this chat, if any. Kept as the tab
     /// moves: the page is detached on navigation, not thrown away.
     public private(set) var page: PageContext?
@@ -185,6 +189,7 @@ public final class Conversation: Identifiable {
         origin = saved.origin.flatMap(URL.init(string:))
         originHeld = saved.originHeld.flatMap(UUID.init(uuidString:))
         archived = saved.archived ?? false
+        chatSpent = saved.spent
         title = SavedChat.title(of: saved.messages)
         sessions = saved.sessions.mapValues { ($0.id, $0.heard, $0.search, nil) }
     }
@@ -207,6 +212,7 @@ public final class Conversation: Identifiable {
         saved.origin = origin?.absoluteString
         saved.originHeld = originHeld?.uuidString
         saved.archived = archived ? true : nil
+        saved.spent = chatSpent
         return saved
     }
 
@@ -474,6 +480,7 @@ public final class Conversation: Identifiable {
         turn += 1
         let turn = turn
         let compacting = wantsCompacting
+        turnSpent = nil
         messages.append(Message(role: .assistant, text: ""))
         phase = .waiting
         activities = []
@@ -487,16 +494,44 @@ public final class Conversation: Identifiable {
                 if compacting { try await self.summarise(via: route, through: self.messages.count - 2) }
                 guard self.turn == turn else { return }
                 let request = self.request(for: route)
-                for try await event in route.service.reply(to: request) {
-                    guard self.turn == turn else { return }
-                    self.take(event, from: route.provider)
+                // Read off the main thread, handed over in batches.
+                try await Self.pump(route.service.reply(to: request)) { [weak self] batch in
+                    guard let self, self.turn == turn else { return }
+                    for event in batch { self.take(event, from: route.provider) }
                 }
+                guard self.turn == turn else { return }
                 self.end(turn, failure: nil, provider: route.provider)
             } catch {
                 self?.end(turn, failure: error, provider: provider)
             }
         }
     }
+
+    /// Reads a reply away from the main thread and hands its events over in
+    /// batches, at most about ten times a second: words as they gather, and
+    /// anything else (a step, a source) at once with them.
+    nonisolated static func pump(
+        _ stream: AsyncThrowingStream<ChatEvent, Error>, deliver: @escaping @MainActor ([ChatEvent]) -> Void
+    ) async throws {
+        var batch: [ChatEvent] = []
+        var sent = ContinuousClock.now - .seconds(1)
+        for try await event in stream {
+            batch.append(event)
+            let words: Bool
+            switch event {
+            case .text, .reasoning: words = true
+            default: words = false
+            }
+            guard !words || ContinuousClock.now - sent >= Self.batching else { continue }
+            let ready = batch
+            batch = []
+            sent = .now
+            await deliver(ready)
+        }
+        if !batch.isEmpty { await deliver(batch) }
+    }
+
+    nonisolated static let batching: Duration = .milliseconds(100)
 
     /// Signs the reply with the route's author and asks for it with everything
     /// before it.
@@ -538,7 +573,9 @@ public final class Conversation: Identifiable {
 
     /// Shows what's held: the first words at once, the rest a pace later.
     private func show(_ last: Int) {
-        phase = .answering
+        // Set only on the change: every set redraws whatever reads it, and
+        // this runs for every piece of the reply.
+        if phase != .answering { phase = .answering }
         if messages[last].text.isEmpty, messages[last].reasoning.isEmpty { return flush() }
         guard flushing == nil else { return }
         flushing = Task { [weak self] in
@@ -582,6 +619,8 @@ public final class Conversation: Identifiable {
             }
         case .usage(let spent):
             usage = spent
+            turnSpent = turnSpent + spent
+            chatSpent = chatSpent + spent
         case .source(let source):
             if !messages[last].sources.contains(where: { $0.id == source.id }) { messages[last].sources.append(source) }
         case .toolCall:

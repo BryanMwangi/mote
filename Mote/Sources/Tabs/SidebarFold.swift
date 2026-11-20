@@ -345,14 +345,26 @@ final class PointerWatch {
         Self.watching[key, default: 0] += 1
         window.acceptsMouseMovedEvents = true
         let kinds: NSEvent.EventTypeMask = [.mouseMoved, .leftMouseDragged]
+        // Once per turn of the run loop, however many moves came in it: a fast
+        // mouse reports up to a thousand times a second, and the pointer is
+        // read afresh anyway.
+        let coalesced = { [weak self] in
+            guard let self, !pending else { return }
+            pending = true
+            DispatchQueue.main.async { [weak self] in
+                self?.pending = false
+                moved()
+            }
+        }
         monitors = [
             NSEvent.addLocalMonitorForEvents(matching: kinds) { event in
-                MainActor.assumeIsolated { moved() }
+                MainActor.assumeIsolated { coalesced() }
                 return event
             } as Any,
-            NSEvent.addGlobalMonitorForEvents(matching: kinds) { _ in MainActor.assumeIsolated { moved() } } as Any,
+            NSEvent.addGlobalMonitorForEvents(matching: kinds) { _ in MainActor.assumeIsolated { coalesced() } } as Any,
         ]
     }
+    private var pending = false
 
     func stop() {
         guard !monitors.isEmpty else { return }

@@ -79,13 +79,27 @@ extension Browser: WKNavigationDelegate, WKUIDelegate {
         return keys
     }
 
-    /// Opens a URL with the app that owns its scheme, asking first as Safari
-    /// does, except for clicked mail and phone links.
-    private func handOff(_ url: URL, clicked: Bool, mainFrame: Bool, from webView: WKWebView) {
-        guard NavigationPolicy.mayHandOff(mainFrame: mainFrame, clicked: clicked),
-            let app = NSWorkspace.shared.urlForApplication(toOpen: url)
+    /// Opens a URL as Settings › General › Links says for its scheme: a web
+    /// service in a tab, a chosen app, or the app that owns the scheme,
+    /// asking first as Safari does, except for clicked mail and phone links.
+    func handOff(_ url: URL, clicked: Bool, mainFrame: Bool, from webView: WKWebView) {
+        guard NavigationPolicy.mayHandOff(mainFrame: mainFrame, clicked: clicked) else { return }
+        let handler = LinkHandlers.handler(for: url.scheme ?? "")
+        switch handler {
+        case .web(let template):
+            if let page = LinkHandler.address(template, for: url) { open(page, foreground: true, from: tab(for: webView)) }
+            return
+        case .app(let id):
+            if let app = NSWorkspace.shared.urlForApplication(withBundleIdentifier: id) {
+                NSWorkspace.shared.open([url], withApplicationAt: app, configuration: NSWorkspace.OpenConfiguration())
+                return
+            }
+        case .system, .ask:
+            break
+        }
+        guard let app = NSWorkspace.shared.urlForApplication(toOpen: url), app.standardizedFileURL != Bundle.main.bundleURL.standardizedFileURL
         else { return }
-        if NavigationPolicy.handsOffQuietly(scheme: url.scheme ?? "", clicked: clicked) {
+        if handler == .system, NavigationPolicy.handsOffQuietly(scheme: url.scheme ?? "", clicked: clicked) {
             NSWorkspace.shared.open(url)
             return
         }
@@ -118,7 +132,7 @@ extension Browser: WKNavigationDelegate, WKUIDelegate {
             let tab = Tab(shy: opener?.shy ?? isPrivate, configuration: configuration)
             adopt(tab)
             tab.opener = opener?.id ?? activeID
-            if !background { activeID = tab.id } else { openedBehind(tab) }
+            if !background { bringForward(tab) } else { openedBehind(tab) }
             tab.setAddressOptimistically(url)
             return tab.web
         }
@@ -141,8 +155,8 @@ extension Browser: WKNavigationDelegate, WKUIDelegate {
         }
         adopt(tab)
         tab.opener = opener?.id ?? activeID
-        activeID = tab.id
-        editing = false
+        // As any link's tab: an open chat comes along.
+        bringForward(tab)
         // Returning the view makes it the target; WebKit loads the request into it.
         if let url = action.request.url { tab.setAddressOptimistically(url) }
         return tab.web
@@ -368,11 +382,12 @@ extension Browser: WKDownloadDelegate {
         completionHandler: @escaping @MainActor @Sendable (URL?) -> Void
     ) {
         let asked = response.url.flatMap { namedDownloads.removeValue(forKey: $0) }
-        let name = asked ?? (suggestedFilename.isEmpty ? "download" : suggestedFilename)
+        let name = asked?.name ?? (suggestedFilename.isEmpty ? "download" : suggestedFilename)
         let folder = downloadsFolder
 
         let transfer = downloads.transfer(for: download)
-        guard prefs.asksWhereToSave else {
+        // An extension's downloads come in batches: asked where only if it says so.
+        guard prefs.asksWhereToSave, asked?.asks ?? true else {
             // Taken on disk, or by a download still under way, whose file
             // may not be written yet: two of the same would share a name.
             let underWay = Set(downloads.transfers.compactMap { $0.file?.standardizedFileURL.path })
@@ -381,6 +396,8 @@ extension Browser: WKDownloadDelegate {
                 return FileManager.default.fileExists(atPath: path) || underWay.contains(path)
             }
             let file = folder.appendingPathComponent(free)
+            // Into the folders an extension named, made as needed.
+            try? FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
             transfer?.file = file
             completionHandler(file)
             DownloadDrop.fly(FileKind.icon(named: free), in: window)

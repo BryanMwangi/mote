@@ -156,7 +156,7 @@ public struct Activity: Equatable, Codable, Sendable {
     }
 }
 
-public struct Usage: Equatable, Sendable {
+public struct Usage: Equatable, Codable, Sendable {
     public var input: Int
     public var output: Int
     /// In US dollars, when the provider says.
@@ -166,6 +166,13 @@ public struct Usage: Equatable, Sendable {
         self.input = input
         self.output = output
         self.cost = cost
+    }
+
+    /// Two spends together; the cost while either says it.
+    public static func + (a: Usage?, b: Usage) -> Usage {
+        guard let a else { return b }
+        let cost = a.cost == nil && b.cost == nil ? nil : (a.cost ?? 0) + (b.cost ?? 0)
+        return Usage(input: a.input + b.input, output: a.output + b.output, cost: cost)
     }
 }
 

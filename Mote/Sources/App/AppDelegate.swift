@@ -49,16 +49,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func openLink(_ event: NSAppleEventDescriptor, reply: NSAppleEventDescriptor) {
-        guard let text = event.paramDescriptor(forKeyword: AEKeyword(keyDirectObject))?.stringValue, let url = URL(string: text),
-            url.scheme?.lowercased().hasPrefix("http") == true
-        else { return }
-        MainActor.assumeIsolated { LinkInbox.take(url) }
+        guard let text = event.paramDescriptor(forKeyword: AEKeyword(keyDirectObject))?.stringValue, let url = URL(string: text) else { return }
+        MainActor.assumeIsolated { Self.take(url) }
+    }
+
+    /// A link from another app: a web address, or a mail link (Mote can be
+    /// their app, Settings › General › Links), which goes to the web mail
+    /// chosen for it. Nothing else: handing one back to the Mac could come here again.
+    @MainActor private static func take(_ url: URL) {
+        let scheme = url.scheme?.lowercased() ?? ""
+        if url.isFileURL || scheme.hasPrefix("http") { return LinkInbox.take(url) }
+        if case .web(let template) = LinkHandlers.handler(for: scheme), let page = LinkHandler.address(template, for: url) {
+            LinkInbox.take(page)
+        }
     }
 
     /// Web addresses, and local .html and .xhtml files (declared in Info.plist).
     func application(_ application: NSApplication, open urls: [URL]) {
-        for url in urls where url.isFileURL || url.scheme?.lowercased().hasPrefix("http") == true {
-            MainActor.assumeIsolated { LinkInbox.take(url) }
+        for url in urls {
+            MainActor.assumeIsolated { Self.take(url) }
         }
     }
 

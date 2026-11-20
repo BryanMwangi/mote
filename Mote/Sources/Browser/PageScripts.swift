@@ -53,6 +53,7 @@ enum PageScripts {
             scripts.append(WKUserScript(source: notify, injectionTime: .atDocumentStart, forMainFrameOnly: true, in: .page))
         }
         scripts.append(WKUserScript(source: NotificationRelay.script, injectionTime: .atDocumentStart, forMainFrameOnly: true, in: .page))
+        scripts.append(WKUserScript(source: ProtocolHandlerRelay.script, injectionTime: .atDocumentStart, forMainFrameOnly: true, in: .page))
         if dev { scripts.append(WKUserScript(source: Self.devHooks, injectionTime: .atDocumentStart, forMainFrameOnly: true, in: .page)) }
         // An image on its own (a file dropped in, a download opened): on a
         // dark ground, as Firefox shows one, rather than the page's white.

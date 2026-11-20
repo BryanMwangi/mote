@@ -41,6 +41,10 @@ struct AISettings: View {
                 tint: Tint.purple, keywords: ["floating search", "tab key"], on: $prefs.tabAsks)
             RowRule()
             SettingRow(
+                "Show token count", "While a reply works, the tokens it has spent so far; /usage shows the chat's",
+                symbol: "number", tint: Tint.gray, keywords: ["tokens", "usage", "cost"], on: $prefs.showsTokens)
+            RowRule()
+            SettingRow(
                 "Search the web", provider.searches ? webDetail(provider) : "\(provider.name) can't search the web", symbol: "globe",
                 tint: Tint.blue, on: Binding(get: { assistant.searchesWeb }, set: { assistant.searchesWeb = $0 })
             )

@@ -334,6 +334,8 @@ final class Assistant {
     /// Keeps `conversation` in the archive from now on, as it changes.
     func keep(_ conversation: Conversation) {
         conversation.changed = { [chats] in chats.save($0.saved) }
+        // Known by its id, so opening it again finds this one rather than a copy.
+        if reopened[conversation.id]?.chat == nil { reopened[conversation.id] = WeakChat(conversation) }
     }
 
     /// A kept chat, ready to carry on and still being kept.
@@ -343,7 +345,6 @@ final class Assistant {
         guard let saved = chats.load(id) else { return nil }
         let conversation = Conversation(saved: saved)
         keep(conversation)
-        reopened[id] = WeakChat(conversation)
         return conversation
     }
 

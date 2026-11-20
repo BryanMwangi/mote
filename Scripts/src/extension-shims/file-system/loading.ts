@@ -184,9 +184,28 @@ export function loadFileSystemURLs(root: Root, cache: FileCache): void {
   }
 }
 
+/** A URL only this page can load: a `filesystem:` URL of its origin, or a blob: URL. */
+const own = (u: unknown): u is string => typeof u === 'string' && (!!parse(u) || u.startsWith('blob:'));
+
+/** A blob: URL of this page, as a data: URL: the file itself. */
+const blobData = (url: string): Promise<string> =>
+  fetch(url)
+    .then((response) => response.blob())
+    .then(
+      (blob) =>
+        new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = () => reject(reader.error);
+          reader.readAsDataURL(blob);
+        }),
+    );
+
 /**
  * The browser downloads and opens tabs from outside this page, where a blob:
  * URL of this page means nothing: those get the file itself, as a data: URL.
+ * So do the page's own blob: URLs, such as a zip of many files made to
+ * download at once.
  */
 export function handOverFileSystemURLs(
   root: Root,
@@ -219,12 +238,11 @@ export function handOverFileSystemURLs(
     held.push(ns);
     define(ns, method, function (this: unknown, options: any, ...rest: unknown[]) {
       const list = options && urls(options);
-      if (!list || !list.some((u: unknown) => typeof u === 'string' && parse(u)))
-        return original.call(this, options, ...rest);
+      if (!list || !list.some(own)) return original.call(this, options, ...rest);
       const callback =
         typeof rest[rest.length - 1] === 'function' ? (rest.pop() as (v?: unknown) => unknown) : null;
       const p = Promise.all(
-        list.map((u: unknown) => (typeof u === 'string' && parse(u) ? cache.dataURL(u) : u)),
+        list.map((u: unknown) => (own(u) ? (parse(u) ? cache.dataURL(u) : blobData(u)) : u)),
       ).then((done) => {
         const copy = Object.assign({}, options, { url: Array.isArray(options.url) ? done : done[0] });
         return original.call(this, copy, ...rest);

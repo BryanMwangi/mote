@@ -297,19 +297,27 @@ private struct SpacePage: View {
                     .padding(.bottom, 10)
             }
             if browser.usesSpaces { SpaceHeader(browser: browser, space: space).padding(.bottom, Self.gap) }
-            if !lines.isEmpty { keptRows(kept, lines: lines) }
             // A plain stack until the tabs overflow, so the room below them
             // still drags the window. Worked out, not measured: ViewThatFits
             // lays the rows out twice, on every page, on every change.
+            // Overflowing, the pinned tabs and folders scroll with the rest,
+            // as Zen's: the essentials and the space's name stay put, and a
+            // big open folder can't push the ones after it out of reach.
             let overflows =
                 Sidebar.rowsHeight(
                     essentials: essentials.count, kept: lines.count, loose: loose.count, width: prefs.sideWidth, named: browser.usesSpaces)
                 > room
             if !overflows {
+                if !lines.isEmpty { keptRows(kept, lines: lines) }
                 listed(loose)
             } else {
                 ScrollViewReader { scroller in
-                    ScrollView(.vertical) { listed(loose, scrolls: true) }
+                    ScrollView(.vertical) {
+                        VStack(alignment: .leading, spacing: 0) {
+                            if !lines.isEmpty { keptRows(kept, lines: lines) }
+                            listed(loose, scrolls: true)
+                        }
+                    }
                         .floatingScrollBar()
                         .coordinateSpace(name: Self.viewport)
                         .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { viewport = $0 }
@@ -376,7 +384,7 @@ private struct SpacePage: View {
     /// The pinned section's lines, an open live folder's items after it.
     private func keptLines(_ kept: [Tab]) -> [KeptLine] {
         // A private window keeps nothing, folders included.
-        let folders = browser.isPrivate ? [] : folderStore.folders(in: space.id)
+        let folders = browser.isPrivate ? [] : browser.folders(in: space.id)
         return Folder.outline(folders, tabs: kept.map { ($0.id, $0.folder) }, active: active).flatMap { line -> [KeptLine] in
             guard case .folder(let id, let depth) = line, let folder = folders.first(where: { $0.id == id }), folder.live != nil,
                 !folder.collapsed
@@ -387,7 +395,7 @@ private struct SpacePage: View {
     }
 
     private func keptRows(_ kept: [Tab], lines: [KeptLine]) -> some View {
-        let folders = folderStore.folders(in: space.id)
+        let folders = browser.folders(in: space.id)
         let unfiled = lines.compactMap { line -> Tab? in
             guard case .line(.tab(let id, 0)) = line else { return nil }
             return kept.first { $0.id == id }
@@ -407,14 +415,16 @@ private struct SpacePage: View {
                             }
                         case .tab(let id, let depth):
                             if let tab = kept.first(where: { $0.id == id }) {
+                                Group {
                                 if depth == 0, let index = unfiled.firstIndex(where: { $0.id == id }) {
                                     row(tab)
+                                        .background { splitBox(at: index, in: unfiled) }
                                         // Places count among the pinned tabs, after the essentials.
                                         .modifier(
                                             Reorderable(
                                                 id: tab.id, index: index, places: 0..<unfiled.count,
                                                 lattice: .column(step: Self.row + Self.gap),
-                                                space: "kept", drag: $keptDrag, filing: (browser, tab)
+                                                space: "kept", drag: $keptDrag, away: (browser, tab), filing: (browser, tab)
                                             ) { target in
                                                 // To where the tab now in that place sits among all the pinned ones.
                                                 let place = kept.firstIndex { $0.id == unfiled[target].id } ?? target
@@ -425,12 +435,13 @@ private struct SpacePage: View {
                                 {
                                     // Among its folder's own tabs, which sit together.
                                     row(tab)
+                                        .background { splitBox(at: index, in: siblings) }
                                         .modifier(
                                             Reorderable(
                                                 id: tab.id, index: index, places: 0..<siblings.count,
                                                 lattice: .column(step: Self.row + Self.gap), space: "kept",
                                                 drag: Binding(get: { folderDrags[home] }, set: { folderDrags[home] = $0 }),
-                                                filing: (browser, tab)
+                                                away: (browser, tab), filing: (browser, tab)
                                             ) { target in
                                                 let place = kept.firstIndex { $0.id == siblings[target].id } ?? target
                                                 browser.move(tab, to: place + browser.essentialCount)
@@ -440,6 +451,9 @@ private struct SpacePage: View {
                                 } else {
                                     row(tab).padding(.leading, CGFloat(depth) * Self.indent)
                                 }
+                                }
+                                // For scrolling to it, as to the open tabs.
+                                .id(tab.id)
                             }
                         }
                     }
@@ -460,6 +474,13 @@ private struct SpacePage: View {
             }
             .coordinateSpace(name: "kept")
             Self.rule
+        }
+    }
+
+    /// The box around a split group's rows, for the row at `index` of `tabs`.
+    @ViewBuilder private func splitBox(at index: Int, in tabs: [Tab]) -> some View {
+        if let run = browser.splitRun(at: index, in: tabs) {
+            SplitRun(axis: .vertical, first: run.first, last: run.last, gap: Self.gap)
         }
     }
 
@@ -491,11 +512,7 @@ private struct SpacePage: View {
                         } action: { away in
                             if tab.id == active, activeAway != away { activeAway = away }
                         }
-                        .background {
-                            if let run = browser.splitRun(at: index, in: loose) {
-                                SplitRun(axis: .vertical, first: run.first, last: run.last, gap: Self.gap)
-                            }
-                        }
+                        .background { splitBox(at: index, in: loose) }
                         // Places count among the loose tabs, after the essentials and pinned ones.
                         .modifier(
                             Reorderable(
@@ -951,16 +968,21 @@ private struct FolderRow: View {
             if !Task.isCancelled { listing = true }
         }
         .menuPanel(isPresented: $listing, edge: .trailing, keyboard: false) {
-            VStack(alignment: .leading, spacing: 0) {
-                ForEach(browser.tabs.filter { $0.folder == folder.id }) { tab in
-                    PopoverLine(tab.label, image: tab.icon) {
-                        listing = false
-                        browser.select(tab)
+            // Its subfolders' tabs too; a long list scrolls rather than running off the screen.
+            let family = Folder.family(of: folder.id, in: browser.folders)
+            let inside = browser.tabs.filter { $0.folder.map(family.contains) ?? false }
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(inside) { tab in
+                        PopoverLine(tab.label, image: tab.icon) {
+                            listing = false
+                            browser.select(tab)
+                        }
                     }
                 }
+                .padding(6)
             }
-            .padding(6)
-            .frame(width: 240)
+            .frame(width: 240, height: min(CGFloat(inside.count) * 28 + 12, (NSScreen.main?.visibleFrame.height ?? 800) * 0.6))
             .onHover { overList = $0 }
         }
         .contextMenu {

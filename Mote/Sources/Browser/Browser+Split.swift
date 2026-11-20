@@ -27,8 +27,8 @@ enum DragZone {
 
 /// Split view: up to four tabs showing at once, each group a
 /// layout kept in `splits` by its own id. A group's tabs sit together in
-/// the row; selecting any of them shows the group. Essentials and pinned
-/// tabs stay out of groups.
+/// the row; selecting any of them shows the group. Essentials stay out of
+/// groups; pinned tabs split with others from their own folder.
 extension Browser {
     /// Between a split's pages.
     static let splitGap: CGFloat = 8
@@ -48,13 +48,21 @@ extension Browser {
     /// The group the page shows: the active tab's.
     var shownSplit: SplitLayout<Tab.ID>? { activeID.flatMap(group(of:)).flatMap { splits[$0] } }
 
-    func splittable(_ tab: Tab) -> Bool { !tab.held && row.index(of: tab.id) != nil }
+    func splittable(_ tab: Tab) -> Bool { tab.pin == nil && row.index(of: tab.id) != nil }
+
+    /// Two tabs from the same place: both open tabs, or pinned in the same folder
+    /// (or none), so a group's tabs can sit together.
+    private func sameHome(_ a: Tab, _ b: Tab) -> Bool { a.kept == b.kept && (!a.kept || a.folder == b.folder) }
 
     /// Puts `tab` beside `target` on `side`, in `target`'s group or a new one,
     /// and shows it. False when either can't be split or the group is full.
     @discardableResult
     func split(_ tab: Tab, beside target: Tab, side: SplitSide) -> Bool {
         guard tab.id != target.id, splittable(tab), splittable(target) else { return false }
+        guard sameHome(tab, target) else {
+            announce(target.kept ? "Split with a tab from the same folder" : "Split with another open tab")
+            return false
+        }
         let id = group(of: target.id) ?? UUID()
         var layout = splits[id] ?? SplitLayout(target.id)
         // Within its own group, it moves.
@@ -92,6 +100,11 @@ extension Browser {
         if activeID != target.id { select(target) }
         let tab = Tab()
         insert(tab, at: placeForNew())
+        // Beside a pinned tab, pinned in its folder too.
+        if target.kept {
+            keep(tab)
+            tab.folder = target.folder
+        }
         split(tab, beside: target, side: side)
         field.clear()
         editing = false

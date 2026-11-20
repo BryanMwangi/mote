@@ -151,6 +151,8 @@ final class Preferences: ObservableObject {
     @Published var aiActs: Bool
     /// Tab in the floating search asks the assistant what was typed.
     @Published var tabAsks: Bool
+    /// A chat shows the tokens its reply has spent while it works.
+    @Published var showsTokens: Bool
     /// How the assistant may act (see AssistantTools.permit).
     @Published var aiMode: AIMode
     /// Sites it may act on without asking, in Trusted mode: "github.com", "localhost:3000".
@@ -282,6 +284,7 @@ final class Preferences: ObservableObject {
         aiReads = store.value("ai.tools.read", or: true)
         aiActs = store.value("ai.tools.act", or: false)
         tabAsks = store.value("ai.tabAsks", or: false)
+        showsTokens = store.value("ai.showsTokens", or: false)
         // Its own key: "ai.mode" is the chat's (chat, search, research), and the
         // two overwrote each other. One saved there before comes along.
         aiMode = store.value("ai.actMode", or: store.value("ai.mode", or: .ask))
@@ -390,6 +393,7 @@ final class Preferences: ObservableObject {
         keep($aiReads, "ai.tools.read")
         keep($aiActs, "ai.tools.act")
         keep($tabAsks, "ai.tabAsks")
+        keep($showsTokens, "ai.showsTokens")
         keep($aiMode, "ai.actMode")
         keep($aiTrusted, "ai.trusted")
         keep($aiDevSites, "ai.devSites")
