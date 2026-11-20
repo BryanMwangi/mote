@@ -27,14 +27,6 @@ struct InspectorItems: View {
         Button("About Processes…") { browser.showingProcesses = true }.keyboardShortcut(keys(.processes))
         Button("Responsive Design Mode", action: browser.toggleResponsive).keyboardShortcut(keys(.responsive))
             .disabled(blank)
-        Toggle(
-            "Source Maps in Inspector",
-            isOn: Binding(
-                get: { browser.prefs.sourceMaps },
-                set: {
-                    browser.prefs.sourceMaps = $0
-                    browser.syncSourceMaps()
-                }))
     }
 }
 

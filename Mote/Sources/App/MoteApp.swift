@@ -127,6 +127,14 @@ private struct MenuBar: Commands {
                     InspectorItems(browser: browser, keys: keys)
                     Divider()
                     Button("Empty Caches", action: browser.emptyCaches)
+                    Toggle(
+                        "Source Maps in Inspector",
+                        isOn: Binding(
+                            get: { browser.prefs.sourceMaps },
+                            set: {
+                                browser.prefs.sourceMaps = $0
+                                browser.syncSourceMaps()
+                            }))
                 }
             }
         }
