@@ -49,7 +49,11 @@ struct ImportForm: View {
                 }
                 if source.isBrowser, close != nil {
                     Card {
-                        Line("Into a new profile", "A Mote of its own for \(source.name), apart from this one") { Switch(on: $ownProfile) }
+                        Line(
+                            "Into a new profile",
+                            Profiles.shared.ownMote
+                                ? "A Mote of its own for \(source.name), apart from this one"
+                                : "A profile of its own here, with its own sign-ins and history") { Switch(on: $ownProfile) }
                     }
                 }
                 let others = siblings(of: source)
@@ -182,27 +186,53 @@ struct ImportForm: View {
     /// Each into a Mote profile of its own, named after it, made without
     /// opening: a window for each, while importing here, was in the way. Each
     /// brings its things the first time it opens (see importOnLaunch).
-    private func bringOthers(of source: ImportSource) {
-        guard everyProfile else { return }
+    /// Living here, each is brought into its profile after this import, one
+    /// at a time (an import has one profile it brings into): those, returned.
+    private func bringOthers(of source: ImportSource) -> [(source: ImportSource, profile: String, kinds: Set<ImportKind>)] {
+        guard everyProfile else { return [] }
+        let containers = !Profiles.shared.ownMote
+        var later: [(source: ImportSource, profile: String, kinds: Set<ImportKind>)] = []
         for other in siblings(of: source) {
-            let wanted = kinds.intersection(other.kinds).map(\.rawValue).joined(separator: ",")
-            Profiles.shared.add(
-                named: other.profileName, avatar: .init(symbol: "person.fill", color: "#6cbad9"), importing: "\(other.id)|\(wanted)",
-                opening: false)
+            let wanted = kinds.intersection(other.kinds)
+            let avatar = Profiles.Avatar(symbol: "person.fill", color: Self.colors[imported.count % Self.colors.count])
+            // Living here, it's brought in now, into its profile; as its own
+            // Mote, the first time that opens.
+            let id = Profiles.shared.add(
+                named: other.profileName, avatar: avatar,
+                importing: containers ? nil : "\(other.id)|\(wanted.map(\.rawValue).joined(separator: ","))", opening: false)
             imported[other.id] = ImportTally()
+            if containers { later.append((other, id, wanted)) }
         }
+        return later
     }
+
+    /// Each profile brought gets a colour of its own.
+    private static let colors = ["#6cbad9", "#e0a458", "#8fbf6a", "#c47ac0", "#e07a6f", "#6f8fe0"]
 
     private func run() {
         guard let source else { return }
         let others = everyProfile ? siblings(of: source).map(\.profileName) : []
-        bringOthers(of: source)
+        let later = bringOthers(of: source)
         if ownProfile {
-            Profiles.shared.add(
-                named: source.name, avatar: .init(symbol: "person.fill", color: "#6cbad9"),
-                importing: "\(source.id)|\(kinds.map(\.rawValue).joined(separator: ","))")
-            tally = ImportTally()
-            trouble = "\(source.name) opens as a profile of its own, bringing its things there."
+            let avatar = Profiles.Avatar(symbol: "person.fill", color: "#6cbad9")
+            guard !Profiles.shared.ownMote else {
+                Profiles.shared.add(
+                    named: source.name, avatar: avatar, importing: "\(source.id)|\(kinds.map(\.rawValue).joined(separator: ","))")
+                tally = ImportTally()
+                trouble = "\(source.name) opens as a profile of its own, bringing its things there."
+                return
+            }
+            // A profile living here: made, its things brought into it, then a tab in it.
+            let id = Profiles.shared.add(named: source.name, avatar: avatar, opening: false)
+            working = true
+            Task {
+                defer { working = false }
+                let brought = try? await browser.bring(kinds, from: source, into: id)
+                imported[source.id] = brought ?? ImportTally()
+                tally = brought ?? ImportTally()
+                for other in later { _ = try? await browser.bring(other.kinds, from: other.source, into: other.profile) }
+                trouble = "\(source.name) is a profile now: open a tab in it from a tab's menu, or give a space to it."
+            }
             return
         }
         var file: URL?
@@ -242,6 +272,8 @@ struct ImportForm: View {
             } catch {
                 trouble = "Nothing readable there."
             }
+            // The browser's other profiles, into theirs, whatever came of this one.
+            for other in later { _ = try? await browser.bring(other.kinds, from: other.source, into: other.profile) }
         }
     }
 }

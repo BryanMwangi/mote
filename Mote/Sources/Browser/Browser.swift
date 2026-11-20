@@ -96,6 +96,8 @@ final class Browser: NSObject, ObservableObject {
         }
     }
     @Published var peeking = false
+    /// The profile an import is bringing things into (a container), while it runs.
+    var importingInto: String?
     /// The folders closed in this window: each window opens and closes its
     /// own, starting from how they were last left (see toggleFolder).
     @Published var closedFolders = Set(FolderStore.shared.bySpace.values.joined().filter(\.collapsed).map(\.id))

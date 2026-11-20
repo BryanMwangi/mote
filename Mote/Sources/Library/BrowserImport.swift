@@ -22,13 +22,26 @@ nonisolated enum ChromiumImporter {
 
         var root: URL { URL.applicationSupportDirectory.appending(path: folder, directoryHint: .isDirectory) }
 
-        /// Each profile's folder (one with a "Login Data" file), or the one meant.
+        /// Each profile's folder (one with a "Login Data" file), or the one
+        /// meant. Opera keeps its first profile in the root itself, and the
+        /// others under _side_profiles.
         var profiles: [URL] {
-            let folders =
-                (try? FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: nil, options: .skipsHiddenFiles)) ?? []
-            return folders.filter {
-                (profile == nil || $0.lastPathComponent == profile) && FileManager.default.fileExists(atPath: $0.appending(path: "Login Data").path)
+            let list = { (folder: URL) in
+                (try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil, options: .skipsHiddenFiles)) ?? []
             }
+            let candidates = [root] + list(root) + list(root.appending(path: "_side_profiles", directoryHint: .isDirectory))
+            return candidates.filter {
+                (profile == nil || folderName(of: $0) == profile) && FileManager.default.fileExists(atPath: $0.appending(path: "Login Data").path)
+            }
+        }
+
+        /// A profile's folder as Local State names it: "Default", "Profile 1",
+        /// "_side_profiles/…"; the root's (Opera's first) is "Default".
+        func folderName(of url: URL) -> String {
+            let path = url.standardizedFileURL.path
+            let base = root.standardizedFileURL.path
+            guard path.hasPrefix(base), path.count > base.count else { return "Default" }
+            return String(path.dropFirst(base.count).drop { $0 == "/" })
         }
 
         /// Only one of its profiles.
@@ -47,6 +60,7 @@ nonisolated enum ChromiumImporter {
     static let known: [Source] = [
         ("Dia", "Dia/User Data"), ("Chrome", "Google/Chrome"), ("Arc", "Arc/User Data"),
         ("Brave", "BraveSoftware/Brave-Browser"), ("Edge", "Microsoft Edge"), ("Vivaldi", "Vivaldi"), ("Chromium", "Chromium"),
+        ("Opera", "com.operasoftware.Opera"), ("Opera GX", "com.operasoftware.OperaGX"),
     ].map { name, folder in
         let account = name == "Edge" ? "Microsoft Edge" : name
         return Source(name: name, folder: folder, service: "\(account) Safe Storage", account: account)
@@ -63,7 +77,7 @@ nonisolated enum ChromiumImporter {
         let state = (try? Data(contentsOf: source.root.appending(path: "Local State")))
             .flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }
         let info = (state?["profile"] as? [String: Any])?["info_cache"] as? [String: [String: Any]] ?? [:]
-        return source.profiles.map(\.lastPathComponent)
+        return source.profiles.map(source.folderName(of:))
             .sorted { ($0 == "Default" ? 0 : 1, $0) < ($1 == "Default" ? 0 : 1, $1) }
             .map { ($0, info[$0]?["name"] as? String ?? $0) }
     }

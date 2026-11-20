@@ -132,7 +132,8 @@ final class Profiles: ObservableObject {
 
     /// A new profile, with the first's settings, opened at once unless not `opening`.
     /// `importing`: another browser's things for it to bring once it opens (see importOnLaunch).
-    func add(named name: String, avatar: Avatar, picture: NSImage? = nil, importing: String? = nil, opening: Bool = true) {
+    @discardableResult
+    func add(named name: String, avatar: Avatar, picture: NSImage? = nil, importing: String? = nil, opening: Bool = true) -> String {
         let id = String(UUID().uuidString.prefix(8)).lowercased()
         list.append(Profile(id: id, name: name.isEmpty ? "Profile" : name, avatar: avatar))
         if let picture { keep(picture, for: id) }
@@ -141,9 +142,10 @@ final class Profiles: ObservableObject {
         guard opening else {
             // Brought in the first time it opens, however it's opened.
             if let importing, let suite = Storage.suite(for: id) { UserDefaults(suiteName: suite)?.set(importing, forKey: "import.pending") }
-            return
+            return id
         }
         open(id, importing: importing)
+        return id
     }
 
     func rename(_ id: String, to name: String) {

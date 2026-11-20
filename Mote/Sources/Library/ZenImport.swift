@@ -105,6 +105,8 @@ extension Browser {
             var space = Space(
                 id: UUID(), name: zen.name, icon: zen.icon ?? list.freeIcon, sharesSignIns: !zen.ownData, origin: origin)
             space.theme = zen.theme
+            // Brought into a profile living here: its spaces live in it.
+            space.profile = importingInto
             list.add(space)
             made.append(space)
             // Zen's folders, as Mote's, each after its parent.

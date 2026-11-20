@@ -136,7 +136,7 @@ struct ImportSource: Identifiable, Hashable {
     private static let chromiumBundles = [
         "Dia": "company.thebrowser.dia", "Chrome": "com.google.Chrome", "Arc": "company.thebrowser.Browser",
         "Brave": "com.brave.Browser", "Edge": "com.microsoft.edgemac", "Vivaldi": "com.vivaldi.Vivaldi",
-        "Chromium": "org.chromium.Chromium",
+        "Chromium": "org.chromium.Chromium", "Opera": "com.operasoftware.Opera", "Opera GX": "com.operasoftware.OperaGX",
     ]
 
     /// Every browser profile on this Mac Mote can read, the Mac's default
@@ -226,11 +226,17 @@ extension Browser {
     /// Brings `kinds` over from `source`. Safari and the files need `file`:
     /// Safari's export (its folder or zip), or the file itself. Nothing in the
     /// other browser changes.
+    /// `profile`: into that profile living here (a container): its history,
+    /// and Zen's spaces living in it; bookmarks and passwords, which profiles
+    /// here share, as usual; and not this Mote's shortcuts or extensions.
     func bring(
-        _ kinds: Set<ImportKind>, from source: ImportSource, file: URL? = nil, primaryPassword: String = ""
+        _ kinds: Set<ImportKind>, from source: ImportSource, file: URL? = nil, primaryPassword: String = "", into profile: String? = nil
     )
         async throws -> ImportTally
     {
+        importingInto = profile
+        defer { importingInto = nil }
+        let kinds = profile == nil ? kinds : kinds.subtracting([.shortcuts, .addOns])
         var tally = ImportTally()
         /// Pages whose icons a Firefox-family browser has kept.
         var iconsWanted: [URL] = []
@@ -367,6 +373,7 @@ extension Browser {
     }
 
     private func take(_ visits: [Visit]) -> Int {
+        let history = Profiles.shared.history(for: importingInto)
         for visit in visits { history.merge(visit.url, title: visit.title, count: visit.count, last: visit.last) }
         history.scheduleSave()
         return visits.count
