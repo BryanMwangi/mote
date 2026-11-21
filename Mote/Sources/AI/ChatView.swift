@@ -974,7 +974,10 @@ private struct UsageCard: View {
                 .buttonStyle(.plain).foregroundStyle(Palette.muted).help("Close")
         }
         .padding(12)
-        .bubble(shadow: 0.08, radius: 12)
+        // Rounded corners, not a capsule: it's several lines tall.
+        .background(Palette.ground, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Palette.hairline))
+        .shadow(color: .black.opacity(0.08), radius: 12, y: 6)
         .transition(.opacity.combined(with: .offset(y: 6)))
     }
 
