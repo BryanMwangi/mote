@@ -628,8 +628,7 @@ final class Tab: ObservableObject, Identifiable {
         guard let controller = built?.configuration.userContentController else { return }
         // Every navigation arms the page; the scripts go to it again only when
         // they'd differ, or it's a page made since.
-        // The script itself only acts on YouTube; blocking may be off there.
-        let ads = AdBlocker.shared.blocksAds(on: "youtube.com")
+        let ads = AdBlocker.shared.pageRules(for: (url ?? pending ?? address)?.host())
         let armed = (ObjectIdentifier(controller), config, boostScript, ads, dev, notify)
         if let last = lastArmed, last.0 == armed.0, last.1 == armed.1, last.2 == armed.2, last.3 == armed.3, last.4 == armed.4,
             last.5 == armed.5
@@ -642,7 +641,7 @@ final class Tab: ObservableObject, Identifiable {
     }
 
     /// What the page's scripts were last made from, and for which controller.
-    private var lastArmed: (ObjectIdentifier, ElementHidingStyle.Config, String, Bool, Bool, String)?
+    private var lastArmed: (ObjectIdentifier, ElementHidingStyle.Config, String, AdBlocker.PageRules, Bool, String)?
 
     /// The boost for the site the tab is loading, as script (see Boosts.swift).
     var boostScript = ""
@@ -767,7 +766,8 @@ final class Tab: ObservableObject, Identifiable {
     /// that were there are gone.
     func fill(user: String, password: String, atMenu: Bool = false, done: ((Bool) -> Void)? = nil) {
         web.callInAppWorld(
-            "return window.__moteForms?.fill(user, password, menu) ?? false", arguments: ["user": user, "password": password, "menu": atMenu]
+            "return window.__moteForms?.fill(user, password, menu) ?? false",
+            arguments: ["user": user, "password": password, "menu": atMenu]
         ) {
             done?(($0 as? Bool) ?? false)
         }

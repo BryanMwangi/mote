@@ -8,6 +8,7 @@
 #   make reopen     open the test world as it was left
 #   make dmg        build/Mote.dmg (Apple silicon) and build/Mote-Intel.dmg, unsigned
 #   make scripts    build the injected TypeScript (Scripts/) into Mote/Resources/Scripts
+#   make ublock     bring uBlock Origin's newest scriptlets in (every build does)
 #   make test       unit, script and integration tests
 #   make test-ui    end-to-end tests (the first run asks for Accessibility access)
 #   make format     format the Swift sources with swift-format
@@ -34,19 +35,24 @@ WORLD_SUITE := io.github.mote-browser.mote.test$(if $(filter test,$(WORLD_NAME))
 WORLD_STORE := $(shell python3 -c 'import sys,functools;w=sys.argv[1];h=0 if w=="test" else functools.reduce(lambda h,b:((h^b)*16777619)&0xFFFFFFFF,w.encode(),2166136261);print("5E4C%04X-%04X-4000-8000-000000000001"%(h>>16,h&0xFFFF))' '$(WORLD_NAME)')
 
 .DEFAULT_GOAL := help
-.PHONY: help build dev fresh reopen dmg scripts test test-unit test-scripts test-integration test-ui format lint clean
+.PHONY: help ublock build dev fresh reopen dmg scripts test test-unit test-scripts test-integration test-ui format lint clean
 
 help: ## List the targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  make %-8s %s\n", $$1, $$2}'
 
-build: ## Release build → build/Mote.app
+build: ublock ## Release build → build/Mote.app
 	$(XCODEBUILD) -configuration Release build
 	@rm -rf $(APP) $(APP).dSYM
 	@ditto $(DERIVED)/Build/Products/Release/Mote.app $(APP)
 	@ditto $(DERIVED)/Build/Products/Release/Mote.app.dSYM $(APP).dSYM
 	@echo "built: $(APP)"
 
-dev: ## Debug build, opened in the test world
+# Its filter lists come over the air (AdBlocker.swift); its scriptlets, code,
+# come with each build. Offline, the copy in Mote/Resources stays.
+ublock: ## Bring uBlock Origin's newest scriptlets in (every build does)
+	@node Tools/ublock/sync.mjs
+
+dev: ublock ## Debug build, opened in the test world
 	$(XCODEBUILD) -configuration Debug build
 	open -n $(DERIVED)/Build/Products/Debug/Mote.app
 
@@ -64,7 +70,7 @@ reopen: ## Open the test world as it was left (WORLD=name for another)
 # Apple silicon's keeps the names the site and older copies' updates use.
 CHIPS := AppleSilicon:arm64:Mote Intel:x86_64:Mote-Intel
 
-dmg: ## build/Mote.dmg (Apple silicon) and build/Mote-Intel.dmg, each its own build, unsigned (needs uv: https://docs.astral.sh/uv)
+dmg: ublock ## build/Mote.dmg (Apple silicon) and build/Mote-Intel.dmg, each its own build, unsigned (needs uv: https://docs.astral.sh/uv)
 	@rm -rf $(BUILD_DIR)/dmg-art $(BUILD_DIR)/Mote.dmg $(BUILD_DIR)/Mote-Intel.dmg
 	@for chip in $(CHIPS); do \
 		name=$${chip%%:*}; rest=$${chip#*:}; arch=$${rest%%:*}; file=$${rest#*:}; \

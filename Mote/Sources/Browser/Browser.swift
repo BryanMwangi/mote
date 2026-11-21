@@ -463,6 +463,7 @@ final class Browser: NSObject, ObservableObject {
     private func startApp() {
         AdBlocker.shared.enabled = prefs.shielded
         AdBlocker.shared.compile()
+        AdBlocker.shared.startLists()
         if #available(macOS 15.4, *) { Extensions.shared.start(for: self) }
         if prefs.bench {
             Bench.shared.start(for: self)
@@ -552,6 +553,8 @@ final class Browser: NSObject, ObservableObject {
         on(prefs.$shielded) { browser, on in
             AdBlocker.shared.enabled = on
             AdBlocker.shared.apply(to: browser.tabs.compactMap { $0.built?.configuration.userContentController })
+            // Back on: uBlock Origin's lists as they are now.
+            if on { Task { await AdBlocker.shared.refresh(force: true) } }
             browser.announce(on ? "Ads and trackers blocked" : "Blocking off — reload to see the difference")
         }
         on(prefs.$look) { browser, _ in browser.refreshIconsSoon() }
