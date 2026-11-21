@@ -18,10 +18,10 @@ nonisolated enum ZenImporter {
         case unreadable
     }
 
-    private static let root = URL.applicationSupportDirectory.appending(path: "zen", directoryHint: .isDirectory)
-
-    /// The profiles with a session to bring, the default first.
-    static func profiles() -> [Profile] {
+    /// The profiles with a session to bring, the default first. `base`:
+    /// where Zen's folder is, Application Support but in tests.
+    static func profiles(in base: URL = .applicationSupportDirectory) -> [Profile] {
+        let root = base.appending(path: "zen", directoryHint: .isDirectory)
         guard let list = try? String(contentsOf: root.appending(path: "profiles.ini"), encoding: .utf8) else { return [] }
         let installs = try? String(contentsOf: root.appending(path: "installs.ini"), encoding: .utf8)
         return FirefoxProfiles.parse(profiles: list, installs: installs).compactMap { found in

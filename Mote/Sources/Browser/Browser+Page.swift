@@ -172,6 +172,8 @@ extension Browser {
     /// Brings in another browser's history, read off the main actor.
     func takePlaces(from source: ChromiumImporter.Source) async -> Int {
         let places = await Task.detached(priority: .userInitiated) { ChromiumImporter.places(in: source) }.value
+        // Into the profile an import is bringing things into, or this Mote's.
+        let history = Profiles.shared.history(for: importingInto)
         for place in places { history.merge(place.url, title: place.title, count: place.count, last: place.last) }
         history.scheduleSave()
         return places.count

@@ -17,10 +17,12 @@ nonisolated enum ChromiumImporter {
         let account: String
         /// One profile's folder name, when only it is meant.
         var profile: String? = nil
+        /// Where browsers keep their folders: Application Support, or a test's.
+        var base = URL.applicationSupportDirectory
 
         var id: String { name + (profile.map { ":\($0)" } ?? "") }
 
-        var root: URL { URL.applicationSupportDirectory.appending(path: folder, directoryHint: .isDirectory) }
+        var root: URL { base.appending(path: folder, directoryHint: .isDirectory) }
 
         /// Each profile's folder (one with a "Login Data" file), or the one
         /// meant. Opera keeps its first profile in the root itself, and the
@@ -66,9 +68,14 @@ nonisolated enum ChromiumImporter {
         return Source(name: name, folder: folder, service: "\(account) Safe Storage", account: account)
     }
 
-    /// The known browsers with a profile on this Mac.
-    static func installed() -> [Source] {
-        known.filter { !$0.profiles.isEmpty }
+    /// The known browsers with a profile on this Mac (in `base`).
+    static func installed(in base: URL = .applicationSupportDirectory) -> [Source] {
+        known.map { source in
+            var source = source
+            source.base = base
+            return source
+        }
+        .filter { !$0.profiles.isEmpty }
     }
 
     /// Its profiles' folders and the names the browser shows for them
@@ -79,7 +86,7 @@ nonisolated enum ChromiumImporter {
         let info = (state?["profile"] as? [String: Any])?["info_cache"] as? [String: [String: Any]] ?? [:]
         return source.profiles.map(source.folderName(of:))
             .sorted { ($0 == "Default" ? 0 : 1, $0) < ($1 == "Default" ? 0 : 1, $1) }
-            .map { ($0, info[$0]?["name"] as? String ?? $0) }
+            .map { ($0, info[$0]?["name"] as? String ?? ($0 as NSString).lastPathComponent) }
     }
 
     enum Trouble: Error {

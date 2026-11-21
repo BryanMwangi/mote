@@ -56,7 +56,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     /// Receives the current value too, so settings asked for before the
     /// browser window appeared still open. On the next turn, since
     /// @Published sends before the value is stored.
-    private func follow(_ browser: Browser) {
+    func follow(_ browser: Browser) {
         let watch = browser.$tuning.receive(on: DispatchQueue.main).sink { [weak self, weak browser] on in
             guard let self, let browser else { return }
             if on {

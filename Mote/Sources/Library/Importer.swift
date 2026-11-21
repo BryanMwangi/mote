@@ -141,9 +141,10 @@ struct ImportSource: Identifiable, Hashable {
 
     /// Every browser profile on this Mac Mote can read, the Mac's default
     /// browser first; then Safari, through its export; then files.
-    static func found() -> [ImportSource] {
+    /// `base`: where browsers keep their folders, Application Support but in tests.
+    static func found(in base: URL = .applicationSupportDirectory) -> [ImportSource] {
         var browsers: [ImportSource] = []
-        for source in ChromiumImporter.installed() {
+        for source in ChromiumImporter.installed(in: base) {
             let profiles = ChromiumImporter.profileNames(in: source)
             for (folder, profile) in profiles {
                 browsers.append(
@@ -152,9 +153,9 @@ struct ImportSource: Identifiable, Hashable {
                         browser: source.name, bundle: chromiumBundles[source.name], family: .chromium(source.only(folder))))
             }
         }
-        let zens = ZenImporter.profiles()
+        let zens = ZenImporter.profiles(in: base)
         for (name, folder, bundle) in firefoxes {
-            let profiles = firefoxProfiles(in: folder)
+            let profiles = firefoxProfiles(in: folder, base: base)
             for (profile, path) in profiles {
                 browsers.append(
                     ImportSource(
@@ -175,8 +176,8 @@ struct ImportSource: Identifiable, Hashable {
     }
 
     /// A Firefox-family browser's profiles that have something to bring, the default first.
-    private static func firefoxProfiles(in folder: String) -> [(String, URL)] {
-        let root = URL.applicationSupportDirectory.appending(path: folder, directoryHint: .isDirectory)
+    private static func firefoxProfiles(in folder: String, base: URL) -> [(String, URL)] {
+        let root = base.appending(path: folder, directoryHint: .isDirectory)
         guard let list = try? String(contentsOf: root.appending(path: "profiles.ini"), encoding: .utf8) else { return [] }
         let installs = try? String(contentsOf: root.appending(path: "installs.ini"), encoding: .utf8)
         return FirefoxProfiles.parse(profiles: list, installs: installs)

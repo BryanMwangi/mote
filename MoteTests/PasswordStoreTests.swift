@@ -36,10 +36,10 @@ struct PasswordStoreTests {
         }
         #expect(PasswordStore.save(host: site, user: "old", password: "x", used: Date(timeIntervalSince1970: 1)))
         #expect(PasswordStore.save(host: sub, user: "new", password: "y", used: Date(timeIntervalSince1970: 2)))
-        #expect(PasswordStore.logins(matching: sub).map(\.user) == ["new", "old"])
+        #expect(PasswordStore.accounts(matching: sub).map(\.user) == ["new", "old"])
         let old = try #require(PasswordStore.logins(for: site).first)
         PasswordStore.touch(old)
-        #expect(PasswordStore.logins(matching: sub).first?.user == "old")
+        #expect(PasswordStore.accounts(matching: sub).first?.user == "old")
     }
 
     @Test("Empty sites and passwords are refused")

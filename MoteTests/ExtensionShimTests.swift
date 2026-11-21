@@ -106,7 +106,8 @@ private struct ShimPage {
     /// The built shim with an extension's values, as `ExtensionShims.shim(for:)` makes it.
     static let shim = InjectedScript.source(
         "extension-shims",
-        config: ExtensionShims.ShimConfig(events: [], scripts: [], chromeVersion: "140.0.7339.0", verbose: false))
+        config: ExtensionShims.ShimConfig(
+            events: [], scripts: [], chromeVersion: "140.0.7339.0", verbose: false, firefox: false, firefoxVersion: "140.0"))
 
     /// Runs `body` as an async function; its result comes back as JSON.
     func json(_ body: String) async throws -> String {

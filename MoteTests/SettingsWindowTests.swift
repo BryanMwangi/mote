@@ -8,21 +8,12 @@ import Testing
 @Suite("Settings window")
 @MainActor
 struct SettingsWindowTests {
-    /// Stands in for `browser.tuning`.
-    final class Tuning: ObservableObject {
-        @Published var on = false
-    }
-
-    /// A settings window following `tuning`, counting the panels it builds.
-    private func make(_ tuning: Tuning, built: @escaping () -> Void = {}) -> SettingsWindow {
-        SettingsWindow(
-            showing: tuning.$on,
-            panel: {
-                built()
-                return NSView()
-            },
-            dismissed: { tuning.on = false }
-        )
+    /// A settings window following a browser window's `tuning`, as the app's does.
+    private func make() -> (SettingsWindow, Browser) {
+        let browser = Browser()
+        let settings = SettingsWindow()
+        settings.follow(browser)
+        return (settings, browser)
     }
 
     private func key(_ characters: String, code: UInt16, flags: NSEvent.ModifierFlags = [], in window: NSWindow) -> NSEvent {
@@ -34,12 +25,11 @@ struct SettingsWindowTests {
 
     @Test("Opens in a window of its own when settings are asked for")
     func opens() async throws {
-        let tuning = Tuning()
-        let settings = make(tuning)
+        let (settings, browser) = make()
         defer { settings.window.close() }
         #expect(!settings.window.isVisible)
 
-        tuning.on = true
+        browser.tuning = true
         _ = try await eventually { settings.window.isVisible ? true : nil }
         #expect(settings.window !== AppDelegate.window)
         #expect(settings.window.styleMask.contains(.titled))
@@ -48,69 +38,65 @@ struct SettingsWindowTests {
 
     @Test("Closes when settings are dismissed from elsewhere")
     func closesWhenDismissed() async throws {
-        let tuning = Tuning()
-        let settings = make(tuning)
+        let (settings, browser) = make()
         defer { settings.window.close() }
-        tuning.on = true
+        browser.tuning = true
         _ = try await eventually { settings.window.isVisible ? true : nil }
 
-        tuning.on = false
+        browser.tuning = false
         _ = try await eventually { settings.window.isVisible ? nil : true }
     }
 
     @Test("Closing the window dismisses settings")
     func closingDismisses() async throws {
-        let tuning = Tuning()
-        let settings = make(tuning)
-        tuning.on = true
+        let (settings, browser) = make()
+        browser.tuning = true
         _ = try await eventually { settings.window.isVisible ? true : nil }
 
         settings.window.performClose(nil)
-        _ = try await eventually { tuning.on ? nil : true }
+        _ = try await eventually { browser.tuning ? nil : true }
         #expect(!settings.window.isVisible)
     }
 
     @Test("Asking again while open keeps the same panel; reopening builds a fresh one")
     func freshPanelOnReopen() async throws {
-        let tuning = Tuning()
-        var panels = 0
-        let settings = make(tuning) { panels += 1 }
+        let (settings, browser) = make()
         defer { settings.window.close() }
 
-        tuning.on = true
+        browser.tuning = true
         _ = try await eventually { settings.window.isVisible ? true : nil }
-        tuning.on = true
+        let first = settings.window.contentView
+        browser.tuning = true
         try await Task.sleep(for: .milliseconds(100))
-        #expect(panels == 1)
+        #expect(settings.window.contentView === first)
 
-        tuning.on = false
+        browser.tuning = false
         _ = try await eventually { settings.window.isVisible ? nil : true }
-        tuning.on = true
+        browser.tuning = true
         _ = try await eventually { settings.window.isVisible ? true : nil }
-        #expect(panels == 2)
+        #expect(settings.window.contentView !== first)
     }
 
     @Test("Escape and ⌘W close the window; other keys are left alone")
     func keys() async throws {
-        let tuning = Tuning()
-        let settings = make(tuning)
+        let (settings, browser) = make()
         defer { settings.window.close() }
         let window = settings.window
 
-        tuning.on = true
+        browser.tuning = true
         _ = try await eventually { window.isVisible ? true : nil }
         #expect(!settings.take(key("t", code: 17, flags: .command, in: window)))
         #expect(!settings.take(key("a", code: 0, in: window)))
         #expect(window.isVisible)
 
         #expect(settings.take(key("\u{1b}", code: 53, in: window)))
-        _ = try await eventually { tuning.on ? nil : true }
+        _ = try await eventually { browser.tuning ? nil : true }
         #expect(!window.isVisible)
 
-        tuning.on = true
+        browser.tuning = true
         _ = try await eventually { window.isVisible ? true : nil }
         #expect(settings.take(key("w", code: 13, flags: .command, in: window)))
-        _ = try await eventually { tuning.on ? nil : true }
+        _ = try await eventually { browser.tuning ? nil : true }
         #expect(!window.isVisible)
     }
 
@@ -146,15 +132,9 @@ struct SettingsWindowTests {
 
     @Test("The page runs all the way to the bottom of the window")
     func pageReachesBottom() async throws {
-        let browser = Browser()
-        let tuning = Tuning()
-        let settings = SettingsWindow(
-            showing: tuning.$on,
-            panel: { NSHostingView(rootView: SettingsPanel(browser: browser, prefs: browser.prefs)) },
-            dismissed: { tuning.on = false }
-        )
+        let (settings, browser) = make()
         defer { settings.window.close() }
-        tuning.on = true
+        browser.tuning = true
         _ = try await eventually { settings.window.isVisible ? true : nil }
         try await Task.sleep(for: .milliseconds(300))
 
