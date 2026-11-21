@@ -90,7 +90,6 @@ struct ComposerPicker: View {
                         .buttonStyle(.plain)
                         .help(item.help)
                         .accessibilityLabel(item.accessibilityName)
-                        .id(index)
                     }
                 }
                 .padding(.vertical, 3)
@@ -99,7 +98,9 @@ struct ComposerPicker: View {
             .frame(height: CGFloat(min(items.count, 6)) * 28 + 6)
             .onChange(of: highlighted) { _, index in
                 guard let index, items.indices.contains(index) else { return }
-                withAnimation(Motion.quick) { proxy.scrollTo(index, anchor: .center) }
+                // By the item's own id, which is the row's: an id by place kept
+                // a row's old command showing as the list narrowed.
+                withAnimation(Motion.quick) { proxy.scrollTo(items[index].id, anchor: .center) }
             }
             .background(Palette.wash, in: Rounded.card)
             .overlay(Rounded.card.strokeBorder(Palette.hairline))

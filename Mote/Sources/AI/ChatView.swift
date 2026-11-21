@@ -56,8 +56,8 @@ struct ChatView<Accessory: View, Start: View>: View {
             ZStack(alignment: .bottom) {
                 // The thin thumb the tab list has, with no track or border.
                 follow(ScrollView { transcript }.floatingScrollBar().coordinateSpace(name: "chat"), scroller)
-                .onChange(of: distance) { _, now in if now == .end { pinned = true } }
-                .onScrollUp { pinned = false }
+                    .onChange(of: distance) { _, now in if now == .end { pinned = true } }
+                    .onScrollUp { pinned = false }
 
                 VStack(spacing: 10) {
                     if distance == .far {
@@ -79,16 +79,22 @@ struct ChatView<Accessory: View, Start: View>: View {
                         )
                         .frame(maxWidth: Self.column)
                     }
-                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { overEnd = $0 }
+                    .onGeometryChange(for: CGFloat.self) {
+                        $0.size.height
+                    } action: {
+                        overEnd = $0
+                    }
                 }
                 .padding(.horizontal, 28)
                 .padding(.bottom, 18)
                 .frame(maxWidth: .infinity)
                 .background(alignment: .bottom) {
                     // The conversation fades out under the composer.
-                    LinearGradient(colors: [(fade ?? ground).opacity(0), fade ?? ground], startPoint: .top, endPoint: .init(x: 0.5, y: 0.45))
-                        .frame(height: max(inputHeight + 110, overEnd + 24))
-                        .allowsHitTesting(false)
+                    LinearGradient(
+                        colors: [(fade ?? ground).opacity(0), fade ?? ground], startPoint: .top, endPoint: .init(x: 0.5, y: 0.45)
+                    )
+                    .frame(height: max(inputHeight + 110, overEnd + 24))
+                    .allowsHitTesting(false)
                 }
                 .animation(Motion.quick, value: distance == .far)
             }
@@ -112,7 +118,8 @@ struct ChatView<Accessory: View, Start: View>: View {
     private var transcript: some View {
         let messages = conversation.messages
         // Where the chat was summarised, before the first message after.
-        let summarisedAt = conversation.summarised > 0 && conversation.summarised < messages.count ? messages[conversation.summarised].id : nil
+        let summarisedAt =
+            conversation.summarised > 0 && conversation.summarised < messages.count ? messages[conversation.summarised].id : nil
         return VStack(alignment: .leading, spacing: 26) {
             if messages.isEmpty { start() }
             // Built as they scroll into view: a long chat lays out only what shows.
@@ -155,7 +162,8 @@ struct ChatView<Accessory: View, Start: View>: View {
     /// Keeps to the end as the reply grows, unless scrolled up to read; opens there.
     private func follow(_ view: some View, _ scroller: ScrollViewProxy) -> some View {
         let toEnd = { if pinned { scroller.scrollTo(Self.end, anchor: .bottom) } }
-        return view
+        return
+            view
             .onChange(of: conversation.messages.last?.text) { toEnd() }
             .onChange(of: conversation.messages.count) {
                 pinned = true
@@ -525,8 +533,11 @@ private struct Status: View {
                     Button {
                         Task { _ = await ledger.undo(done.map(\.id), in: conversation.id) }
                     } label: {
-                        Label(done.count == 1 ? "Undo what it did" : "Undo the \(done.count) things it did", systemImage: "arrow.uturn.backward")
-                            .font(.system(size: 12.5))
+                        Label(
+                            done.count == 1 ? "Undo what it did" : "Undo the \(done.count) things it did",
+                            systemImage: "arrow.uturn.backward"
+                        )
+                        .font(.system(size: 12.5))
                     }
                     .buttonStyle(.plain)
                     .foregroundStyle(Palette.muted)
@@ -714,6 +725,9 @@ private struct ChatComposer: View {
         dismissedMenu = nil
         selection.reset()
         releaseEscapePick()
+        // One Mote runs itself (/usage, /compact, /new, /clear) runs as it's
+        // picked: left as the draft, the picker would only offer it again.
+        if case .skill(let skill) = item, skill.prompt.hasPrefix("/") { send() }
     }
 
     private func moveSelection(_ step: Int) -> Bool {
@@ -783,7 +797,8 @@ private struct ChatComposer: View {
                 if conversation.busy, !hasText {
                     RoundButton(symbol: "stop.fill", filled: true, help: "Stop   esc") { conversation.stop() }
                 } else {
-                    RoundButton(symbol: "arrow.up", filled: hasText, help: conversation.busy ? "Send after this reply   ↩" : "Send   ↩", act: send)
+                    RoundButton(
+                        symbol: "arrow.up", filled: hasText, help: conversation.busy ? "Send after this reply   ↩" : "Send   ↩", act: send)
                 }
             }
         }
@@ -966,7 +981,8 @@ private struct UsageCard: View {
                 row("Last reply", conversation.turnSpent)
                 row("This chat", conversation.chatSpent)
                 if conversation.chatSpent == nil {
-                    Text("Nothing counted yet: some models don't say what they spent.").font(.system(size: 11.5)).foregroundStyle(Palette.muted)
+                    Text("Nothing counted yet: some models don't say what they spent.").font(.system(size: 11.5)).foregroundStyle(
+                        Palette.muted)
                 }
             }
             Spacer(minLength: 0)
@@ -974,10 +990,9 @@ private struct UsageCard: View {
                 .buttonStyle(.plain).foregroundStyle(Palette.muted).help("Close")
         }
         .padding(12)
-        // Rounded corners, not a capsule: it's several lines tall.
-        .background(Palette.ground, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Palette.hairline))
-        .shadow(color: .black.opacity(0.08), radius: 12, y: 6)
+        // A card as the composer's others are (its picker, the page chip).
+        .background(Palette.wash, in: Rounded.card)
+        .overlay(Rounded.card.strokeBorder(Palette.hairline))
         .transition(.opacity.combined(with: .offset(y: 6)))
     }
 
