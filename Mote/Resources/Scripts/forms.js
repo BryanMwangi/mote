@@ -211,14 +211,27 @@
 		if (tag === "textarea") return true;
 		if (element.isContentEditable === true) return true;
 		if (element.getAttribute && element.getAttribute("role") === "textbox") return true;
-		if (tag === "iframe") try {
-			const inner = element.contentDocument;
-			return acceptsTyping(inner && inner.activeElement);
-		} catch {
-			return false;
+		if (tag === "iframe") {
+			if (!sameOrigin(element)) return false;
+			try {
+				const inner = element.contentDocument;
+				return acceptsTyping(inner && inner.activeElement);
+			} catch {
+				return false;
+			}
 		}
 		if (tag !== "input") return false;
 		return TYPING_TYPES.has((element.type || "text").toLowerCase());
+	}
+	/** Whether a frame's document is this page's origin, judged without touching it. */
+	function sameOrigin(frame) {
+		try {
+			const url = new URL(frame.getAttribute("src") || "about:blank", location.href);
+			if (url.protocol === "about:") return !frame.hasAttribute("sandbox") || frame.sandbox.contains("allow-same-origin");
+			return url.origin === location.origin;
+		} catch {
+			return false;
+		}
 	}
 	/** A field's frame in the viewport, in CSS pixels, or null while it takes no room. */
 	function fieldFrame(element) {

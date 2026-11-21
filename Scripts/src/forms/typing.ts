@@ -90,6 +90,8 @@ export function acceptsTyping(element: Element | null | undefined): boolean {
   // A document that types into a frame of its own: Google Docs keeps the
   // caret there, and ⌘⇧V is that document's paste, so the frame counts.
   if (tag === 'iframe') {
+    // Only a frame of this page's own: WebKit logs an error for reading another's.
+    if (!sameOrigin(element as HTMLIFrameElement)) return false;
     try {
       const inner = (element as HTMLIFrameElement).contentDocument;
       return acceptsTyping(inner && inner.activeElement);
@@ -99,6 +101,18 @@ export function acceptsTyping(element: Element | null | undefined): boolean {
   }
   if (tag !== 'input') return false;
   return TYPING_TYPES.has(((element as Editable).type || 'text').toLowerCase());
+}
+
+/** Whether a frame's document is this page's origin, judged without touching it. */
+function sameOrigin(frame: HTMLIFrameElement): boolean {
+  try {
+    const url = new URL(frame.getAttribute('src') || 'about:blank', location.href);
+    if (url.protocol === 'about:')
+      return !frame.hasAttribute('sandbox') || frame.sandbox.contains('allow-same-origin');
+    return url.origin === location.origin;
+  } catch {
+    return false;
+  }
 }
 
 /** A field's frame in the viewport, in CSS pixels, or null while it takes no room. */

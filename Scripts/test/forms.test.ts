@@ -253,6 +253,18 @@ describe('acceptsTyping', () => {
     for (const id of ['c', 'b', 'p']) expect(acceptsTyping(byId(id))).toBe(false);
     expect(acceptsTyping(null)).toBe(false);
   });
+
+  it('never looks into a frame of another origin', () => {
+    document.body.innerHTML =
+      '<iframe id="data" src="data:text/html,x"></iframe><iframe id="boxed" sandbox></iframe>';
+    for (const id of ['data', 'boxed']) {
+      const frame = byId(id);
+      let read = false;
+      Object.defineProperty(frame, 'contentDocument', { get: () => ((read = true), null) });
+      expect(acceptsTyping(frame)).toBe(false);
+      expect(read).toBe(false);
+    }
+  });
 });
 
 describe('fieldFrame', () => {

@@ -439,7 +439,7 @@
 	const stringify = JSON.stringify;
 	const then = Promise.prototype.then;
 	const isPrototypeOf = Object.prototype.isPrototypeOf;
-	const containerProto = CredentialsContainer.prototype;
+	const containerProto = window.CredentialsContainer?.prototype;
 	const typeErrorProto = TypeError.prototype;
 	/** `value instanceof CredentialsContainer`, which a page can't redefine. */
 	const isContainer = (value) => apply(isPrototypeOf, containerProto, [value]);

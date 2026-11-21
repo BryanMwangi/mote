@@ -41,7 +41,8 @@ const PagePromise = Promise;
 const stringify = JSON.stringify;
 const then = Promise.prototype.then;
 const isPrototypeOf = Object.prototype.isPrototypeOf;
-const containerProto: object = CredentialsContainer.prototype;
+// Missing where the page isn't a secure context (a data: frame); nothing is installed there.
+const containerProto: object | undefined = window.CredentialsContainer?.prototype;
 const typeErrorProto: object = TypeError.prototype;
 
 /** `value instanceof CredentialsContainer`, which a page can't redefine. */
