@@ -74,6 +74,11 @@ public final class Conversation: Identifiable {
     /// the whole chat, kept with it. `usage` is only the latest round.
     public private(set) var turnSpent: Usage?
     public private(set) var chatSpent: Usage?
+    /// So far on the turn under way, from a provider that only adds it up at
+    /// the end (`ChatEvent.spending`); gone once it does.
+    public private(set) var spending: Usage?
+    /// The turn under way's spend as known now, for the live count.
+    public var spentSoFar: Usage? { spending.map { turnSpent + $0 } ?? turnSpent }
     /// The page the person has shared with this chat, if any. Kept as the tab
     /// moves: the page is detached on navigation, not thrown away.
     public private(set) var page: PageContext?
@@ -481,6 +486,7 @@ public final class Conversation: Identifiable {
         let turn = turn
         let compacting = wantsCompacting
         turnSpent = nil
+        spending = nil
         messages.append(Message(role: .assistant, text: ""))
         phase = .waiting
         activities = []
@@ -625,9 +631,12 @@ public final class Conversation: Identifiable {
                 messages[last].steps.append(activity)
             }
         case .usage(let spent):
+            spending = nil
             usage = spent
             turnSpent = turnSpent + spent
             chatSpent = chatSpent + spent
+        case .spending(let sofar):
+            spending = sofar
         case .source(let source):
             if !messages[last].sources.contains(where: { $0.id == source.id }) { messages[last].sources.append(source) }
         case .toolCall:

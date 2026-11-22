@@ -963,7 +963,7 @@ private struct TokenLine: View {
     let conversation: Conversation
 
     var body: some View {
-        if prefs.showsTokens, conversation.busy, let spent = conversation.turnSpent {
+        if prefs.showsTokens, conversation.busy, let spent = conversation.spentSoFar {
             Text(spentLine(spent)).font(.system(size: 11.5)).foregroundStyle(Palette.faint).monospacedDigit()
                 .transition(.opacity)
         }

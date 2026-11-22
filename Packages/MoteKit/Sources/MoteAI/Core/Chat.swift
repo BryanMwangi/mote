@@ -85,6 +85,9 @@ public enum ChatEvent: Equatable, Sendable {
     case activity(Activity)
     /// What the turn cost, once known.
     case usage(Usage)
+    /// What the turn has spent so far, for a provider that only says what it
+    /// cost at the end: shown while it works, and replaced by `usage`.
+    case spending(Usage)
     /// A page the provider found or read on the way.
     case source(Source)
     /// The model asks for a tool (see ToolLoop).

@@ -45,6 +45,24 @@ struct ClaudeCodeDecoderTests {
         #expect(try decode(ClaudeCodeDecoder(), lines) == [.usage(Usage(input: 16007, output: 9))])
     }
 
+    @Test("While it works, what the turn has spent so far: the chat's size, and every call's words")
+    func spendingLive() throws {
+        let event = { (json: String) in #"{"type":"stream_event","event":"# + json + #","parent_tool_use_id":null}"# }
+        let lines = [
+            event(#"{"type":"message_start","message":{"usage":{"input_tokens":5,"cache_read_input_tokens":1000}}}"#),
+            event(#"{"type":"message_delta","delta":{"stop_reason":"tool_use"},"usage":{"output_tokens":40}}"#),
+            event(#"{"type":"message_start","message":{"usage":{"input_tokens":3,"cache_read_input_tokens":1200}}}"#),
+            event(#"{"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":7}}"#),
+            #"{"type":"result","subtype":"success","is_error":false,"usage":{"input_tokens":8,"cache_read_input_tokens":2200,"output_tokens":47}}"#,
+        ]
+        #expect(
+            try decode(ClaudeCodeDecoder(), lines) == [
+                .spending(Usage(input: 1005, output: 0)), .spending(Usage(input: 1005, output: 40)),
+                .spending(Usage(input: 1203, output: 40)), .spending(Usage(input: 1203, output: 47)),
+                .usage(Usage(input: 1203, output: 47)),
+            ])
+    }
+
     @Test("An error result fails the reply with its message")
     func errorResult() {
         let line = #"{"type":"result","subtype":"success","is_error":true,"result":"Invalid API key · Please run /login"}"#

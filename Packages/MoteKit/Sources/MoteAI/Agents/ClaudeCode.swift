@@ -57,6 +57,10 @@ public struct ClaudeCodeDecoder: LineDecoder {
     /// result's usage adds up every call of the turn, so a turn of many
     /// tools would look many times as long.
     private var heard: Int?
+    /// Output of the calls before this one, and of this one so far, for the
+    /// live count; the result gives the turn's own total.
+    private var wroteBefore = 0
+    private var writing = 0
 
     public init() {}
 
@@ -101,8 +105,15 @@ public struct ClaudeCodeDecoder: LineDecoder {
             default: return []
             }
         case "message_start":
-            if let usage = event["message"]?["usage"] { heard = Self.input(usage) }
-            return []
+            wroteBefore += writing
+            writing = 0
+            guard let usage = event["message"]?["usage"] else { return [] }
+            heard = Self.input(usage)
+            return [spendingSoFar]
+        case "message_delta":
+            guard let output = event["usage"]?["output_tokens"]?.int else { return [] }
+            writing = output
+            return [spendingSoFar]
         case "content_block_start":
             let block = event["content_block"]
             if block?["type"]?.string == "text" { blockStarted = true }
@@ -195,6 +206,8 @@ public struct ClaudeCodeDecoder: LineDecoder {
         }
         return events
     }
+
+    private var spendingSoFar: ChatEvent { .spending(Usage(input: heard ?? 0, output: wroteBefore + writing)) }
 
     private static func input(_ usage: JSON) -> Int {
         ["input_tokens", "cache_creation_input_tokens", "cache_read_input_tokens"].compactMap { usage[$0]?.int }.reduce(0, +)
