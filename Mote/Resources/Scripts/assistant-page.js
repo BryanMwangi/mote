@@ -3,7 +3,7 @@ var moteAssistantPage = (function(exports) {
 
 Object.defineProperty(exports, Symbol.toStringTag, { value: 'Module' });
 //#region src/assistant-page.ts
-	const PICKABLE = "a[href],button,input:not([type=hidden]),select,textarea,summary,[role=button],[role=link],[role=checkbox],[role=tab],[role=menuitem],[contenteditable=\"\"],[contenteditable=true]";
+	const PICKABLE = "a[href],button,input:not([type=hidden]),select,textarea,summary,[role=button],[role=link],[role=checkbox],[role=radio],[role=switch],[role=tab],[role=menuitem],[role=menuitemcheckbox],[role=menuitemradio],[role=combobox],[role=listbox],[role=option],[role=textbox],[contenteditable=\"\"],[contenteditable=true]";
 	/** The most elements listed at once, and the most of a list's or table's text. */
 	const MOST = 250;
 	const MOST_TEXT = 2e4;
@@ -69,18 +69,27 @@ Object.defineProperty(exports, Symbol.toStringTag, { value: 'Module' });
 		if ((field.validity ? !field.validity.valid : false) || item.getAttribute("aria-invalid") === "true") notes.push(field.validationMessage ? `invalid: ${brief(field.validationMessage)}` : "invalid");
 		return notes.length ? ` (${notes.join(", ")})` : "";
 	}
+	/** On or off, open, chosen: what a box, a dropdown or an option says of itself. */
+	function state(item) {
+		const input = item;
+		if (input.type === "checkbox" || input.type === "radio") return input.checked ? " [on]" : " [off]";
+		const checked = item.getAttribute("aria-checked");
+		if (checked) return checked === "true" ? " [on]" : " [off]";
+		if (item.getAttribute("aria-selected") === "true") return " [chosen]";
+		if (item.getAttribute("aria-expanded") === "true") return " [open]";
+		return "";
+	}
 	/** One line of the list: number, kind, name, what it holds, its state, where it goes. */
 	function entry(item, n) {
 		const input = item;
 		const role = item.getAttribute("role");
-		const kind = role && !(item instanceof HTMLInputElement) ? role : item.tagName.toLowerCase() + (input.type ? `(${input.type})` : "");
+		const kind = role && (role === "combobox" || !(item instanceof HTMLInputElement)) ? role : item.tagName.toLowerCase() + (input.type ? `(${input.type})` : "");
 		const field = isField(item);
 		const name = field ? brief(labelOf(item)) || describe(item) : describe(item);
 		const value = field ? shownValue(item) : null;
 		const holds = value === null ? "" : value === "" ? " = (empty)" : ` = "${brief(value)}"`;
-		const state = input.type === "checkbox" || input.type === "radio" ? input.checked ? " [on]" : " [off]" : "";
 		const href = item.href ? ` -> ${item.href}` : "";
-		return `[${n}] ${kind} ${name}${holds}${state}${field ? validity(item) : ""}${href}`;
+		return `[${n}] ${kind} ${name}${holds}${state(item)}${field ? validity(item) : ""}${href}`;
 	}
 	/** Numbers what can be picked, keeping earlier numbers; the list as text. */
 	function outline(root = document) {
@@ -129,19 +138,21 @@ Object.defineProperty(exports, Symbol.toStringTag, { value: 'Module' });
 		const fields = known.map((item, n) => ({
 			item,
 			n
-		})).filter(({ item }) => item.isConnected && (item instanceof HTMLInputElement || item instanceof HTMLSelectElement || item instanceof HTMLTextAreaElement || isEditor(item)));
+		})).filter(({ item }) => item.isConnected && isField(item));
 		const near = fields.find(({ item }) => labelOf(item).toLowerCase() === wanted) ?? fields.find(({ item }) => labelOf(item).toLowerCase().includes(wanted));
 		return near ? near.n : null;
 	}
 	/** What kind of field an element is, for filling it the right way. */
 	function kindOf(item) {
 		if (!item) return "gone";
-		if (item instanceof HTMLSelectElement) return "select";
+		if (item instanceof HTMLSelectElement || isList(item)) return "select";
 		if (item instanceof HTMLInputElement) {
 			if (item.type === "checkbox" || item.type === "radio" || item.type === "password") return item.type;
 			return "text";
 		}
-		if (item.getAttribute("role") === "checkbox") return "checkbox";
+		const role = item.getAttribute("role");
+		if (role === "checkbox" || role === "switch") return "checkbox";
+		if (role === "radio") return "radio";
 		return "text";
 	}
 	function numbered(n) {
@@ -203,8 +214,11 @@ Object.defineProperty(exports, Symbol.toStringTag, { value: 'Module' });
 		if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement) return target.value;
 		return target.innerText ?? "";
 	}
-	/** Picks an option of a list by its value or what it says. */
+	/** Picks an option of a list by its value or what it says: a page's own
+	* dropdown or autocomplete (role combobox or listbox) is opened, typed
+	* into when it takes typing, and its option clicked. */
 	function choose(target, value) {
+		if (target && !(target instanceof HTMLSelectElement) && isList(target)) return pick(target, value);
 		if (!(target instanceof HTMLSelectElement)) return target ? "not-a-list" : "gone";
 		const wanted = value.trim().toLowerCase();
 		const option = [...target.options].find((item) => item.value.toLowerCase() === wanted || item.text.trim().toLowerCase() === wanted);
@@ -212,6 +226,57 @@ Object.defineProperty(exports, Symbol.toStringTag, { value: 'Module' });
 		target.value = option.value;
 		target.dispatchEvent(new Event("input", { bubbles: true }));
 		target.dispatchEvent(new Event("change", { bubbles: true }));
+		return "done";
+	}
+	function isList(item) {
+		const role = item.getAttribute("role");
+		return role === "combobox" || role === "listbox" || item.getAttribute("aria-haspopup") === "listbox";
+	}
+	/** The options a dropdown shows now: in the list it names, else anywhere
+	* (pages draw them at the end of the body). */
+	function optionsOf(owner) {
+		const named = (owner.getAttribute("aria-controls") ?? owner.getAttribute("aria-owns") ?? "").split(/\s+/).flatMap((id) => id ? [document.getElementById(id)] : []).filter((box) => !!box);
+		return (owner.getAttribute("role") === "listbox" ? [owner] : named.length ? named : [document]).flatMap((list) => [...list.querySelectorAll("[role=option]")]).filter((option) => shown(option) && option.getAttribute("aria-disabled") !== "true");
+	}
+	/** A click where a pointer would land: on what is drawn at the element's
+	* middle, which is where pages listen (a dropdown's inner trigger). */
+	function press(item, down = false) {
+		item.scrollIntoView({ block: "nearest" });
+		const box = item.getBoundingClientRect();
+		const drawn = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2);
+		const at = drawn && item.contains(drawn) ? drawn : item;
+		if (down) for (const type of ["pointerdown", "mousedown"]) at.dispatchEvent(new MouseEvent(type, {
+			bubbles: true,
+			cancelable: true,
+			view: window
+		}));
+		at.click();
+	}
+	/** What `look` gives once it gives something, or null after `ms`. */
+	async function soon(look, ms) {
+		for (const end = Date.now() + ms;;) {
+			const found = look();
+			if (found || Date.now() > end) return found;
+			await new Promise((done) => setTimeout(done, 50));
+		}
+	}
+	const wordsOf = (option) => (option.textContent ?? "").trim().replace(/\s+/g, " ").toLowerCase();
+	async function pick(target, value) {
+		const wanted = value.trim().replace(/\s+/g, " ").toLowerCase();
+		const listed = () => {
+			const options = optionsOf(target);
+			return options.length ? options : null;
+		};
+		if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) {
+			target.focus();
+			setValue(target, value);
+		}
+		if (!listed()) press(target);
+		const options = await soon(listed, 700) ?? (press(target, true), await soon(listed, 1800));
+		if (!options) return "no-options";
+		const option = options.find((item) => wordsOf(item) === wanted || item.getAttribute("data-value")?.toLowerCase() === wanted) ?? options.find((item) => wordsOf(item).includes(wanted));
+		if (!option) return `no-option: ${options.slice(0, 40).map((item) => brief(item.textContent ?? "")).join(" | ")}`;
+		press(option);
 		return "done";
 	}
 	/** Ticks or unticks a box, by clicking it so the page hears it. */

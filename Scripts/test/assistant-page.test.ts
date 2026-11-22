@@ -71,6 +71,60 @@ describe('fields in the outline', () => {
   });
 });
 
+// As Angular Material does: the options appear in an overlay at the end of the body.
+const overlay = (names: string[], chosen: (name: string) => void) => {
+  const panel = document.createElement('div');
+  panel.id = 'panel';
+  panel.setAttribute('role', 'listbox');
+  for (const name of names) {
+    const option = document.createElement('div');
+    option.setAttribute('role', 'option');
+    option.textContent = ` ${name} `;
+    option.addEventListener('click', () => chosen(name));
+    panel.append(option);
+  }
+  document.body.append(panel);
+};
+
+describe('dropdowns a page draws itself', () => {
+  it('lists them with their state, and opens one to pick an option', async () => {
+    document.body.innerHTML = `
+      <span id="l">Country</span>
+      <div id="s" role="combobox" aria-labelledby="l" aria-controls="panel" aria-expanded="false"><span id="t">Select</span></div>`;
+    const select = byId('s');
+    let got = '';
+    // Where a pointer lands: the inner trigger, which is what listens.
+    vi.spyOn(document, 'elementFromPoint').mockImplementation(() => byId('t'));
+    byId('t').addEventListener('click', () => {
+      select.setAttribute('aria-expanded', 'true');
+      overlay(['Germany', 'Kenya'], (name) => (got = name));
+    });
+    expect(outline()).toBe('[0] combobox Country = "Select"');
+    expect(await run('choose', { n: 0, value: 'kenya' })).toBe('done');
+    expect(got).toBe('Kenya');
+    expect(outline()).toContain('[0] combobox Country = "Select" [open]');
+  });
+
+  it('types into an autocomplete to bring its options up', async () => {
+    document.body.innerHTML = '<input id="a" role="combobox" aria-label="City">';
+    let got = '';
+    byId('a').addEventListener('input', (event) => {
+      if ((event.target as HTMLInputElement).value === 'Nai')
+        overlay(['Nairobi', 'Naivasha'], (name) => (got = name));
+    });
+    expect(outline()).toBe('[0] combobox City = (empty)');
+    expect(run('kind', { n: 0 })).toBe('select');
+    expect(await choose(byId('a'), 'Nai')).toBe('done');
+    expect(got).toBe('Nairobi');
+  });
+
+  it('says which options there are when none matches', async () => {
+    document.body.innerHTML = '<div id="s" role="combobox" aria-label="Size">M</div>';
+    byId('s').addEventListener('click', () => overlay(['Small', 'Large'], () => {}));
+    expect(await choose(byId('s'), 'Huge')).toBe('no-option: Small | Large');
+  });
+});
+
 describe('write', () => {
   it('replaces, appends and inserts in a field, as typing would', () => {
     document.body.innerHTML = '<input id="f" value="Hello">';

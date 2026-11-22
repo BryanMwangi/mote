@@ -40,7 +40,7 @@ extension AssistantTools {
                 schema: schema(
                     tab + "," + element + #","text":{"type":"string"},"how":{"type":"string","enum":["replace","insert","append"]}"#, ["text"])),
             Tool(
-                name: "select_option", description: "Picks an option, by its value or words, in a list read_tab listed. Asks first, per site.",
+                name: "select_option", description: "Picks an option, by its value or words, in a list read_tab listed: a select, or a page's own dropdown or autocomplete (combobox), which it opens, types into and picks from. Asks first, per site.",
                 schema: schema(tab + "," + element + #","value":{"type":"string"}"#, ["tab", "element", "value"])),
             Tool(
                 name: "check", description: "Ticks or unticks a box read_tab listed. Asks first, per site.",
