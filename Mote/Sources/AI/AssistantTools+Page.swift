@@ -165,10 +165,16 @@ extension AssistantTools {
         try? await Task.sleep(for: .milliseconds(woke ? 1000 : 300))
     }
 
-    /// The work shown on the tab's page: it comes to the front, and the
-    /// overlay says who's doing what, with Stop.
+    /// The work shown on the tab's page: it comes to the front when the agent
+    /// starts on it, unless the chat works in the background; after that the
+    /// tab the person or another agent brought forward stays in front, and
+    /// this one goes on out of sight. The overlay says who's doing what, with Stop.
     private func show(_ found: Found, _ caption: String) {
-        if found.browser.active !== found.tab || found.parked { bringForward(found) }
+        let behind = chat.map { ChatModes.shared.worksBehind($0, else: prefs.aiBackground) } ?? prefs.aiBackground
+        let starting = begun.insert(ObjectIdentifier(found.tab)).inserted
+        if found.browser.active !== found.tab || found.parked {
+            if starting, !behind { bringForward(found) } else { Backstage.keep(found.tab) }
+        }
         found.tab.agent.begin(caption, by: driver, stop: stopTurn)
     }
 

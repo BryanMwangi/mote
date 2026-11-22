@@ -79,6 +79,10 @@ struct AISettings: View {
                     sites("Developer sites", "localhost:*, staging.example.com", $prefs.aiDevSites)
                 }
                 RowRule()
+                SettingRow(
+                    "Work in the background", "Each tab it starts on comes forward unless this is on; /background switches one chat",
+                    symbol: "rectangle.stack", tint: Tint.orange, on: $prefs.aiBackground)
+                RowRule()
                 sites("May sign in to", "Added when you allow it", $prefs.aiSignIn)
                 RowRule()
                 FoldersRow(prefs: prefs)

@@ -32,6 +32,19 @@ final class ChatModes: ObservableObject {
 
     /// Out of Plan, into what it was before.
     func leavePlan(_ chat: UUID) { set(chat, beforePlan.removeValue(forKey: chat) ?? .asks) }
+
+    /// Chats set apart from Settings › AI › Work in the background (/background).
+    @Published private var behind: [UUID: Bool] = [:]
+
+    /// Whether the chat's agents leave the tab in front alone, working on theirs behind it.
+    func worksBehind(_ chat: UUID, else setting: Bool) -> Bool { behind[chat] ?? setting }
+
+    /// Switches it for the chat; what it is now.
+    func toggleBehind(_ chat: UUID, else setting: Bool) -> Bool {
+        let now = !worksBehind(chat, else: setting)
+        behind[chat] = now
+        return now
+    }
 }
 
 /// What the assistant may ask Mote to do while it answers (Settings › AI ›
@@ -57,6 +70,9 @@ final class AssistantTools {
     /// Starts a sub-agent on a task (see AssistantTools+Agents); nil for a
     /// sub-agent's own tools, and an outside agent's.
     var spawn: ((String) async -> ToolOutput)?
+    /// The tabs this agent has started acting on: each comes forward once,
+    /// when it starts, and after that it works on it wherever it is.
+    var begun: Set<ObjectIdentifier> = []
     /// Sites this chat may act on without asking again.
     private static var trusted: [UUID: Set<String>] = [:]
 

@@ -53,8 +53,12 @@ public enum Skill {
     /// What the chat has spent, in tokens: shown, not sent.
     public static let usage = Item(command: "usage", title: "Token usage", prompt: "/usage")
 
+    /// The chat's agents work on tabs behind the one in front, or bring them
+    /// forward again: switched, not sent.
+    public static let background = Item(command: "background", title: "Work in the background", prompt: "/background")
+
     /// The built-ins, in the order the picker shows them.
-    public static let all: [Item] = [summary, eli5, keypoints, actions, compact, new, clear, usage]
+    public static let all: [Item] = [summary, eli5, keypoints, actions, compact, new, clear, usage, background]
 
     /// The skills whose command starts with `query`, case-insensitively. A
     /// blank query offers them all, in order.

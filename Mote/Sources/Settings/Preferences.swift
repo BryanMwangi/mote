@@ -149,6 +149,8 @@ final class Preferences: ObservableObject {
     @Published var aiReads: Bool
     /// The assistant may open tabs and click and type in pages, asking each time.
     @Published var aiActs: Bool
+    /// The assistant acts on tabs behind the one in front, never bringing them forward.
+    @Published var aiBackground: Bool
     /// Tab in the floating search asks the assistant what was typed.
     @Published var tabAsks: Bool
     /// A chat shows the tokens its reply has spent while it works.
@@ -288,6 +290,7 @@ final class Preferences: ObservableObject {
         oneChat = store.value("ai.oneChat", or: false)
         aiReads = store.value("ai.tools.read", or: true)
         aiActs = store.value("ai.tools.act", or: false)
+        aiBackground = store.value("ai.background", or: false)
         tabAsks = store.value("ai.tabAsks", or: false)
         showsTokens = store.value("ai.showsTokens", or: false)
         // Its own key: "ai.mode" is the chat's (chat, search, research), and the
@@ -399,6 +402,7 @@ final class Preferences: ObservableObject {
         keep($oneChat, "ai.oneChat")
         keep($aiReads, "ai.tools.read")
         keep($aiActs, "ai.tools.act")
+        keep($aiBackground, "ai.background")
         keep($tabAsks, "ai.tabAsks")
         keep($showsTokens, "ai.showsTokens")
         keep($aiMode, "ai.actMode")

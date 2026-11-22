@@ -185,6 +185,10 @@ struct ChatView<Accessory: View, Start: View>: View {
         draft.text = ""
         if text == Skill.compact.prompt { return Assistant.shared.compact(conversation) }
         if text == Skill.usage.prompt { return withAnimation(Motion.quick) { showsUsage = true } }
+        if text == Skill.background.prompt {
+            let behind = ChatModes.shared.toggleBehind(conversation.id, else: browser.prefs.aiBackground)
+            return browser.announce(behind ? "This chat works in the background: tabs stay behind the one you're on" : "This chat brings each tab it starts on forward")
+        }
         if text == Skill.new.prompt || text == Skill.clear.prompt { return (newChat ?? browser.newAskingTab)() }
         guard let beforeSend else { return Assistant.shared.ask(text, in: conversation) }
         Task {

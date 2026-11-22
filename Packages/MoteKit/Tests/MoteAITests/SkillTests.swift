@@ -10,7 +10,7 @@ import Testing
 struct SkillTests {
     @Test("The built-in skills are the fixed commands, in order")
     func builtins() {
-        #expect(Skill.all.map(\.command) == ["summary", "eli5", "keypoints", "actions", "compact", "new", "clear", "usage"])
+        #expect(Skill.all.map(\.command) == ["summary", "eli5", "keypoints", "actions", "compact", "new", "clear", "usage", "background"])
         #expect(Skill.summary.prompt == "Summarize this page")
         #expect(Skill.eli5.prompt == "Explain this page in simple terms")
         #expect(Skill.keypoints.prompt == "Extract the key points of this page")
