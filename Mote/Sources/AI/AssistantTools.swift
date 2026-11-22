@@ -73,6 +73,9 @@ final class AssistantTools {
     /// The tabs this agent has started acting on: each comes forward once,
     /// when it starts, and after that it works on it wherever it is.
     var begun: Set<ObjectIdentifier> = []
+    /// What read_tab last gave this agent for each tab, so the same again
+    /// isn't sent again: every result stays in the chat the model rereads.
+    var lastRead: [ObjectIdentifier: (text: String, outline: String)] = [:]
     /// Sites this chat may act on without asking again.
     private static var trusted: [UUID: Set<String>] = [:]
 

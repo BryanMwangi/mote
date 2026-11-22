@@ -75,9 +75,13 @@ extension AssistantTools {
             // A PDF: its text page by page, and whether it has fields.
             if let text = await pdfText(of: tab) { return text }
             await ready(found)
-            let text = await tab.capturePageContext()?.text ?? ""
+            let text = String((await tab.capturePageContext()?.text ?? "").prefix(Self.most))
             let outline = await page(tab, "outline") ?? ""
-            return "\(tab.label)\n\(tab.address?.absoluteString ?? "")\n\n\(String(text.prefix(Self.most)))\n\nElements:\n\(outline)"
+            let before = lastRead[ObjectIdentifier(tab)]
+            lastRead[ObjectIdentifier(tab)] = (text, outline)
+            let same = "the same as when you last read this tab"
+            return "\(tab.label)\n\(tab.address?.absoluteString ?? "")\n\n" + (before?.text == text ? "(Its text is \(same).)" : text)
+                + "\n\nElements:\n" + (before?.outline == outline ? "(\(same.prefix(1).uppercased() + same.dropFirst()); the numbers hold.)" : outline)
         }
         guard tab.built != nil, let address = tab.address else { return "“\(tab.label)” is asleep; read it first, which wakes it." }
         let n = input["element"]?.int
