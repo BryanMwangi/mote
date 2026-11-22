@@ -129,7 +129,6 @@ struct ChatView<Accessory: View, Start: View>: View {
                 }
             }
             Status(browser: browser, conversation: conversation, retry: retry)
-            TokenLine(prefs: browser.prefs, conversation: conversation)
             if conversation.summarised == conversation.messages.count, conversation.summarised > 0, let summary = conversation.summary {
                 SummaryDivider(summary: summary)
             }
@@ -518,15 +517,21 @@ private struct Status: View {
         Group {
             switch conversation.phase {
             case .waiting where researching, .answering where researching:
-                // The research card above shows its own progress.
-                EmptyView()
+                // The research card above shows its own progress; the time and tokens go here.
+                TurnMeta(prefs: browser.prefs, conversation: conversation)
             case .waiting:
-                Working(title: conversation.activities.last(where: { !$0.done })?.title ?? waitingWords)
+                if let activity = conversation.activities.last(where: { !$0.done }) {
+                    Working(title: activity.title, prefs: browser.prefs, conversation: conversation)
+                } else {
+                    Working(title: waitingWords, prefs: browser.prefs, conversation: conversation, wanders: true)
+                }
             case .answering:
                 if let activity = conversation.activities.last(where: { !$0.done }) {
-                    Working(title: activity.title)
+                    Working(title: activity.title, prefs: browser.prefs, conversation: conversation)
                 } else if conversation.messages.last?.text.isEmpty != false {
-                    Working(title: "Thinking")
+                    Working(title: "Thinking", prefs: browser.prefs, conversation: conversation, wanders: true)
+                } else {
+                    TurnMeta(prefs: browser.prefs, conversation: conversation)
                 }
             case .failed(let reason):
                 Failure(reason: reason, retry: retry) { browser.openSettings(at: .ai) }
@@ -562,16 +567,27 @@ private struct Status: View {
     }
 }
 
-/// A line of shimmering words while waiting.
+/// A line of shimmering words while waiting: what it's doing, or, with
+/// nothing more to say (`wanders`), a word that changes every few seconds;
+/// after a while how long the turn has taken, and with Settings › AI › Show
+/// token count, what it has spent so far.
 private struct Working: View {
     let title: String
+    @ObservedObject var prefs: Preferences
+    let conversation: Conversation
+    var wanders = false
     @State private var sweep = false
     @Environment(\.accessibilityReduceMotion) private var still
 
     var body: some View {
-        HStack(spacing: 7) {
-            Image(systemName: "sparkle").font(.system(size: 10, weight: .semibold))
-            Text(title + "…").font(.system(size: 13))
+        TimelineView(.periodic(from: .now, by: 1)) { time in
+            let spent = time.date.timeIntervalSince(conversation.askedAt ?? time.date)
+            HStack(spacing: 7) {
+                Image(systemName: "sparkle").font(.system(size: 10, weight: .semibold))
+                Text(words(after: spent) + "…").font(.system(size: 13)).contentTransition(.opacity)
+                    .animation(Motion.quick, value: words(after: spent))
+                TurnMeta.Line(prefs: prefs, conversation: conversation, seconds: spent)
+            }
         }
         .foregroundStyle(Palette.muted)
         .overlay {
@@ -591,6 +607,75 @@ private struct Working: View {
             withAnimation(.linear(duration: 1.4).repeatForever(autoreverses: false)) { sweep = true }
         }
         .accessibilityElement(children: .combine)
+    }
+}
+
+extension Working {
+    /// The provider's name first, then a word of Mote's every few seconds.
+    private func words(after seconds: TimeInterval) -> String {
+        guard wanders, seconds >= 3 else { return title }
+        let start = conversation.askedAt.map { Int($0.timeIntervalSinceReferenceDate) } ?? 0
+        return Self.verbs[(start + Int(seconds / 3)) % Self.verbs.count]
+    }
+
+    static let verbs = [
+        "Browsing", "Pondering", "Rummaging", "Sifting", "Weaving", "Tinkering", "Mulling", "Puzzling", "Sketching", "Scouting",
+        "Tracing", "Untangling", "Brewing", "Combing through", "Charting", "Wandering", "Noodling", "Assembling", "Considering",
+        "Distilling", "Fathoming", "Gathering", "Hatching", "Imagining", "Juggling", "Kneading", "Lining up", "Musing", "Nudging",
+        "Orienting", "Piecing together", "Quilting", "Reckoning", "Shaping", "Threading", "Unfolding", "Venturing", "Whittling",
+        "Zeroing in", "Spelunking",
+    ]
+}
+
+/// How long the turn has taken, once it's been a while, and what it has
+/// spent so far (Settings › AI › Show token count), rising as it goes.
+private struct TurnMeta: View {
+    @ObservedObject var prefs: Preferences
+    let conversation: Conversation
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 1)) { time in
+            Line(prefs: prefs, conversation: conversation, seconds: time.date.timeIntervalSince(conversation.askedAt ?? time.date))
+                .foregroundStyle(Palette.muted)
+        }
+    }
+
+    struct Line: View {
+        @ObservedObject var prefs: Preferences
+        let conversation: Conversation
+        let seconds: TimeInterval
+
+        var body: some View {
+            let spent = prefs.showsTokens ? conversation.spentSoFar.map(withWriting) : nil
+            if seconds >= 10 || spent != nil {
+                HStack(spacing: 6) {
+                    if seconds >= 10 { Text(Self.time(seconds)) }
+                    if let spent {
+                        Text("↑\(tokens(spent.input)) ↓\(tokens(spent.output))").contentTransition(.numericText())
+                            .animation(Motion.quick, value: spent.input + spent.output)
+                    }
+                }
+                .font(.system(size: 11.5)).monospacedDigit().foregroundStyle(Palette.faint)
+                .help(spent.map { spentLine($0) } ?? "")
+            }
+        }
+
+        /// Words out are only counted when a call ends: until then, about
+        /// four characters a token of what has been written so far.
+        private func withWriting(_ spent: Usage) -> Usage {
+            guard let last = conversation.messages.last, last.role == .assistant else { return spent }
+            var guess = spent
+            guess.output = max(spent.output, (last.text.count + last.reasoning.count) / 4)
+            return guess
+        }
+
+        /// 42s, 3m 05s, 1h 02m.
+        static func time(_ seconds: TimeInterval) -> String {
+            let whole = Int(seconds)
+            if whole < 60 { return "\(whole)s" }
+            if whole < 3600 { return "\(whole / 60)m \(String(format: "%02d", whole % 60))s" }
+            return "\(whole / 3600)h \(String(format: "%02d", whole / 60 % 60))m"
+        }
     }
 }
 
@@ -958,20 +1043,6 @@ private func spentLine(_ spent: Usage) -> String {
     var line = "\(tokens(spent.input)) in · \(tokens(spent.output)) out"
     if let cost = spent.cost { line += " · " + cost.formatted(.currency(code: "USD").precision(.fractionLength(2...4))) }
     return line
-}
-
-/// What the reply under way has spent so far, round by round, while it
-/// works (Settings › AI › Show token count).
-private struct TokenLine: View {
-    @ObservedObject var prefs: Preferences
-    let conversation: Conversation
-
-    var body: some View {
-        if prefs.showsTokens, conversation.busy, let spent = conversation.spentSoFar {
-            Text(spentLine(spent)).font(.system(size: 11.5)).foregroundStyle(Palette.faint).monospacedDigit()
-                .transition(.opacity)
-        }
-    }
 }
 
 /// /usage: the last reply's tokens and the whole chat's.

@@ -79,6 +79,8 @@ public final class Conversation: Identifiable {
     public private(set) var spending: Usage?
     /// The turn under way's spend as known now, for the live count.
     public var spentSoFar: Usage? { spending.map { turnSpent + $0 } ?? turnSpent }
+    /// When the turn under way (or the last) began, for how long it has taken.
+    public private(set) var askedAt: Date?
     /// The page the person has shared with this chat, if any. Kept as the tab
     /// moves: the page is detached on navigation, not thrown away.
     public private(set) var page: PageContext?
@@ -492,6 +494,7 @@ public final class Conversation: Identifiable {
         let compacting = wantsCompacting
         turnSpent = nil
         spending = nil
+        askedAt = Date()
         messages.append(Message(role: .assistant, text: ""))
         phase = .waiting
         activities = []
