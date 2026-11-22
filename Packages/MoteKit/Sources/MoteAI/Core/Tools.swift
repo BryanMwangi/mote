@@ -274,6 +274,7 @@ extension ToolLoop {
         case "list_devices": return "Looking at device sizes"
         case "new_test_tab": return "Opening a test tab"
         case "close_test_tabs": return "Closing test tabs"
+        case "attach_file": return "Attaching a file"
         case "sign_in": return "Signing in"
         case "ask_for_credentials": return "Asking you to sign in"
         case "ask_person": return "Asking you"
