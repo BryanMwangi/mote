@@ -162,6 +162,8 @@ final class Preferences: ObservableObject {
     @Published var aiDevSites: String
     /// Sites it may sign in to with saved passwords.
     @Published var aiSignIn: String
+    /// Folders the assistant may attach files from, for good.
+    @Published var aiFolders: [String]
     /// Coding agents on this Mac may drive Mote over MCP (MoteMCP).
     @Published var agentsUseMote: Bool
     @Published var glyph: Glyph
@@ -294,6 +296,7 @@ final class Preferences: ObservableObject {
         aiTrusted = store.value("ai.trusted", or: "")
         aiDevSites = store.value("ai.devSites", or: "localhost:*, 127.0.0.1:*")
         aiSignIn = store.value("ai.signIn", or: "")
+        aiFolders = store.value("ai.folders", or: [])
         agentsUseMote = store.value("ai.agents", or: false)
         chatWidth = min(Metrics.chatMax, max(Metrics.chatMin, store.value("chat.width", or: Metrics.chat)))
         chatSide = store.value("chat.side", or: .right)
@@ -402,6 +405,7 @@ final class Preferences: ObservableObject {
         keep($aiTrusted, "ai.trusted")
         keep($aiDevSites, "ai.devSites")
         keep($aiSignIn, "ai.signIn")
+        keep($aiFolders, "ai.folders")
         keep($agentsUseMote, "ai.agents") { on in MoteMCP.shared.outside(on) }
         keep($glyph, "glyph")
         keep($spaceMarks, "spaces.marks")

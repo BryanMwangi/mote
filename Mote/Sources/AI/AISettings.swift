@@ -80,6 +80,8 @@ struct AISettings: View {
                 }
                 RowRule()
                 sites("May sign in to", "Added when you allow it", $prefs.aiSignIn)
+                RowRule()
+                FoldersRow(prefs: prefs)
             }
             if prefs.aiReads {
                 RowRule()
@@ -480,6 +482,44 @@ struct SidebarSite {
 
 /// Settings › AI › Memory: what the assistant keeps from chat to chat, each
 /// removable, and a way to keep nothing.
+/// The folders the assistant may attach files from, for good: added when the
+/// person says "Always allow" in a chat, or here.
+private struct FoldersRow: View {
+    @ObservedObject var prefs: Preferences
+
+    var body: some View {
+        SettingRow(
+            "May attach files from", prefs.aiFolders.isEmpty ? "Added when you allow it, or here" : "To upload fields in pages",
+            symbol: "paperclip", tint: Tint.orange, keywords: ["upload", "files", "folders", "attach"]
+        ) {
+            Pill("Add Folder…") { add() }
+        }
+        ForEach(prefs.aiFolders, id: \.self) { folder in
+            HStack(spacing: 10) {
+                Image(systemName: "folder").foregroundStyle(.secondary)
+                Text((folder as NSString).abbreviatingWithTildeInPath).font(TextStyle.body.font).lineLimit(1).truncationMode(.middle)
+                Spacer(minLength: 8)
+                Door(icon: "xmark", help: "Don't allow") { prefs.aiFolders.removeAll { $0 == folder } }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 4)
+        }
+    }
+
+    private func add() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.allowsMultipleSelection = true
+        panel.message = "The assistant may attach files from these folders to pages"
+        guard panel.runModal() == .OK else { return }
+        for url in panel.urls {
+            let folder = url.standardizedFileURL.resolvingSymlinksInPath().path
+            if !prefs.aiFolders.contains(folder) { prefs.aiFolders.append(folder) }
+        }
+    }
+}
+
 private struct MemorySection: View {
     @ObservedObject private var memories = Memories.shared
 

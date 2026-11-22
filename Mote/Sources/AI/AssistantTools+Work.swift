@@ -131,6 +131,8 @@ extension AssistantTools {
                 result = await page(tab, "choose", ["n": n, "value": text])
             case "password":
                 result = "password"
+            case "file":
+                result = "file"
             default:
                 let was = await page(tab, "read", ["n": n])
                 result = await page(tab, "write", ["n": n, "text": text, "how": "replace"])
@@ -154,6 +156,8 @@ extension AssistantTools {
         switch result {
         case "gone": "gone (the page changed; read the tab again)"
         case "password": "left alone: Mote never writes passwords; use sign_in"
+        case "file": "an upload field: use attach_file"
+        case "no-options": "its list didn't open; click it, read the tab and pick the option"
         case "locked": "can't be changed"
         case "not-editable": "not something to write in"
         case .some(let other) where other.hasPrefix("no-option: "): "no such option; it offers \(other.dropFirst(11))"

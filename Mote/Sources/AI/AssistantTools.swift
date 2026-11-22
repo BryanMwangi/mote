@@ -98,7 +98,7 @@ final class AssistantTools {
     var list: [Tool] {
         outside
             ? tabTools + pageTools + pdfTools + workTools + devTools
-            : tabTools + spaceTools + pageTools + pdfTools + workTools + signInTools + devTools + dataTools + ledgerTools + askTools
+            : tabTools + spaceTools + pageTools + pdfTools + workTools + fileTools + signInTools + devTools + dataTools + ledgerTools + askTools
                 + agentTools
     }
 
@@ -137,6 +137,7 @@ final class AssistantTools {
         if !outside, let said = await runSpaces(call) { return ToolOutput(said) }
         if !outside, let said = await runLedger(call) { return ToolOutput(said) }
         if !outside, let said = await runSignIn(call) { return ToolOutput(said) }
+        if !outside, let said = await runFiles(call) { return ToolOutput(said) }
         if !outside, let said = await runData(call) { return ToolOutput(said) }
         if !outside, let said = await runAsk(call) { return ToolOutput(said) }
         return ToolOutput("There's no tool called \(call.name).", outcome: .failed)

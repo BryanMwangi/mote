@@ -1,6 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { check, choose, find, outline, problems, readField, run, tables, write } from '../src/assistant-page';
+import {
+  attach,
+  check,
+  choose,
+  find,
+  outline,
+  problems,
+  readField,
+  run,
+  tables,
+  write,
+} from '../src/assistant-page';
 
 beforeEach(() => {
   vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
@@ -122,6 +133,29 @@ describe('dropdowns a page draws itself', () => {
     document.body.innerHTML = '<div id="s" role="combobox" aria-label="Size">M</div>';
     byId('s').addEventListener('click', () => overlay(['Small', 'Large'], () => {}));
     expect(await choose(byId('s'), 'Huge')).toBe('no-option: Small | Large');
+  });
+});
+
+describe('attach', () => {
+  const cv = { name: 'cv.pdf', type: 'application/pdf', data: btoa('%PDF-1.4') };
+
+  it('lists a hidden file field, and puts files in through the button over it', () => {
+    document.body.innerHTML = `
+      <div><button id="b">Upload CV</button><input id="f" type="file" data-hidden aria-label="CV" required></div>`;
+    expect(outline()).toContain('[0] button(submit) Upload CV\n[1] input(file) CV = (empty) (required');
+    const heard: string[] = [];
+    byId('f').addEventListener('change', () => heard.push('change'));
+    expect(attach(byId('b'), [cv])).toBe('done');
+    expect(byId<HTMLInputElement>('f').files?.[0]?.name).toBe('cv.pdf');
+    expect(heard).toEqual(['change']);
+    expect(outline()).toContain('CV = "cv.pdf"');
+  });
+
+  it('takes one file where the field takes one', () => {
+    document.body.innerHTML = '<input id="f" type="file">';
+    expect(attach(byId('f'), [cv, cv])).toBe('one-file-only');
+    outline();
+    expect(run('kind', { n: 0 })).toBe('file');
   });
 });
 

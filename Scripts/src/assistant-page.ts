@@ -16,6 +16,8 @@ export type Args = {
   by?: number;
   key?: string;
   label?: string;
+  /** Files to attach, read by Mote from the Mac. */
+  files?: { name: string; type: string; data: string }[];
 };
 
 declare global {
@@ -58,6 +60,44 @@ export function describe(item: Element): string {
     (['submit', 'button'].includes(input.type) ? input.value : '') ||
     '';
   return said.trim().replace(/\s+/g, ' ').slice(0, 80);
+}
+
+function isFileField(item: Element | null): item is HTMLInputElement {
+  return item instanceof HTMLInputElement && item.type === 'file';
+}
+
+/** The file field an element stands for: itself, one inside it, the one its
+ * label is for, or the one beside it (a button over a hidden field). */
+function fileFieldFor(item: Element): HTMLInputElement | null {
+  if (isFileField(item)) return item;
+  const inside = item.querySelector('input[type=file]');
+  if (isFileField(inside)) return inside;
+  const labelled = item.closest('label')?.control ?? null;
+  if (isFileField(labelled)) return labelled;
+  let around = item.parentElement;
+  for (let up = 0; around && up < 3; up++, around = around.parentElement) {
+    const near = around.querySelectorAll('input[type=file]');
+    if (near.length === 1 && isFileField(near[0]!)) return near[0];
+  }
+  return null;
+}
+
+/** Puts files from the Mac into a file field, as choosing them would. */
+export function attach(target: Element | null, files: NonNullable<Args['files']>): string {
+  if (!target) return 'gone';
+  const field = fileFieldFor(target);
+  if (!field) return 'not-a-file-field';
+  if (field.disabled) return 'locked';
+  if (files.length > 1 && !field.multiple) return 'one-file-only';
+  const chosen = new DataTransfer();
+  for (const file of files) {
+    const bytes = Uint8Array.from(atob(file.data), (char) => char.charCodeAt(0));
+    chosen.items.add(new File([bytes], file.name, { type: file.type }));
+  }
+  field.files = chosen.files;
+  field.dispatchEvent(new Event('input', { bubbles: true }));
+  field.dispatchEvent(new Event('change', { bubbles: true }));
+  return 'done';
 }
 
 /** A form field, or a widget that stands for one, as opposed to a link or button. */
@@ -144,7 +184,8 @@ export function outline(root: Document = document): string {
   }
   const lines: string[] = [];
   known.forEach((item, n) => {
-    if (lines.length >= MOST || !item.isConnected || !shown(item)) return;
+    // A file field is often hidden behind a button of the page's own.
+    if (lines.length >= MOST || !item.isConnected || (!shown(item) && !isFileField(item))) return;
     lines.push(entry(item, n));
   });
   return lines.join('\n');
@@ -213,7 +254,7 @@ export function kindOf(item: Element | null): string {
   if (!item) return 'gone';
   if (item instanceof HTMLSelectElement || isList(item)) return 'select';
   if (item instanceof HTMLInputElement) {
-    if (item.type === 'checkbox' || item.type === 'radio' || item.type === 'password') return item.type;
+    if (['checkbox', 'radio', 'password', 'file'].includes(item.type)) return item.type;
     return 'text';
   }
   const role = item.getAttribute('role');
@@ -503,6 +544,8 @@ export function run(op: string, args: Args = {}): unknown {
       return tables();
     case 'problems':
       return problems();
+    case 'attach':
+      return attach(target, args.files ?? []);
     case 'selection':
       return window.getSelection()?.toString() ?? '';
     case 'code': {

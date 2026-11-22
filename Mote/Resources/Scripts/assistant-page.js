@@ -24,6 +24,41 @@ Object.defineProperty(exports, Symbol.toStringTag, { value: 'Module' });
 		const input = item;
 		return ((item instanceof HTMLSelectElement ? "" : item.innerText) || item.getAttribute("aria-label") || input.placeholder || item.getAttribute("title") || input.name || (["submit", "button"].includes(input.type) ? input.value : "") || "").trim().replace(/\s+/g, " ").slice(0, 80);
 	}
+	function isFileField(item) {
+		return item instanceof HTMLInputElement && item.type === "file";
+	}
+	/** The file field an element stands for: itself, one inside it, the one its
+	* label is for, or the one beside it (a button over a hidden field). */
+	function fileFieldFor(item) {
+		if (isFileField(item)) return item;
+		const inside = item.querySelector("input[type=file]");
+		if (isFileField(inside)) return inside;
+		const labelled = item.closest("label")?.control ?? null;
+		if (isFileField(labelled)) return labelled;
+		let around = item.parentElement;
+		for (let up = 0; around && up < 3; up++, around = around.parentElement) {
+			const near = around.querySelectorAll("input[type=file]");
+			if (near.length === 1 && isFileField(near[0])) return near[0];
+		}
+		return null;
+	}
+	/** Puts files from the Mac into a file field, as choosing them would. */
+	function attach(target, files) {
+		if (!target) return "gone";
+		const field = fileFieldFor(target);
+		if (!field) return "not-a-file-field";
+		if (field.disabled) return "locked";
+		if (files.length > 1 && !field.multiple) return "one-file-only";
+		const chosen = new DataTransfer();
+		for (const file of files) {
+			const bytes = Uint8Array.from(atob(file.data), (char) => char.charCodeAt(0));
+			chosen.items.add(new File([bytes], file.name, { type: file.type }));
+		}
+		field.files = chosen.files;
+		field.dispatchEvent(new Event("input", { bubbles: true }));
+		field.dispatchEvent(new Event("change", { bubbles: true }));
+		return "done";
+	}
 	/** A form field, or a widget that stands for one, as opposed to a link or button. */
 	function isField(item) {
 		if (item instanceof HTMLInputElement) return ![
@@ -100,7 +135,7 @@ Object.defineProperty(exports, Symbol.toStringTag, { value: 'Module' });
 		}
 		const lines = [];
 		known.forEach((item, n) => {
-			if (lines.length >= MOST || !item.isConnected || !shown(item)) return;
+			if (lines.length >= MOST || !item.isConnected || !shown(item) && !isFileField(item)) return;
 			lines.push(entry(item, n));
 		});
 		return lines.join("\n");
@@ -147,7 +182,12 @@ Object.defineProperty(exports, Symbol.toStringTag, { value: 'Module' });
 		if (!item) return "gone";
 		if (item instanceof HTMLSelectElement || isList(item)) return "select";
 		if (item instanceof HTMLInputElement) {
-			if (item.type === "checkbox" || item.type === "radio" || item.type === "password") return item.type;
+			if ([
+				"checkbox",
+				"radio",
+				"password",
+				"file"
+			].includes(item.type)) return item.type;
 			return "text";
 		}
 		const role = item.getAttribute("role");
@@ -388,6 +428,7 @@ Object.defineProperty(exports, Symbol.toStringTag, { value: 'Module' });
 			case "kind": return kindOf(target);
 			case "tables": return tables();
 			case "problems": return problems();
+			case "attach": return attach(target, args.files ?? []);
 			case "selection": return window.getSelection()?.toString() ?? "";
 			case "code": {
 				const field = document.querySelector("input[autocomplete=\"one-time-code\"], input[name*=\"otp\" i], input[name*=\"code\" i][inputmode=\"numeric\"]");
@@ -398,6 +439,7 @@ Object.defineProperty(exports, Symbol.toStringTag, { value: 'Module' });
 	}
 
 //#endregion
+exports.attach = attach;
 exports.check = check;
 exports.choose = choose;
 exports.describe = describe;
