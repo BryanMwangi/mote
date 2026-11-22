@@ -37,10 +37,25 @@ extension Bench {
             }
             Assistant.shared.ask(text, in: chat)
             call.answer(describe(browser))
+        case "answer":
+            guard call.testRun("it would answer in your browser") else { return }
+            guard let chat = browser.active?.chat, chat.question != nil, let text = request.string("text") else {
+                return call.fail("chat answer needs a chat in front waiting on a question, and the answer")
+            }
+            chat.answer(text)
+            call.answer(describe(browser))
+        case "acting":
+            guard call.testRun("it would change how your chat acts") else { return }
+            guard let chat = browser.active?.chat, let mode = request.string("mode").flatMap(ChatMode.init(rawValue:)) else {
+                return call.fail("chat acting needs a chat in front and asks, auto or plan")
+            }
+            ChatModes.shared.set(chat.id, mode)
+            call.answer(["acting": mode.rawValue])
         case "wait":
             let deadline = Date().addingTimeInterval(request.double("seconds") ?? 30)
             @MainActor func poll() {
-                let busy = browser.active?.chat?.busy == true
+                // A question waiting is the bench's to answer: no use waiting on it.
+                let busy = browser.active?.chat.map { $0.busy && $0.question == nil } == true
                 guard busy, Date() < deadline else {
                     var out = describe(browser)
                     out["timeout"] = busy
@@ -109,7 +124,7 @@ extension Bench {
             }
         default:
             call.fail(
-                "chat does show, ask TEXT, follow TEXT, wait [SECONDS], use PROVIDER [MODEL] [ADDRESS], mode chat|search|research, search on|off or providers"
+                "chat does show, ask TEXT, follow TEXT, answer TEXT, acting asks|auto|plan, wait [SECONDS], use PROVIDER [MODEL] [ADDRESS], mode chat|search|research, search on|off or providers"
             )
         }
     }
@@ -126,6 +141,8 @@ extension Bench {
         return [
             "chat": true, "tab": BenchWire.short(tab.id), "title": chat.title, "label": tab.label, "phase": phase,
             "activities": chat.activities.map(\.title),
+            "question": chat.question.map { ["text": $0.text, "options": $0.options.map(\.label)] } ?? NSNull(),
+            "spent": chat.spentSoFar.map { ["in": $0.input, "out": $0.output] } ?? NSNull(),
             "messages": chat.messages.map { message in
                 [
                     "role": message.role.rawValue, "text": message.text, "author": message.author ?? "",

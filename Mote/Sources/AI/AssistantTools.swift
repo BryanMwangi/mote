@@ -8,7 +8,7 @@ import WebKit
 /// back or Mote quits. Asks: it asks before acting. Auto: it acts without
 /// asking; what it does can be undone, and only what can't be (deleting
 /// history) still asks. Plan: it only looks, and ends with a plan to approve.
-enum ChatMode: CaseIterable {
+enum ChatMode: String, CaseIterable {
     case asks, auto, plan
 
     var next: ChatMode { Self.allCases[(Self.allCases.firstIndex(of: self)! + 1) % Self.allCases.count] }
