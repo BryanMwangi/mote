@@ -27,6 +27,7 @@ extension AssistantTools {
         guard acts, !planning else { return refused }
         guard let found = find(call.input) else { return "There's no open tab with that id; list the tabs again." }
         let tab = found.tab
+        if let taken = taken(tab) { return taken }
         guard let address = tab.address, let site = browser.logins.accounts(for: tab) else { return "That tab has no site to sign in to." }
         if found.browser.active !== tab || found.parked { bringForward(found) }
         if call.name == "ask_for_credentials" { return await askForCredentials(tab, why: call.input["why"]?.string) }
@@ -44,7 +45,7 @@ extension AssistantTools {
             else { return Self.declined }
             prefs.aiSignIn = SiteList.adding(site.host, to: prefs.aiSignIn)
         }
-        tab.agent.begin("Signing in as \(login.user)", by: driver, stop: stopTurn)
+        working(on: tab, "Signing in as \(login.user)")
         defer { tab.agent.end() }
         // Through the same fill as the person's own, with Touch ID if they've asked for it.
         browser.logins.fill(login, in: tab, host: site.host, clear: site.clear)
@@ -75,7 +76,7 @@ extension AssistantTools {
             answer = alert.runModal()
         }
         guard answer == .alertFirstButtonReturn, !password.stringValue.isEmpty else { return "The person didn't sign in." }
-        tab.agent.begin("Signing in", by: driver, stop: stopTurn)
+        working(on: tab, "Signing in")
         defer { tab.agent.end() }
         let filled = await withCheckedContinuation { done in
             tab.fill(user: user.stringValue, password: password.stringValue) { done.resume(returning: $0) }

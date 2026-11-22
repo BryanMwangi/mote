@@ -276,6 +276,7 @@ final class Tab: ObservableObject, Identifiable {
             for file in files { _ = browser.open(file, foreground: true) }
         }
         web.onTouch = { [weak self] in self?.uncover() }
+        web.agent = agent
         web.onPress = { [weak self] in if let self { owner?.tabPressed(self) } }
         web.searchName = { [weak self] in self?.owner?.searchEngineName }
         web.onSearch = { [weak self] text in

@@ -95,6 +95,7 @@ extension AssistantTools {
         case "read_field":
             return Self.said(await page(tab, "read", args), n: n)
         case "scroll":
+            if let taken = taken(tab) { return taken }
             guard await permit(.gentle, "") else { return refused }
             if let to = input["to"]?.string { args["to"] = to }
             if let by = input["by"]?.double { args["by"] = by }
@@ -106,6 +107,7 @@ extension AssistantTools {
             break
         }
         // Acting in the page: shown on the page, asked per site, naming what and where.
+        if let taken = taken(tab) { return taken }
         let what = n == nil ? "where the caret is" : Self.named(await page(tab, "describe", args), call.name, n: n ?? 0)
         show(found, Self.caption(call.name, what: what))
         let box = n == nil ? nil : Self.box(await page(tab, "rect", args))
@@ -175,7 +177,7 @@ extension AssistantTools {
         if found.browser.active !== found.tab || found.parked {
             if starting, !behind { bringForward(found) } else { Backstage.keep(found.tab) }
         }
-        found.tab.agent.begin(caption, by: driver, stop: stopTurn)
+        working(on: found.tab, caption)
     }
 
     /// Once the work on a tab that has gone out of sight is done, a notice.

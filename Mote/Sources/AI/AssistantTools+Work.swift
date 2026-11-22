@@ -109,7 +109,8 @@ extension AssistantTools {
         guard await permit(.inPage(address), "Fill \(values.count) field\(values.count == 1 ? "" : "s") on \(Address.siteHost(of: address) ?? "this page")?") else {
             return refused
         }
-        found.tab.agent.begin("Filling in the form", by: driver, stop: stopTurn)
+        if let taken = taken(tab) { return taken }
+        working(on: tab, "Filling in the form")
         defer { found.tab.agent.end() }
         var rows: [String] = []
         var undo: [(Int, String)] = []

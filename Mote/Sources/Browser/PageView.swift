@@ -22,6 +22,9 @@ final class PageView: WKWebView {
     private var takesFiles = false
     /// Any click or scroll, so a wake snapshot never gets in the way.
     var onTouch: (() -> Void)?
+    /// The assistant at work on this page: while it has it, the person's
+    /// keys wait, unless a step of its own is pressing them.
+    weak var agent: AgentActivity?
     /// A click, not a scroll.
     var onPress: (() -> Void)?
 
@@ -586,6 +589,7 @@ final class PageView: WKWebView {
     static var quieted = 0
 
     override func keyDown(with event: NSEvent) {
+        if let agent, agent.owned, !agent.stepping { return }
         used = Date()
         if let back = handed.firstIndex(where: { Self.same($0, event) }) {
             handed.remove(at: back)

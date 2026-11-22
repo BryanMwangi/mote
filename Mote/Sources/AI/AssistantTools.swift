@@ -105,7 +105,20 @@ final class AssistantTools {
     /// The developer tools are offered: Developer mode, or an agent from outside.
     var developing: Bool { outside || (acts && prefs.aiMode == .developer) }
 
-    /// Stops this turn: the pill's Stop and Take over.
+    /// The agent starts a step on a tab's page: shown there, holding the page
+    /// from the person while its turn goes on.
+    func working(on tab: Tab, _ caption: String) {
+        let chat = chat
+        tab.agent.begin(caption, by: driver, stop: stopTurn) { chat.flatMap { Assistant.shared.conversation($0) }?.busy == true }
+    }
+
+    /// Why the agent may not act on the tab now: the person took it.
+    func taken(_ tab: Tab) -> String? {
+        guard tab.agent.held else { return nil }
+        return "The person took control of \(Self.line(tab)) and is using it. Don't act on it until they hand it back; work elsewhere, or ask them with ask_person."
+    }
+
+    /// Stops this turn: the pill's Stop.
     var stopTurn: (() -> Void)? {
         guard let chat else { return nil }
         return { Assistant.shared.stop(chat: chat) }

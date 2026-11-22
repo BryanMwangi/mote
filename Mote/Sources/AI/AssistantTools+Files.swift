@@ -31,6 +31,7 @@ extension AssistantTools {
         guard acts, !planning else { return refused }
         guard let found = find(call.input) else { return Self.noTab }
         let tab = found.tab
+        if let taken = taken(tab) { return taken }
         guard let n = call.input["element"]?.int else { return "Say which field, by its number from read_tab." }
         guard tab.built != nil, let address = tab.address else { return "\(Self.line(tab)) is asleep; read it first, which wakes it." }
         let paths = (call.input["paths"]?.array ?? []).compactMap(\.string)
@@ -57,7 +58,7 @@ extension AssistantTools {
             let type = UTType(filenameExtension: url.pathExtension)?.preferredMIMEType ?? "application/octet-stream"
             sent.append(["name": url.lastPathComponent, "type": type, "data": data.base64EncodedString()])
         }
-        tab.agent.begin("Attaching \(names)", by: driver, stop: stopTurn)
+        working(on: tab, "Attaching \(names)")
         defer { tab.agent.end() }
         tab.built?.actedOnBehalf()
         switch await page(tab, "attach", ["n": n, "files": sent]) {

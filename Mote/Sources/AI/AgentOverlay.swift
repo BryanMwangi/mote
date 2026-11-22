@@ -11,8 +11,13 @@ final class AgentActivity: ObservableObject {
     @Published private(set) var working = false
     @Published private(set) var caption = ""
     @Published private(set) var driver = ""
-    /// A step is running: the page holds off the person's clicks and keys.
+    /// A step is running: the agent's own keys go through to the page.
     @Published private(set) var stepping = false
+    /// The person took the page back (Take control): the agent's actions on
+    /// it are refused until they hand it back, or for half an hour.
+    @Published private(set) var heldSince: Date?
+    /// While the turn goes on, the agent keeps the page between its steps.
+    private var turnGoesOn: (() -> Bool)?
 
     enum Effect {
         /// The cursor glides to the middle of `CGRect` (CSS pixels in the page's view).
@@ -28,9 +33,16 @@ final class AgentActivity: ObservableObject {
     var stop: (() -> Void)?
     private var resting: Task<Void, Never>?
 
+    /// The person has the page: taken back, within the last half hour.
+    var held: Bool { heldSince.map { Date().timeIntervalSince($0) < 30 * 60 } ?? false }
+
+    /// The agent has the page: the person's clicks, scrolls and keys don't reach it.
+    var owned: Bool { working && !held }
+
     /// A step begins: shown, with its caption, the page held.
-    func begin(_ caption: String, by driver: String, stop: (() -> Void)?) {
+    func begin(_ caption: String, by driver: String, stop: (() -> Void)?, turnGoesOn: (() -> Bool)? = nil) {
         resting?.cancel()
+        if let turnGoesOn { self.turnGoesOn = turnGoesOn }
         if !working { working = true }
         if self.caption != caption { self.caption = caption }
         if self.driver != driver { self.driver = driver }
@@ -38,18 +50,33 @@ final class AgentActivity: ObservableObject {
         stepping = true
     }
 
-    /// The step is done: the page is the person's again, and the overlay
-    /// goes a moment later unless another step comes.
+    /// The step is done. The overlay goes a moment later, unless another
+    /// step comes; while the turn goes on (the model thinking between
+    /// steps), it stays up to half a minute, so the page isn't up for grabs.
     func end(then finished: (() -> Void)? = nil) {
         stepping = false
         resting?.cancel()
         resting = Task { [weak self] in
             try? await Task.sleep(for: .seconds(4))
+            for _ in 0..<26 where self?.turnGoesOn?() == true {
+                try? await Task.sleep(for: .seconds(1))
+            }
             guard !Task.isCancelled, let self else { return }
             self.working = false
+            self.turnGoesOn = nil
             finished?()
         }
     }
+
+    /// The person takes the page: the agent goes on elsewhere, told so if it
+    /// tries to act here.
+    func takeControl() {
+        heldSince = Date()
+        stepping = false
+    }
+
+    /// The person gives the page back to the agent.
+    func handBack() { heldSince = nil }
 
     /// The person stops it, or takes the page back.
     func leave() {
@@ -65,7 +92,7 @@ final class AgentActivity: ObservableObject {
 /// colour and a lit ring round the edge that turns and breathes, its cursor
 /// gliding to what it acts on, a ripple where it clicks, an outline round
 /// what it writes in, and a pill saying who's doing what, with Stop and
-/// Take over. All Core Animation, added only while it works.
+/// Take control (Hand back once taken). All Core Animation, added only while it works.
 struct AgentOverlay: View {
     @ObservedObject var activity: AgentActivity
     /// CSS pixels to points.
@@ -75,7 +102,8 @@ struct AgentOverlay: View {
     var body: some View {
         if activity.working {
             ZStack(alignment: .bottom) {
-                AgentLayers(activity: activity, tint: NSColor(tint ?? Color(nsColor: Glow.clay)), zoom: zoom, holds: activity.stepping)
+                AgentLayers(activity: activity, tint: NSColor(tint ?? Color(nsColor: Glow.clay)), zoom: zoom, holds: activity.owned)
+                    .opacity(activity.held ? 0 : 1)
                 pill.padding(.bottom, 22)
             }
             .transition(.opacity)
@@ -87,9 +115,14 @@ struct AgentOverlay: View {
             Image(systemName: "sparkle").font(.system(size: 11, weight: .semibold))
             Text(activity.driver).font(.system(size: 12, weight: .semibold))
             Rectangle().fill(Palette.hairline).frame(width: 1, height: 14)
-            Text(activity.caption).font(.system(size: 12)).lineLimit(1).truncationMode(.tail).frame(maxWidth: 320, alignment: .leading)
+            Text(activity.held ? "Paused here: the page is yours" : activity.caption).font(.system(size: 12)).lineLimit(1).truncationMode(.tail).frame(maxWidth: 320, alignment: .leading)
             Pill("Stop") { activity.leave() }
-            Pill("Take over", filled: true) { activity.leave() }
+            if activity.held {
+                Pill("Hand back", filled: true) { activity.handBack() }.help("Let the assistant act on this page again")
+            } else {
+                Pill("Take control", filled: true) { activity.takeControl() }
+                    .help("Use the page yourself; the assistant is told, and leaves it until you hand it back")
+            }
         }
         .padding(.leading, 14)
         .padding(.trailing, 8)
@@ -117,7 +150,7 @@ private struct AgentLayers: NSViewRepresentable {
 
     final class Layers: NSView {
         var zoom: CGFloat = 1
-        /// Holding the page's clicks and keys while a step runs.
+        /// Holding the page's clicks and scrolls while the agent has it.
         var holds = false
         private let wash = CALayer()
         /// The ring: a gradient turning inside a still frame that only shows its edge.
@@ -164,8 +197,14 @@ private struct AgentLayers: NSViewRepresentable {
 
         override var isFlipped: Bool { true }
 
-        /// Only while a step runs does it stand in the page's way.
+        /// While the agent has the page it stands in the way: Take control on
+        /// the pill hands it to the person.
         override func hitTest(_ point: NSPoint) -> NSView? { holds ? super.hitTest(point) : nil }
+        override func mouseDown(with event: NSEvent) {}
+        override func rightMouseDown(with event: NSEvent) {}
+        override func otherMouseDown(with event: NSEvent) {}
+        override func scrollWheel(with event: NSEvent) {}
+        override func magnify(with event: NSEvent) {}
 
         override func layout() {
             super.layout()
