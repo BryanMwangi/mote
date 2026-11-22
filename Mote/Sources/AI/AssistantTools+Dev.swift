@@ -131,6 +131,12 @@ extension AssistantTools {
 
     private func develop(_ tool: String, _ input: JSON, on found: Found) async -> String {
         let tab = found.tab
+        // Working in the page: shown on it, and the person's hands kept off it, as for a click.
+        if tool == "run_script" || tool == "wait_for" {
+            if let taken = taken(tab) { return taken }
+            show(found, tool == "run_script" ? "Running a script" : "Waiting for the page")
+        }
+        defer { if tool == "run_script" || tool == "wait_for" { tab.agent.end() } }
         switch tool {
         case "responsive_design_mode":
             if input["off"]?.bool == true {

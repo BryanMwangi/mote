@@ -175,7 +175,7 @@ extension AssistantTools {
     /// starts on it, unless the chat works in the background; after that the
     /// tab the person or another agent brought forward stays in front, and
     /// this one goes on out of sight. The overlay says who's doing what, with Stop.
-    private func show(_ found: Found, _ caption: String) {
+    func show(_ found: Found, _ caption: String) {
         let behind = chat.map { ChatModes.shared.worksBehind($0, else: prefs.aiBackground) } ?? prefs.aiBackground
         let starting = begun.insert(ObjectIdentifier(found.tab)).inserted
         if found.browser.active !== found.tab || found.parked {
