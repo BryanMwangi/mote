@@ -583,30 +583,95 @@ private struct Working: View {
         TimelineView(.periodic(from: .now, by: 1)) { time in
             let spent = time.date.timeIntervalSince(conversation.askedAt ?? time.date)
             HStack(spacing: 7) {
-                Image(systemName: "sparkle").font(.system(size: 10, weight: .semibold))
-                Text(words(after: spent) + "…").font(.system(size: 13)).contentTransition(.opacity)
-                    .animation(Motion.quick, value: words(after: spent))
+                // The sweep lights the sparkle and the letters, masked to them.
+                let label = HStack(spacing: 7) {
+                    Image(systemName: "sparkle").font(.system(size: 10, weight: .semibold))
+                    RollingWord(word: words(after: spent) + "…").font(.system(size: 13))
+                }
+                label
+                    .overlay {
+                        if !still {
+                            GeometryReader { geo in
+                                LinearGradient(colors: [.clear, Palette.ink.opacity(0.9), .clear], startPoint: .leading, endPoint: .trailing)
+                                    .frame(width: geo.size.width * 0.4)
+                                    .offset(x: sweep ? geo.size.width : -geo.size.width * 0.4)
+                            }
+                            .allowsHitTesting(false)
+                        }
+                    }
+                    .mask { label }
                 TurnMeta.Line(prefs: prefs, conversation: conversation, seconds: spent)
             }
         }
         .foregroundStyle(Palette.muted)
-        .overlay {
-            if !still {
-                GeometryReader { geo in
-                    LinearGradient(
-                        colors: [.clear, Palette.ground.opacity(0.85), .clear], startPoint: .leading, endPoint: .trailing
-                    )
-                    .frame(width: geo.size.width * 0.5)
-                    .offset(x: sweep ? geo.size.width : -geo.size.width * 0.5)
-                }
-                .allowsHitTesting(false)
-            }
-        }
-        .clipped()
         .onAppear {
-            withAnimation(.linear(duration: 1.4).repeatForever(autoreverses: false)) { sweep = true }
+            withAnimation(.linear(duration: 1.6).repeatForever(autoreverses: false)) { sweep = true }
         }
         .accessibilityElement(children: .combine)
+    }
+}
+
+/// Words that change a letter at a time: the old ones fade up and away from
+/// the left, the new ones fade in after them, rising into place. Mostly
+/// opacity, so it reads as calm rather than busy.
+private struct RollingWord: View {
+    let word: String
+    @State private var shown: String
+    @State private var leaving: String?
+    @State private var settled = true
+    @Environment(\.accessibilityReduceMotion) private var still
+
+    init(word: String) {
+        self.word = word
+        _shown = State(initialValue: word)
+    }
+
+    var body: some View {
+        ZStack(alignment: .leading) {
+            if let leaving { letters(leaving, away: true) }
+            letters(shown, away: false)
+        }
+        .onChange(of: word) { _, next in
+            guard !still else { return withAnimation(Motion.quick) { shown = next } }
+            var instantly = Transaction()
+            instantly.disablesAnimations = true
+            withTransaction(instantly) {
+                leaving = shown
+                shown = next
+                settled = false
+            }
+            Task { @MainActor in
+                // A frame with the new word laid out unseen, then the letters go.
+                try? await Task.sleep(for: .milliseconds(16))
+                settled = true
+                try? await Task.sleep(for: .seconds(Self.out + Self.each + Self.stagger * Double(max(next.count, 1))))
+                if shown == next { withAnimation(.easeOut(duration: 0.2)) { leaving = nil } }
+            }
+        }
+    }
+
+    /// Letters go quickly; each new one arrives just after the old one in its place.
+    private static let out = 0.14
+    private static let each = 0.22
+    private static let stagger = 0.014
+
+    /// The leaving word's letters go as `settled` turns true; the coming
+    /// word's arrive, a beat behind.
+    private func letters(_ text: String, away: Bool) -> some View {
+        HStack(spacing: 0) {
+            ForEach(Array(text.enumerated()), id: \.offset) { index, letter in
+                let gone = away ? settled : !settled
+                Text(String(letter))
+                    .opacity(gone ? 0 : 1)
+                    .offset(y: gone ? (away ? -3 : 3) : 0)
+                    .animation(
+                        away
+                            ? .easeIn(duration: Self.out).delay(Double(index) * Self.stagger)
+                            : .easeOut(duration: Self.each).delay(Self.out * 0.6 + Double(index) * Self.stagger),
+                        value: settled)
+            }
+        }
+        .fixedSize()
     }
 }
 
