@@ -169,6 +169,8 @@ extension AssistantTools {
             if tab.muted { marks.append("muted") }
             if tab.asleep { marks.append("asleep") }
             if tab.pdf != nil { marks.append("a PDF") }
+            // Where agents, sub-agents too, are at work, and on what.
+            if tab.agent.working { marks.append("an agent at work: \(tab.agent.caption)") }
             let place = "window \(found.window)" + (found.space.map { ", space “\($0.name)”" } ?? "")
             return [
                 Self.id(tab), tab.label, tab.address?.absoluteString ?? "", marks.joined(separator: ", "),

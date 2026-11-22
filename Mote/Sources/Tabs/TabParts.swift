@@ -60,15 +60,33 @@ struct Speaker: View {
     }
 }
 
-/// Small marks before a tab's title: a flask on the bench's tabs, a crossed
-/// eye on private ones.
+/// Small marks before a tab's title: a sparkle while the assistant works in
+/// it, saying what it's doing; a flask on the bench's tabs, a crossed eye on
+/// private ones.
 struct TabMarks: View {
     @ObservedObject var tab: Tab
     let colour: Color
 
     var body: some View {
+        AgentMark(agent: tab.agent)
         ForEach([tab.bench ? "flask" : nil, tab.shy ? "eye.slash" : nil].compactMap { $0 }, id: \.self) {
             Image(systemName: $0).font(.system(size: 9)).foregroundStyle(colour.opacity(0.7))
+        }
+    }
+}
+
+/// The assistant at work in a tab, seen from its row.
+private struct AgentMark: View {
+    @ObservedObject var agent: AgentActivity
+
+    var body: some View {
+        if agent.working {
+            Image(systemName: "sparkle")
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundStyle(Color.accentColor)
+                .symbolEffect(.pulse, isActive: agent.stepping)
+                .help("\(agent.driver): \(agent.caption)")
+                .transition(.opacity.combined(with: .scale))
         }
     }
 }
