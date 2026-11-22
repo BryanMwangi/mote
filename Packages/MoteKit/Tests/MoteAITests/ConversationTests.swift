@@ -186,6 +186,18 @@ struct ConversationTests {
         #expect(conversation.messages.last?.text == "Fresh")
     }
 
+    @Test("A turn that ends whole says so")
+    func finishedHook() async {
+        let service = ScriptedService()
+        service.events = [.text("Plan: 1. 2.")]
+        let conversation = Conversation()
+        var told = 0
+        conversation.finished = { _ in told += 1 }
+        conversation.send("Plan it", via: route(service))
+        await settle(conversation)
+        #expect(told == 1)
+    }
+
     @Test("A sidebar chat keeps the tab it was about")
     func origin() {
         let conversation = Conversation()

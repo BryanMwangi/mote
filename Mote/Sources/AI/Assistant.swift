@@ -367,6 +367,12 @@ final class Assistant {
     /// Sends `text` in `conversation` to the chosen provider.
     func ask(_ text: String, in conversation: Conversation) {
         answering[conversation.id] = WeakChat(conversation)
+        // A plan done while the person is elsewhere: macOS tells them it's ready.
+        conversation.finished = { [weak self] chat in
+            guard ChatModes.shared.mode(of: chat.id) == .plan, !WebNotifications.sees(chat: chat.id) else { return }
+            let name = self?.provider.name ?? "The assistant"
+            Task { await WebNotifications.shared.tell(chat: chat.id, "Plan ready for review", "\(name) has a plan for “\(chat.title)”") }
+        }
         conversation.send(text, routing: { [self] in try await route(chat: conversation.id) })
     }
 

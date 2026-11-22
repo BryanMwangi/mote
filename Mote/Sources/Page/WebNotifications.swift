@@ -1,4 +1,5 @@
 import AppKit
+import MoteAI
 import MoteCore
 import UserNotifications
 import WebKit
@@ -69,6 +70,56 @@ final class WebNotifications: NSObject, UNUserNotificationCenterDelegate {
         try? await center.add(UNNotificationRequest(identifier: "push.\(UUID().uuidString)", content: content, trigger: nil))
     }
 
+    // MARK: - The assistant
+
+    /// The assistant needs the person, who can't see its chat (another app,
+    /// another tab, the sidebar shut): macOS says so, and a click takes them
+    /// to the chat. One a chat at a time.
+    func tell(chat: UUID, _ title: String, _ body: String) async {
+        let center = UNUserNotificationCenter.current()
+        guard (try? await center.requestAuthorization(options: [.alert, .sound])) == true else { return }
+        let content = UNMutableNotificationContent()
+        content.title = title
+        content.body = body
+        content.threadIdentifier = "chat"
+        content.userInfo = ["chat": chat.uuidString]
+        content.sound = .default
+        try? await center.add(UNNotificationRequest(identifier: "chat.\(chat.uuidString)", content: content, trigger: nil))
+    }
+
+    /// Answered or seen: the notice goes.
+    func untell(chat: UUID) {
+        let id = "chat.\(chat.uuidString)"
+        UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: [id])
+        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [id])
+    }
+
+    /// Whether the person can see the chat now: Mote in front, its window
+    /// key, and the chat on the tab in front, as the tab itself, or in its
+    /// sidebar or the ask card.
+    static func sees(chat id: UUID) -> Bool {
+        guard NSApp.isActive else { return false }
+        return Windows.shared.all.contains { browser in
+            guard browser.window?.isKeyWindow == true, let tab = browser.active else { return false }
+            return tab.chat?.id == id || (tab.pageChat?.id == id && (tab.chatOpen || browser.field.askCard?.id == id))
+        }
+    }
+
+    /// Back to the chat: its tab, or the sidebar of the tab it's about.
+    private static func open(chat id: UUID) {
+        for browser in Windows.shared.all {
+            let all = browser.tabs + browser.parkedTabs
+            let own = all.first { $0.chat?.id == id }
+            let about = browser.active.flatMap { $0.pageChat?.id == id ? $0 : nil } ?? all.first { $0.pageChat?.id == id }
+            guard let tab = own ?? about else { continue }
+            NSApp.activate()
+            browser.window?.makeKeyAndOrderFront(nil)
+            browser.showPlaying(tab)
+            if own == nil, !tab.chatOpen { browser.slidingFold { tab.chatOpen = true } }
+            return
+        }
+    }
+
     /// Said once a launch: a site may notify, but macOS won't let Mote.
     private var toldRefused = false
 
@@ -137,6 +188,7 @@ final class WebNotifications: NSObject, UNUserNotificationCenterDelegate {
         let page = info["page"] as? String
         if let tab, let page { Task { @MainActor in Self.open(tab, page) } }
         if let link = (info["link"] as? String).flatMap(URL.init(string:)) { Task { @MainActor in WebPushService.open(link) } }
+        if let chat = (info["chat"] as? String).flatMap(UUID.init(uuidString:)) { Task { @MainActor in Self.open(chat: chat) } }
         done()
     }
 

@@ -115,6 +115,15 @@ final class AssistantTools {
         tab.agent.begin(caption, by: driver, stop: stopTurn) { chat.flatMap { Assistant.shared.conversation($0) }?.busy == true }
     }
 
+    /// Asks the person in the chat, telling them through macOS when they
+    /// can't see it; the notice goes once they answer.
+    func asking(_ conversation: Conversation, _ question: Conversation.Question) async -> String? {
+        let unseen = !WebNotifications.sees(chat: conversation.id)
+        if unseen { Task { await WebNotifications.shared.tell(chat: conversation.id, "\(driver) asks", question.text) } }
+        defer { if unseen { WebNotifications.shared.untell(chat: conversation.id) } }
+        return await conversation.ask(question)
+    }
+
     /// Why the agent may not act on the tab now: the person took it.
     func taken(_ tab: Tab) -> String? {
         guard tab.agent.held else { return nil }
@@ -222,7 +231,7 @@ final class AssistantTools {
         for (index, question) in questions.enumerated() {
             var question = question
             if questions.count > 1 { question.place = "\(index + 1) of \(questions.count)" }
-            guard let answer = await conversation.ask(question) else {
+            guard let answer = await asking(conversation, question) else {
                 let got = answers.isEmpty ? "" : " Answered before then: " + answers.joined(separator: "; ") + "."
                 return "The person didn't answer: the reply was stopped." + got
             }
@@ -326,7 +335,7 @@ final class AssistantTools {
         if let chat, let conversation = Assistant.shared.conversation(chat), conversation.busy {
             let allow = "Allow", trust = site.map { "Allow on \($0) for this chat" }, deny = "Deny"
             let options = [allow, trust, deny].compactMap { $0 }.map { Conversation.Question.Option(label: $0) }
-            let answer = await conversation.ask(Conversation.Question(text: question, options: options))
+            let answer = await asking(conversation, Conversation.Question(text: question, options: options))
             if let trust, let site, answer == trust { Self.trusted[chat, default: []].insert(site) }
             if answer == allow || (trust != nil && answer == trust) { return true }
             // Words of their own instead: a no, with what they said told to the model.

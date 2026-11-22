@@ -79,6 +79,8 @@ public final class Conversation: Identifiable {
     public private(set) var spending: Usage?
     /// The turn under way's spend as known now, for the live count.
     public var spentSoFar: Usage? { spending.map { turnSpent + $0 } ?? turnSpent }
+    /// Told when a turn ends with its reply whole (not stopped, not failed).
+    @ObservationIgnored public var finished: ((Conversation) -> Void)?
     /// When the turn under way (or the last) began, for how long it has taken.
     public private(set) var askedAt: Date?
     /// The page the person has shared with this chat, if any. Kept as the tab
@@ -697,6 +699,7 @@ public final class Conversation: Identifiable {
         guard let failure, !(failure is CancellationError) else {
             if let provider, let opened { sessions[provider] = (opened, messages.count, searched, openedShared) }
             cutShort = nil
+            finished?(self)
             phase = .idle
             touch()
             // The next message waiting goes now.

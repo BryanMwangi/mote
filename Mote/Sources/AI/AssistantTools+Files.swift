@@ -90,7 +90,7 @@ extension AssistantTools {
                 .init(label: always, description: "Listed in Settings › AI, where you can take it back"),
                 .init(label: deny),
             ])
-        switch await conversation.ask(question) {
+        switch await asking(conversation, question) {
         case thisChat?:
             Self.chatFolders[chat, default: []].insert(folder)
             return true
