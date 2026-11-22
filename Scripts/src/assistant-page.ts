@@ -16,6 +16,8 @@ export type Args = {
   by?: number;
   key?: string;
   label?: string;
+  /** List the elements numbered after this one. */
+  after?: number;
   /** Files to attach, read by Mote from the Mac. */
   files?: { name: string; type: string; data: string }[];
 };
@@ -29,7 +31,7 @@ declare global {
 const PICKABLE =
   'a[href],button,input:not([type=hidden]),select,textarea,summary,[role=button],[role=link],[role=checkbox],[role=radio],[role=switch],[role=tab],[role=menuitem],[role=menuitemcheckbox],[role=menuitemradio],[role=combobox],[role=listbox],[role=option],[role=textbox],[contenteditable=""],[contenteditable=true]';
 /** The most elements listed at once, and the most of a list's or table's text. */
-const MOST = 250;
+const MOST = 150;
 const MOST_TEXT = 20000;
 
 function shown(item: Element): boolean {
@@ -176,18 +178,23 @@ function entry(item: Element, n: number): string {
 }
 
 /** Numbers what can be picked, keeping earlier numbers; the list as text. */
-export function outline(root: Document = document): string {
+export function outline(root: Document = document, after = -1): string {
   const known = (window.__moteOutline ??= []);
   for (const item of root.querySelectorAll(PICKABLE)) {
     if (known.length >= 2000) break;
     if (!known.includes(item)) known.push(item);
   }
   const lines: string[] = [];
+  let more = 0;
+  let last = after;
   known.forEach((item, n) => {
     // A file field is often hidden behind a button of the page's own.
-    if (lines.length >= MOST || !item.isConnected || (!shown(item) && !isFileField(item))) return;
+    if (n <= after || !item.isConnected || (!shown(item) && !isFileField(item))) return;
+    if (lines.length >= MOST) return void more++;
     lines.push(entry(item, n));
+    last = n;
   });
+  if (more) lines.push(`(${more} more: read_tab with elements_after: ${last})`);
   return lines.join('\n');
 }
 
@@ -492,7 +499,7 @@ export function run(op: string, args: Args = {}): unknown {
   const target = numbered(args.n);
   switch (op) {
     case 'outline':
-      return outline();
+      return outline(document, args.after ?? -1);
     case 'describe':
       return target ? describe(target) : null;
     case 'rect':

@@ -19,8 +19,8 @@ extension AssistantTools {
             Tool(
                 name: "read_tab",
                 description:
-                    "An open tab's text, and a numbered list of what can be clicked or typed into: fields by their label, with what they hold now and whether they are required or invalid. Numbers stay the same until the page changes.",
-                schema: schema(tab, ["tab"])),
+                    "An open tab's text, and a numbered list of what can be clicked or typed into: fields by their label, with what they hold now and whether they are required or invalid. Numbers stay the same until the page changes. Long pages come in parts: it says where to go on with from (text) or elements_after (elements). To find something specific, find_in_page is cheaper.",
+                schema: schema(tab + #","from":{"type":"integer","description":"Where in the text to start"},"elements_after":{"type":"integer"}"#, ["tab"])),
             Tool(name: "get_selection", description: "The words the person has selected in a tab (the one in front, if none is given).", schema: schema(tab, [])),
             Tool(
                 name: "find_in_page", description: "Where words appear in a tab, up to twenty places, each with what's around it.",
@@ -75,8 +75,13 @@ extension AssistantTools {
             // A PDF: its text page by page, and whether it has fields.
             if let text = await pdfText(of: tab) { return text }
             await ready(found)
-            let text = String((await tab.capturePageContext()?.text ?? "").prefix(Self.most))
-            let outline = await page(tab, "outline") ?? ""
+            let whole = await tab.capturePageContext()?.text ?? ""
+            let from = min(max(0, input["from"]?.int ?? 0), whole.count)
+            var text = String(whole.dropFirst(from).prefix(Self.part))
+            if whole.count > from + text.count {
+                text += "\n…\(whole.count - from - text.count) more characters: read_tab with from: \(from + text.count)"
+            }
+            let outline = await page(tab, "outline", ["after": input["elements_after"]?.int ?? -1]) ?? ""
             let before = lastRead[ObjectIdentifier(tab)]
             lastRead[ObjectIdentifier(tab)] = (text, outline)
             let same = "the same as when you last read this tab"
@@ -170,6 +175,10 @@ extension AssistantTools {
         for _ in 0..<150 where tab.loading { try? await Task.sleep(for: .milliseconds(100)) }
         try? await Task.sleep(for: .milliseconds(woke ? 1000 : 300))
     }
+
+    /// The most of a page's text one read_tab gives: enough for most pages,
+    /// and a long one goes on in parts rather than sitting whole in the chat.
+    static let part = 8_000
 
     /// The work shown on the tab's page: it comes to the front when the agent
     /// starts on it, unless the chat works in the background; after that the

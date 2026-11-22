@@ -5,7 +5,7 @@ Object.defineProperty(exports, Symbol.toStringTag, { value: 'Module' });
 //#region src/assistant-page.ts
 	const PICKABLE = "a[href],button,input:not([type=hidden]),select,textarea,summary,[role=button],[role=link],[role=checkbox],[role=radio],[role=switch],[role=tab],[role=menuitem],[role=menuitemcheckbox],[role=menuitemradio],[role=combobox],[role=listbox],[role=option],[role=textbox],[contenteditable=\"\"],[contenteditable=true]";
 	/** The most elements listed at once, and the most of a list's or table's text. */
-	const MOST = 250;
+	const MOST = 150;
 	const MOST_TEXT = 2e4;
 	function shown(item) {
 		const box = item.getBoundingClientRect();
@@ -127,17 +127,22 @@ Object.defineProperty(exports, Symbol.toStringTag, { value: 'Module' });
 		return `[${n}] ${kind} ${name}${holds}${state(item)}${field ? validity(item) : ""}${href}`;
 	}
 	/** Numbers what can be picked, keeping earlier numbers; the list as text. */
-	function outline(root = document) {
+	function outline(root = document, after = -1) {
 		const known = window.__moteOutline ??= [];
 		for (const item of root.querySelectorAll(PICKABLE)) {
 			if (known.length >= 2e3) break;
 			if (!known.includes(item)) known.push(item);
 		}
 		const lines = [];
+		let more = 0;
+		let last = after;
 		known.forEach((item, n) => {
-			if (lines.length >= MOST || !item.isConnected || !shown(item) && !isFileField(item)) return;
+			if (n <= after || !item.isConnected || !shown(item) && !isFileField(item)) return;
+			if (lines.length >= MOST) return void more++;
 			lines.push(entry(item, n));
+			last = n;
 		});
+		if (more) lines.push(`(${more} more: read_tab with elements_after: ${last})`);
 		return lines.join("\n");
 	}
 	/** The fields the page would refuse to send as they are: required and empty,
@@ -378,7 +383,7 @@ Object.defineProperty(exports, Symbol.toStringTag, { value: 'Module' });
 	function run(op, args = {}) {
 		const target = numbered(args.n);
 		switch (op) {
-			case "outline": return outline();
+			case "outline": return outline(document, args.after ?? -1);
 			case "describe": return target ? describe(target) : null;
 			case "rect":
 				if (target) target.scrollIntoView({
