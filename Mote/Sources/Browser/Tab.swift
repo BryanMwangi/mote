@@ -836,6 +836,8 @@ final class Tab: ObservableObject, Identifiable {
     func wake() -> Bool {
         guard let rested else { return false }
         self.rested = nil
+        // Woken to be used: its idle time starts now, not from when it slept.
+        touch()
         freshPage()
         if let picture = rested.picture, let image = NSImage(data: picture) {
             cover = image

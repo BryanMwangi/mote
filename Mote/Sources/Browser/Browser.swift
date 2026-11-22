@@ -235,6 +235,7 @@ final class Browser: NSObject, ObservableObject {
     /// Idle tab sleep timer and memory pressure source (see Browser+TabSleep.swift).
     var dozing: Timer?
     var pressure: DispatchSourceMemoryPressure?
+    var squeezing: Timer?
     /// Updates Chrome Web Store pages as extensions come and go (see WebStoreBridge.swift).
     var storeWatch: AnyCancellable?
     /// The video was floated because the app went to the background, so it

@@ -17,6 +17,8 @@ public enum TabSleep {
         public var downloading = false
         /// The tab on screen was opened from it (a sign-in pop-up reports back).
         public var openedTheTabOnScreen = false
+        /// The assistant is working on its page.
+        public var agentAtWork = false
 
         public init() {}
     }
@@ -36,6 +38,7 @@ public enum TabSleep {
         case downloading
         case opener = "the page on screen came from it"
         case typed = "holding something typed"
+        case agent = "the assistant is working on it"
     }
 
     /// The first reason the tab must stay awake, or nil if it may sleep.
@@ -44,7 +47,7 @@ public enum TabSleep {
             (tab.onScreen, .onScreen), (tab.pinned, .pinned), (tab.bench, .bench), (tab.blank, .blank),
             (tab.asleep, .asleep), (!tab.hasPage, .noPage), (tab.loading, .loading), (tab.playingSound, .sound),
             (tab.floating, .floating), (tab.onCall, .call), (tab.downloading, .downloading),
-            (tab.openedTheTabOnScreen, .opener),
+            (tab.openedTheTabOnScreen, .opener), (tab.agentAtWork, .agent),
         ]
         return checks.first { $0.0 }?.1
     }
@@ -60,11 +63,8 @@ public enum TabSleep {
         min(60, max(5, limit / 4))
     }
 
-    /// The idle limit under memory pressure: five minutes when macOS warns,
-    /// none at all when it is critical.
-    public static func idleLimit(underPressure critical: Bool) -> TimeInterval {
-        critical ? 0 : 5 * 60
-    }
+    /// How often, while memory is critical, the longest idle tab goes to sleep.
+    public static let squeezeEvery: TimeInterval = 2
 
     /// The tabs idle for at least `limit`, longest idle first.
     public static func idle<ID>(_ tabs: [(id: ID, touched: Date)], limit: TimeInterval, now: Date) -> [ID] {

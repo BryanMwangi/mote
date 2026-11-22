@@ -17,11 +17,13 @@ extension Browser {
         RunLoop.main.add(timer, forMode: .common)
         dozing = timer
 
-        let source = DispatchSource.makeMemoryPressureSource(eventMask: [.warning, .critical], queue: .main)
+        // A warning leaves the person's limit alone. While memory is critical
+        // the longest idle tab sleeps every couple of seconds until it clears.
+        let source = DispatchSource.makeMemoryPressureSource(eventMask: [.normal, .critical], queue: .main)
         source.setEventHandler { [weak self] in
             MainActor.assumeIsolated {
                 guard let self, let event = self.pressure?.data else { return }
-                self.sleepIdle(within: TabSleep.idleLimit(underPressure: event.contains(.critical)))
+                self.squeeze(event.contains(.critical))
             }
         }
         source.resume()
@@ -31,9 +33,34 @@ extension Browser {
     /// Puts every tab idle for `limit` to sleep, other spaces' included, longest idle first.
     func sleepIdle(within limit: TimeInterval = Browser.sleepAfter) {
         guard prefs.sleepsTabs else { return }
+        for tab in sleepable(within: limit) { sleep(tab) }
+    }
+
+    /// The tabs that may sleep, idle for `limit`, longest idle first. Tabs on
+    /// screen are in use, so their idle time starts again.
+    private func sleepable(within limit: TimeInterval) -> [Tab] {
+        for id in [activeID].compactMap({ $0 }) + (shownSplit?.ids ?? []) { tab(id)?.touch() }
         let candidates = (tabs + parkedTabs).filter { awake(because: $0) == nil }
         let ids = TabSleep.idle(candidates.map { (id: $0.id, touched: $0.touched) }, limit: limit, now: Date())
-        for tab in ids.compactMap({ id in candidates.first { $0.id == id } }) { sleep(tab) }
+        return ids.compactMap { id in candidates.first { $0.id == id } }
+    }
+
+    /// While memory is critical, the longest idle tab sleeps every couple of
+    /// seconds, until it clears or nothing more may sleep.
+    private func squeeze(_ critical: Bool) {
+        squeezing?.invalidate()
+        squeezing = nil
+        guard critical, prefs.sleepsTabs else { return }
+        let timer = Timer(timeInterval: TabSleep.squeezeEvery, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                guard let tab = self.sleepable(within: 0).first else { return self.squeeze(false) }
+                self.sleep(tab)
+            }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        squeezing = timer
+        timer.fire()
     }
 
     /// Why a tab has to stay awake, or nil. Idle time is the caller's to check.
@@ -56,6 +83,7 @@ extension Browser {
             facts.downloading = downloading.contains { $0.webView === web }
         }
         facts.openedTheTabOnScreen = active?.opener == tab.id
+        facts.agentAtWork = tab.agent.working
         if asked { (facts.pinned, facts.playingSound, facts.loading, facts.openedTheTabOnScreen) = (false, false, false, false) }
         return TabSleep.keepsAwake(facts)?.rawValue
     }

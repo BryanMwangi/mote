@@ -15,7 +15,7 @@ struct TabSleepTests {
         let cases: [(WritableKeyPath<TabSleep.Facts, Bool>, TabSleep.Reason)] = [
             (\.onScreen, .onScreen), (\.pinned, .pinned), (\.bench, .bench), (\.blank, .blank), (\.asleep, .asleep),
             (\.loading, .loading), (\.playingSound, .sound), (\.floating, .floating), (\.onCall, .call),
-            (\.downloading, .downloading), (\.openedTheTabOnScreen, .opener),
+            (\.downloading, .downloading), (\.openedTheTabOnScreen, .opener), (\.agentAtWork, .agent),
         ]
         for (fact, reason) in cases {
             var tab = TabSleep.Facts()
@@ -41,8 +41,6 @@ struct TabSleepTests {
         #expect(TabSleep.idleLimit(setting: 12) == 12)
         #expect(TabSleep.checkEvery(limit: 1800) == 60)
         #expect(TabSleep.checkEvery(limit: 8) == 5)
-        #expect(TabSleep.idleLimit(underPressure: false) == 300)
-        #expect(TabSleep.idleLimit(underPressure: true) == 0)
     }
 
     @Test("Idle tabs come longest idle first")
