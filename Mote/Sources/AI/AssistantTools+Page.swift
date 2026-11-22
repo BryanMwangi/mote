@@ -74,7 +74,7 @@ extension AssistantTools {
         if call.name == "read_tab" {
             // A PDF: its text page by page, and whether it has fields.
             if let text = await pdfText(of: tab) { return text }
-            _ = tab.wake()
+            await ready(found)
             let text = await tab.capturePageContext()?.text ?? ""
             let outline = await page(tab, "outline") ?? ""
             return "\(tab.label)\n\(tab.address?.absoluteString ?? "")\n\n\(String(text.prefix(Self.most)))\n\nElements:\n\(outline)"
@@ -151,6 +151,18 @@ extension AssistantTools {
         default:
             return await press(input["key"]?.string ?? "Enter", in: tab, args: args)
         }
+    }
+
+    /// A tab about to be read or used: woken if it slept, kept live if it's
+    /// out of sight, and waited on while it loads, a moment more once woken
+    /// for its own scripts to draw.
+    func ready(_ found: Found) async {
+        let tab = found.tab
+        let woke = tab.wake()
+        if found.parked || found.browser.active !== tab { Backstage.keep(tab) }
+        guard woke || tab.loading else { return }
+        for _ in 0..<150 where tab.loading { try? await Task.sleep(for: .milliseconds(100)) }
+        try? await Task.sleep(for: .milliseconds(woke ? 1000 : 300))
     }
 
     /// The work shown on the tab's page: it comes to the front, and the

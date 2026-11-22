@@ -96,7 +96,7 @@ extension AssistantTools {
             return head + String(text.prefix(most))
         }
         guard let url = tab.pending ?? tab.address, ["http", "https"].contains(url.scheme ?? "") else { return head + "(nothing to read)" }
-        return head + String((await ReadAway.text(of: url)).prefix(most))
+        return head + String((await ReadAway.text(of: url, store: tab.store)).prefix(most))
     }
 
     // MARK: Forms

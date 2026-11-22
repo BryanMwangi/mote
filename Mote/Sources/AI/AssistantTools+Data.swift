@@ -263,9 +263,15 @@ extension AssistantTools {
 final class ReadAway: NSObject, WKNavigationDelegate {
     private var done: CheckedContinuation<Void, Never>?
 
-    static func text(of url: URL) async -> String {
+    /// `store`: the tab's own, so a site it's signed in to reads as it would there.
+    static func text(of url: URL, store: WKWebsiteDataStore? = nil) async -> String {
         let reader = ReadAway()
-        let page = WKWebView(frame: NSRect(x: 0, y: 0, width: 1280, height: 900), configuration: Web.configuration(shy: true))
+        let page = WKWebView(
+            frame: NSRect(x: 0, y: 0, width: 1280, height: 900), configuration: Web.configuration(shy: store == nil, store: store))
+        // Laid out and running as if shown, so pages that draw late do.
+        page.unpublished("_setWindowOcclusionDetectionEnabled:", false)
+        BenchRoom.made.contentView?.addSubview(page)
+        defer { page.removeFromSuperview() }
         page.navigationDelegate = reader
         page.load(URLRequest(url: url))
         await withCheckedContinuation { done in
@@ -275,6 +281,8 @@ final class ReadAway: NSObject, WKNavigationDelegate {
                 reader.finish()
             }
         }
+        // Its own scripts draw after it loads.
+        try? await Task.sleep(for: .seconds(1))
         let text = (try? await page.callAsyncJavaScript(Reader.text, contentWorld: .page) as? String) ?? ""
         page.stopLoading()
         return text.isEmpty ? "The page had no text to read." : String(text.prefix(AssistantTools.most))
