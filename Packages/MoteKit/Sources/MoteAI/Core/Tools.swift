@@ -246,9 +246,9 @@ extension ToolLoop {
     public static func title(of name: String, input: JSON?) -> String {
         let site = input?["url"]?.string.flatMap(URL.init(string:)).map { Source(url: $0, title: "").site }
         switch name {
-        case "spawn_agent":
-            let task = input?["task"]?.string.map { $0.split(whereSeparator: \.isNewline).first.map(String.init) ?? $0 } ?? ""
-            return task.isEmpty ? "A sub-agent at work" : "Agent: " + (task.count > 70 ? String(task.prefix(69)) + "…" : task)
+        case "spawn_agent": return "Starting an agent"
+        case "wait_agents": return "Waiting for agents"
+        case "stop_agent": return "Stopping an agent"
         case "list_tabs": return "Looking at your tabs"
         case "read_tab": return "Reading a tab"
         case "read_page": return site.map { "Reading \($0)" } ?? "Reading a page"

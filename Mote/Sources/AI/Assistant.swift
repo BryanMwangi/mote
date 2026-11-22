@@ -306,8 +306,9 @@ final class Assistant {
             let server = overMCP ? await MoteMCP.shared.server(for: tools) : nil
             // Sub-agents run on the same model, without the tools loop around it.
             let (base, driver) = (service, provider.name)
-            tools.spawn = { task in
-                await AssistantTools.runAgent(task, through: base, model: model, overMCP: overMCP, chat: chat, driver: driver)
+            tools.spawn = { task, progress in
+                await AssistantTools.runAgent(
+                    task, through: base, model: model, overMCP: overMCP, chat: chat, driver: driver, progress: progress)
             }
             service = ToolLoop(
                 service: service, tools: tools.list, server: server, describe: AssistantTools.describe, together: ["spawn_agent"]

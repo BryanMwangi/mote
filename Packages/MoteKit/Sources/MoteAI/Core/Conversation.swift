@@ -525,6 +525,20 @@ public final class Conversation: Identifiable {
         }
     }
 
+    /// A step that goes on outside a reply's own stream (a sub-agent working
+    /// on after the call that started it): shown in the reply it began in, or
+    /// the last one, and kept up to date there.
+    public func show(step: Activity) {
+        if let at = messages.lastIndex(where: { $0.steps.contains { $0.id == step.id } }),
+            let index = messages[at].steps.firstIndex(where: { $0.id == step.id })
+        {
+            messages[at].steps[index] = step
+        } else if let last = messages.lastIndex(where: { $0.role == .assistant }) {
+            messages[last].steps.append(step)
+        }
+        if let index = activities.firstIndex(where: { $0.id == step.id }) { activities[index] = step }
+    }
+
     /// The reply under way has nothing in it yet: no words, thinking or steps.
     private var nothingYet: Bool {
         guard let last = messages.last, last.role == .assistant else { return true }
