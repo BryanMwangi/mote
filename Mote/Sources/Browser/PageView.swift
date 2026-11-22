@@ -423,6 +423,10 @@ final class PageView: WKWebView {
     /// second dropped those without a word.
     var mayOpenWindow: Bool { Date().timeIntervalSince(used) < 5 }
 
+    /// The assistant clicked or typed for the person: its pop-ups (a sign-in
+    /// window) open as theirs would.
+    func actedOnBehalf() { used = Date() }
+
     override func mouseDown(with event: NSEvent) {
         used = Date()
         DownloadDrop.pressed = (NSEvent.mouseLocation, Date())

@@ -127,6 +127,7 @@ extension AssistantTools {
         if let box { tab.agent.effects.send(call.name == "click" ? .click(box) : call.name == "write" || call.name == "fill" ? .write(box) : .move(box)) }
         // The cursor gets there first.
         if box != nil, !Glow.stillness { try? await Task.sleep(for: .milliseconds(380)) }
+        tab.built?.actedOnBehalf()
         switch call.name {
         case "click":
             return Self.said(await page(tab, "click", args), n: n, done: "Clicked.")
