@@ -62,6 +62,7 @@ extension AssistantTools {
         guard let tools = AssistantTools.current(chat: chat, driver: driver) else {
             return ToolOutput("Mote's tools are off.", outcome: .failed)
         }
+        tools.subAgent = true
         let server = overMCP ? await MoteMCP.shared.server(for: tools) : nil
         let loop = ToolLoop(service: base, tools: tools.list, server: server, describe: AssistantTools.describe) { call in
             await tools.run(call)

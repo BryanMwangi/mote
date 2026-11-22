@@ -136,9 +136,13 @@ final class AssistantTools {
         return { Assistant.shared.stop(chat: chat) }
     }
 
+    /// A sub-agent's: only what a part of the work needs, so each of its
+    /// many calls carries fewer tool definitions.
+    var subAgent = false
+
     var list: [Tool] {
-        outside
-            ? tabTools + pageTools + pdfTools + workTools + devTools
+        outside || subAgent
+            ? tabTools + pageTools + pdfTools + workTools + (subAgent ? fileTools : []) + devTools
             : tabTools + spaceTools + pageTools + pdfTools + workTools + fileTools + signInTools + devTools + dataTools + ledgerTools + askTools
                 + agentTools
     }
