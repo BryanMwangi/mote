@@ -984,8 +984,11 @@ final class Tab: ObservableObject, Identifiable {
         owner = nil
         leaveChat()
         // The tab is going away: stop any reply still coming, but keep the
-        // chat itself until the tab is released.
-        pageChat?.stop(why: "The tab this chat was about closed, which stopped your last reply.")
+        // chat itself until the tab is released. A chat other tabs share
+        // (one chat across the tabs, or one the assistant carried along) goes on.
+        if let pageChat, !Windows.shared.all.contains(where: { ($0.tabs + $0.parkedTabs).contains { $0 !== self && $0.pageChat === pageChat } }) {
+            pageChat.stop(why: "The tab this chat was about closed, which stopped your last reply.")
+        }
         letPageGo()
     }
 
