@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { check, choose, find, outline, readField, run, tables, write } from '../src/assistant-page';
+import { check, choose, find, outline, problems, readField, run, tables, write } from '../src/assistant-page';
 
 beforeEach(() => {
   vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
@@ -32,6 +32,42 @@ describe('outline', () => {
     document.body.innerHTML =
       '<button data-hidden>Gone</button><input type="checkbox" id="c" checked aria-label="Agree">';
     expect(outline()).toBe('[1] input(checkbox) Agree [on]');
+  });
+});
+
+describe('fields in the outline', () => {
+  it('names a field by its label, hidden or not, and says what it holds', () => {
+    document.body.innerHTML = `
+      <label for="e" style="position:absolute;clip:rect(0 0 0 0)">Email address</label><input id="e" placeholder="you@…" value="ana@x.io">
+      <span id="cl">Cover letter</span><textarea aria-labelledby="cl"></textarea>
+      <fieldset><legend>Salary</legend><input name="sal" value="5000"></fieldset>`;
+    const list = outline();
+    expect(list).toContain('input(text) Email address = "ana@x.io"');
+    expect(list).toContain('textarea(textarea) Cover letter = (empty)');
+    expect(list).toContain('input(text) Salary = "5000"');
+  });
+
+  it('shows a list by its chosen option, and its value when the option says nothing', () => {
+    document.body.innerHTML = `
+      <label>Country <select id="c" required><option value="">Pick one</option><option value="KE"></option></select></label>`;
+    const select = byId<HTMLSelectElement>('c');
+    expect(outline()).toContain('select(select-one) Country = "Pick one" (required, invalid');
+    select.value = 'KE';
+    expect(outline()).toBe('[0] select(select-one) Country = "KE" (required)');
+  });
+
+  it('lists what the page would refuse to send', () => {
+    document.body.innerHTML = `
+      <input aria-label="Name" required><input aria-label="Phone" value="1" aria-invalid="true"><input aria-label="City" value="Nairobi" required>`;
+    const found = problems();
+    expect(found).toHaveLength(2);
+    expect(found[0]).toContain('Name = (empty) (required');
+    expect(found[1]).toContain('Phone = "1" (invalid)');
+  });
+
+  it('never shows a password', () => {
+    document.body.innerHTML = '<input type="password" aria-label="Password" value="secret">';
+    expect(outline()).toBe('[0] input(password) Password = "••••"');
   });
 });
 

@@ -22,7 +22,65 @@ Object.defineProperty(exports, Symbol.toStringTag, { value: 'Module' });
 	/** What an element says it is, briefly, for the list and the person's question. */
 	function describe(item) {
 		const input = item;
-		return (item.innerText || item.getAttribute("aria-label") || input.placeholder || item.getAttribute("title") || input.name || (["submit", "button"].includes(input.type) ? input.value : "") || "").trim().replace(/\s+/g, " ").slice(0, 80);
+		return ((item instanceof HTMLSelectElement ? "" : item.innerText) || item.getAttribute("aria-label") || input.placeholder || item.getAttribute("title") || input.name || (["submit", "button"].includes(input.type) ? input.value : "") || "").trim().replace(/\s+/g, " ").slice(0, 80);
+	}
+	/** A form field, or a widget that stands for one, as opposed to a link or button. */
+	function isField(item) {
+		if (item instanceof HTMLInputElement) return ![
+			"submit",
+			"button",
+			"reset",
+			"image"
+		].includes(item.type);
+		return item instanceof HTMLSelectElement || item instanceof HTMLTextAreaElement || isEditor(item) || [
+			"combobox",
+			"textbox",
+			"listbox"
+		].includes(item.getAttribute("role") ?? "");
+	}
+	/** Words for the list, kept short and on one line. */
+	function brief(said, most = 60) {
+		const line = said.trim().replace(/\s+/g, " ");
+		return line.length > most ? `${line.slice(0, most - 1)}…` : line;
+	}
+	/** What a field holds now, as the person sees it: a list's chosen option by
+	* what it says (its value when it says nothing), never a password. */
+	function shownValue(item) {
+		if (item instanceof HTMLSelectElement) {
+			const option = item.options[item.selectedIndex];
+			if (!option) return "";
+			return option.text.trim() || option.value;
+		}
+		if (item instanceof HTMLInputElement) {
+			if (["checkbox", "radio"].includes(item.type)) return null;
+			if (item.type === "password") return item.value ? "••••" : "";
+			if (item.type === "file") return [...item.files ?? []].map((file) => file.name).join(", ");
+			return item.value;
+		}
+		if (item instanceof HTMLTextAreaElement) return item.value;
+		if (isField(item)) return item.innerText ?? "";
+		return null;
+	}
+	/** Required, and whether the page or the browser finds it wrong, with why. */
+	function validity(item) {
+		const field = item;
+		const notes = [];
+		if (field.required || item.getAttribute("aria-required") === "true") notes.push("required");
+		if ((field.validity ? !field.validity.valid : false) || item.getAttribute("aria-invalid") === "true") notes.push(field.validationMessage ? `invalid: ${brief(field.validationMessage)}` : "invalid");
+		return notes.length ? ` (${notes.join(", ")})` : "";
+	}
+	/** One line of the list: number, kind, name, what it holds, its state, where it goes. */
+	function entry(item, n) {
+		const input = item;
+		const role = item.getAttribute("role");
+		const kind = role && !(item instanceof HTMLInputElement) ? role : item.tagName.toLowerCase() + (input.type ? `(${input.type})` : "");
+		const field = isField(item);
+		const name = field ? brief(labelOf(item)) || describe(item) : describe(item);
+		const value = field ? shownValue(item) : null;
+		const holds = value === null ? "" : value === "" ? " = (empty)" : ` = "${brief(value)}"`;
+		const state = input.type === "checkbox" || input.type === "radio" ? input.checked ? " [on]" : " [off]" : "";
+		const href = item.href ? ` -> ${item.href}` : "";
+		return `[${n}] ${kind} ${name}${holds}${state}${field ? validity(item) : ""}${href}`;
 	}
 	/** Numbers what can be picked, keeping earlier numbers; the list as text. */
 	function outline(root = document) {
@@ -34,23 +92,34 @@ Object.defineProperty(exports, Symbol.toStringTag, { value: 'Module' });
 		const lines = [];
 		known.forEach((item, n) => {
 			if (lines.length >= MOST || !item.isConnected || !shown(item)) return;
-			const input = item;
-			const kind = item.tagName.toLowerCase() + (input.type ? `(${input.type})` : "");
-			const state = input.type === "checkbox" || input.type === "radio" ? input.checked ? " [on]" : " [off]" : "";
-			const href = item.href ? ` -> ${item.href}` : "";
-			lines.push(`[${n}] ${kind} ${describe(item)}${state}${href}`);
+			lines.push(entry(item, n));
 		});
 		return lines.join("\n");
+	}
+	/** The fields the page would refuse to send as they are: required and empty,
+	* or wrong by the browser's or the page's own checks. One line each. */
+	function problems() {
+		if (!window.__moteOutline?.length) outline();
+		return (window.__moteOutline ?? []).flatMap((item, n) => {
+			if (!item.isConnected || !isField(item)) return [];
+			const said = validity(item);
+			const field = item;
+			const empty = shownValue(item) === "" && !(field.type === "checkbox" && field.checked);
+			const required = said.includes("required");
+			if (!said.includes("invalid") && !(required && empty)) return [];
+			return [entry(item, n)];
+		});
 	}
 	/** The element numbered `n`, while it's still in the page. */
 	/** A field's label, as a person reads it: its <label>, else what it says it is. */
 	function labelOf(item) {
 		const field = item;
-		const byFor = field.id ? document.querySelector(`label[for="${CSS.escape(field.id)}"]`) : null;
+		const byFor = field.labels?.[0] ?? (field.id ? document.querySelector(`label[for="${CSS.escape(field.id)}"]`) : null);
 		const wrapping = item.closest("label");
 		const named = item.getAttribute("aria-labelledby");
 		const labelled = named ? named.split(/\s+/).map((id) => document.getElementById(id)?.textContent ?? "").join(" ") : "";
-		return (byFor?.textContent || labelled || item.getAttribute("aria-label") || wrapping?.textContent || field.placeholder || field.name || item.getAttribute("title") || "").trim().replace(/\s+/g, " ");
+		const own = (label) => (label?.textContent ?? "").replace(item.textContent ?? "", "");
+		return (own(byFor) || labelled || item.getAttribute("aria-label") || own(wrapping) || field.placeholder || item.getAttribute("title") || item.closest("fieldset")?.querySelector("legend")?.textContent || field.name || "").trim().replace(/\s+/g, " ");
 	}
 	/** The number of the form field whose label says `label`: the same words, else containing them. */
 	function findField(label) {
@@ -253,6 +322,7 @@ Object.defineProperty(exports, Symbol.toStringTag, { value: 'Module' });
 			}
 			case "kind": return kindOf(target);
 			case "tables": return tables();
+			case "problems": return problems();
 			case "selection": return window.getSelection()?.toString() ?? "";
 			case "code": {
 				const field = document.querySelector("input[autocomplete=\"one-time-code\"], input[name*=\"otp\" i], input[name*=\"code\" i][inputmode=\"numeric\"]");
@@ -272,8 +342,10 @@ exports.kindOf = kindOf;
 exports.labelOf = labelOf;
 exports.outline = outline;
 exports.place = place;
+exports.problems = problems;
 exports.readField = readField;
 exports.run = run;
+exports.shownValue = shownValue;
 exports.tables = tables;
 exports.write = write;
 return exports;

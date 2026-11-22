@@ -17,7 +17,7 @@ extension AssistantTools {
             Tool(
                 name: "fill_form",
                 description:
-                    "Fills a whole form in a tab in one go: fields by the numbers read_tab listed, or by their labels, to text; \"on\"/\"off\" for check boxes; an option for lists. Says what went where. Asks first, per site. Never passwords: use sign_in. Doesn't submit it.",
+                    "Fills a whole form in a tab in one go: fields by the numbers read_tab listed, or by their labels, to text; \"on\"/\"off\" for check boxes; an option for lists. Says what went where, and which fields the page would still refuse. Asks first, per site. Never passwords: use sign_in. Doesn't submit it.",
                 schema: "{\"type\":\"object\",\"properties\":{\(tab),\"values\":{\"type\":\"object\",\"description\":\"Element number or label to value\"}},\"required\":[\"tab\",\"values\"]}"),
         ]
         guard !outside else { return tools }
@@ -139,6 +139,10 @@ extension AssistantTools {
             rows.append("- \(key) → “\(text)”: " + (result == "done" ? "filled" : Self.formSaid(result)))
         }
         let filled = undo
+        // What the page would still refuse, so the model fixes it before sending.
+        if let left = await page(tab, "problems"), !left.isEmpty {
+            rows.append("Not accepted yet (required and empty, or invalid):\n" + left.replacingOccurrences(of: Self.item, with: "\n"))
+        }
         return "In \(Self.line(tab)), not submitted:\n" + rows.joined(separator: "\n") + record("Filled a form in \(Self.line(tab))") { [weak self] in
             guard let self else { return "Not now." }
             for (n, was) in filled { _ = await self.page(tab, "write", ["n": n, "text": was, "how": "replace"]) }

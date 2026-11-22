@@ -48,8 +48,9 @@ function isEditor(item: Element): boolean {
 /** What an element says it is, briefly, for the list and the person's question. */
 export function describe(item: Element): string {
   const input = item as HTMLInputElement;
+  // A list's text is every option's; what it's called is elsewhere.
   const said =
-    (item as HTMLElement).innerText ||
+    (item instanceof HTMLSelectElement ? '' : (item as HTMLElement).innerText) ||
     item.getAttribute('aria-label') ||
     input.placeholder ||
     item.getAttribute('title') ||
@@ -57,6 +58,72 @@ export function describe(item: Element): string {
     (['submit', 'button'].includes(input.type) ? input.value : '') ||
     '';
   return said.trim().replace(/\s+/g, ' ').slice(0, 80);
+}
+
+/** A form field, or a widget that stands for one, as opposed to a link or button. */
+function isField(item: Element): boolean {
+  if (item instanceof HTMLInputElement) return !['submit', 'button', 'reset', 'image'].includes(item.type);
+  return (
+    item instanceof HTMLSelectElement ||
+    item instanceof HTMLTextAreaElement ||
+    isEditor(item) ||
+    ['combobox', 'textbox', 'listbox'].includes(item.getAttribute('role') ?? '')
+  );
+}
+
+/** Words for the list, kept short and on one line. */
+function brief(said: string, most = 60): string {
+  const line = said.trim().replace(/\s+/g, ' ');
+  return line.length > most ? `${line.slice(0, most - 1)}…` : line;
+}
+
+/** What a field holds now, as the person sees it: a list's chosen option by
+ * what it says (its value when it says nothing), never a password. */
+export function shownValue(item: Element): string | null {
+  if (item instanceof HTMLSelectElement) {
+    const option = item.options[item.selectedIndex];
+    if (!option) return '';
+    return option.text.trim() || option.value;
+  }
+  if (item instanceof HTMLInputElement) {
+    if (['checkbox', 'radio'].includes(item.type)) return null;
+    if (item.type === 'password') return item.value ? '••••' : '';
+    if (item.type === 'file') return [...(item.files ?? [])].map((file) => file.name).join(', ');
+    return item.value;
+  }
+  if (item instanceof HTMLTextAreaElement) return item.value;
+  if (isField(item)) return (item as HTMLElement).innerText ?? '';
+  return null;
+}
+
+/** Required, and whether the page or the browser finds it wrong, with why. */
+function validity(item: Element): string {
+  const field = item as HTMLInputElement;
+  const notes: string[] = [];
+  if (field.required || item.getAttribute('aria-required') === 'true') notes.push('required');
+  const wrong = field.validity ? !field.validity.valid : false;
+  if (wrong || item.getAttribute('aria-invalid') === 'true') {
+    notes.push(field.validationMessage ? `invalid: ${brief(field.validationMessage)}` : 'invalid');
+  }
+  return notes.length ? ` (${notes.join(', ')})` : '';
+}
+
+/** One line of the list: number, kind, name, what it holds, its state, where it goes. */
+function entry(item: Element, n: number): string {
+  const input = item as HTMLInputElement;
+  const role = item.getAttribute('role');
+  const kind =
+    role && !(item instanceof HTMLInputElement)
+      ? role
+      : item.tagName.toLowerCase() + (input.type ? `(${input.type})` : '');
+  const field = isField(item);
+  const name = field ? brief(labelOf(item)) || describe(item) : describe(item);
+  const value = field ? shownValue(item) : null;
+  const holds = value === null ? '' : value === '' ? ' = (empty)' : ` = "${brief(value)}"`;
+  const state =
+    input.type === 'checkbox' || input.type === 'radio' ? (input.checked ? ' [on]' : ' [off]') : '';
+  const href = (item as HTMLAnchorElement).href ? ` -> ${(item as HTMLAnchorElement).href}` : '';
+  return `[${n}] ${kind} ${name}${holds}${state}${field ? validity(item) : ''}${href}`;
 }
 
 /** Numbers what can be picked, keeping earlier numbers; the list as text. */
@@ -69,21 +136,33 @@ export function outline(root: Document = document): string {
   const lines: string[] = [];
   known.forEach((item, n) => {
     if (lines.length >= MOST || !item.isConnected || !shown(item)) return;
-    const input = item as HTMLInputElement;
-    const kind = item.tagName.toLowerCase() + (input.type ? `(${input.type})` : '');
-    const state =
-      input.type === 'checkbox' || input.type === 'radio' ? (input.checked ? ' [on]' : ' [off]') : '';
-    const href = (item as HTMLAnchorElement).href ? ` -> ${(item as HTMLAnchorElement).href}` : '';
-    lines.push(`[${n}] ${kind} ${describe(item)}${state}${href}`);
+    lines.push(entry(item, n));
   });
   return lines.join('\n');
+}
+
+/** The fields the page would refuse to send as they are: required and empty,
+ * or wrong by the browser's or the page's own checks. One line each. */
+export function problems(): string[] {
+  if (!window.__moteOutline?.length) outline();
+  return (window.__moteOutline ?? []).flatMap((item, n) => {
+    if (!item.isConnected || !isField(item)) return [];
+    const said = validity(item);
+    const field = item as HTMLInputElement;
+    const empty = shownValue(item) === '' && !(field.type === 'checkbox' && field.checked);
+    const required = said.includes('required');
+    if (!said.includes('invalid') && !(required && empty)) return [];
+    return [entry(item, n)];
+  });
 }
 
 /** The element numbered `n`, while it's still in the page. */
 /** A field's label, as a person reads it: its <label>, else what it says it is. */
 export function labelOf(item: Element): string {
   const field = item as HTMLInputElement;
-  const byFor = field.id ? document.querySelector(`label[for="${CSS.escape(field.id)}"]`) : null;
+  // Hidden labels count: they're what the field is called, shown or not.
+  const byFor =
+    field.labels?.[0] ?? (field.id ? document.querySelector(`label[for="${CSS.escape(field.id)}"]`) : null);
   const wrapping = item.closest('label');
   const named = item.getAttribute('aria-labelledby');
   const labelled = named
@@ -92,14 +171,17 @@ export function labelOf(item: Element): string {
         .map((id) => document.getElementById(id)?.textContent ?? '')
         .join(' ')
     : '';
+  // A label round the field holds the field's own words too (a list's options).
+  const own = (label: Element | null) => (label?.textContent ?? '').replace(item.textContent ?? '', '');
   const said =
-    byFor?.textContent ||
+    own(byFor) ||
     labelled ||
     item.getAttribute('aria-label') ||
-    wrapping?.textContent ||
+    own(wrapping) ||
     field.placeholder ||
-    field.name ||
     item.getAttribute('title') ||
+    item.closest('fieldset')?.querySelector('legend')?.textContent ||
+    field.name ||
     '';
   return said.trim().replace(/\s+/g, ' ');
 }
@@ -340,6 +422,8 @@ export function run(op: string, args: Args = {}): unknown {
       return kindOf(target);
     case 'tables':
       return tables();
+    case 'problems':
+      return problems();
     case 'selection':
       return window.getSelection()?.toString() ?? '';
     case 'code': {

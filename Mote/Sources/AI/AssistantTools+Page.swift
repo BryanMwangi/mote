@@ -19,7 +19,7 @@ extension AssistantTools {
             Tool(
                 name: "read_tab",
                 description:
-                    "An open tab's text, and a numbered list of what can be clicked or typed into. Numbers stay the same until the page changes.",
+                    "An open tab's text, and a numbered list of what can be clicked or typed into: fields by their label, with what they hold now and whether they are required or invalid. Numbers stay the same until the page changes.",
                 schema: schema(tab, ["tab"])),
             Tool(name: "get_selection", description: "The words the person has selected in a tab (the one in front, if none is given).", schema: schema(tab, [])),
             Tool(
