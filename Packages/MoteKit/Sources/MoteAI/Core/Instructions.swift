@@ -30,6 +30,14 @@ public enum Instructions {
     /// apart from it. A page that is absent, or no longer shared, says
     /// nothing, so a chat outlives navigation. Joins after the standing
     /// instructions without disturbing them.
+    /// Before the person's own words, when Mote's notes come first.
+    public static let question = "The person's message:\n"
+
+    /// Said once the page shared before no longer is.
+    public static let unshared = "The person no longer shares the page from before."
+    /// Said once the tabs mentioned before no longer are.
+    public static let unmentioned = "The person no longer shares the tabs they mentioned before."
+
     public static func page(_ context: PageContext?) -> String {
         guard let context, context.isActive else { return "" }
         var lines = [

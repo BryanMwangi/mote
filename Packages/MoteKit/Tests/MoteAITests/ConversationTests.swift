@@ -8,6 +8,8 @@ import Testing
 final class ScriptedService: ChatService, @unchecked Sendable {
     var events: [ChatEvent] = []
     var failure: Error?
+    /// Fails the next reply only, before any of its events.
+    var failOnce: Error?
     /// Holds the reply open after its events until the stream is ended.
     var hold = false
     private(set) var requests: [ChatRequest] = []
@@ -21,8 +23,13 @@ final class ScriptedService: ChatService, @unchecked Sendable {
 
     func reply(to request: ChatRequest) -> AsyncThrowingStream<ChatEvent, Error> {
         requests.append(request)
-        let (events, failure, hold) = (events, failure, hold)
         let (stream, continuation) = AsyncThrowingStream<ChatEvent, Error>.makeStream()
+        if let failOnce {
+            self.failOnce = nil
+            continuation.finish(throwing: failOnce)
+            return stream
+        }
+        let (events, failure, hold) = (events, failure, hold)
         for event in events { continuation.yield(event) }
         continuation.onTermination = { [weak self] reason in
             if case .cancelled = reason { self?.stopped = true }
@@ -42,6 +49,9 @@ struct ConversationTests {
     private func route(_ service: ChatService, provider: String = "claude-code", model: String = "sonnet") -> Conversation.Route {
         Conversation.Route(provider: provider, model: model, author: "Claude Code · \(model)", service: service, instructions: "Be brief")
     }
+
+    /// What a request said with its question: Mote's notes, then the person's words.
+    private func said(_ request: ChatRequest?) -> String { request?.messages.last { $0.role == .user }?.text ?? "" }
 
     /// Waits for the reply to settle.
     private func settle(_ conversation: Conversation) async {
@@ -130,14 +140,50 @@ struct ConversationTests {
         service.events = [.text("Carrying on.")]
         conversation.send("Go on", via: route(service))
         await settle(conversation)
-        let told = service.requests.last?.instructions ?? ""
+        let told = said(service.requests.last)
         #expect(told.contains("stopped your last reply"))
         #expect(told.contains("Closing tabs: Closed “GitHub”"))
         #expect(told.contains("Not done or not finished: Moving tabs"))
         // Told once.
         conversation.send("Thanks", via: route(service))
         await settle(conversation)
-        #expect(service.requests.last?.instructions?.contains("stopped your last reply") == false)
+        #expect(!said(service.requests.last).contains("stopped your last reply"))
+    }
+
+    @Test("A stopped reply's session goes on next turn, told it was stopped, not sent the whole chat again")
+    func stopKeepsSession() async {
+        let service = ScriptedService()
+        service.events = [.session("s-1"), .text("Working")]
+        service.hold = true
+        let conversation = Conversation()
+        conversation.send("Do a long thing", via: route(service))
+        for _ in 0..<200 where conversation.messages.last?.text.isEmpty != false { try? await Task.sleep(for: .milliseconds(5)) }
+        conversation.stop()
+        service.hold = false
+        service.events = [.text("Carrying on.")]
+        conversation.send("Go on", via: route(service))
+        await settle(conversation)
+        #expect(service.requests[1].resume == "s-1")
+        #expect(service.requests[1].messages.count == 3)
+        #expect(said(service.requests[1]).contains("stopped your last reply"))
+    }
+
+    @Test("A reply that fails before anything arrives is tried once more, afresh")
+    func failedEarlyTriesAgain() async {
+        let service = ScriptedService()
+        service.events = [.session("s-1"), .text("Hi")]
+        let conversation = Conversation()
+        conversation.send("Hello", via: route(service))
+        await settle(conversation)
+        service.failOnce = AIError.failed("No conversation found with session ID: s-1")
+        service.events = [.session("s-2"), .text("Fresh")]
+        conversation.send("Again", via: route(service))
+        await settle(conversation)
+        #expect(service.requests.count == 3)
+        #expect(service.requests[1].resume == "s-1")
+        #expect(service.requests[2].resume == nil)
+        #expect(conversation.phase == .idle)
+        #expect(conversation.messages.last?.text == "Fresh")
     }
 
     @Test("A sidebar chat keeps the tab it was about")
@@ -436,7 +482,7 @@ struct ConversationTests {
         #expect(count.changes < 30)
     }
 
-    @Test("A chat carrying a shared page tells the model about it, after the standing instructions")
+    @Test("A shared page is told with the question, leaving the standing instructions as they are")
     func sharedPage() async {
         let service = ScriptedService()
         service.events = [.text("Hi")]
@@ -444,11 +490,14 @@ struct ConversationTests {
         conversation.attach(PageContext(url: URL(string: "https://example.com/a")!, title: "An article"))
         conversation.send("What is this?", via: route(service))
         await settle(conversation)
-        let instructions = service.requests[0].instructions ?? ""
-        #expect(instructions.hasPrefix("Be brief"))
-        #expect(instructions.contains("An article"))
-        #expect(instructions.contains("https://example.com/a"))
-        #expect(instructions.contains("untrusted page evidence"))
+        #expect(service.requests[0].instructions == "Be brief")
+        let told = said(service.requests[0])
+        #expect(told.contains("An article"))
+        #expect(told.contains("https://example.com/a"))
+        #expect(told.contains("untrusted page evidence"))
+        #expect(told.hasSuffix("The person's message:\nWhat is this?"))
+        // The chat itself shows what they typed.
+        #expect(conversation.messages[0].text == "What is this?")
         #expect(!service.requests[0].search)
     }
 
@@ -484,12 +533,12 @@ struct ConversationTests {
         conversation.attach(PageContext(url: URL(string: "https://example.com/b")!, title: "Second"))
         conversation.send("Hello", via: route(service))
         await settle(conversation)
-        let instructions = service.requests[0].instructions ?? ""
-        #expect(instructions.contains("Second"))
-        #expect(!instructions.contains("First"))
+        let told = said(service.requests[0])
+        #expect(told.contains("Second"))
+        #expect(!told.contains("First"))
     }
 
-    @Test("Sharing a page with a provider that already heard the chat starts it afresh")
+    @Test("Sharing a page with a provider that already heard the chat carries its session on, telling it the page")
     func pageChangesSession() async {
         let service = ScriptedService()
         service.events = [.session("s-1"), .text("Hi")]
@@ -500,8 +549,8 @@ struct ConversationTests {
         service.events = [.text("About that page")]
         conversation.send("And now?", via: route(service))
         await settle(conversation)
-        #expect(service.requests[1].resume == nil)
-        #expect(service.requests[1].instructions?.contains("An article") == true)
+        #expect(service.requests[1].resume == "s-1")
+        #expect(said(service.requests[1]).contains("An article"))
     }
 
     @Test("The same page kept across turns carries the provider's session on")
@@ -516,6 +565,8 @@ struct ConversationTests {
         conversation.send("Again", via: route(service))
         await settle(conversation)
         #expect(service.requests[1].resume == "s-1")
+        // Heard already: not told again.
+        #expect(said(service.requests[1]) == "Again")
     }
 
     @Test("Replacing a shared page with identical effective context keeps the provider session")
@@ -537,7 +588,7 @@ struct ConversationTests {
         #expect(service.requests[1].resume == "s-1")
     }
 
-    @Test("A page changed during a reply is not recorded as the context that session heard")
+    @Test("A page changed during a reply is not taken as heard, so it is told next turn")
     func pageChangesDuringReply() async {
         let service = ScriptedService()
         service.events = [.session("s-1"), .text("Hi")]
@@ -556,10 +607,11 @@ struct ConversationTests {
         service.events = [.text("Fresh context")]
         conversation.send("What changed?", via: route(service))
         await settle(conversation)
-        #expect(service.requests[1].resume == nil)
+        #expect(service.requests[1].resume == "s-1")
+        #expect(said(service.requests[1]).contains("Second body"))
     }
 
-    @Test("A mention added during a reply is not recorded as context that session heard")
+    @Test("A mention added during a reply is not taken as heard, so it is told next turn")
     func mentionChangesDuringReply() async {
         let service = ScriptedService()
         service.events = [.session("s-1"), .text("Hi")]
@@ -577,10 +629,11 @@ struct ConversationTests {
         service.events = [.text("Fresh context")]
         conversation.send("What does it say?", via: route(service))
         await settle(conversation)
-        #expect(service.requests[1].resume == nil)
+        #expect(service.requests[1].resume == "s-1")
+        #expect(said(service.requests[1]).contains("Mentioned body"))
     }
 
-    @Test("Updating shared page text at the same URL starts a fresh provider session")
+    @Test("Updating shared page text at the same URL is told to the session carried on")
     func sameURLPageTextChangesSession() async {
         let service = ScriptedService()
         service.events = [.session("s-1"), .text("Hi")]
@@ -594,10 +647,11 @@ struct ConversationTests {
         conversation.send("What changed?", via: route(service))
         await settle(conversation)
 
-        #expect(service.requests[1].resume == nil)
+        #expect(service.requests[1].resume == "s-1")
+        #expect(said(service.requests[1]).contains("Updated version"))
     }
 
-    @Test("Updating shared page title at the same URL starts a fresh provider session")
+    @Test("Updating shared page title at the same URL is told to the session carried on")
     func sameURLPageTitleChangesSession() async {
         let service = ScriptedService()
         service.events = [.session("s-1"), .text("Hi")]
@@ -611,10 +665,11 @@ struct ConversationTests {
         conversation.send("What changed?", via: route(service))
         await settle(conversation)
 
-        #expect(service.requests[1].resume == nil)
+        #expect(service.requests[1].resume == "s-1")
+        #expect(said(service.requests[1]).contains("New title"))
     }
 
-    @Test("Updating shared page selection at the same URL starts a fresh provider session")
+    @Test("Updating shared page selection at the same URL is told to the session carried on")
     func sameURLPageSelectionChangesSession() async {
         let service = ScriptedService()
         service.events = [.session("s-1"), .text("Hi")]
@@ -628,10 +683,11 @@ struct ConversationTests {
         conversation.send("What changed?", via: route(service))
         await settle(conversation)
 
-        #expect(service.requests[1].resume == nil)
+        #expect(service.requests[1].resume == "s-1")
+        #expect(said(service.requests[1]).contains("New quote"))
     }
 
-    @Test("A shared page's delayed text enrichment starts a fresh provider session")
+    @Test("A shared page's delayed text enrichment is told to the session carried on")
     func sharedPageEnrichmentChangesSession() async {
         let service = ScriptedService()
         service.events = [.session("s-1"), .text("Hi")]
@@ -645,11 +701,11 @@ struct ConversationTests {
         conversation.send("What does it say?", via: route(service))
         await settle(conversation)
 
-        #expect(service.requests[1].resume == nil)
-        #expect(service.requests[1].instructions?.contains("Read after attach") == true)
+        #expect(service.requests[1].resume == "s-1")
+        #expect(said(service.requests[1]).contains("Read after attach"))
     }
 
-    @Test("Updating a mentioned page's same-URL content starts a fresh provider session")
+    @Test("Updating a mentioned page's same-URL content is told to the session carried on")
     func sameURLMentionChangesSession() async {
         let service = ScriptedService()
         service.events = [.session("s-1"), .text("Hi")]
@@ -663,7 +719,8 @@ struct ConversationTests {
         conversation.send("What changed?", via: route(service))
         await settle(conversation)
 
-        #expect(service.requests[1].resume == nil)
+        #expect(service.requests[1].resume == "s-1")
+        #expect(said(service.requests[1]).contains("Updated version"))
     }
 
     // MARK: - Mentioned tabs
@@ -718,12 +775,12 @@ struct ConversationTests {
         conversation.mention(page("extra.com", title: "Extra", text: "More words"))
         conversation.send("Compare them", via: route(service))
         await settle(conversation)
-        let instructions = service.requests[0].instructions ?? ""
-        #expect(instructions.hasPrefix("Be brief"))
-        #expect(instructions.contains("Main"))
-        #expect(instructions.contains("Extra"))
-        #expect(instructions.contains("More words"))
-        #expect(instructions.contains("untrusted page evidence"))
+        #expect(service.requests[0].instructions == "Be brief")
+        let told = said(service.requests[0])
+        #expect(told.contains("Main"))
+        #expect(told.contains("Extra"))
+        #expect(told.contains("More words"))
+        #expect(told.contains("untrusted page evidence"))
     }
 
     @Test("A blank tab's chat has no page, but its mentioned tabs carry the context")
@@ -734,13 +791,13 @@ struct ConversationTests {
         conversation.mention(page("only.com", title: "Only"))
         conversation.send("What's this?", via: route(service))
         await settle(conversation)
-        let instructions = service.requests[0].instructions ?? ""
-        #expect(instructions.hasPrefix("Be brief"))
-        #expect(instructions.contains("Only"))
-        #expect(!instructions.contains("looking at a web page"))
+        #expect(service.requests[0].instructions == "Be brief")
+        let told = said(service.requests[0])
+        #expect(told.contains("Only"))
+        #expect(!told.contains("looking at a web page"))
     }
 
-    @Test("Naming or letting go of a tab starts the provider afresh, so it gets the new context")
+    @Test("Naming or letting go of a tab carries the session on, telling it so")
     func mentionChangesSession() async {
         let service = ScriptedService()
         service.events = [.session("s-1"), .text("Hi")]
@@ -751,12 +808,14 @@ struct ConversationTests {
         service.events = [.text("On it")]
         conversation.send("And this?", via: route(service))
         await settle(conversation)
-        #expect(service.requests[1].resume == nil)
+        #expect(service.requests[1].resume == "s-1")
+        #expect(said(service.requests[1]).contains("Mentioned page: A"))
         conversation.unmention(URL(string: "https://a.com/")!)
         service.events = [.text("Back")]
         conversation.send("And now?", via: route(service))
         await settle(conversation)
-        #expect(service.requests[2].resume == nil)
+        #expect(service.requests[2].resume == "s-1")
+        #expect(said(service.requests[2]).contains(Instructions.unmentioned))
     }
 
     @Test("The same mentioned tabs kept across turns carry the provider's session on")

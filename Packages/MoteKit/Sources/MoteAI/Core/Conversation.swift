@@ -118,6 +118,8 @@ public final class Conversation: Identifiable {
     @ObservationIgnored private var sessions: [String: (id: String, heard: Int, search: Bool, shared: SharedContext?)] = [:]
     /// The session opened or carried on by the reply under way.
     @ObservationIgnored private var opened: String?
+    /// The provider the turn under way went to, for keeping its session on Stop.
+    @ObservationIgnored private var openedWith: String?
     /// Context captured when that request was built, not when its reply ends.
     @ObservationIgnored private var openedShared: SharedContext?
     /// Whether the reply under way searches.
@@ -331,6 +333,9 @@ public final class Conversation: Identifiable {
         turn += 1
         task?.cancel()
         task = nil
+        // The provider's session goes on from what it heard, told next time
+        // that it was stopped, rather than hearing the whole chat again.
+        if let provider = openedWith, let opened { sessions[provider] = (opened, messages.count, searched, openedShared) }
         if let last = messages.indices.last, messages[last].role == .assistant {
             messages[last].interrupted = true
             messages[last].steps = messages[last].steps.map(\.cutShort)
@@ -499,11 +504,18 @@ public final class Conversation: Identifiable {
                 // A long chat is summarised first: everything but the new question.
                 if compacting { try await self.summarise(via: route, through: self.messages.count - 2) }
                 guard self.turn == turn else { return }
-                let request = self.request(for: route)
                 // Read off the main thread, handed over in batches.
-                try await Self.pump(route.service.reply(to: request)) { [weak self] batch in
+                let deliver: @MainActor ([ChatEvent]) -> Void = { [weak self] batch in
                     guard let self, self.turn == turn else { return }
                     for event in batch { self.take(event, from: route.provider) }
+                }
+                do {
+                    try await Self.pump(route.service.reply(to: self.request(for: route)), deliver: deliver)
+                } catch where !(error is CancellationError) && self.turn == turn && self.nothingYet {
+                    // Failed before a word or a step (a session that can't be
+                    // carried on, a hiccup): once more, afresh.
+                    self.sessions[route.provider] = nil
+                    try await Self.pump(route.service.reply(to: self.request(for: route)), deliver: deliver)
                 }
                 guard self.turn == turn else { return }
                 self.end(turn, failure: nil, provider: route.provider)
@@ -511,6 +523,12 @@ public final class Conversation: Identifiable {
                 self?.end(turn, failure: error, provider: provider)
             }
         }
+    }
+
+    /// The reply under way has nothing in it yet: no words, thinking or steps.
+    private var nothingYet: Bool {
+        guard let last = messages.last, last.role == .assistant else { return true }
+        return last.text.isEmpty && last.reasoning.isEmpty && last.steps.isEmpty && held.text.isEmpty && held.reasoning.isEmpty
     }
 
     /// Reads a reply away from the main thread and hands its events over in
@@ -551,37 +569,42 @@ public final class Conversation: Identifiable {
     private func request(for route: Route) -> ChatRequest {
         let asked = Array(messages.dropLast())
         // What the summary stands for isn't sent again.
-        let sent = Array(asked.dropFirst(min(summarised, asked.count)))
+        var sent = Array(asked.dropFirst(min(summarised, asked.count)))
         if let last = messages.indices.last { messages[last].author = route.author }
         let shared = self.shared
-        // Up to date if it heard everything but the new question, and was
-        // told the same things (search, shared page).
-        let session = sessions[route.provider].flatMap {
-            $0.heard == asked.count - 1 && $0.search == route.search && $0.shared == shared ? $0.id : nil
+        // Up to date if it heard everything but the new question, with search
+        // as it was. A page shared since is told with the question, so the
+        // session goes on: starting afresh sends the whole chat again, uncached.
+        let carried = sessions[route.provider].flatMap { $0.heard == asked.count - 1 && $0.search == route.search ? $0 : nil }
+        // What changes from turn to turn goes with the question, never in the
+        // standing instructions, which stay the same and so stay cached.
+        // The note stays until a reply gets through, so a try made again tells it too.
+        var told = cutShort.map { [$0] } ?? []
+        if carried == nil || carried?.shared != shared {
+            told += [Instructions.page(page), Instructions.mentions(mentions)].filter { !$0.isEmpty }
+            if carried?.shared?.page != nil, shared?.page == nil { told.append(Instructions.unshared) }
+            if carried?.shared?.mentions.isEmpty == false, shared?.mentions.isEmpty != false { told.append(Instructions.unmentioned) }
+        }
+        if !told.isEmpty, let question = sent.lastIndex(where: { $0.role == .user }) {
+            sent[question].text = (told + [Instructions.question + sent[question].text]).joined(separator: "\n\n")
         }
         // An agent that carries a session on may not name it again.
-        opened = session
+        opened = carried?.id
+        openedWith = route.provider
         openedShared = shared
         searched = route.search
         return ChatRequest(
-            model: route.model, messages: sent, instructions: instructions(for: route), resume: session, search: route.search
+            model: route.model, messages: sent, instructions: instructions(for: route), resume: carried?.id, search: route.search
         )
     }
 
-    /// The route's standing instructions with the shared page, and any tabs
-    /// mentioned with @, described after them: exactly the route's
-    /// instructions when there is nothing shared.
+    /// The route's standing instructions, with the summary of what came
+    /// before it when the chat was compacted.
     private func instructions(for route: Route) -> String? {
-        let earlier = summary.map { "Earlier in this chat, in summary (the messages themselves aren't repeated):\n" + $0 } ?? ""
-        let note = cutShort ?? ""
-        cutShort = nil
-        let context =
-            [earlier, note, Instructions.page(self.page), Instructions.mentions(self.mentions)]
-            .filter { !$0.isEmpty }
-            .joined(separator: "\n\n")
-        guard !context.isEmpty else { return route.instructions }
-        guard let standing = route.instructions, !standing.isEmpty else { return context }
-        return standing + "\n\n" + context
+        guard let summary else { return route.instructions }
+        let earlier = "Earlier in this chat, in summary (the messages themselves aren't repeated):\n" + summary
+        guard let standing = route.instructions, !standing.isEmpty else { return earlier }
+        return standing + "\n\n" + earlier
     }
 
     /// Shows what's held: the first words at once, the rest a pace later.
@@ -654,6 +677,7 @@ public final class Conversation: Identifiable {
         unsteer()
         guard let failure, !(failure is CancellationError) else {
             if let provider, let opened { sessions[provider] = (opened, messages.count, searched, openedShared) }
+            cutShort = nil
             phase = .idle
             touch()
             // The next message waiting goes now.
