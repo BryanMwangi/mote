@@ -24,6 +24,7 @@ public struct ClaudeCodeAgent: AgentWire {
                 "headers": ["Authorization": "Bearer ${\(ToolServer.tokenVariable)}"],
             ]
             environment[ToolServer.tokenVariable] = server.token
+            environment["MCP_TOOL_TIMEOUT"] = String(ToolServer.callSeconds * 1000)
         }
         var arguments = [
             "-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--include-partial-messages",

@@ -23,7 +23,7 @@ public struct GeminiCLIAgent: AgentWire {
         var files: [URL: String] = [:]
         if let server = request.mcp {
             let remote: [String: Any] = [
-                "httpUrl": server.url.absoluteString, "trust": true,
+                "httpUrl": server.url.absoluteString, "trust": true, "timeout": ToolServer.callSeconds * 1000,
                 "headers": ["Authorization": "Bearer $\(ToolServer.tokenVariable)"],
             ]
             files[workspace.appending(path: ".gemini/settings.json")] = JSON.encode(["mcpServers": [ToolServer.name: remote]])

@@ -38,6 +38,10 @@ public struct ToolServer: Equatable, Sendable {
     /// The environment variable an agent finds the token in, so it isn't
     /// written into its settings or the process list.
     public static let tokenVariable = "MOTE_MCP_TOKEN"
+    /// How long an agent waits on one of Mote's tools: an hour, for a question
+    /// the person answers later or a sub-agent's long task. Agents' own
+    /// defaults are minutes, and cut those off.
+    public static let callSeconds = 3600
 }
 
 extension ChatRequest {

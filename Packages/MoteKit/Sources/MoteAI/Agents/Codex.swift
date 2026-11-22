@@ -16,6 +16,7 @@ public struct CodexAgent: AgentWire {
             arguments += [
                 "-c", "mcp_servers.\(ToolServer.name).url=\(JSON.quote(server.url.absoluteString))",
                 "-c", "mcp_servers.\(ToolServer.name).bearer_token_env_var=\(JSON.quote(ToolServer.tokenVariable))",
+                "-c", "mcp_servers.\(ToolServer.name).tool_timeout_sec=\(ToolServer.callSeconds)",
             ]
             environment[ToolServer.tokenVariable] = server.token
         }

@@ -163,6 +163,10 @@ struct AgentToolTests {
             #expect(said.contains("127.0.0.1:4567/mcp"))
         }
         #expect(commands[0].arguments.contains("mcp__mote"))
+        // A tool may take an hour: a question the person answers later, a sub-agent's task.
+        #expect(commands[0].environment["MCP_TOOL_TIMEOUT"] == "3600000")
+        #expect(commands[1].arguments.contains("mcp_servers.mote.tool_timeout_sec=3600"))
+        #expect(commands[3].files.values.joined().contains("3600000"))
         #expect(commands[3].files.keys.first?.path == "/tmp/mote-agent/.gemini/settings.json")
     }
 
