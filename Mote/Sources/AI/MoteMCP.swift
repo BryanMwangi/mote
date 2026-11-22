@@ -13,15 +13,17 @@ final class MoteMCP {
     static let shared = MoteMCP()
 
     /// Each turn's tools, by the token its agent was given: chats running at
-    /// once, and an agent's sub-agents, each reach their own. The newest few.
-    private var turns: [(token: String, tools: AssistantTools)] = []
+    /// once, and an agent's sub-agents, each reach their own. Held weakly, so
+    /// a token lasts as long as its turn, however long that runs.
+    private var turns: [(token: String, tools: Weak<AssistantTools>)] = []
+    private struct Weak<T: AnyObject> { weak var object: T? }
 
     /// Where an agent finds `tools`, with a token of their own; nil until listening.
     func server(for tools: AssistantTools) async -> ToolServer? {
         guard let base = await start() else { return nil }
         let token = UUID().uuidString + UUID().uuidString
-        turns.append((token, tools))
-        if turns.count > 32 { turns.removeFirst(turns.count - 32) }
+        turns.removeAll { $0.tools.object == nil }
+        turns.append((token, Weak(object: tools)))
         return ToolServer(url: base.url, token: token)
     }
     private var listener: NWListener?
@@ -154,7 +156,7 @@ final class MoteMCP {
     private func answer(_ request: HTTPRequest) async -> (String, Data) {
         let said = request.headers["authorization"]
         // Mote's own agents, each turn by its token, or an agent from outside while that's on.
-        let turn = turns.last { said == "Bearer \($0.token)" }?.tools
+        let turn = turns.last { said == "Bearer \($0.token)" }?.tools.object
         let fromOutside = turn == nil
         if fromOutside {
             guard outsideListener != nil, said == "Bearer \(outsideToken)" else { return ("401 Unauthorized", Data()) }
