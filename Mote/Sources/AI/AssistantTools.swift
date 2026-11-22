@@ -69,7 +69,7 @@ final class AssistantTools {
     let turn = UUID()
     /// Starts a sub-agent on a task (see AssistantTools+Agents); nil for a
     /// sub-agent's own tools, and an outside agent's.
-    var spawn: ((String, @escaping @MainActor (String?, Usage?) -> Void) async -> ToolOutput)?
+    var spawn: ((String, @escaping @MainActor (Activity?, Usage?) -> Void) async -> ToolOutput)?
     /// The tabs this agent has started acting on: each comes forward once,
     /// when it starts, and after that it works on it wherever it is.
     var begun: Set<ObjectIdentifier> = []

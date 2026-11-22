@@ -53,11 +53,11 @@ extension AssistantTools {
     }
 
     /// A sub-agent's run: `task` through `base` with fresh tools of its own,
-    /// over MCP for an agent on the Mac, telling `progress` each step it
-    /// starts and what it has spent. Its tokens count toward the chat's.
+    /// over MCP for an agent on the Mac, telling `progress` of each step as it
+    /// starts and ends, and what it has spent. Its tokens count toward the chat's.
     static func runAgent(
         _ task: String, through base: any ChatService, model: String, overMCP: Bool, chat: UUID?, driver: String,
-        progress: @escaping @MainActor (_ doing: String?, _ spent: Usage?) -> Void = { _, _ in }
+        progress: @escaping @MainActor (_ step: Activity?, _ spent: Usage?) -> Void = { _, _ in }
     ) async -> ToolOutput {
         guard let tools = AssistantTools.current(chat: chat, driver: driver) else {
             return ToolOutput("Mote's tools are off.", outcome: .failed)
@@ -75,8 +75,9 @@ extension AssistantTools {
             for try await event in loop.reply(to: request) {
                 switch event {
                 case .text(let more): text += more
-                case .activity(let step) where step.done: steps += 1
-                case .activity(let step): progress(step.title, nil)
+                case .activity(let step):
+                    if step.done { steps += 1 }
+                    progress(step, nil)
                 case .usage(let used):
                     spent = spent + used
                     progress(nil, spent)
@@ -129,15 +130,13 @@ final class AgentRuns {
         /// Its step in the chat.
         var step: Activity {
             let line = task.split(whereSeparator: \.isNewline).first.map(String.init) ?? task
-            let title = "Agent \(id): " + (line.count > 70 ? String(line.prefix(69)) + "…" : line)
-            let cost = spent.map { " · \(Self.tokens($0.input + $0.output)) tokens" } ?? ""
-            let detail = (report == nil ? doing : report?.detail ?? "Done") + " · \(steps) step\(steps == 1 ? "" : "s")" + cost
+            let title = "Agent \(id) · " + (line.count > 70 ? String(line.prefix(69)) + "…" : line)
             let outcome: Activity.Outcome? = report.map { $0.outcome == .failed ? .failed : .done }
-            return Activity(id: "agent-\(id)", title: title, done: report != nil, kind: .task, outcome: outcome, detail: detail)
-        }
-
-        static func tokens(_ count: Int) -> String {
-            count < 10_000 ? count.formatted() : (Double(count) / 1000).formatted(.number.precision(.fractionLength(1))) + "k"
+            var step = Activity(
+                id: "agent-\(id)", title: title, done: report != nil, kind: .agent, outcome: outcome,
+                detail: report == nil ? doing : report?.detail)
+            step.spent = spent.map { $0.input + $0.output }
+            return step
         }
     }
 
@@ -145,7 +144,7 @@ final class AgentRuns {
     private var made = 0
 
     /// Starts `task` through `work`, shown in the chat, and returns at once.
-    func start(_ task: String, chat: UUID?, work: @escaping (String, @escaping @MainActor (String?, Usage?) -> Void) async -> ToolOutput)
+    func start(_ task: String, chat: UUID?, work: @escaping (String, @escaping @MainActor (Activity?, Usage?) -> Void) async -> ToolOutput)
         -> Run
     {
         made += 1
@@ -153,14 +152,19 @@ final class AgentRuns {
         runs.append(run)
         show(run)
         run.job = Task { [weak self] in
-            let report = await work(task) { [weak self, weak run] doing, spent in
+            let report = await work(task) { [weak self, weak run] step, spent in
                 guard let self, let run, run.working else { return }
-                if let doing {
-                    run.doing = doing
-                    run.steps += 1
-                }
                 if let spent { run.spent = spent }
-                self.show(run)
+                if let step {
+                    if !step.done { run.doing = step.title }
+                    if step.done { run.steps += 1 }
+                    // Its own step, under it in the chat.
+                    var own = step
+                    own.id = "agent-\(run.id)-\(step.id)"
+                    self.show(run, step: own)
+                } else {
+                    self.show(run)
+                }
             }
             guard let self, run.working else { return }
             run.report = report
@@ -193,9 +197,10 @@ final class AgentRuns {
         return "Stopping agent \(id); wait_agents gives what it had written."
     }
 
-    private func show(_ run: Run) {
-        guard let chat = run.chat else { return }
-        Assistant.shared.conversation(chat)?.show(step: run.step)
+    private func show(_ run: Run, step: Activity? = nil) {
+        guard let chat = run.chat, let conversation = Assistant.shared.conversation(chat) else { return }
+        conversation.show(step: run.step)
+        if let step { conversation.show(step: step, beside: run.step.id) }
     }
 
     /// Once the chat's agents are all done, reports the assistant hasn't had

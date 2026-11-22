@@ -115,6 +115,87 @@ struct ResearchProgress: View {
     }
 }
 
+/// The sub-agents a reply started: each on a row with what it's doing now,
+/// how many tools it has used and the tokens it has spent, opening to its
+/// own steps.
+struct AgentsCard: View {
+    /// The agents and their own steps, in the order they came.
+    let steps: [Activity]
+
+    /// A reply's steps: those of its sub-agents (each with its own), and the rest.
+    static func split(_ steps: [Activity]) -> (agents: [Activity], others: [Activity]) {
+        let agents = steps.filter { $0.kind == .agent }.map(\.id)
+        let theirs = { (step: Activity) in agents.contains { step.id == $0 || step.id.hasPrefix($0 + "-") } }
+        return (steps.filter(theirs), steps.filter { !theirs($0) })
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            ForEach(steps.filter { $0.kind == .agent }, id: \.id) { agent in
+                AgentRow(agent: agent, tools: steps.filter { $0.id.hasPrefix(agent.id + "-") })
+            }
+        }
+        .padding(12)
+        .background(Palette.wash.opacity(0.45), in: Rounded.card)
+        .overlay(Rounded.card.strokeBorder(Palette.hairline))
+    }
+}
+
+private struct AgentRow: View {
+    let agent: Activity
+    let tools: [Activity]
+    @State private var open = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Button {
+                withAnimation(Motion.settle) { open.toggle() }
+            } label: {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    mark.frame(width: 14)
+                    Text(agent.title).font(.system(size: 12.5)).foregroundStyle(Palette.ink.opacity(0.85)).lineLimit(1)
+                        .truncationMode(.tail)
+                    Spacer(minLength: 8)
+                    Text(tally).font(.system(size: 11).monospacedDigit()).foregroundStyle(Palette.muted)
+                        .contentTransition(.numericText()).animation(Motion.quick, value: tally)
+                    Image(systemName: "chevron.right").font(.system(size: 8.5, weight: .bold)).foregroundStyle(Palette.muted)
+                        .rotationEffect(.degrees(open ? 90 : 0))
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            // What it's doing now, or how it ended.
+            if let now = agent.done ? agent.detail : tools.last(where: { !$0.done })?.title ?? agent.detail {
+                Text(agent.done ? now : now + "…").font(.system(size: 11.5)).foregroundStyle(Palette.faint).lineLimit(1)
+                    .padding(.leading, 22).contentTransition(.opacity).animation(Motion.quick, value: now)
+            }
+            if open {
+                VStack(alignment: .leading, spacing: 7) {
+                    ForEach(tools, id: \.id) { StepLine(step: $0) }
+                }
+                .padding(.leading, 22)
+                .transition(.opacity)
+            }
+        }
+    }
+
+    private var tally: String {
+        let used = "\(tools.count) tool\(tools.count == 1 ? "" : "s")"
+        return agent.spent.map { used + " · " + tokens($0) + " tokens" } ?? used
+    }
+
+    @ViewBuilder
+    private var mark: some View {
+        if !agent.done {
+            Ring(size: 9)
+        } else if agent.outcome == .failed {
+            Image(systemName: "xmark").font(.system(size: 9.5, weight: .bold)).foregroundStyle(.red)
+        } else {
+            Image(systemName: "checkmark").font(.system(size: 9.5, weight: .bold)).foregroundStyle(Palette.muted)
+        }
+    }
+}
+
 /// What a search reply did: a line saying how many searches and pages,
 /// opening to the list of them.
 struct StepsSummary: View {
@@ -165,7 +246,7 @@ struct StepsSummary: View {
 }
 
 /// A step, with how it went and what it came to: "Closed “GitHub”, “Hacker News”".
-private struct StepLine: View {
+struct StepLine: View {
     let step: Activity
     @State private var whole = false
 

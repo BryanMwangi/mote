@@ -381,7 +381,10 @@ private struct Answer: View {
             if message.steps.contains(where: { $0.kind == .task || $0.kind == .phase }) {
                 ResearchProgress(steps: message.steps, live: streaming)
             } else if !message.steps.isEmpty {
-                StepsSummary(steps: message.steps)
+                // Sub-agents in a card of their own, each with its own steps; the rest summed up.
+                let (agents, others) = AgentsCard.split(message.steps)
+                if !agents.isEmpty { AgentsCard(steps: agents) }
+                if !others.isEmpty { StepsSummary(steps: others) }
             }
             if !entries.isEmpty { SourcesStrip(entries: entries).padding(.bottom, 2) }
             if !message.reasoning.isEmpty { thoughts }
@@ -1100,7 +1103,7 @@ private final class Draft {
 }
 
 /// Tokens as people read them: 1,234 or 12.3k.
-private func tokens(_ count: Int) -> String {
+func tokens(_ count: Int) -> String {
     count < 10_000 ? count.formatted() : (Double(count) / 1000).formatted(.number.precision(.fractionLength(1))) + "k"
 }
 

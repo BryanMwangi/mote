@@ -188,7 +188,7 @@ public struct ClaudeCodeDecoder: LineDecoder {
         case .read:
             guard let address = result["url"]?.string, let url = URL(string: address) else { return [] }
             return [.source(Source(url: url, title: ""))]
-        case .tool, .task, .phase:
+        case .tool, .task, .phase, .agent:
             return []
         }
     }

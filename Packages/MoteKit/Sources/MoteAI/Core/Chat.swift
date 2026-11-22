@@ -106,6 +106,8 @@ public struct Activity: Equatable, Codable, Sendable {
         case task
         /// A stage of a research: planning, reviewing, writing.
         case phase
+        /// A sub-agent at work; its own steps have ids that start with this one's and a dash.
+        case agent
     }
 
     /// How a step ended.
@@ -128,6 +130,8 @@ public struct Activity: Equatable, Codable, Sendable {
     public var outcome: Outcome?
     /// What it came to, in a line: "Closed “GitHub”, “Hacker News”".
     public var detail: String?
+    /// Tokens it took, when it ran a model of its own (a sub-agent).
+    public var spent: Int?
 
     public init(id: String, title: String, done: Bool = false, kind: Kind = .tool, outcome: Outcome? = nil, detail: String? = nil) {
         self.id = id

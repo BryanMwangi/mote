@@ -529,15 +529,17 @@ public final class Conversation: Identifiable {
     }
 
     /// A step that goes on outside a reply's own stream (a sub-agent working
-    /// on after the call that started it): shown in the reply it began in, or
-    /// the last one, and kept up to date there.
-    public func show(step: Activity) {
+    /// on after the call that started it, and its own steps): shown in the
+    /// reply holding `beside` (or the last), and kept up to date there.
+    public func show(step: Activity, beside: String? = nil) {
         if let at = messages.lastIndex(where: { $0.steps.contains { $0.id == step.id } }),
             let index = messages[at].steps.firstIndex(where: { $0.id == step.id })
         {
             messages[at].steps[index] = step
-        } else if let last = messages.lastIndex(where: { $0.role == .assistant }) {
-            messages[last].steps.append(step)
+        } else if let at = beside.flatMap({ id in messages.lastIndex { $0.steps.contains { $0.id == id } } })
+            ?? messages.lastIndex(where: { $0.role == .assistant })
+        {
+            messages[at].steps.append(step)
         }
         if let index = activities.firstIndex(where: { $0.id == step.id }) { activities[index] = step }
     }
