@@ -392,7 +392,7 @@ private struct PageCard: View {
                         Color.clear
                             .contentShape(Rectangle())
                             .onTapGesture { browser.reviewing = false }
-                        HiddenElementsPanel(browser: browser)
+                        HiddenElementsPanel(browser: browser, hider: browser.elementHider)
                             .padding(.top, 8)
                             .padding(.trailing, 8)
                             .transition(.scale(scale: 0.97, anchor: .topTrailing).combined(with: .opacity))

@@ -6,6 +6,12 @@ import SwiftUI
 /// says little.
 struct HiddenElementsPanel: View {
     @ObservedObject var browser: Browser
+    /// Watched itself: what's hidden changes there, not on the browser,
+    /// and a restored line has to leave the list at once.
+    @ObservedObject var hider: ElementHider
+    /// Where it's been dragged to, from its corner.
+    @State private var moved: CGSize = .zero
+    @State private var dragging: CGSize = .zero
 
     var body: some View {
         Plate(browser.hereHost ?? "This page", width: 380, close: { browser.reviewing = false }) {
@@ -33,6 +39,23 @@ struct HiddenElementsPanel: View {
                 Spacer()
             }
         }
+        // Moved by its top, as a window by its title bar; its close button stays clear.
+        .overlay(alignment: .top) {
+            Color.clear
+                .frame(height: 44)
+                .padding(.trailing, 48)
+                .contentShape(Rectangle())
+                .gesture(
+                    DragGesture(minimumDistance: 2)
+                        .onChanged { dragging = $0.translation }
+                        .onEnded { drag in
+                            moved.width += drag.translation.width
+                            moved.height += drag.translation.height
+                            dragging = .zero
+                        })
+                .onHover { inside in if inside { NSCursor.openHand.push() } else { NSCursor.pop() } }
+        }
+        .offset(x: moved.width + dragging.width, y: moved.height + dragging.height)
         // Whatever was shown hides again once the pointer leaves.
         .onHover { inside in
             if !inside { browser.stopPeeking() }
