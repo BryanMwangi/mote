@@ -281,7 +281,7 @@ Object.defineProperty(exports, Symbol.toStringTag, { value: 'Module' });
 	* (pages draw them at the end of the body). */
 	function optionsOf(owner) {
 		const named = (owner.getAttribute("aria-controls") ?? owner.getAttribute("aria-owns") ?? "").split(/\s+/).flatMap((id) => id ? [document.getElementById(id)] : []).filter((box) => !!box);
-		return (owner.getAttribute("role") === "listbox" ? [owner] : named.length ? named : [document]).flatMap((list) => [...list.querySelectorAll("[role=option]")]).filter((option) => shown(option) && option.getAttribute("aria-disabled") !== "true");
+		return (owner.getAttribute("role") === "listbox" ? [owner] : named.length ? named : [document]).flatMap((list) => Array.from(list.querySelectorAll("[role=option]"))).filter((option) => shown(option) && option.getAttribute("aria-disabled") !== "true");
 	}
 	/** A click where a pointer would land: on what is drawn at the element's
 	* middle, which is where pages listen (a dropdown's inner trigger). */
@@ -299,11 +299,10 @@ Object.defineProperty(exports, Symbol.toStringTag, { value: 'Module' });
 	}
 	/** What `look` gives once it gives something, or null after `ms`. */
 	async function soon(look, ms) {
-		for (const end = Date.now() + ms;;) {
-			const found = look();
-			if (found || Date.now() > end) return found;
-			await new Promise((done) => setTimeout(done, 50));
-		}
+		const found = look();
+		if (found || ms <= 0) return found;
+		await new Promise((done) => setTimeout(done, 50));
+		return soon(look, ms - 50);
 	}
 	const wordsOf = (option) => (option.textContent ?? "").trim().replace(/\s+/g, " ").toLowerCase();
 	async function pick(target, value) {

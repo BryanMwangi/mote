@@ -374,7 +374,7 @@ function optionsOf(owner: Element): HTMLElement[] {
     .filter((box): box is HTMLElement => !!box);
   const lists = owner.getAttribute('role') === 'listbox' ? [owner] : named.length ? named : [document];
   return lists
-    .flatMap((list) => [...list.querySelectorAll<HTMLElement>('[role=option]')])
+    .flatMap((list) => Array.from(list.querySelectorAll<HTMLElement>('[role=option]')))
     .filter((option) => shown(option) && option.getAttribute('aria-disabled') !== 'true');
 }
 
@@ -395,11 +395,10 @@ function press(item: Element, down = false): void {
 
 /** What `look` gives once it gives something, or null after `ms`. */
 async function soon<T>(look: () => T | null, ms: number): Promise<T | null> {
-  for (const end = Date.now() + ms; ;) {
-    const found = look();
-    if (found || Date.now() > end) return found;
-    await new Promise((done) => setTimeout(done, 50));
-  }
+  const found = look();
+  if (found || ms <= 0) return found;
+  await new Promise((done) => setTimeout(done, 50));
+  return soon(look, ms - 50);
 }
 
 const wordsOf = (option: Element) => (option.textContent ?? '').trim().replace(/\s+/g, ' ').toLowerCase();
