@@ -635,6 +635,7 @@ struct PrivacySettings: View {
     /// The permission whose sites are being managed.
     @State private var managing: SitePermissions.Kind?
     @State private var managingData = false
+    @State private var contactsRefused = false
 
     private static let permissions: [(kind: SitePermissions.Kind, detail: String, symbol: String, tint: Color)] = [
         (.capture(.camera), "Websites that asked to use your camera", "video", Tint.green),
@@ -683,6 +684,32 @@ struct PrivacySettings: View {
             }
         }
         .sheet(item: $managing) { SitePermissionsSheet(kind: $0) }
+
+        SettingsSection("Filling in forms") {
+            SettingRow(
+                "Fill in your contact details", "Your card in Contacts under name, email, phone and address boxes",
+                symbol: "person.text.rectangle", tint: Tint.blue, keywords: ["autofill", "address", "contacts", "phone", "email"],
+                on: Binding(
+                    get: { prefs.fillsContacts },
+                    set: { on in
+                        guard on else { return prefs.fillsContacts = false }
+                        // macOS asks first; without its yes, or without a card, it stays off.
+                        Task {
+                            prefs.fillsContacts = await ContactFill.shared.allow()
+                            if !prefs.fillsContacts { contactsRefused = true }
+                        }
+                    })
+            )
+            .help("When you click into a box asking for your name, email, phone or address, Mote offers your card from Contacts. Nothing is filled until you pick it, and never in private windows.")
+        }
+        .alert("Mote can't read your card in Contacts", isPresented: $contactsRefused) {
+            Button("Open System Settings") {
+                NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Contacts")!)
+            }
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("Allow Mote in System Settings › Privacy & Security › Contacts, and make sure Contacts has a card for you (Card › Make This My Card).")
+        }
 
         SettingsSection("Clearing up") {
             SettingRow("History", "Every page you've been to, to look through or clear", symbol: "clock.arrow.circlepath", tint: Tint.blue) {

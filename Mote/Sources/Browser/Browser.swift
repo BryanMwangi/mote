@@ -1598,6 +1598,10 @@ extension Browser: TabOwner {
         logins.fieldFocused(in: tab, at: spot, listing: prefs.fillsPasswords && tab.id == activeID)
     }
 
+    func tab(_ tab: Tab, focusedContactAt spot: CGRect?) {
+        ContactFill.shared.focused(tab, at: prefs.fillsContacts && !tab.shy && tab.id == activeID ? spot : nil)
+    }
+
     func tab(_ tab: Tab, signedIn sent: SentSignIn) {
         guard prefs.savesPasswords, !tab.shy else { return }
         // A password manager extension has taken over saving.

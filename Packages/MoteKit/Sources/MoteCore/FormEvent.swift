@@ -7,8 +7,9 @@ public enum FormEvent: Equatable, Sendable {
     /// The sign-in fields went away without a new page.
     case settled
     /// Focus moved. `typing` when it is in something editable; `field` is the
-    /// focused sign-in field's frame in CSS pixels, if it is one.
-    case focus(typing: Bool, field: CGRect?)
+    /// focused sign-in field's frame in CSS pixels, if it is one, and
+    /// `contact` a field's asking for the person's details (name, email, address).
+    case focus(typing: Bool, field: CGRect?, contact: CGRect? = nil)
     /// The page's own word on full screen.
     case fullscreen(Bool)
     /// A menu is opening on the page: on a sign-in field, or elsewhere (nil).
@@ -28,12 +29,15 @@ public enum FormEvent: Equatable, Sendable {
         case "settled":
             self = .settled
         case "focus":
-            let rect = body["rect"] as? [String: Double]
-            let field = rect.flatMap { rect -> CGRect? in
-                guard let x = rect["x"], let y = rect["y"], let w = rect["w"], let h = rect["h"] else { return nil }
-                return CGRect(x: x, y: y, width: w, height: h)
+            let frame = { (rect: [String: Double]?) in
+                rect.flatMap { rect -> CGRect? in
+                    guard let x = rect["x"], let y = rect["y"], let w = rect["w"], let h = rect["h"] else { return nil }
+                    return CGRect(x: x, y: y, width: w, height: h)
+                }
             }
-            self = .focus(typing: body["typing"] as? Bool ?? false, field: field)
+            self = .focus(
+                typing: body["typing"] as? Bool ?? false, field: frame(body["rect"] as? [String: Double]),
+                contact: frame(body["contact"] as? [String: Double]))
         case "fullscreen":
             self = .fullscreen(body["on"] as? Bool ?? false)
         case "menu":

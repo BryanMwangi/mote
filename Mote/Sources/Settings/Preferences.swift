@@ -254,6 +254,8 @@ final class Preferences: ObservableObject {
     @Published var savesPasswords: Bool
     /// Saved accounts listed under sign-in fields.
     @Published var fillsPasswords: Bool
+    /// Offer the person's card in Contacts under name, email, phone and address fields.
+    @Published var fillsContacts: Bool
 
     // Downloads and updates
     @Published var downloads: URL
@@ -352,6 +354,7 @@ final class Preferences: ObservableObject {
         showsPageActions = store.value("extensions.pageActions", or: true)
         savesPasswords = store.value("passwords.save", or: true)
         fillsPasswords = store.value("passwords.fill", or: true)
+        fillsContacts = store.value("forms.contacts", or: false)
         asksWhereToSave = store.value("downloads.ask", or: false)
         installsUpdates = store.value(Updater.installKey, or: true)
         // Test runs keep downloads in their own folder, clear of macOS's prompt for ~/Downloads.
@@ -461,6 +464,7 @@ final class Preferences: ObservableObject {
         keep($passkeys, "passkeys")
         keep($savesPasswords, "passwords.save")
         keep($fillsPasswords, "passwords.fill")
+        keep($fillsContacts, "forms.contacts")
         keep($downloads, "downloads")
         keep($asksWhereToSave, "downloads.ask")
         keep($installsUpdates, Updater.installKey) { if $0 { Updater.shared.install() } }

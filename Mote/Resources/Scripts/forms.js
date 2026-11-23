@@ -131,6 +131,101 @@
 	}
 
 //#endregion
+//#region src/forms/contact.ts
+/** The page's own `autocomplete` tokens, the plain way to say what a field wants. */
+	const TOKENS = {
+		name: "name",
+		"given-name": "given",
+		"family-name": "family",
+		email: "email",
+		tel: "tel",
+		"tel-national": "tel",
+		"street-address": "street",
+		"address-line1": "street",
+		"address-level2": "city",
+		"address-level1": "region",
+		"postal-code": "postal",
+		country: "country",
+		"country-name": "country",
+		organization: "organization"
+	};
+	/** Else, what the field is called, by its name, id, placeholder or label. */
+	const WORDS = [
+		[/first.?name|given.?name|forename|vorname|prénom/i, "given"],
+		[/last.?name|family.?name|surname|nachname/i, "family"],
+		[/e.?mail/i, "email"],
+		[/phone|mobile|tel\b|telephone/i, "tel"],
+		[/post.?code|zip|postal/i, "postal"],
+		[/city|town/i, "city"],
+		[/state|province|county|region/i, "region"],
+		[/country/i, "country"],
+		[/address|street/i, "street"],
+		[/company|organi[sz]ation|employer/i, "organization"],
+		[/full.?name|your.?name|^name$/i, "name"]
+	];
+	function described(field) {
+		const label = field.labels?.[0]?.textContent ?? field.getAttribute("aria-label") ?? "";
+		const placeholder = "placeholder" in field ? field.placeholder : "";
+		return [
+			field.name,
+			field.id,
+			placeholder,
+			label
+		].join(" ");
+	}
+	/** What a field asks for of the person's details, or null. Never a password. */
+	function contactPart(element) {
+		if (!(element instanceof HTMLInputElement || element instanceof HTMLSelectElement || element instanceof HTMLTextAreaElement)) return null;
+		if (element instanceof HTMLInputElement && ![
+			"text",
+			"email",
+			"tel",
+			"search",
+			""
+		].includes(element.type)) return null;
+		for (const token of (element.getAttribute("autocomplete") ?? "").toLowerCase().split(/\s+/)) {
+			if (token === "off" || token === "new-password" || token === "current-password") continue;
+			if (TOKENS[token]) return TOKENS[token];
+		}
+		if (element instanceof HTMLInputElement && element.type === "email") return "email";
+		if (element instanceof HTMLInputElement && element.type === "tel") return "tel";
+		const words = described(element);
+		return WORDS.find(([pattern]) => pattern.test(words))?.[1] ?? null;
+	}
+	/** A field's value from the card: a full name split where the page asks for parts. */
+	function valueFor(part, card) {
+		if (part === "name") return card.name ?? [card.given, card.family].filter(Boolean).join(" ");
+		return card[part];
+	}
+	/**
+	* Fills the empty contact fields around `focused` (its form, else the page)
+	* from the card, as typing would; how many it filled.
+	*/
+	function fillContact(focused, card) {
+		const scope = focused?.closest("form") ?? document;
+		let filled = 0;
+		for (const field of scope.querySelectorAll("input, select, textarea")) {
+			if (field.disabled || "readOnly" in field && field.readOnly || !hasSize(field) || field.value) continue;
+			const part = contactPart(field);
+			const value = part ? valueFor(part, card) : void 0;
+			if (!value) continue;
+			if (field instanceof HTMLSelectElement) {
+				const wanted = value.toLowerCase();
+				const option = [...field.options].find((item) => item.text.trim().toLowerCase() === wanted || item.value.toLowerCase() === wanted);
+				if (!option) continue;
+				field.value = option.value;
+				field.dispatchEvent(new Event("change", { bubbles: true }));
+			} else if (field instanceof HTMLInputElement) setFieldValue(field, value);
+			else {
+				field.value = value;
+				field.dispatchEvent(new Event("input", { bubbles: true }));
+			}
+			filled++;
+		}
+		return filled;
+	}
+
+//#endregion
 //#region src/forms/typing.ts
 /** How many fields typed into are remembered, the oldest forgotten first. */
 	const MAX_TYPED_FIELDS = 40;
@@ -278,12 +373,15 @@
 	function caret() {
 		const focused = document.activeElement;
 		const fields = findSignIn();
-		const rect = fields && focused && (focused === fields.user || focused === fields.password) && focused ? fieldFrame(focused) : null;
-		hanging = rect !== null;
+		const inSignIn = fields && focused && (focused === fields.user || focused === fields.password);
+		const rect = inSignIn && focused ? fieldFrame(focused) : null;
+		const contact = !inSignIn && contactPart(focused) ? fieldFrame(focused) : null;
+		hanging = rect !== null || contact !== null;
 		const message = {
 			kind: "focus",
 			typing: acceptsTyping(focused),
-			rect
+			rect,
+			contact
 		};
 		const said = JSON.stringify(message);
 		if (said === reported) return;
@@ -311,7 +409,8 @@
 			unsaved: () => typed.unsaved(),
 			fill: (user, password, menu) => menu ? fillAround(menuField, user, password) !== null : fillSignIn(findSignIn(), user, password),
 			hasPassword: () => !!findSignIn(),
-			suggest: (password) => fillNewPassword(menuField, password)
+			suggest: (password) => fillNewPassword(menuField, password),
+			contact: (card) => fillContact(document.activeElement, card)
 		};
 		let menuField = null;
 		document.addEventListener("contextmenu", (event) => {

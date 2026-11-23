@@ -433,6 +433,7 @@ private struct PageCard: View {
                             .transition(.opacity)
                     }
                 }
+                .overlay(alignment: .topLeading) { ContactOfferLayer(browser: browser, tab: tab) }
                 .animation(Motion.quick, value: browser.logins.choices)
         }
     }
@@ -551,6 +552,20 @@ struct ResizeGrip: FillsRoom {
             defer { start = nil }
             guard start != nil, wanted < least - ResizeGrip.foldBeyond else { return }
             fold()
+        }
+    }
+}
+
+/// The contact offer under a focused field of `tab`, when there is one.
+private struct ContactOfferLayer: View {
+    let browser: Browser
+    let tab: Tab
+    @ObservedObject private var fill = ContactFill.shared
+
+    var body: some View {
+        if let offer = fill.offer, offer.tab == tab.id {
+            ContactOfferView(fill: fill, offer: offer) { fill.fill(in: tab, browser: browser) }
+                .transition(.opacity)
         }
     }
 }

@@ -17,6 +17,7 @@ protocol TabOwner: AnyObject {
 
     /// A sign-in field gained focus (its frame in points) or lost it.
     func tab(_ tab: Tab, focusedSignInAt spot: CGRect?)
+    func tab(_ tab: Tab, focusedContactAt spot: CGRect?)
     /// A sign-in went through.
     func tab(_ tab: Tab, signedIn sent: SentSignIn)
 
@@ -42,6 +43,7 @@ extension TabOwner {
     func tabStoppedPicking(_ tab: Tab) {}
     func tab(_ tab: Tab, couldNotHide reason: String) {}
     func tab(_ tab: Tab, focusedSignInAt spot: CGRect?) {}
+    func tab(_ tab: Tab, focusedContactAt spot: CGRect?) {}
     func tab(_ tab: Tab, signedIn sent: SentSignIn) {}
     func tab(_ tab: Tab, openedImageMenuFor image: URL) {}
     func tab(_ tab: Tab, searches text: String) {}

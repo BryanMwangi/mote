@@ -101,6 +101,9 @@ struct FormEventTests {
             FormEvent(["kind": "focus", "typing": true, "rect": ["x": 1.0, "y": 2.0, "w": 3.0, "h": 4.0]])
                 == .focus(typing: true, field: CGRect(x: 1, y: 2, width: 3, height: 4)))
         #expect(FormEvent(["kind": "focus", "rect": ["x": 1.0]]) == .focus(typing: false, field: nil))
+        #expect(
+            FormEvent(["kind": "focus", "typing": true, "contact": ["x": 5.0, "y": 6.0, "w": 7.0, "h": 8.0]])
+                == .focus(typing: true, field: nil, contact: CGRect(x: 5, y: 6, width: 7, height: 8)))
         #expect(FormEvent(["kind": "fullscreen", "on": true]) == .fullscreen(true))
         #expect(FormEvent(["kind": "menu", "field": "password"]) == .menu(.password))
         #expect(FormEvent(["kind": "menu", "field": "user"]) == .menu(.user))

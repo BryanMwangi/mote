@@ -8,5 +8,7 @@
   <key>com.apple.security.device.audio-input</key><true/>
   <!-- And a site's question about where you are reaches Core Location. -->
   <key>com.apple.security.personal-information.location</key><true/>
+  <!-- Your own card in Contacts, for filling in forms when you've turned it on. -->
+  <key>com.apple.security.personal-information.addressbook</key><true/>
 </dict>
 </plist>

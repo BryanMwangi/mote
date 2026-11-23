@@ -7,6 +7,7 @@ import {
   signInFields,
   submittedCredentials,
 } from '../src/forms/sign-in';
+import { contactPart, fillContact } from '../src/forms/contact';
 import {
   acceptsTyping,
   fieldFrame,
@@ -298,5 +299,46 @@ describe('fillNewPassword', () => {
     const field = document.createElement('input');
     expect(fillNewPassword(field, 'x')).toBeNull();
     expect(fillNewPassword(null, 'x')).toBeNull();
+  });
+});
+
+const part = (id: string) => contactPart(document.getElementById(id));
+
+describe('contact details', () => {
+  it('knows what a field asks for, by autocomplete, type or name, and never a password', () => {
+    document.body.innerHTML = `
+      <input id="a" autocomplete="given-name"><input id="b" type="email"><input id="c" name="phone_number">
+      <input id="d" placeholder="Postcode"><input id="e" type="password" autocomplete="email"><input id="f" name="q">`;
+    expect([part('a'), part('b'), part('c'), part('d'), part('e'), part('f')]).toEqual([
+      'given',
+      'email',
+      'tel',
+      'postal',
+      null,
+      null,
+    ]);
+  });
+
+  it("fills the form's empty contact fields from the card, as typing would, and leaves filled ones", () => {
+    document.body.innerHTML = `
+      <form><input id="n" autocomplete="name"><input id="m" type="email" value="kept@x.io"><input id="t" type="tel">
+      <select id="c" autocomplete="country"><option value="">Pick</option><option value="KE">Kenya</option></select></form>
+      <input id="outside" type="email">`;
+    const heard: string[] = [];
+    document.getElementById('n')!.addEventListener('input', () => heard.push('input'));
+    const filled = fillContact(document.getElementById('n'), {
+      given: 'Ana',
+      family: 'Wanjiru',
+      email: 'ana@x.io',
+      tel: '+254700000000',
+      country: 'Kenya',
+    });
+    expect(filled).toBe(3);
+    expect((document.getElementById('n') as HTMLInputElement).value).toBe('Ana Wanjiru');
+    expect((document.getElementById('m') as HTMLInputElement).value).toBe('kept@x.io');
+    expect((document.getElementById('t') as HTMLInputElement).value).toBe('+254700000000');
+    expect((document.getElementById('c') as HTMLSelectElement).value).toBe('KE');
+    expect((document.getElementById('outside') as HTMLInputElement).value).toBe('');
+    expect(heard).toEqual(['input']);
   });
 });

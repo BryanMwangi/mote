@@ -15,6 +15,7 @@ import {
   signInFields,
   submittedCredentials,
 } from './forms/sign-in';
+import { type ContactCard, contactPart, fillContact } from './forms/contact';
 import { acceptsTyping, fieldFrame, TypedFields } from './forms/typing';
 
 /** What Swift can ask the page, from Mote's world. */
@@ -37,13 +38,21 @@ interface FormsAPI {
    * field), or null when that field is gone.
    */
   suggest(password: string): string | null;
+  /** Fills the empty contact fields around the focused one from the person's card; how many. */
+  contact(card: ContactCard): number;
 }
 
 type FormMessage =
   | { kind: 'form' }
   | { kind: 'submit'; user: string; password: string }
   | { kind: 'settled' }
-  | { kind: 'focus'; typing: boolean; rect: { x: number; y: number; w: number; h: number } | null }
+  | {
+      kind: 'focus';
+      typing: boolean;
+      rect: { x: number; y: number; w: number; h: number } | null;
+      /** A field asking for the person's details (a name, an email, an address). */
+      contact: { x: number; y: number; w: number; h: number } | null;
+    }
   | { kind: 'fullscreen'; on: boolean }
   | { kind: 'menu'; field: 'password' | 'user' | null };
 
@@ -87,8 +96,9 @@ function caret(): void {
   const fields = findSignIn();
   const inSignIn = fields && focused && (focused === fields.user || focused === fields.password);
   const rect = inSignIn && focused ? fieldFrame(focused) : null;
-  hanging = rect !== null;
-  const message: FormMessage = { kind: 'focus', typing: acceptsTyping(focused), rect };
+  const contact = !inSignIn && contactPart(focused) ? fieldFrame(focused!) : null;
+  hanging = rect !== null || contact !== null;
+  const message: FormMessage = { kind: 'focus', typing: acceptsTyping(focused), rect, contact };
   const said = JSON.stringify(message);
   if (said === reported) return;
   reported = said;
@@ -118,6 +128,7 @@ function installForms(): void {
       menu ? fillAround(menuField, user, password) !== null : fillSignIn(findSignIn(), user, password),
     hasPassword: () => !!findSignIn(),
     suggest: (password) => fillNewPassword(menuField, password),
+    contact: (card) => fillContact(document.activeElement, card),
   };
 
   // The sign-in field a menu opens on, for Mote's saved and strong passwords.

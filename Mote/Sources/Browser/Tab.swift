@@ -731,6 +731,17 @@ final class Tab: ObservableObject, Identifiable {
             focusedSignInAt: rect.map { CGRect(x: $0.minX * zoom, y: $0.minY * zoom, width: $0.width * zoom, height: $0.height * zoom) })
     }
 
+    /// A field asking for the person's details gained focus at `rect` (CSS pixels), or lost it.
+    func contactFocused(_ rect: CGRect?) {
+        let zoom = built?.pageZoom ?? 1
+        owner?.tab(self, focusedContactAt: rect.map { CGRect(x: $0.minX * zoom, y: $0.minY * zoom, width: $0.width * zoom, height: $0.height * zoom) })
+    }
+
+    /// Fills the empty contact fields around the focused one from the person's card; `done` hears how many.
+    func fillContact(_ card: [String: String], done: @escaping (Int) -> Void) {
+        web.callInAppWorld("return window.__moteForms?.contact(card) ?? 0", arguments: ["card": card]) { done(($0 as? Int) ?? 0) }
+    }
+
     /// The page sent a sign-in. Its site is taken now, before any redirect.
     func sentSignIn(user: String, password: String) {
         sent = SentSignIn(page: address, user: user, password: password, at: Date())
