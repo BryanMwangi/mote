@@ -166,6 +166,37 @@ private struct AnnouncementCard: View {
     private var slim: Bool { message.detail == nil && message.action == nil && message.symbol == nil }
 
     var body: some View {
+        // As wide as its words when they fit on a line each; else wrapped at 460 pt.
+        ViewThatFits(in: .horizontal) {
+            card.fixedSize()
+            card.frame(width: 460, alignment: .leading).fixedSize(horizontal: false, vertical: true)
+        }
+        .background(Palette.ground, in: shape)
+        .overlay(shape.strokeBorder(Palette.hairline))
+        .shadow(color: .black.opacity(0.07), radius: 2, y: 1)
+        .shadow(color: .black.opacity(0.16), radius: 26, y: 12)
+        .overlay(alignment: .topTrailing) {
+            if hovering, !slim {
+                Button(action: browser.dismissAnnouncement) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 8, weight: .bold))
+                        .foregroundStyle(Palette.muted)
+                        .frame(width: 18, height: 18)
+                        .background(Palette.ground, in: Circle())
+                        .overlay(Circle().strokeBorder(Palette.hairline))
+                }
+                .buttonStyle(.plain)
+                .offset(x: 6, y: -6)
+                .transition(.opacity)
+            }
+        }
+        .onHover { inside in
+            withAnimation(Motion.hover) { hovering = inside }
+            browser.holdAnnouncement(inside)
+        }
+    }
+
+    private var card: some View {
         HStack(spacing: 12) {
             if let symbol = message.symbol {
                 Image(systemName: symbol)
@@ -199,31 +230,6 @@ private struct AnnouncementCard: View {
         .padding(.vertical, slim ? 10 : 12)
         .padding(.leading, message.symbol == nil ? 16 : 12)
         .padding(.trailing, message.action == nil ? 16 : 12)
-        .frame(maxWidth: 460)
-        .fixedSize(horizontal: slim, vertical: true)
-        .background(Palette.ground, in: shape)
-        .overlay(shape.strokeBorder(Palette.hairline))
-        .shadow(color: .black.opacity(0.07), radius: 2, y: 1)
-        .shadow(color: .black.opacity(0.16), radius: 26, y: 12)
-        .overlay(alignment: .topTrailing) {
-            if hovering, !slim {
-                Button(action: browser.dismissAnnouncement) {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 8, weight: .bold))
-                        .foregroundStyle(Palette.muted)
-                        .frame(width: 18, height: 18)
-                        .background(Palette.ground, in: Circle())
-                        .overlay(Circle().strokeBorder(Palette.hairline))
-                }
-                .buttonStyle(.plain)
-                .offset(x: 6, y: -6)
-                .transition(.opacity)
-            }
-        }
-        .onHover { inside in
-            withAnimation(Motion.hover) { hovering = inside }
-            browser.holdAnnouncement(inside)
-        }
     }
 }
 

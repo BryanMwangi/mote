@@ -186,6 +186,9 @@ extension Bench {
             case "update": browser.tell(.out(release))
             case "ready": browser.tell(.ready(release))
             case "manual": browser.tell(.manual(release))
+            case "download":
+                browser.announce(
+                    Announcement("Downloading Hungarian to translate (37.2 MB)", detail: "Once only; then it translates on this Mac.", symbol: "arrow.down.circle"))
             default: browser.announce(notice)
             }
         }
