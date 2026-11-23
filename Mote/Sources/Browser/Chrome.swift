@@ -180,7 +180,7 @@ struct ChromeDetail: View {
                             card: layout.card, corner: layout.corner,
                             tab: anchor.anchors["tab"].map { proxy[$0].insetBy(dx: -TabShape.foot, dy: 0) },
                             viewport: anchor.dragging ? nil : anchor.anchors["viewport"].map { proxy[$0] },
-                            attachment: anchor.attachment)
+                            attachment: anchor.attachment, hole: (browser.shownSplit?.count ?? 0) > 1 ? layout.page : nil)
                         surface.fill(browser.chromeGround.opacity(browser.active?.isStart == true ? 0.92 : 1))
                             .compositingGroup()
                             .shadow(color: .black.opacity(0.06), radius: 1.5, y: 0.5)
@@ -211,6 +211,19 @@ struct ChromeDetail: View {
 
 // MARK: - Card
 
+/// The card's ground: its rounded shape, less the page's place in its
+/// bottom-trailing corner when that's left open (filled even-odd).
+private nonisolated struct CardGround: Shape {
+    let corner: CGFloat
+    let hole: CGSize?
+
+    func path(in rect: CGRect) -> Path {
+        var path = Path(roundedRect: rect, cornerRadius: corner, style: .continuous)
+        if let hole { path.addRect(CGRect(x: rect.maxX - hole.width, y: rect.maxY - hole.height, width: hole.width, height: hole.height)) }
+        return path
+    }
+}
+
 /// One surface throughout the morph from floating tab to attached tab.
 private nonisolated struct TabCardShape: Shape {
     let card: CGRect
@@ -219,6 +232,8 @@ private nonisolated struct TabCardShape: Shape {
     let viewport: CGRect?
     var attachment: CGFloat
     var masksBorder = false
+    /// The page's place, left open in a split.
+    var hole: CGRect? = nil
 
     var animatableData: CGFloat {
         get { attachment }
@@ -235,7 +250,8 @@ private nonisolated struct TabCardShape: Shape {
         var outline = tab.map { TabShape(attachment: attachment).path(in: $0) } ?? Path()
         if let viewport, !outline.isEmpty { outline = outline.intersection(Path(viewport)) }
         if masksBorder { return Path(Path(rect).subtracting(outline).cgPath) }
-        return Path(RoundedRectangle(cornerRadius: corner, style: .continuous).path(in: card).union(outline).cgPath)
+        let surface = Path(RoundedRectangle(cornerRadius: corner, style: .continuous).path(in: card).union(outline).cgPath)
+        return hole.map { surface.subtracting(Path($0)) } ?? surface
     }
 }
 
@@ -295,6 +311,10 @@ private struct PageCard: View {
     let layout: ChromeLayout
     @Environment(\.colorScheme) private var colorScheme
 
+    /// In a split, the page's place is left open: the gaps between the panes
+    /// show the window's own colours beneath, as beside the sidebar.
+    private var hole: CGSize? { (browser.shownSplit?.count ?? 0) > 1 ? layout.page.size : nil }
+
     private var shape: RoundedRectangle {
         RoundedRectangle(cornerRadius: layout.corner, style: .continuous)
     }
@@ -344,19 +364,19 @@ private struct PageCard: View {
             if layout.strip != nil {
                 Color.clear
             } else if layout.corner > 0 {
-                shape
-                    .fill(browser.chromeGround.opacity(browser.active?.isStart == true ? 0.92 : 1))
+                CardGround(corner: layout.corner, hole: hole)
+                    .fill(browser.chromeGround.opacity(browser.active?.isStart == true ? 0.92 : 1), style: FillStyle(eoFill: true))
                     .shadow(color: .black.opacity(0.06), radius: 1.5, y: 0.5)
                     .shadow(color: .black.opacity(0.05), radius: 12, y: 4)
             } else {
-                browser.chromeGround
+                CardGround(corner: 0, hole: hole).fill(browser.chromeGround, style: FillStyle(eoFill: true))
             }
         }
         .clipShape(shape)
         .background {
             // Outside the clip, so the shadow can fall onto the sidebar.
             if layout.sidebar != nil, layout.corner > 0 {
-                shape.fill(browser.chromeGround)
+                CardGround(corner: layout.corner, hole: hole).fill(browser.chromeGround, style: FillStyle(eoFill: true))
                     .shadow(color: .black.opacity(colorScheme == .dark ? 0.18 : 0.08), radius: 7, x: -1, y: 2)
             }
         }

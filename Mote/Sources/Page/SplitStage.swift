@@ -24,8 +24,6 @@ struct SplitStage<Pane: View>: View {
             let area = CGRect(origin: .zero, size: proxy.size)
             let frames = layout.frames(in: area, gap: Browser.splitGap)
             ZStack(alignment: .topLeading) {
-                // The gaps between panes in the space's colours, as the sidebar beside them.
-                if split { SpaceBand(browser: browser) }
                 // A page alone keeps one place whatever its tab: keyed by the
                 // tab, every switch made the stage again, moving the page out
                 // of the window and back, where it was drawn afresh (130 ms).
