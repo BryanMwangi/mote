@@ -2,8 +2,7 @@
 
 What changes in Mote from one version to the next, newest first.
 
-**Unreleased** gathers what's done since the last version, as it lands. When
-a version ships, the section takes its number and date, as in
+**Unreleased** gathers what's done since the last version, as it lands. When a version ships, the section takes its number and date, as in
 `## <version> — <date>`, with one line under the heading saying what it
 brings: that line is what Settings shows beside the update, and the whole
 section becomes the release's notes (see `Tools/release/appcast`).
@@ -12,11 +11,12 @@ section becomes the release's notes (see `Tools/release/appcast`).
 
 ## 0.4.7 (beta)
 
-Zen's ways come to Mote: folders, split view, previews, space themes and boosts, imports from Zen and other browsers, profiles, Firefox add-ons, and an assistant that works across your tabs.
+Zen and Arc ways come to Mote: folders, split view, previews, space themes and boosts, imports from Zen and other browsers, profiles, Firefox add-ons, and an assistant that works across your tabs with Arc's spaces and profiles coming soon.
 
 ### Added
 
 **Tabs and folders**
+
 - Folders for pinned tabs, with subfolders, their own icons, and live folders that follow a feed or GitHub.
 - Pinned tabs as their own tier, going back to their pinned address.
 - Essentials in rows of up to three, the active one glowing with its icon.
@@ -26,28 +26,33 @@ Zen's ways come to Mote: folders, split view, previews, space themes and boosts,
 - ⇧⌘K closes every unpinned tab, and the toast brings them back.
 
 **Spaces**
+
 - Space colours, icons (symbols or emoji) and a header; themes picked in a frosted panel.
 - Sites that always open in a chosen space.
 - Merge and delete spaces from Settings; give a space a profile.
 - Drag a tab to the next space; swipe between spaces with a bounce at the ends.
 
 **Split view and previews**
+
 - Split view of up to four tabs: drag onto the page, menus, layouts and keys.
-- Link previews as Zen's Glance (⇧- or ⌥-click), opened as a tab or split.
+- Link previews (⇧- or ⌥-click), opened as a tab or split.
 - ⌥⇧-click a link straight into a split.
 
 **Windows and profiles**
+
 - More windows (⌘N), private windows (⇧⌘N), and reopening closed windows.
 - Every window comes back after a restart, essentials in step.
 - Profiles, each with its own sign-ins, history, passwords and extensions; as their own Mote or side by side.
 - Handoff to and from your other devices.
 
 **Bring your browser over**
+
 - Import from Zen, Chromium browsers, Firefox, Safari and Opera: spaces, tabs, folders, splits, colours, history, bookmarks, passwords, icons and extensions.
 - Every profile of a browser into a Mote profile.
 - Zen's keyboard shortcuts, one button away.
 
 **Extensions**
+
 - Firefox add-ons from addons.mozilla.org, with Add to Mote on its pages.
 - uBlock Origin's own filter lists and scriptlets, kept up to date.
 - Reorder extensions; the one with something for the page shows by the address.
@@ -55,6 +60,7 @@ Zen's ways come to Mote: folders, split view, previews, space themes and boosts,
 - Each space with its own sign-ins runs its own extensions.
 
 **Assistant**
+
 - Uses your tabs, pages, history and bookmarks, and acts in pages, asking first.
 - Ask from the floating search (⌘J), or in a chat sidebar that follows you.
 - Fills forms, picks dropdowns, attaches files, signs in, and reads many tabs at once.
@@ -66,8 +72,9 @@ Zen's ways come to Mote: folders, split view, previews, space themes and boosts,
 - Live token count and time while it works.
 
 **Pages and files**
+
 - Translate a page on this Mac, with Mozilla's engine for languages macOS lacks.
-- Boosts: a site's colours, fonts and your own CSS, as Zen's.
+- Boosts: a site's colours, fonts and your own CSS, similar to Arc and Zen.
 - Screenshots of what's visible or the whole page; view source; save as a web archive.
 - Responsive Design Mode (⌃⌘R) and F12 for the inspector.
 - PDFs open in Mote's own reader: draw, sign, add notes, and save.
@@ -75,12 +82,14 @@ Zen's ways come to Mote: folders, split view, previews, space themes and boosts,
 - Web notifications and push from sites you allow; pages can lock the pointer for games.
 
 **Privacy and passwords**
+
 - Site permissions, strong passwords, passkeys, and Touch ID to fill.
 - Mote's ad blocker takes YouTube's video ads out.
 - Website data: what each site keeps and how much, and free up space without signing out.
 - Fill in your contact details from your card in Contacts.
 
 **Downloads, library and settings**
+
 - Downloads you can watch, pause and resume after a relaunch, with menus and drag out.
 - History, Downloads and Bookmarks in one Library (⌥⇧L).
 - Bookmark folders, and importing a browser's bookmark file.
