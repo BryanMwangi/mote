@@ -43,7 +43,8 @@ final class AgentActivity: ObservableObject {
     func begin(_ caption: String, by driver: String, stop: (() -> Void)?, turnGoesOn: (() -> Bool)? = nil) {
         resting?.cancel()
         if let turnGoesOn { self.turnGoesOn = turnGoesOn }
-        if !working { working = true }
+        // Animated where it changes, so the tab's sparkle and the overlay come and go smoothly.
+        if !working { withAnimation(Motion.settle) { working = true } }
         if self.caption != caption { self.caption = caption }
         if self.driver != driver { self.driver = driver }
         self.stop = stop
@@ -62,7 +63,7 @@ final class AgentActivity: ObservableObject {
                 try? await Task.sleep(for: .seconds(1))
             }
             guard !Task.isCancelled, let self else { return }
-            self.working = false
+            withAnimation(Motion.settle) { self.working = false }
             self.turnGoesOn = nil
             finished?()
         }
@@ -84,7 +85,7 @@ final class AgentActivity: ObservableObject {
         stop?()
         stop = nil
         stepping = false
-        working = false
+        withAnimation(Motion.settle) { working = false }
     }
 }
 
