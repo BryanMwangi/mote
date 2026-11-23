@@ -5,8 +5,9 @@ import Translation
 import WebKit
 
 /// Translating a page when a page is in a language the user doesn't read,
-/// a quiet button beside the address translates it
-/// with Apple's Translation framework.
+/// a quiet button beside the address translates it: with Apple's Translation
+/// framework when macOS has the pair, else with Mozilla's engine
+/// (MozillaTranslation). Which is the page's business, never the person's.
 extension Browser {
     /// Notes the language a page is in, when it's one you don't read.
     func noteLanguage(of tab: Tab) {
@@ -102,10 +103,22 @@ extension Browser {
         try? await LanguageAvailability().status(from: Locale.Language(identifier: source), to: Locale.Language(identifier: target))
     }
 
-    /// The languages macOS translates.
+    /// Every language Mote translates, whichever engine does it.
     @available(macOS 15, *)
-    @concurrent nonisolated static func translatable() async -> [String] {
-        await LanguageAvailability().supportedLanguages.map(\.minimalIdentifier)
+    static func translatable() async -> [String] {
+        let apple = await Task.detached { await LanguageAvailability().supportedLanguages.map(\.minimalIdentifier) }.value
+        let mozilla = await MozillaTranslation.shared.languages()
+        // One entry a language: Apple's name for it ("zh-Hans") wins over Mozilla's ("zh-Hans", "nb").
+        let known = Set(apple.map { Locale.Language(identifier: $0).languageCode?.identifier ?? $0 })
+        return apple + mozilla.filter { !known.contains(Locale.Language(identifier: $0).languageCode?.identifier ?? $0) }
+    }
+
+    /// Whether Mote can translate `source` to `target`, with either engine.
+    @available(macOS 15, *)
+    static func canTranslate(from source: String, to target: String) async -> Bool {
+        guard source != target else { return false }
+        if let status = await availability(from: source, to: target), status != .unsupported { return true }
+        return await MozillaTranslation.shared.route(from: source, to: target) != nil
     }
 
     /// The page menu's item, and the bench's: show the page as it was, or
@@ -120,27 +133,37 @@ extension Browser {
         tab.translation = nil
     }
 
-    /// Translates the page from `source` to `target`, once macOS says it can.
+    /// Translates the page from `source` to `target`: with macOS when it has
+    /// the pair (through `translating` and TranslationHost), else Mozilla's engine.
     func translate(_ tab: Tab, from source: String, to target: String) {
-        guard #available(macOS 15, *) else { return }
+        guard #available(macOS 15, *), source != target else { return }
         Task {
-            let status = await Self.availability(from: source, to: target)
-            guard status != .unsupported, source != target else {
-                return announce("macOS can't translate \(Self.languageName(source)) to \(Self.languageName(target))")
+            let job = TranslationJob(tab: tab.id, source: source, target: target)
+            if let status = await Self.availability(from: source, to: target), status != .unsupported {
+                return translating = job
             }
-            translating = TranslationJob(tab: tab.id, source: source, target: target)
+            guard await MozillaTranslation.shared.route(from: source, to: target) != nil else {
+                return announce("Mote can't translate \(Self.languageName(source)) to \(Self.languageName(target)) yet")
+            }
+            await run(job) { MozillaTranslation.shared.stream($0, from: source, to: target) }
         }
     }
 
-    /// Runs with the session SwiftUI hands over (see TranslationHost), as
-    /// Firefox translates: what's on screen first, each distinct piece of
-    /// text once however often it repeats, and the results written in as
-    /// they stream back, a few at a time. The page's text comes 5000 pieces
-    /// at a time, the ones around the screen first, until all of it's done.
+    /// Runs with the session SwiftUI hands over (see TranslationHost).
     @available(macOS 15, *)
     func translate(with session: TranslationSession) async {
-        guard let job = translating, let tab = tab(job.tab), let web = tab.built else { return }
+        guard let job = translating else { return }
         defer { if translating == job { translating = nil } }
+        await run(job) { Self.stream($0, in: session) }
+    }
+
+    /// Translates the job's page through `engine`, as Firefox translates:
+    /// what's on screen first, each distinct piece of text once however often
+    /// it repeats, and the results written in as they stream back, a few at a
+    /// time. The page's text comes 5000 pieces at a time, the ones around the
+    /// screen first, until all of it's done.
+    private func run(_ job: TranslationJob, engine: @escaping ([String]) -> AsyncThrowingStream<(Int, String), Error>) async {
+        guard let tab = tab(job.tab), let web = tab.built else { return }
         let found = await withCheckedContinuation { done in
             web.evaluateInAppWorld(Self.collect) { done.resume(returning: $0 as? Bool == true) }
         }
@@ -162,7 +185,7 @@ extension Browser {
             let places = await Task.detached(priority: .userInitiated) { texts.indices.filter { !Self.alreadyRead(texts[$0]) } }.value
             if places.isEmpty { continue }
             do {
-                for try await (index, text) in Self.stream(places.map { texts[$0] }, in: session) {
+                for try await (index, text) in engine(places.map { texts[$0] }) {
                     guard tab.translation == job else { return }
                     pending[String(base + places[index])] = text
                     translated += 1
@@ -318,7 +341,7 @@ struct TranslationHost: View {
 }
 
 /// The translate button's popover, as Firefox's: from and to what language,
-/// so a wrong guess can be put right, and why when macOS can't.
+/// so a wrong guess can be put right, and why when Mote can't.
 @available(macOS 15, *)
 struct TranslatePanel: View {
     let browser: Browser
@@ -328,9 +351,10 @@ struct TranslatePanel: View {
     @State private var from = ""
     @State private var to = ""
     @State private var languages: [String] = []
-    @State private var status: LanguageAvailability.Status?
+    /// Whether the chosen pair can be translated; nil while asking.
+    @State private var possible: Bool?
 
-    /// What macOS translates, by name; asked once.
+    /// Every language Mote translates, by name; asked once.
     @MainActor private static var supported: [String]?
 
     var body: some View {
@@ -394,9 +418,9 @@ struct TranslatePanel: View {
             languages = Self.supported ?? []
         }
         .task(id: from + ">" + to) {
-            status = nil
+            possible = nil
             guard !from.isEmpty, !to.isEmpty, from != to else { return }
-            status = await Browser.availability(from: from, to: to)
+            possible = await Browser.canTranslate(from: from, to: to)
         }
     }
 
@@ -406,18 +430,15 @@ struct TranslatePanel: View {
     }
 
     private var ready: Bool {
-        guard status == .installed || status == .supported else { return false }
+        guard possible == true else { return false }
         return tab.translation.map { $0.source != from || $0.target != to } ?? true
     }
 
     private var note: String? {
-        switch status {
-        case .unsupported where !languages.isEmpty && !languages.contains(from):
-            "macOS can't translate \(Browser.languageName(from)) yet. If the page is in another language, choose it above."
-        case .unsupported: "macOS can't translate \(Browser.languageName(from)) to \(Browser.languageName(to))."
-        case .supported: "macOS downloads these languages the first time, then translates on this Mac."
-        default: nil
-        }
+        guard possible == false else { return nil }
+        return !languages.isEmpty && !languages.contains(from)
+            ? "Mote can't translate \(Browser.languageName(from)) yet. If the page is in another language, choose it above."
+            : "Mote can't translate \(Browser.languageName(from)) to \(Browser.languageName(to)) yet."
     }
 
     private func choice(_ title: String, _ code: Binding<String>, _ options: [String]) -> some View {
