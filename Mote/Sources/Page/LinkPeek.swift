@@ -1,4 +1,5 @@
 import AppKit
+import MoteCore
 import SwiftUI
 
 // Option-clicking a link (or shift-clicking, Settings › General › Links)
@@ -14,6 +15,7 @@ extension Browser {
         preview.go(to: url)
         // The click that asked for it, under the pointer still.
         peekOrigin = NSEvent.mouseLocation
+        peekFrom = tab.id
         peekLeaving = false
         withAnimation(Motion.settle) { peekTab = preview }
     }
@@ -39,6 +41,24 @@ extension Browser {
         guard let preview = takePeek() else { return }
         insert(preview, at: place)
         select(preview)
+    }
+
+    /// The preview as a tab beside the one it came from: in its split if it
+    /// has one, laid out in a grid past two.
+    func splitPeek() {
+        guard let from = peekFrom.flatMap({ tab($0) }), peekSplits else { return keepPeek() }
+        let place = placeForNew()
+        guard let preview = takePeek() else { return }
+        insert(preview, at: place)
+        let group = group(of: from.id)
+        guard split(preview, beside: from, side: .right) else { return select(preview) }
+        if let group, (splits[group]?.ids.count ?? 0) > 2 { relayout(group, .grid) }
+    }
+
+    /// Whether the preview can split beside its tab: one that splits, with room in its split.
+    var peekSplits: Bool {
+        guard let from = peekFrom.flatMap({ tab($0) }), splittable(from), !from.kept else { return false }
+        return (group(of: from.id).flatMap { splits[$0]?.ids.count } ?? 1) < SplitLayout<Tab.ID>.most
     }
 
     @discardableResult
@@ -98,6 +118,13 @@ private struct PeekCard: View {
                 VStack(spacing: 8) {
                     Bubble(icon: "xmark", help: "Close (esc)", act: browser.closePeek)
                     Bubble(icon: "arrow.up.left.and.arrow.down.right", help: "Open as a tab", act: browser.keepPeek)
+                    Bubble(
+                        icon: "rectangle.split.2x1",
+                        help: browser.peekSplits ? "Split with this tab (⌥⇧-click a link)" : "This split is full, or this tab can't split",
+                        act: browser.splitPeek
+                    )
+                    .disabled(!browser.peekSplits)
+                    .opacity(browser.peekSplits ? 1 : 0.45)
                 }
             }
             .frame(width: room.size.width * Self.widthShare, height: room.size.height * Self.heightShare)

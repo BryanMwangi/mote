@@ -43,6 +43,9 @@ extension Browser: WKNavigationDelegate, WKUIDelegate {
         case .peek:
             decisionHandler(.cancel)
             if let from { Task { self.peek(url, from: from) } }
+        case .split:
+            decisionHandler(.cancel)
+            open(url, as: .split, from: from)
         case .openTab(let foreground):
             let tab = open(url, foreground: foreground, from: from)
             if !foreground { openedBehind(tab) }

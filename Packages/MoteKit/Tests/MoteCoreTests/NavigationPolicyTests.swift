@@ -32,7 +32,15 @@ struct NavigationPolicyTests {
         #expect(NavigationPolicy.decide(Request(scheme: "https", clicked: true, keys: .shift, peekKeys: .shift)) == .peek)
         #expect(NavigationPolicy.decide(Request(scheme: "https", clicked: true, keys: .shift)) == .load)
         #expect(
-            NavigationPolicy.decide(Request(scheme: "https", clicked: true, keys: [.shift, .option], peekKeys: .shift)) == .load)
+            NavigationPolicy.decide(Request(scheme: "https", clicked: true, keys: [.shift, .command], peekKeys: .shift))
+                == .openTab(foreground: true))
+    }
+
+    @Test("⌥⇧-click opens the link in a split beside its tab, when previews are possible")
+    func splits() {
+        #expect(NavigationPolicy.decide(Request(scheme: "https", clicked: true, keys: [.option, .shift], peekKeys: .option)) == .split)
+        #expect(NavigationPolicy.decide(Request(scheme: "https", clicked: true, keys: [.option, .shift], peekKeys: .shift)) == .split)
+        #expect(NavigationPolicy.decide(Request(scheme: "https", clicked: true, keys: [.option, .shift])) == .load)
     }
 
     @Test("Option-click previews when chosen, as Zen's Glance; then shift-click doesn't, and ⌘-click still opens a tab")

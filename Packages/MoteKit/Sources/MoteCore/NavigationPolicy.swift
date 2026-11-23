@@ -48,6 +48,8 @@ public enum NavigationPolicy {
         /// Show a link preview over the page.
         case peek
         case openTab(foreground: Bool)
+        /// Open it in a split beside the tab it came from.
+        case split
         /// Hand the URL to the app that owns its scheme.
         case handOff
     }
@@ -56,8 +58,9 @@ public enum NavigationPolicy {
         // Middle-clicks are opened by the page script, which sees them first.
         if request.clicked, request.button == 4 { return .ignore }
         if request.clicked, request.isWeb {
-            // The preview's key alone previews; ⌘ opens a background tab, ⌘⇧ a foreground one.
+            // The preview's key alone previews, ⌥⇧ splits; ⌘ opens a background tab, ⌘⇧ a foreground one.
             if let peek = request.peekKeys, request.keys == peek { return .peek }
+            if request.peekKeys != nil, request.keys == [.option, .shift] { return .split }
             if request.keys.contains(.command) { return .openTab(foreground: request.keys.contains(.shift)) }
         }
         return loadable.contains(request.scheme) ? .load : .handOff

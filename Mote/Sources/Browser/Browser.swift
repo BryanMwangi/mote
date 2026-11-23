@@ -207,6 +207,8 @@ final class Browser: NSObject, ObservableObject {
     @Published var peekTab: Tab?
     /// Where on screen the link previewed was clicked, for the preview to grow from.
     var peekOrigin: NSPoint?
+    /// The tab the preview was opened from, to split beside.
+    var peekFrom: Tab.ID?
     /// The preview is going back into its link (see LinkPeek.swift).
     @Published var peekLeaving = false
     /// Split views, every space's, each by its own id (see Browser+Split.swift).
