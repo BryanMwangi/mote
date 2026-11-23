@@ -101,6 +101,7 @@ extension Browser {
             tab.snapshot { [weak self, weak tab] picture in
                 guard let self, let tab else { return }
                 if let reason = awake(because: tab, asked: asked) { return done?(reason) ?? () }
+                self.dropPeek(of: tab.id)
                 tab.sleep(picture: picture)
                 done?("asleep")
             }

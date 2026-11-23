@@ -257,6 +257,8 @@ struct BenchCall {
     /// in test runs any tab does, popups a bench page opened included.
     func tab() -> Tab? {
         let ref = request.string("id") ?? ""
+        // The link preview in front (test runs), which isn't in the row.
+        if ref == "peek", Storage.testing, let preview = browser.peekTab { return preview }
         if let tab = browser.tabs.first(where: { (Storage.testing || $0.bench) && BenchWire.names(ref, $0.id) }) { return tab }
         fail("no tab “\(ref)” — see tabs")
         return nil

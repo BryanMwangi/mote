@@ -2,7 +2,8 @@
 """Drive a running Mote from the shell, through its bench socket.
 
 Needs Settings › General › "Let a script drive Mote" on in that Mote. Tabs
-are named by the start of their id, as `tabs` prints it. --test talks to
+are named by the start of their id, as `tabs` prints it; `peek` names the
+link preview in front (test runs). --test talks to
 the test world ("Mote (test)"), --world NAME to "Mote (NAME)"; --yes skips
 an extension's install question, in a test world only.
 """

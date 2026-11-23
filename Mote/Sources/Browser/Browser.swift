@@ -209,6 +209,9 @@ final class Browser: NSObject, ObservableObject {
     var peekOrigin: NSPoint?
     /// The tab the preview was opened from, to split beside.
     var peekFrom: Tab.ID?
+    /// Previews set aside while their tab isn't in front, as Zen keeps a
+    /// Glance with its tab: back on screen when the tab is.
+    var parkedPeeks: [Tab.ID: (tab: Tab, origin: NSPoint?)] = [:]
     /// The preview is going back into its link (see LinkPeek.swift).
     @Published var peekLeaving = false
     /// Split views, every space's, each by its own id (see Browser+Split.swift).
@@ -361,7 +364,11 @@ final class Browser: NSObject, ObservableObject {
     var recentlyVisited: [History.Entry] { history.recent() }
 
     func tab(_ id: Tab.ID) -> Tab? { tabs.first { $0.id == id } }
-    func tab(for webView: WKWebView) -> Tab? { tabs.first { $0.built === webView } }
+    /// The tab a page belongs to: one in the row, or a preview, which is a tab too (its links work in it).
+    func tab(for webView: WKWebView) -> Tab? {
+        tabs.first { $0.built === webView } ?? (peekTab?.built === webView ? peekTab : nil)
+            ?? parkedPeeks.values.first { $0.tab.built === webView }?.tab
+    }
 
     /// The other tabs a chat may @-mention: this window's open, named tabs,
     /// except the one given and any already mentioned. Blank tabs, which have
@@ -980,7 +987,7 @@ final class Browser: NSObject, ObservableObject {
     // MARK: - Switching
 
     func select(_ tab: Tab) {
-        if peekTab != nil, tab.id != activeID { closePeek() }
+        swapPeek(to: tab)
         if siteCardRow != nil, siteCardRow != tab.id { siteCardRow = nil }
         cancelTabEdit()
         field.switching = false
@@ -1101,6 +1108,7 @@ final class Browser: NSObject, ObservableObject {
     /// only lets go of its page and stays in the row; Unpin removes it.
     func close(_ tab: Tab) {
         guard let index = row.index(of: tab.id) else { return }
+        dropPeek(of: tab.id)
         if floating == tab.id { land() }
         permissions.drop(tab: tab.id)
         dropPanels(of: tab.id)

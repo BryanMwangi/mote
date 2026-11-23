@@ -125,6 +125,11 @@ extension Browser: WKNavigationDelegate, WKUIDelegate {
         windowFeatures: WKWindowFeatures
     ) -> WKWebView? {
         let opener = tab(for: webView)
+        // A link in a preview that would open a tab goes on in the preview, as a Glance does.
+        if let opener, opener === peekTab, linkOpening == nil, action.navigationType == .linkActivated, let url = action.request.url {
+            opener.go(to: url)
+            return nil
+        }
         // A link from Mote's own menu items, to open somewhere else (Browser+Links.swift).
         if let opening = linkOpening, let url = action.request.url {
             linkOpening = nil

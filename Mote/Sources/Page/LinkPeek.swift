@@ -61,6 +61,31 @@ extension Browser {
         return (group(of: from.id).flatMap { splits[$0]?.ids.count } ?? 1) < SplitLayout<Tab.ID>.most
     }
 
+    /// Going to `tab`: the preview over the tab left is set aside with it,
+    /// and `tab`'s own, if it has one, comes back as it was, without growing again.
+    func swapPeek(to tab: Tab) {
+        guard tab.id != activeID else { return }
+        if let preview = peekTab, let from = peekFrom, !peekLeaving {
+            parkedPeeks[from] = (preview, peekOrigin)
+            takePeek()
+        } else if peekTab != nil {
+            closePeek()
+        }
+        guard let parked = parkedPeeks.removeValue(forKey: tab.id) else { return }
+        peekOrigin = parked.origin
+        peekFrom = tab.id
+        GlanceView.quiet = true
+        var still = Transaction()
+        still.disablesAnimations = true
+        withTransaction(still) { peekTab = parked.tab }
+    }
+
+    /// A tab going away (closed, asleep) takes its preview with it.
+    func dropPeek(of id: Tab.ID) {
+        if let parked = parkedPeeks.removeValue(forKey: id) { parked.tab.close() }
+        if peekFrom == id, peekTab != nil { closePeek() }
+    }
+
     @discardableResult
     private func takePeek() -> Tab? {
         let preview = peekTab
@@ -173,6 +198,8 @@ struct Glance<Card: View>: NSViewRepresentable {
 
 final class GlanceView: NSView {
     @MainActor weak static var current: GlanceView?
+    /// The next preview comes back rather than opens: shown at once, without growing.
+    @MainActor static var quiet = false
     static let opening = 0.4
     static let closing = 0.2
     let host: NSHostingView<AnyView>
@@ -211,6 +238,7 @@ final class GlanceView: NSView {
     private func openOnce() {
         guard !opened, window != nil, bounds.width > 0 else { return }
         opened = true
+        if GlanceView.quiet { return GlanceView.quiet = false }
         open()
     }
 
