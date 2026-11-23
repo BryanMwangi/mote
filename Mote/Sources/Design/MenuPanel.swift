@@ -200,6 +200,7 @@ final class MenuPanel: NSObject, NSPopoverDelegate {
         panel.appearance = window.effectiveAppearance
         panel.contentView = host
         panel.onEscape = { [weak self] in self?.dismiss() }
+        panel.keyable = keyboard
 
         self.panel = panel
         self.host = host
@@ -304,6 +305,10 @@ final class MenuPanel: NSObject, NSPopoverDelegate {
     private final class Host: NSHostingView<AnyView> {
         var resized: () -> Void = {}
 
+        /// A panel that doesn't take the keyboard (a folder's list of tabs)
+        /// isn't key when clicked: the first click still picks.
+        override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
         override func invalidateIntrinsicContentSize() {
             super.invalidateIntrinsicContentSize()
             // After the layout under way, which a new frame mustn't interrupt.
@@ -315,8 +320,10 @@ final class MenuPanel: NSObject, NSPopoverDelegate {
     /// and Escape work.
     private final class Panel: NSPanel {
         var onEscape: () -> Void = {}
+        /// False for a panel opened without the keyboard, which a click mustn't make key.
+        var keyable = true
 
-        override var canBecomeKey: Bool { true }
+        override var canBecomeKey: Bool { keyable }
 
         override func cancelOperation(_ sender: Any?) { onEscape() }
 
