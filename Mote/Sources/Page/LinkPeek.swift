@@ -36,6 +36,17 @@ extension Browser {
     }
 
     /// The preview becomes a tab after the one it came from, and is picked.
+    /// The preview over `id`'s tab: the one showing, or the one waiting with it.
+    func preview(of id: Tab.ID) -> Tab? {
+        peekTab != nil && peekFrom == id && !peekLeaving ? peekTab : parkedPeeks[id]?.tab
+    }
+
+    /// The preview's mark on `tab` clicked: kept as a tab when it's showing,
+    /// else its tab is gone to, which shows it.
+    func openPreview(of tab: Tab) {
+        if peekFrom == tab.id, peekTab != nil { keepPeek() } else { select(tab) }
+    }
+
     func keepPeek() {
         let place = placeForNew()
         guard let preview = takePeek() else { return }

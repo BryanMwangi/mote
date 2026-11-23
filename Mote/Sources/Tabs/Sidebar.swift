@@ -367,7 +367,7 @@ private struct SpacePage: View {
             browser: browser, tab: tab, live: tab.id == active, renaming: renaming,
             draft: renaming ? browser.tabDraft : "", refusals: renaming ? browser.field.refusals : 0,
             icons: prefs.glyph == .icons, showsReading: prefs.showsReading,
-            preview: live && tab.id == active ? browser.peekTab : nil, carded: live && showing && browser.siteCardRow == tab.id,
+            preview: browser.preview(of: tab.id), carded: live && showing && browser.siteCardRow == tab.id,
             picks: browser.picks)
     }
 
@@ -562,7 +562,7 @@ private struct PinnedTabs: View {
             ForEach(Array(tabs.enumerated()), id: \.element.id) { index, tab in
                 PinSquare(
                     browser: browser, tab: tab, live: tab.id == active, lettering: live && showing && browser.editingPin == tab.id,
-                    icons: prefs.glyph == .icons, size: grid.frame(of: index).size
+                    icons: prefs.glyph == .icons, size: grid.frame(of: index).size, preview: browser.preview(of: tab.id)
                 )
                 .modifier(
                     Reorderable(
@@ -639,6 +639,8 @@ private struct PinSquare: View {
     let lettering: Bool
     let icons: Bool
     let size: CGSize
+    /// A link preview open over it: its site's mark sits on the square's corner, as Zen's.
+    let preview: Tab?
 
     @State private var hovering = false
     @State private var overMinus = false
@@ -673,8 +675,15 @@ private struct PinSquare: View {
                 }
             )
             .rowHover { hovering = $0 }
-            // – lets the page go, keeping the essential.
             .overlay(alignment: .topTrailing) {
+                if let preview {
+                    PreviewMark(tab: preview, size: side * 0.42) { browser.openPreview(of: tab) }
+                        .padding(3)
+                        .transition(.scale(scale: 0.6).combined(with: .opacity))
+                }
+            }
+            // – lets the page go, keeping the essential; to the other corner past a preview's mark.
+            .overlay(alignment: preview == nil ? .topTrailing : .topLeading) {
                 if hovering || overMinus, !tab.asleep, !lettering {
                     // Small to look at, easy to hit: the press takes a square
                     // well past the circle.
@@ -694,7 +703,7 @@ private struct PinSquare: View {
                     // Past the square's edge it keeps itself showing.
                     .onHover { overMinus = $0 }
                     .help("Unload Tab, keeping it   ⌘W")
-                    .offset(x: 4, y: -4)
+                    .offset(x: preview == nil ? 4 : -4, y: -4)
                     .transition(.opacity)
                 }
             }
@@ -778,7 +787,7 @@ private struct SideRow: View {
                 Spacer(minLength: 2)
                 ZStack {
                     if let preview {
-                        PreviewMark(tab: preview) { browser.keepPeek() }.transition(.opacity)
+                        PreviewMark(tab: preview) { browser.openPreview(of: tab) }.transition(.opacity)
                     } else if tab.loading {
                         Ring().transition(.opacity)
                     } else {
@@ -786,8 +795,8 @@ private struct SideRow: View {
                     }
                 }
                 .frame(width: 16, height: 16)
-                // On hover the close button takes this place and the speaker moves left.
-                .opacity(hovering && !speaker ? 0 : 1)
+                // On hover the close button takes this place and the speaker moves left; a preview's mark stays.
+                .opacity(hovering && !speaker && preview == nil ? 0 : 1)
                 .padding(.trailing, hovering && speaker ? 26 : 0)
             }
         }
@@ -900,12 +909,17 @@ private struct TitleFade: ViewModifier {
 /// over; a click keeps it as a tab.
 private struct PreviewMark: View {
     @ObservedObject var tab: Tab
+    /// Its tile's side: the row's small mark, or a badge on an essential.
+    var size: CGFloat = 16
     let keep: () -> Void
 
+    private var tile: RoundedRectangle { RoundedRectangle(cornerRadius: size / 4, style: .continuous) }
+
     var body: some View {
-        Mark(icon: tab.icon, letter: tab.monogram, size: 14)
-            .padding(1)
-            .background(Palette.veil, in: RoundedRectangle(cornerRadius: 4, style: .continuous))
+        Mark(icon: tab.icon, letter: tab.monogram, size: size > 16 ? size * 0.62 : 14)
+            .frame(width: size, height: size)
+            .background(size > 16 ? Palette.ground : Palette.veil, in: tile)
+            .overlay { if size > 16 { tile.strokeBorder(Palette.hairline) } }
             .contentShape(Rectangle())
             .onTapGesture(perform: keep)
             .help("Previewing “\(tab.label)” — click to keep it as a tab")

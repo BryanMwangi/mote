@@ -211,7 +211,7 @@ final class Browser: NSObject, ObservableObject {
     var peekFrom: Tab.ID?
     /// Previews set aside while their tab isn't in front, as Zen keeps a
     /// Glance with its tab: back on screen when the tab is.
-    var parkedPeeks: [Tab.ID: (tab: Tab, origin: NSPoint?)] = [:]
+    @Published var parkedPeeks: [Tab.ID: (tab: Tab, origin: NSPoint?)] = [:]
     /// The preview is going back into its link (see LinkPeek.swift).
     @Published var peekLeaving = false
     /// Split views, every space's, each by its own id (see Browser+Split.swift).
