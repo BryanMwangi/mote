@@ -185,10 +185,12 @@ extension AssistantTools {
         }
     }
 
-    /// Runs script in the page's own world (developer sites only); its answer as text.
+    /// Runs script in the page's own world (developer sites only); its answer
+    /// as text. A script that takes the page elsewhere, or runs past half a
+    /// minute, is answered at once rather than waited on.
     private func inPage(_ tab: Tab, _ body: String, _ arguments: [String: Any] = [:]) async -> String? {
         guard let web = tab.built else { return nil }
-        return await withCheckedContinuation { done in
+        let answer: Settled<String?> = await settle(tab, within: 30) { give in
             web.callAsyncJavaScript(body, arguments: arguments, in: nil, in: .page) { result in
                 let text: String? =
                     switch result {
@@ -200,8 +202,13 @@ extension AssistantTools {
                     case .success: nil
                     case .failure(let error): "Error: \((error as NSError).userInfo["WKJavaScriptExceptionMessage"] as? String ?? error.localizedDescription)"
                     }
-                done.resume(returning: text)
+                give(text)
             }
+        }
+        switch answer {
+        case .done(let text): return text
+        case .went(let url): return "The script took the page to \(url?.absoluteString ?? "another page"); read the tab for what's there now."
+        case .late: return "The script was still running after 30 seconds; it's left running. Read the tab to see where it got to."
         }
     }
 
