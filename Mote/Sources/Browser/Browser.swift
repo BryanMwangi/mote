@@ -1610,6 +1610,11 @@ extension Browser: TabOwner {
         ContactFill.shared.focused(tab, at: prefs.fillsContacts && !tab.shy && tab.id == activeID ? spot : nil)
     }
 
+    func tab(_ tab: Tab, sentContact parts: [String: String]) {
+        guard prefs.offersContacts, !tab.shy, let host = tab.address?.host() else { return }
+        ContactFill.shared.sent(parts, host: host)
+    }
+
     func tab(_ tab: Tab, signedIn sent: SentSignIn) {
         guard prefs.savesPasswords, !tab.shy else { return }
         // A password manager extension has taken over saving.

@@ -7,11 +7,15 @@ import SwiftUI
 /// picking things to hide.
 struct Notices: View {
     @ObservedObject var browser: Browser
+    @ObservedObject private var contacts = ContactFill.shared
 
     var body: some View {
         VStack(spacing: 8) {
             if let offer = browser.logins.offer {
                 SaveQuestion(offer: offer, logins: browser.logins).transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+            if let keeping = contacts.keeping {
+                SaveContactQuestion(keeping: keeping, contacts: contacts).transition(.move(edge: .bottom).combined(with: .opacity))
             }
             StoreOffer(browser: browser)
             if browser.pickingElement {
@@ -28,6 +32,7 @@ struct Notices: View {
         .padding(.bottom, 30)
         .animation(Motion.settle, value: browser.pickingElement)
         .animation(Motion.settle, value: browser.logins.offer)
+        .animation(Motion.settle, value: contacts.keeping)
     }
 }
 
@@ -239,6 +244,23 @@ private struct SaveQuestion: View {
             BubbleButton(offer.changed ? "Update" : "Save", filled: true, act: logins.keepOffer)
             BubbleButton("Not Now", act: logins.dropOffer)
             if !offer.changed { BubbleButton("Never for This Site", act: logins.neverOffer) }
+        }
+        .padding(EdgeInsets(top: 9, leading: 16, bottom: 9, trailing: 12))
+        .bubble()
+    }
+}
+
+/// Keeping the contact details a form was just sent with.
+private struct SaveContactQuestion: View {
+    let keeping: ContactFill.Keeping
+    let contacts: ContactFill
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Text("Save the contact details for \(keeping.card.name)?").textStyle(.row).lineLimit(1)
+            BubbleButton("Save", filled: true, act: contacts.keep)
+            BubbleButton("Not Now", act: contacts.notNow)
+            BubbleButton("Never for This Site", act: contacts.neverHere)
         }
         .padding(EdgeInsets(top: 9, leading: 16, bottom: 9, trailing: 12))
         .bubble()

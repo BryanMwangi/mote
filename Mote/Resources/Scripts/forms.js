@@ -224,6 +224,21 @@
 		}
 		return filled;
 	}
+	/**
+	* What a form being sent holds of the person's details, part by part, or
+	* null when it holds no name, or nothing to reach them by besides. Never
+	* from a form with a password: that's a sign-in.
+	*/
+	function contactSent(form) {
+		if (form.querySelector("input[type=password]")) return null;
+		const card = {};
+		for (const field of form.querySelectorAll("input, select, textarea")) {
+			const part = contactPart(field);
+			const value = field instanceof HTMLSelectElement ? field.options[field.selectedIndex]?.text.trim() ?? "" : field.value.trim();
+			if (part && value && !card[part]) card[part] = value.slice(0, 200);
+		}
+		return (card.name || card.given || card.family) && (card.email || card.tel || card.street) ? card : null;
+	}
 
 //#endregion
 //#region src/forms/typing.ts
@@ -424,6 +439,18 @@
 			});
 		}, true);
 		document.addEventListener("submit", offer, true);
+		let toldCard = "";
+		const sentCard = (form) => {
+			const card = contactSent(form);
+			const said = JSON.stringify(card);
+			if (!card || said === toldCard) return;
+			toldCard = said;
+			post({
+				kind: "contact",
+				card
+			});
+		};
+		document.addEventListener("submit", (event) => sentCard(event.target instanceof Element ? event.target : document), true);
 		document.addEventListener("keydown", (event) => {
 			if (event.key !== "Enter") return;
 			const fields = findSignIn();
@@ -433,7 +460,11 @@
 		document.addEventListener("click", (event) => {
 			const target = event.target;
 			if (!target || !target.closest) return;
-			if (target.closest("button, input[type=\"submit\"], [role=\"button\"]")) setTimeout(offer, 0);
+			const button = target.closest("button, input[type=\"submit\"], [role=\"button\"]");
+			if (!button) return;
+			setTimeout(offer, 0);
+			const form = button.closest("form");
+			if (form) setTimeout(() => sentCard(form), 0);
 		}, true);
 		let told = false;
 		const tell = () => {

@@ -15,7 +15,7 @@ import {
   signInFields,
   submittedCredentials,
 } from './forms/sign-in';
-import { type ContactCard, contactPart, fillContact } from './forms/contact';
+import { type ContactCard, contactPart, contactSent, fillContact } from './forms/contact';
 import { acceptsTyping, fieldFrame, TypedFields } from './forms/typing';
 
 /** What Swift can ask the page, from Mote's world. */
@@ -54,6 +54,8 @@ type FormMessage =
       contact: { x: number; y: number; w: number; h: number } | null;
     }
   | { kind: 'fullscreen'; on: boolean }
+  /** A form sent with the person's details in it, for Mote to offer to keep. */
+  | { kind: 'contact'; card: ContactCard }
   | { kind: 'menu'; field: 'password' | 'user' | null };
 
 declare global {
@@ -153,6 +155,20 @@ function installForms(): void {
   );
 
   document.addEventListener('submit', offer, true);
+  // A form sent with someone's details, said once each time they change.
+  let toldCard = '';
+  const sentCard = (form: Element | Document): void => {
+    const card = contactSent(form);
+    const said = JSON.stringify(card);
+    if (!card || said === toldCard) return;
+    toldCard = said;
+    post({ kind: 'contact', card });
+  };
+  document.addEventListener(
+    'submit',
+    (event) => sentCard(event.target instanceof Element ? event.target : document),
+    true,
+  );
   document.addEventListener(
     'keydown',
     (event) => {
@@ -169,7 +185,12 @@ function installForms(): void {
     (event) => {
       const target = event.target as Element | null;
       if (!target || !target.closest) return;
-      if (target.closest('button, input[type="submit"], [role="button"]')) setTimeout(offer, 0);
+      const button = target.closest('button, input[type="submit"], [role="button"]');
+      if (!button) return;
+      setTimeout(offer, 0);
+      // Forms sent by a script from a button, not by submitting.
+      const form = button.closest('form');
+      if (form) setTimeout(() => sentCard(form), 0);
     },
     true,
   );

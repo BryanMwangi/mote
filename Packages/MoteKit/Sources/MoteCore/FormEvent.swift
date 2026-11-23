@@ -14,6 +14,8 @@ public enum FormEvent: Equatable, Sendable {
     case fullscreen(Bool)
     /// A menu is opening on the page: on a sign-in field, or elsewhere (nil).
     case menu(Field?)
+    /// A form was sent with the person's details in it, part by part.
+    case contact([String: String])
 
     /// A sign-in field: the password's, or the account's name.
     public enum Field: String, Sendable {
@@ -42,6 +44,9 @@ public enum FormEvent: Equatable, Sendable {
             self = .fullscreen(body["on"] as? Bool ?? false)
         case "menu":
             self = .menu((body["field"] as? String).flatMap(Field.init))
+        case "contact":
+            guard let card = body["card"] as? [String: String], !card.isEmpty else { return nil }
+            self = .contact(card)
         default:
             return nil
         }

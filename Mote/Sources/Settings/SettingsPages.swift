@@ -636,6 +636,7 @@ struct PrivacySettings: View {
     @State private var managing: SitePermissions.Kind?
     @State private var managingData = false
     @State private var contactsRefused = false
+    @ObservedObject private var contacts = ContactFill.shared
 
     private static let permissions: [(kind: SitePermissions.Kind, detail: String, symbol: String, tint: Color)] = [
         (.capture(.camera), "Websites that asked to use your camera", "video", Tint.green),
@@ -687,20 +688,26 @@ struct PrivacySettings: View {
 
         SettingsSection("Filling in forms") {
             SettingRow(
-                "Fill in your contact details", "Your card in Contacts under name, email, phone and address boxes",
+                "Fill in contact details", "Your saved contacts and your card in Contacts, under name, email, phone and address boxes",
                 symbol: "person.text.rectangle", tint: Tint.blue, keywords: ["autofill", "address", "contacts", "phone", "email"],
                 on: Binding(
                     get: { prefs.fillsContacts },
                     set: { on in
-                        guard on else { return prefs.fillsContacts = false }
-                        // macOS asks first; without its yes, or without a card, it stays off.
-                        Task {
-                            prefs.fillsContacts = await ContactFill.shared.allow()
-                            if !prefs.fillsContacts { contactsRefused = true }
-                        }
+                        prefs.fillsContacts = on
+                        guard on else { return }
+                        // Your card in Contacts too, when macOS says yes; saved contacts fill without it.
+                        Task { if await !ContactFill.shared.allow(), contacts.saved.isEmpty { contactsRefused = true } }
                     })
             )
-            .help("When you click into a box asking for your name, email, phone or address, Mote offers your card from Contacts. Nothing is filled until you pick it, and never in private windows.")
+            .help("When you click into a box asking for your name, email, phone or address, Mote offers your contacts. Nothing is filled until you pick one, and never in private windows.")
+            RowRule()
+            SettingRow(
+                "Offer to save contact details", "After you send a form with a name and an email, phone or address",
+                symbol: "square.and.arrow.down", tint: Tint.green, keywords: ["autofill", "address", "save"], on: $prefs.offersContacts)
+            RowRule()
+            SettingRow("Saved contacts", "Kept sealed on this Mac", symbol: "person.2", tint: Tint.gray) {
+                Pill("Manage") { contacts.managing = true }
+            }
         }
         .alert("Mote can't read your card in Contacts", isPresented: $contactsRefused) {
             Button("Open System Settings") {
@@ -708,8 +715,9 @@ struct PrivacySettings: View {
             }
             Button("OK", role: .cancel) {}
         } message: {
-            Text("Allow Mote in System Settings › Privacy & Security › Contacts, and make sure Contacts has a card for you (Card › Make This My Card).")
+            Text("Allow Mote in System Settings › Privacy & Security › Contacts, and make sure Contacts has a card for you (Card › Make This My Card). Or add contacts of your own under Saved contacts.")
         }
+        .sheet(isPresented: $contacts.managing) { ContactsSheet() }
 
         SettingsSection("Clearing up") {
             SettingRow("History", "Every page you've been to, to look through or clear", symbol: "clock.arrow.circlepath", tint: Tint.blue) {

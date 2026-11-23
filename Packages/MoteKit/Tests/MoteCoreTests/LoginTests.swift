@@ -97,6 +97,8 @@ struct FormEventTests {
         #expect(FormEvent(["kind": "submit", "user": "me", "password": "pw"]) == .sent(user: "me", password: "pw"))
         #expect(FormEvent(["kind": "submit"]) == .sent(user: "", password: ""))
         #expect(FormEvent(["kind": "settled"]) == .settled)
+        #expect(FormEvent(["kind": "contact", "card": ["name": "Ana", "email": "a@x.io"]]) == .contact(["name": "Ana", "email": "a@x.io"]))
+        #expect(FormEvent(["kind": "contact", "card": [String: String]()]) == nil)
         #expect(
             FormEvent(["kind": "focus", "typing": true, "rect": ["x": 1.0, "y": 2.0, "w": 3.0, "h": 4.0]])
                 == .focus(typing: true, field: CGRect(x: 1, y: 2, width: 3, height: 4)))

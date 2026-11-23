@@ -7,7 +7,7 @@ import {
   signInFields,
   submittedCredentials,
 } from '../src/forms/sign-in';
-import { contactPart, fillContact } from '../src/forms/contact';
+import { contactPart, contactSent, fillContact } from '../src/forms/contact';
 import {
   acceptsTyping,
   fieldFrame,
@@ -340,5 +340,25 @@ describe('contact details', () => {
     expect((document.getElementById('c') as HTMLSelectElement).value).toBe('KE');
     expect((document.getElementById('outside') as HTMLInputElement).value).toBe('');
     expect(heard).toEqual(['input']);
+  });
+});
+
+describe('contact details sent', () => {
+  it("reads a form's details as sent, and needs a name and a way to reach them", () => {
+    document.body.innerHTML = `
+      <form id="f"><input name="full_name" value="Ana Wanjiru"><input type="email" value="ana@x.io">
+      <select autocomplete="country"><option>Kenya</option></select></form>`;
+    expect(contactSent(document.getElementById('f')!)).toEqual({
+      name: 'Ana Wanjiru',
+      email: 'ana@x.io',
+      country: 'Kenya',
+    });
+    document.body.innerHTML = '<form id="f"><input name="full_name" value="Ana"></form>';
+    expect(contactSent(document.getElementById('f')!)).toBeNull();
+  });
+
+  it('never reads a sign-in', () => {
+    document.body.innerHTML = `<form id="f"><input name="full_name" value="Ana"><input type="email" value="a@x.io"><input type="password" value="p"></form>`;
+    expect(contactSent(document.getElementById('f')!)).toBeNull();
   });
 });

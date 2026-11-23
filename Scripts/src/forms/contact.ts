@@ -120,3 +120,25 @@ export function fillContact(focused: Element | null, card: ContactCard): number 
   }
   return filled;
 }
+
+/**
+ * What a form being sent holds of the person's details, part by part, or
+ * null when it holds no name, or nothing to reach them by besides. Never
+ * from a form with a password: that's a sign-in.
+ */
+export function contactSent(form: Element | Document): ContactCard | null {
+  if (form.querySelector('input[type=password]')) return null;
+  const card: ContactCard = {};
+  for (const field of form.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>(
+    'input, select, textarea',
+  )) {
+    const part = contactPart(field);
+    const value =
+      field instanceof HTMLSelectElement
+        ? (field.options[field.selectedIndex]?.text.trim() ?? '')
+        : field.value.trim();
+    if (part && value && !card[part]) card[part] = value.slice(0, 200);
+  }
+  const named = card.name || card.given || card.family;
+  return named && (card.email || card.tel || card.street) ? card : null;
+}

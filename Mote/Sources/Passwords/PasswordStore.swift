@@ -145,10 +145,6 @@ enum PasswordStore {
 private enum Vault {
     private static let file = Storage.file("passwords.vault")
     private static let lock = NSLock()
-    /// Read once a launch: macOS asks at most once, after an update.
-    nonisolated(unsafe) private static var known: SymmetricKey?
-    /// The person said no to macOS's question: not asked again this launch.
-    nonisolated(unsafe) private static var declined = false
 
     static func logins() -> [Login] {
         lock.withLock { read() } ?? []
@@ -179,22 +175,38 @@ private enum Vault {
     }
 
     /// Every login, or nil when there's no key to open them with.
-    private static func read() -> [Login]? {
+    private static func read() -> [Login]? { SafeStorage.open([Login].self, from: file, named: "passwords") }
+
+    private static func write(_ logins: [Login]) -> Bool { SafeStorage.seal(logins, to: file) }
+
+}
+
+/// What Mote keeps sealed on the Mac (passwords, contact cards): files
+/// sealed with AES-GCM under one key, kept in the keychain as "Mote Safe
+/// Storage", so macOS asks at most once, after an update.
+enum SafeStorage {
+    /// Read once a launch.
+    nonisolated(unsafe) private static var known: SymmetricKey?
+    /// The person said no to macOS's question: not asked again this launch.
+    nonisolated(unsafe) private static var declined = false
+
+    /// What `file` holds; empty when there's no file yet, nil when there's no key to open it with.
+    static func open<Value: Codable & RangeReplaceableCollection>(_ type: Value.Type, from file: URL, named: String) -> Value? {
         guard let key = key() else { return nil }
-        guard let sealed = try? Data(contentsOf: file) else { return [] }
+        guard let sealed = try? Data(contentsOf: file) else { return Value() }
         guard let box = try? AES.GCM.SealedBox(combined: sealed), let data = try? AES.GCM.open(box, using: key),
-            let logins = try? JSONDecoder().decode([Login].self, from: data)
+            let value = try? JSONDecoder().decode(Value.self, from: data)
         else {
             // Sealed under a key that's gone: kept aside, never written over.
-            NSLog("Passwords: the vault can't be opened; it's kept as passwords.vault.unopened")
+            NSLog("Safe storage: %@ can't be opened; it's kept as %@.unopened", named, file.lastPathComponent)
             try? FileManager.default.moveItem(at: file, to: file.appendingPathExtension("unopened"))
-            return []
+            return Value()
         }
-        return logins
+        return value
     }
 
-    private static func write(_ logins: [Login]) -> Bool {
-        guard let key = key(), let data = try? JSONEncoder().encode(logins), let sealed = try? AES.GCM.seal(data, using: key).combined
+    static func seal(_ value: some Encodable, to file: URL) -> Bool {
+        guard let key = key(), let data = try? JSONEncoder().encode(value), let sealed = try? AES.GCM.seal(data, using: key).combined
         else { return false }
         try? FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
         return (try? sealed.write(to: file, options: .atomic)) != nil

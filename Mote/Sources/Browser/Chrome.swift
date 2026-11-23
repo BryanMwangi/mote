@@ -564,8 +564,12 @@ private struct ContactOfferLayer: View {
 
     var body: some View {
         if let offer = fill.offer, offer.tab == tab.id {
-            ContactOfferView(fill: fill, offer: offer) { fill.fill(in: tab, browser: browser) }
-                .transition(.opacity)
+            ContactOfferView(fill: fill, offer: offer) { fill.fill($0, in: tab, browser: browser) } manage: {
+                fill.drop()
+                fill.managing = true
+                browser.openSettings(at: .privacy)
+            }
+            .transition(.opacity)
         }
     }
 }
