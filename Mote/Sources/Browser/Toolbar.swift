@@ -349,7 +349,14 @@ struct Pressed: ButtonStyle {
 struct TranslateButton: View {
     let browser: Browser
     @ObservedObject var tab: Tab
+    @ObservedObject private var mozilla = MozillaTranslation.shared
     @State private var asking = false
+
+    /// How far this page's language has come down, while it's downloading.
+    private var downloaded: Double? {
+        [tab.pageLanguage, tab.translation?.source, tab.translation?.target].compactMap { $0 }
+            .lazy.compactMap { mozilla.downloading[MozillaTranslation.code($0)] }.first
+    }
 
     /// The bench opens the popover (test runs).
     static let ask = Notification.Name("MoteAskTranslation")
@@ -363,6 +370,20 @@ struct TranslateButton: View {
                         ?? "Translate this page from \(tab.languageName)"
                 ) {
                     asking.toggle()
+                }
+                // Its language coming down, the first time: a ring filling round the button.
+                .overlay {
+                    if let downloaded {
+                        Circle()
+                            .trim(from: 0, to: max(0.04, downloaded))
+                            .stroke(Color.accentColor, style: StrokeStyle(lineWidth: 2, lineCap: .round))
+                            .rotationEffect(.degrees(-90))
+                            .frame(width: 24, height: 24)
+                            .animation(.linear(duration: 0.2), value: downloaded)
+                            .help("Downloading \(tab.languageName) to translate: \(Int(downloaded * 100))%")
+                            .allowsHitTesting(false)
+                            .transition(.opacity)
+                    }
                 }
                 // The language it's translated to, as Firefox shows it.
                 .overlay(alignment: .bottomTrailing) {

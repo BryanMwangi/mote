@@ -21,6 +21,13 @@ extension Browser {
                 let code = await Task.detached(priority: .utility) { Self.language(of: text) }.value
                 guard let code, !Self.reads(code), self?.prefs.neverTranslate.contains(code) == false else { return }
                 tab?.pageLanguage = code
+                // A language only Mozilla's engine does: ready before it's asked, if it's here already.
+                if #available(macOS 15, *), let target = self?.translationTarget,
+                    await Self.availability(from: code, to: target).map({ $0 == .unsupported }) ?? true,
+                    let route = await MozillaTranslation.shared.route(from: code, to: target)
+                {
+                    try? await MozillaTranslation.shared.prepare(route, fetching: false)
+                }
             }
         }
     }
@@ -142,8 +149,15 @@ extension Browser {
             if let status = await Self.availability(from: source, to: target), status != .unsupported {
                 return translating = job
             }
-            guard await MozillaTranslation.shared.route(from: source, to: target) != nil else {
+            guard let route = await MozillaTranslation.shared.route(from: source, to: target) else {
                 return announce("Mote can't translate \(Self.languageName(source)) to \(Self.languageName(target)) yet")
+            }
+            // The first time for a language, it comes down first: say so, and how much.
+            let needed = await MozillaTranslation.shared.toDownload(route)
+            if !needed.isEmpty {
+                let names = needed.keys.map(Self.languageName).sorted().joined(separator: " and ")
+                let size = ByteCountFormatter.string(fromByteCount: Int64(needed.values.reduce(0, +)), countStyle: .file)
+                announce(Announcement("Downloading \(names) to translate (\(size))", detail: "Once only; then it translates on this Mac.", symbol: "arrow.down.circle"))
             }
             await run(job) { MozillaTranslation.shared.stream($0, from: source, to: target) }
         }
@@ -181,8 +195,10 @@ extension Browser {
         }
         var translated = 0, failed = false
         while tab.translation == job, let (base, texts) = await Self.next(in: web) {
+          // The first hundred (the screen) start at once; the rest are sorted while they're translated.
+          for part in [texts.indices.prefix(100), texts.indices.dropFirst(100)] where !part.isEmpty {
             // Only what's foreign to you, each keeping its place among them all.
-            let places = await Task.detached(priority: .userInitiated) { texts.indices.filter { !Self.alreadyRead(texts[$0]) } }.value
+            let places = await Task.detached(priority: .userInitiated) { part.filter { !Self.alreadyRead(texts[$0]) } }.value
             if places.isEmpty { continue }
             do {
                 for try await (index, text) in engine(places.map { texts[$0] }) {
@@ -197,6 +213,7 @@ extension Browser {
                 failed = true
             }
             flush()
+          }
         }
         if failed, translated == 0 { announce("This page couldn't be translated") }
     }
@@ -351,6 +368,7 @@ struct TranslatePanel: View {
     @State private var from = ""
     @State private var to = ""
     @State private var languages: [String] = []
+    @ObservedObject private var mozilla = MozillaTranslation.shared
     /// Whether the chosen pair can be translated; nil while asking.
     @State private var possible: Bool?
 
@@ -385,6 +403,12 @@ struct TranslatePanel: View {
                 choice("Translate from", $from, languages.contains(from) || from.isEmpty ? languages : languages + [from])
             }
             choice("Translate to", $to, languages.filter { $0 != from })
+            ForEach(downloads, id: \.language) { download in
+                VStack(alignment: .leading, spacing: 5) {
+                    Text("Downloading \(Browser.languageName(download.language))…").font(.callout).foregroundStyle(.secondary)
+                    ProgressView(value: download.done).controlSize(.small)
+                }
+            }
             if let note {
                 Text(note).font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
@@ -427,6 +451,11 @@ struct TranslatePanel: View {
     private var title: String {
         tab.translation.map { "This page is translated from \(Browser.languageName($0.source)) to \(Browser.languageName($0.target))" }
             ?? "Translate this page?"
+    }
+
+    /// The chosen languages coming down, the first time, and how far.
+    private var downloads: [(language: String, done: Double)] {
+        [from, to].compactMap { code in mozilla.downloading[MozillaTranslation.code(code)].map { (code, $0) } }
     }
 
     private var ready: Bool {
