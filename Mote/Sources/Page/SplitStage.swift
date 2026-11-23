@@ -34,6 +34,8 @@ struct SplitStage<Pane: View>: View {
                     if let tab = browser.tab(id), let frame = frames[id] {
                         let shape = RoundedRectangle(cornerRadius: split ? Self.corner : 0, style: .continuous)
                         pane(tab)
+                            // What draws on the page's edge (the agent's halo) follows its corners.
+                            .environment(\.paneCorner, split ? Self.corner : ChromeLayout.corner)
                             .frame(width: frame.width, height: frame.height)
                             .clipShape(shape)
                             .overlay {

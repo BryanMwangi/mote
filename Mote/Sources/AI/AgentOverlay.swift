@@ -1,5 +1,6 @@
 import AppKit
 import Combine
+import MoteCore
 import SwiftUI
 
 /// The assistant at work on a tab's page: whether it is, what it's doing,
@@ -89,8 +90,9 @@ final class AgentActivity: ObservableObject {
     }
 }
 
-/// Over a page the assistant is acting on: a light wash of the space's
-/// colour and a lit ring round the edge that turns and breathes, its cursor
+/// Over a page the assistant is acting on: a light wash of Mote's clay and
+/// the floating search's halo round the page's edge, turning while it acts
+/// and resting between steps, its cursor
 /// gliding to what it acts on, a ripple where it clicks, an outline round
 /// what it writes in, and a pill saying who's doing what, with Stop and
 /// Take control (Hand back once taken). All Core Animation, added only while it works.
@@ -98,16 +100,16 @@ struct AgentOverlay: View {
     @ObservedObject var activity: AgentActivity
     /// CSS pixels to points.
     let zoom: CGFloat
-    @Environment(\.spaceTint) private var tint
+    /// The corners of the pane the page sits in, which the halo follows.
+    @Environment(\.paneCorner) private var corner
 
     var body: some View {
         if activity.working {
             ZStack(alignment: .bottom) {
                 // Taken by the person: gone, not hidden, so nothing goes on drawing.
                 if !activity.held {
-                    AgentLayers(
-                        activity: activity, tint: NSColor(tint ?? Color(nsColor: Glow.clay)), zoom: zoom, holds: activity.owned,
-                        turning: activity.stepping)
+                    AgentLayers(activity: activity, corner: corner, zoom: zoom, holds: activity.owned, turning: activity.stepping)
+                        .id(corner)
                 }
                 pill.padding(.bottom, 22)
             }
@@ -141,56 +143,45 @@ struct AgentOverlay: View {
 /// The overlay's layers, moved by Core Animation.
 private struct AgentLayers: NSViewRepresentable {
     let activity: AgentActivity
-    let tint: NSColor
+    let corner: CGFloat
     let zoom: CGFloat
     let holds: Bool
-    /// A step is running: the ring turns; between steps it rests.
+    /// A step is running: the halo turns; between steps it rests.
     let turning: Bool
 
-    func makeNSView(context: Context) -> Layers { Layers(activity: activity) }
+    func makeNSView(context: Context) -> Layers { Layers(activity: activity, corner: corner) }
 
     func updateNSView(_ view: Layers, context: Context) {
         view.zoom = zoom
         view.holds = holds
         view.turning = turning
-        view.tint(tint)
     }
 
     final class Layers: NSView {
         var zoom: CGFloat = 1
         /// Holding the page's clicks and scrolls while the agent has it.
         var holds = false
-        /// The ring turns while a step runs and rests, still and dimmer, between
-        /// them: a gradient turning over the whole page is work for the GPU.
+        /// The halo turns while a step runs and rests, still and dimmer, between them.
         var turning = false {
-            didSet {
-                guard turning != oldValue, !Glow.stillness else { return }
-                if turning { breathe() } else { rest() }
-            }
+            didSet { if turning != oldValue { halo.rest(!turning) } }
         }
         private let wash = CALayer()
-        /// The ring: a gradient turning inside a still frame that only shows its edge.
-        private let edge = CALayer()
-        private let ring = CAGradientLayer()
-        private let ringShape = CAShapeLayer()
+        /// The floating search's own halo, just inside the page's edge.
+        private let halo: AskHalo.HaloView
         private let cursor = CAShapeLayer()
         /// The element the assistant has picked, outlined; it slides to the next one.
         private let picked = CAShapeLayer()
         private var watching: AnyCancellable?
 
-        init(activity: AgentActivity) {
+        init(activity: AgentActivity, corner: CGFloat) {
+            halo = AskHalo.HaloView(radius: corner, inset: 1)
             super.init(frame: .zero)
             wantsLayer = true
             layer?.addSublayer(wash)
-            ring.type = .conic
-            ring.startPoint = CGPoint(x: 0.5, y: 0.5)
-            ring.endPoint = CGPoint(x: 1, y: 0.5)
-            ringShape.fillColor = nil
-            ringShape.strokeColor = NSColor.black.cgColor
-            ringShape.lineWidth = 3
-            edge.mask = ringShape
-            edge.addSublayer(ring)
-            layer?.addSublayer(edge)
+            wash.backgroundColor = Glow.clay.withAlphaComponent(0.04).cgColor
+            halo.autoresizingMask = [.width, .height]
+            addSubview(halo)
+            halo.show(true)
             cursor.path = Self.arrow
             cursor.fillColor = NSColor.white.cgColor
             cursor.strokeColor = NSColor.black.withAlphaComponent(0.6).cgColor
@@ -202,10 +193,15 @@ private struct AgentLayers: NSViewRepresentable {
             picked.fillColor = NSColor.white.withAlphaComponent(0.06).cgColor
             picked.lineWidth = 2
             picked.opacity = 0
+            picked.strokeColor = Glow.clay.cgColor
+            picked.shadowColor = Glow.clay.cgColor
+            picked.shadowOpacity = 0.6
+            picked.shadowRadius = 6
+            picked.shadowOffset = .zero
             layer?.addSublayer(picked)
             layer?.addSublayer(cursor)
             watching = activity.effects.sink { [weak self] effect in self?.play(effect) }
-            rest()
+            halo.rest(true)
         }
 
         @available(*, unavailable)
@@ -227,65 +223,8 @@ private struct AgentLayers: NSViewRepresentable {
             CATransaction.begin()
             CATransaction.setDisableActions(true)
             wash.frame = bounds
-            edge.frame = bounds
-            ringShape.frame = bounds
-            ringShape.path = CGPath(roundedRect: bounds.insetBy(dx: 1.5, dy: 1.5), cornerWidth: 10, cornerHeight: 10, transform: nil)
-            // Wider than the view, so it covers every corner as it turns.
-            let side = hypot(bounds.width, bounds.height)
-            ring.bounds = CGRect(x: 0, y: 0, width: side, height: side)
-            ring.position = CGPoint(x: bounds.midX, y: bounds.midY)
+            halo.frame = bounds
             CATransaction.commit()
-        }
-
-        func tint(_ color: NSColor) {
-            CATransaction.begin()
-            CATransaction.setDisableActions(true)
-            wash.backgroundColor = color.withAlphaComponent(0.05).cgColor
-            picked.strokeColor = color.cgColor
-            picked.shadowColor = color.cgColor
-            picked.shadowOpacity = 0.6
-            picked.shadowRadius = 6
-            picked.shadowOffset = .zero
-            ring.colors = [color.cgColor, color.withAlphaComponent(0.15).cgColor, NSColor.white.withAlphaComponent(0.9).cgColor, color.cgColor]
-            CATransaction.commit()
-        }
-
-        /// Still and dimmer, as it was when the last step ended.
-        private func rest() {
-            for (layer, key) in [(ring, "turn"), (edge, "breathe")] {
-                if let shown = layer.presentation() {
-                    layer.transform = shown.transform
-                    layer.opacity = shown.opacity
-                }
-                layer.removeAnimation(forKey: key)
-            }
-            CATransaction.begin()
-            CATransaction.setAnimationDuration(0.4)
-            edge.opacity = 0.5
-            CATransaction.commit()
-        }
-
-        /// The ring turns once in three seconds and breathes, as Phi's does;
-        /// thirty frames a second is smooth enough for a slow turn.
-        private func breathe() {
-            edge.opacity = 1
-            let turn = CABasicAnimation(keyPath: "transform.rotation.z")
-            turn.preferredFrameRateRange = CAFrameRateRange(minimum: 15, maximum: 30, preferred: 30)
-            // On from where it rested.
-            let from = (ring.value(forKeyPath: "transform.rotation.z") as? Double) ?? 0
-            turn.fromValue = from
-            turn.toValue = from + 2 * Double.pi
-            turn.duration = 3
-            turn.repeatCount = .infinity
-            ring.add(turn, forKey: "turn")
-            let glow = CABasicAnimation(keyPath: "opacity")
-            glow.fromValue = 0.55
-            glow.toValue = 1
-            glow.duration = 1.7
-            glow.autoreverses = true
-            glow.repeatCount = .infinity
-            glow.preferredFrameRateRange = turn.preferredFrameRateRange
-            edge.add(glow, forKey: "breathe")
         }
 
         private func play(_ effect: AgentActivity.Effect) {
@@ -342,7 +281,7 @@ private struct AgentLayers: NSViewRepresentable {
             let ring = CAShapeLayer()
             ring.path = CGPath(ellipseIn: CGRect(x: -14, y: -14, width: 28, height: 28), transform: nil)
             ring.fillColor = nil
-            ring.strokeColor = wash.backgroundColor.map { NSColor(cgColor: $0)?.withAlphaComponent(1).cgColor } ?? NSColor.white.cgColor
+            ring.strokeColor = Glow.clay.cgColor
             ring.lineWidth = 2
             ring.position = point
             layer?.addSublayer(ring)
@@ -368,7 +307,7 @@ private struct AgentLayers: NSViewRepresentable {
             let line = CAShapeLayer()
             line.path = CGPath(roundedRect: points(box).insetBy(dx: -3, dy: -3), cornerWidth: 6, cornerHeight: 6, transform: nil)
             line.fillColor = nil
-            line.strokeColor = ring.colors?.first.map { $0 as! CGColor } ?? NSColor.white.cgColor
+            line.strokeColor = Glow.clay.cgColor
             line.lineWidth = 2
             layer?.addSublayer(line)
             let pulse = CABasicAnimation(keyPath: "opacity")
@@ -416,5 +355,18 @@ private struct AgentLayers: NSViewRepresentable {
             path.closeSubpath()
             return path
         }()
+    }
+}
+
+/// The corners of the pane a page sits in: the window's card on its own,
+/// a split pane's in a split.
+private struct PaneCorner: EnvironmentKey {
+    static var defaultValue: CGFloat { ChromeLayout.corner }
+}
+
+extension EnvironmentValues {
+    var paneCorner: CGFloat {
+        get { self[PaneCorner.self] }
+        set { self[PaneCorner.self] = newValue }
     }
 }

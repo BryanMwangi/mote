@@ -62,6 +62,9 @@ struct AskHalo: NSViewRepresentable {
         private static let lap: CFTimeInterval = 7
 
         private let radius: CGFloat
+        /// How far inside its frame the border runs: `spill` for the
+        /// floating search, whose glow spills out; a point or two inside a page.
+        private let inset: CGFloat
         private let glow = CALayer()
         private let glowMask = CALayer()
         private let line = CALayer()
@@ -75,8 +78,9 @@ struct AskHalo: NSViewRepresentable {
         private var drawn: CGSize = .zero
         private var shown = false
 
-        init(radius: CGFloat) {
+        init(radius: CGFloat, inset: CGFloat = AskHalo.spill) {
             self.radius = radius
+            self.inset = inset
             super.init(frame: .zero)
             wantsLayer = true
             let root = layer!
@@ -95,7 +99,7 @@ struct AskHalo: NSViewRepresentable {
             for half in reveals {
                 half.fillColor = nil
                 half.strokeColor = NSColor.white.cgColor
-                half.lineWidth = AskHalo.spill * 2 + 8
+                half.lineWidth = max(inset, AskHalo.spill) * 2 + 8
                 half.lineCap = .butt
                 // A little over half, so the two meet without a seam.
                 half.strokeEnd = 0.52
@@ -120,7 +124,7 @@ struct AskHalo: NSViewRepresentable {
             drawn = bounds.size
             CATransaction.begin()
             CATransaction.setDisableActions(true)
-            let edge = bounds.insetBy(dx: AskHalo.spill, dy: AskHalo.spill)
+            let edge = bounds.insetBy(dx: inset, dy: inset)
             let path = CGPath(roundedRect: edge, cornerWidth: radius, cornerHeight: radius, transform: nil)
             turning.frame = bounds
             reveal.frame = bounds
@@ -141,6 +145,8 @@ struct AskHalo: NSViewRepresentable {
                 turn.toValue = -Double.pi * 2
                 turn.duration = Self.lap
                 turn.repeatCount = .infinity
+                // A slow turn: thirty frames a second is smooth, and half the work.
+                turn.preferredFrameRateRange = CAFrameRateRange(minimum: 15, maximum: 30, preferred: 30)
                 sweep.add(turn, forKey: "turn")
             }
             lineMask.frame = bounds
@@ -186,6 +192,17 @@ struct AskHalo: NSViewRepresentable {
             }
             path.addLine(to: start)
             return path
+        }
+
+        /// Still and dimmer while there's a pause (an agent between steps),
+        /// turning and bright again after.
+        func rest(_ resting: Bool) {
+            guard shown else { return }
+            Glow.run(turning, !resting)
+            CATransaction.begin()
+            CATransaction.setAnimationDuration(0.4)
+            turning.opacity = resting ? 0.55 : 1
+            CATransaction.commit()
         }
 
         func show(_ on: Bool) {
