@@ -175,6 +175,8 @@ final class Tab: ObservableObject, Identifiable {
     /// its own open or closed state: a new tab — including one a link opened —
     /// starts closed, and coming back to a tab brings its panel back as it was.
     @Published var chatOpen = false
+    /// The person asked for it to stay awake (the site menu): tab sleep leaves it be.
+    @Published var keptAwake = false
     /// A draft waiting for the page chat's composer, put there by asking about
     /// a selection on the page. Taken up once, then cleared (see ChatView),
     /// so reopening the panel does not put it back.

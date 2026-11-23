@@ -100,6 +100,9 @@ struct PagePanel: View {
             Menu {
                 Button("Clear Cookies and Site Data…") { closing { browser.clearSiteData() } }
                     .disabled(browser.active?.address?.host() == nil)
+                if let tab = browser.active, !tab.isBlank {
+                    Toggle("Keep Tab Awake", isOn: Binding(get: { tab.keptAwake }, set: { tab.keptAwake = $0; browser.saveSoon() }))
+                }
                 Divider()
                 Button("Manage Extensions") { closing { browser.openSettings(at: .extensions) } }
                 Button("Add Extensions") { closing { browser.open(browser.extensionStore, foreground: true) } }

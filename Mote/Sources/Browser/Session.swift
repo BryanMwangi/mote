@@ -34,6 +34,8 @@ enum Session {
         /// The profile it lives in when not its space's ("" the default);
         /// nil in older files and for the others.
         var profile: String?
+        /// Kept awake by the person (the site menu); nil for the others.
+        var awake: Bool?
     }
 
     /// A tab's back and forward pages, for the session: WebKit's own record,

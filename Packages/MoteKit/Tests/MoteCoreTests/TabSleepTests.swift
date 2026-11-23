@@ -15,7 +15,7 @@ struct TabSleepTests {
         let cases: [(WritableKeyPath<TabSleep.Facts, Bool>, TabSleep.Reason)] = [
             (\.onScreen, .onScreen), (\.pinned, .pinned), (\.bench, .bench), (\.blank, .blank), (\.asleep, .asleep),
             (\.loading, .loading), (\.playingSound, .sound), (\.floating, .floating), (\.onCall, .call),
-            (\.downloading, .downloading), (\.openedTheTabOnScreen, .opener), (\.agentAtWork, .agent),
+            (\.downloading, .downloading), (\.openedTheTabOnScreen, .opener), (\.agentAtWork, .agent), (\.keptAwake, .kept),
         ]
         for (fact, reason) in cases {
             var tab = TabSleep.Facts()

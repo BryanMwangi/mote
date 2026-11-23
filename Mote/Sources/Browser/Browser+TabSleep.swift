@@ -84,6 +84,7 @@ extension Browser {
         }
         facts.openedTheTabOnScreen = active?.opener == tab.id
         facts.agentAtWork = tab.agent.working
+        facts.keptAwake = tab.keptAwake
         if asked { (facts.pinned, facts.playingSound, facts.loading, facts.openedTheTabOnScreen) = (false, false, false, false) }
         return TabSleep.keepsAwake(facts)?.rawValue
     }

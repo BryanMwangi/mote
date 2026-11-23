@@ -640,6 +640,7 @@ final class Browser: NSObject, ObservableObject {
         // Its chat sidebar as it was left: the chat, and open or not.
         if let id = entry.pageChat.flatMap(UUID.init(uuidString:)), let chat = Assistant.shared.reopen(id) { tab.share(chat) }
         if entry.chatOpen == true { tab.chatOpen = true }
+        tab.keptAwake = entry.awake == true
         tab.pin = entry.pin
         tab.kept = entry.kept == true
         tab.heldID = entry.held.flatMap(UUID.init(uuidString:))
@@ -696,7 +697,7 @@ final class Browser: NSObject, ObservableObject {
             folder: tab.kept ? tab.folder?.uuidString : nil, used: tab.touched, state: Session.keptState(tab.history),
             chatOpen: tab.chatOpen ? true : nil,
             pageChat: tab.pageChat.flatMap { $0.messages.isEmpty ? nil : $0.id.uuidString },
-            profile: tab.profileOverride(in: self.home(of: tab)))
+            profile: tab.profileOverride(in: self.home(of: tab)), awake: tab.keptAwake ? true : nil)
     }
 
     // MARK: - Merging spaces

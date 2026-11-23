@@ -19,6 +19,8 @@ public enum TabSleep {
         public var openedTheTabOnScreen = false
         /// The assistant is working on its page.
         public var agentAtWork = false
+        /// The person asked for this tab to stay awake.
+        public var keptAwake = false
 
         public init() {}
     }
@@ -39,6 +41,7 @@ public enum TabSleep {
         case opener = "the page on screen came from it"
         case typed = "holding something typed"
         case agent = "the assistant is working on it"
+        case kept = "kept awake"
     }
 
     /// The first reason the tab must stay awake, or nil if it may sleep.
@@ -47,7 +50,7 @@ public enum TabSleep {
             (tab.onScreen, .onScreen), (tab.pinned, .pinned), (tab.bench, .bench), (tab.blank, .blank),
             (tab.asleep, .asleep), (!tab.hasPage, .noPage), (tab.loading, .loading), (tab.playingSound, .sound),
             (tab.floating, .floating), (tab.onCall, .call), (tab.downloading, .downloading),
-            (tab.openedTheTabOnScreen, .opener), (tab.agentAtWork, .agent),
+            (tab.openedTheTabOnScreen, .opener), (tab.agentAtWork, .agent), (tab.keptAwake, .kept),
         ]
         return checks.first { $0.0 }?.1
     }
