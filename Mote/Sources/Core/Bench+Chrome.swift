@@ -9,7 +9,18 @@ import WebKit
 extension Bench {
     var chromeCommands: [String: Command] {
         [
-            "probe": Self.probe, "push": { $0.answer(WebPushService.shared.report) }, "ui": Self.ui, "consent": Self.consent,
+            "probe": Self.probe, "push": { $0.answer(WebPushService.shared.report) },
+            "websitedata": { call in
+                // What Settings › Privacy › Website data lists: the largest sites, sizes when WebKit tells them.
+                let data = WebsiteData()
+                Task {
+                    await data.load()
+                    call.answer([
+                        "sized": data.sized, "sites": data.sites.count, "total": data.total, "cache": data.cache,
+                        "top": data.sites.prefix(8).map { "\($0.name) \($0.size)" },
+                    ])
+                }
+            }, "ui": Self.ui, "consent": Self.consent,
             "little": Self.little, "space": Self.space, "peek": Self.peek,
             "window": Self.window, "windows": Self.windows, "quit": Self.quit, "link": Self.link,
         ]

@@ -634,6 +634,7 @@ struct PrivacySettings: View {
     @ObservedObject private var blocker = AdBlocker.shared
     /// The permission whose sites are being managed.
     @State private var managing: SitePermissions.Kind?
+    @State private var managingData = false
 
     private static let permissions: [(kind: SitePermissions.Kind, detail: String, symbol: String, tint: Color)] = [
         (.capture(.camera), "Websites that asked to use your camera", "video", Tint.green),
@@ -683,19 +684,19 @@ struct PrivacySettings: View {
         }
         .sheet(item: $managing) { SitePermissionsSheet(kind: $0) }
 
-        SettingsSection("Clearing up", note: "Each of these happens straight away.") {
-            SettingRow("History", "Every page you've been to", symbol: "clock.arrow.circlepath", tint: Tint.blue) {
-                Pill("Clear") { browser.clearHistory() }
+        SettingsSection("Clearing up") {
+            SettingRow("History", "Every page you've been to, to look through or clear", symbol: "clock.arrow.circlepath", tint: Tint.blue) {
+                Pill("Manage") {
+                    browser.window?.makeKeyAndOrderFront(nil)
+                    browser.showLibrary(.history)
+                }
             }
             RowRule()
-            SettingRow("Cookies and sign-ins", "Signs you out of every site", symbol: "person.crop.circle.badge.xmark", tint: Tint.red) {
-                Pill("Clear") { browser.clearSites() }
-            }
-            RowRule()
-            SettingRow("Cache", "Copies kept so pages open faster", symbol: "internaldrive", tint: Tint.gray) {
-                Pill("Clear") { browser.clearCache() }
+            SettingRow("Website data", "What sites keep: cookies, sign-ins, storage and copies of pages", symbol: "internaldrive", tint: Tint.gray) {
+                Pill("Manage") { managingData = true }
             }
         }
+        .sheet(isPresented: $managingData) { WebsiteDataSheet() }
     }
 }
 

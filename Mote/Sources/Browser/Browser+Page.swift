@@ -189,7 +189,7 @@ extension Browser {
 
     /// Removes caches only, keeping sign-ins and storage.
     func clearCache() {
-        removeData([WKWebsiteDataTypeDiskCache, WKWebsiteDataTypeMemoryCache, WKWebsiteDataTypeOfflineWebApplicationCache])
+        removeData(WebsiteData.caches)
         announce("Cache cleared")
     }
 
