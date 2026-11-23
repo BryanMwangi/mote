@@ -806,7 +806,7 @@ private struct ProfileRows: View {
     var body: some View {
         SettingsSection(
             "Profiles",
-            note: ownMote
+            note: ownMote && !profiles.list.isEmpty
                 ? "Each profile is its own Mote: its own tabs, history, passwords, sign-ins and extensions. A new one starts with these settings."
                 : "Profiles live side by side in this Mote, each with its own sign-ins and history: give a space one from its menu, or open any tab in one."
         ) {
@@ -815,10 +815,13 @@ private struct ProfileRows: View {
                 RowRule()
                 ProfileRow(id: profile.id, editing: { editing = Editing(id: profile.id, making: false) })
             }
-            RowRule()
-            SettingRow(
-                "Open profiles as their own Mote", "Each in a window of its own, with its own tabs, passwords and extensions",
-                symbol: "macwindow.on.rectangle", tint: Tint.indigo, keywords: ["containers", "separate"], on: $ownMote)
+            // A choice only once there's more than one profile.
+            if !profiles.list.isEmpty {
+                RowRule()
+                SettingRow(
+                    "Open profiles as their own Mote", "Each in a window of its own, with its own tabs, passwords and extensions",
+                    symbol: "macwindow.on.rectangle", tint: Tint.indigo, keywords: ["containers", "separate"], on: $ownMote)
+            }
             RowRule()
             HStack {
                 Spacer()
