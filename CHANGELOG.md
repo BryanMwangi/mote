@@ -12,31 +12,97 @@ section becomes the release's notes (see `Tools/release/appcast`).
 
 ## 0.4.7 (beta)
 
-The assistant works on several tabs at once, with sub-agents you can watch, and Mote fills in forms, splits previews and shows what sites keep.
+Zen's ways come to Mote: folders, split view, previews, space themes and boosts, imports from Zen and other browsers, profiles, Firefox add-ons, and an assistant that works across your tabs.
 
 ### Added
 
-- Sub-agents run on their own, each in a card with what it's doing, its
-  tools and its tokens; their reports come back even when a reply has ended.
-- The assistant attaches files from folders you allow, reads and picks in
-  dropdowns pages draw themselves, and says what a click or scroll did.
-- Take control and Hand back on a page the assistant is working in; a
-  sparkle on each tab it works in; Work in the background (/background).
-- Notifications when the assistant asks you something or a plan is ready,
-  while you're elsewhere.
+**Tabs and folders**
+- Folders for pinned tabs, with subfolders, their own icons, and live folders that follow a feed or GitHub.
+- Pinned tabs as their own tier, going back to their pinned address.
+- Essentials in rows of up to three, the active one glowing with its icon.
+- Pick several tabs to drag, close, move or copy as links.
+- A preview card when you rest on a tab; a way back to the selected tab.
+- Unload a tab (⌃⌘U), choose how long before tabs rest, or keep a tab awake.
+- ⇧⌘K closes every unpinned tab, and the toast brings them back.
+
+**Spaces**
+- Space colours, icons (symbols or emoji) and a header; themes picked in a frosted panel.
+- Sites that always open in a chosen space.
+- Merge and delete spaces from Settings; give a space a profile.
+- Drag a tab to the next space; swipe between spaces with a bounce at the ends.
+
+**Split view and previews**
+- Split view of up to four tabs: drag onto the page, menus, layouts and keys.
+- Link previews as Zen's Glance (⇧- or ⌥-click), opened as a tab or split.
+- ⌥⇧-click a link straight into a split.
+
+**Windows and profiles**
+- More windows (⌘N), private windows (⇧⌘N), and reopening closed windows.
+- Every window comes back after a restart, essentials in step.
+- Profiles, each with its own sign-ins, history, passwords and extensions; as their own Mote or side by side.
+- Handoff to and from your other devices.
+
+**Bring your browser over**
+- Import from Zen, Chromium browsers, Firefox, Safari and Opera: spaces, tabs, folders, splits, colours, history, bookmarks, passwords, icons and extensions.
+- Every profile of a browser into a Mote profile.
+- Zen's keyboard shortcuts, one button away.
+
+**Extensions**
+- Firefox add-ons from addons.mozilla.org, with Add to Mote on its pages.
+- uBlock Origin's own filter lists and scriptlets, kept up to date.
+- Reorder extensions; the one with something for the page shows by the address.
+- Side panels for extensions and the chat, on either side.
+- Each space with its own sign-ins runs its own extensions.
+
+**Assistant**
+- Uses your tabs, pages, history and bookmarks, and acts in pages, asking first.
+- Ask from the floating search (⌘J), or in a chat sidebar that follows you.
+- Fills forms, picks dropdowns, attaches files, signs in, and reads many tabs at once.
+- Plan mode, Auto mode (⇧⇥), queued messages, questions, and undo for anything it did.
+- Sub-agents that work on several tabs at once, each shown with its tools and tokens.
+- Take control of a page it's working in; a sparkle on each tab it's in.
+- Notifications when it asks you something or a plan is ready.
+- Coding agents on the Mac (Claude Code, Codex and others) get Mote's tools.
+- Live token count and time while it works.
+
+**Pages and files**
+- Translate a page on this Mac, with Mozilla's engine for languages macOS lacks.
+- Boosts: a site's colours, fonts and your own CSS, as Zen's.
+- Screenshots of what's visible or the whole page; view source; save as a web archive.
+- Responsive Design Mode (⌃⌘R) and F12 for the inspector.
+- PDFs open in Mote's own reader: draw, sign, add notes, and save.
+- Mote as the default app for PDFs, images and media; open files with ⌘O or by dropping them.
+- Web notifications and push from sites you allow; pages can lock the pointer for games.
+
+**Privacy and passwords**
+- Site permissions, strong passwords, passkeys, and Touch ID to fill.
+- Mote's ad blocker takes YouTube's video ads out.
+- Website data: what each site keeps and how much, and free up space without signing out.
 - Fill in your contact details from your card in Contacts.
-- Split a link preview with its tab, or ⌥⇧-click a link into a split.
-- Website data in Settings › Privacy: what each site keeps and how much,
-  Free Up Space without signing out.
-- Keep Tab Awake, from the site menu.
+
+**Downloads, library and settings**
+- Downloads you can watch, pause and resume after a relaunch, with menus and drag out.
+- History, Downloads and Bookmarks in one Library (⌥⇧L).
+- Bookmark folders, and importing a browser's bookmark file.
+- An app menu, quick actions in the address bar, and your own buttons at the sidebar's foot.
+- The sidebar on the right; the toolbar always, on hover or hidden.
+- A Keyboard page to record shortcuts, and searching all of Settings (⌘F).
+- A media strip for each tab playing, with floating video and call controls.
 
 ### Fixed
 
-- Tabs sleep after the time you set; a memory warning no longer cuts it.
-- Sign-in pop-ups open from the assistant's clicks; Gmail and other pages
-  load in tabs the assistant reads out of sight.
-- Claude Code sessions carry on across tabs and after Stop, and long pages
-  are read in parts, so a chat costs far fewer tokens.
+- Extensions: VPNs connect and stay off when turned off, popups open in their own window, workers restart, and menus show once.
+- Tabs and spaces: drags, folders, splits, essentials and pinned tabs behave across windows and restarts.
+- Pages that crash come back where they were; no error sound on keys while a page loads.
+- Tabs sleep after the time you set; sign-in pop-ups open from the assistant's clicks.
+- The Touch Bar, Settings, Share and menus open from where you asked, every time.
+
+### Faster
+
+- Switching tabs shows the page in 33–65 ms, waking a sleeping tab in about 50 ms.
+- Spaces swipe and switch at once; the sidebar and folded sidebar stay smooth.
+- Less memory: closed tabs give their processes back, and unchanged scripts aren't sent again.
+- Assistant chats cost far fewer tokens: sessions carry on, and long pages are read in parts.
 
 ## 0.4.6 — 2026-10-09
 
