@@ -8,8 +8,9 @@ import WebKit
 /// the assistant has left it alone for a while or the tab is shown.
 @MainActor
 enum Backstage {
-    /// How long a page stays live after the assistant last used it.
-    static let linger: Duration = .seconds(120)
+    /// How long a page stays live after the assistant last used it, or
+    /// stopped working on it: long enough for its next step, no longer.
+    static let linger: Duration = .seconds(20)
     private static var until: [ObjectIdentifier: ContinuousClock.Instant] = [:]
 
     /// Keeps the tab's page live, off screen, unless it's already in a window.
@@ -30,9 +31,17 @@ enum Backstage {
         web.frame = room.contentView?.bounds ?? NSRect(x: 0, y: 0, width: 1280, height: 800)
         web.autoresizingMask = [.width, .height]
         room.contentView?.addSubview(web)
-        Task { [weak web] in
-            while let web, let end = until[key], ContinuousClock.now < end {
-                try? await Task.sleep(until: end)
+        Task { [weak web, weak tab] in
+            while let web, let end = until[key] {
+                if ContinuousClock.now < end {
+                    try? await Task.sleep(until: end)
+                } else if tab?.agent.working == true {
+                    // Still at work on it: kept while it is, then the linger.
+                    until[key] = .now + linger
+                } else {
+                    break
+                }
+                _ = web
             }
             until[key] = nil
             guard let web else { return }

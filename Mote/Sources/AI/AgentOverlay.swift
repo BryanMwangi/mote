@@ -103,8 +103,12 @@ struct AgentOverlay: View {
     var body: some View {
         if activity.working {
             ZStack(alignment: .bottom) {
-                AgentLayers(activity: activity, tint: NSColor(tint ?? Color(nsColor: Glow.clay)), zoom: zoom, holds: activity.owned)
-                    .opacity(activity.held ? 0 : 1)
+                // Taken by the person: gone, not hidden, so nothing goes on drawing.
+                if !activity.held {
+                    AgentLayers(
+                        activity: activity, tint: NSColor(tint ?? Color(nsColor: Glow.clay)), zoom: zoom, holds: activity.owned,
+                        turning: activity.stepping)
+                }
                 pill.padding(.bottom, 22)
             }
             .transition(.opacity)
@@ -140,12 +144,15 @@ private struct AgentLayers: NSViewRepresentable {
     let tint: NSColor
     let zoom: CGFloat
     let holds: Bool
+    /// A step is running: the ring turns; between steps it rests.
+    let turning: Bool
 
     func makeNSView(context: Context) -> Layers { Layers(activity: activity) }
 
     func updateNSView(_ view: Layers, context: Context) {
         view.zoom = zoom
         view.holds = holds
+        view.turning = turning
         view.tint(tint)
     }
 
@@ -153,6 +160,14 @@ private struct AgentLayers: NSViewRepresentable {
         var zoom: CGFloat = 1
         /// Holding the page's clicks and scrolls while the agent has it.
         var holds = false
+        /// The ring turns while a step runs and rests, still and dimmer, between
+        /// them: a gradient turning over the whole page is work for the GPU.
+        var turning = false {
+            didSet {
+                guard turning != oldValue, !Glow.stillness else { return }
+                if turning { breathe() } else { rest() }
+            }
+        }
         private let wash = CALayer()
         /// The ring: a gradient turning inside a still frame that only shows its edge.
         private let edge = CALayer()
@@ -190,7 +205,7 @@ private struct AgentLayers: NSViewRepresentable {
             layer?.addSublayer(picked)
             layer?.addSublayer(cursor)
             watching = activity.effects.sink { [weak self] effect in self?.play(effect) }
-            if !Glow.stillness { breathe() }
+            rest()
         }
 
         @available(*, unavailable)
@@ -235,11 +250,31 @@ private struct AgentLayers: NSViewRepresentable {
             CATransaction.commit()
         }
 
-        /// The ring turns once in three seconds and breathes, as Phi's does.
+        /// Still and dimmer, as it was when the last step ended.
+        private func rest() {
+            for (layer, key) in [(ring, "turn"), (edge, "breathe")] {
+                if let shown = layer.presentation() {
+                    layer.transform = shown.transform
+                    layer.opacity = shown.opacity
+                }
+                layer.removeAnimation(forKey: key)
+            }
+            CATransaction.begin()
+            CATransaction.setAnimationDuration(0.4)
+            edge.opacity = 0.5
+            CATransaction.commit()
+        }
+
+        /// The ring turns once in three seconds and breathes, as Phi's does;
+        /// thirty frames a second is smooth enough for a slow turn.
         private func breathe() {
+            edge.opacity = 1
             let turn = CABasicAnimation(keyPath: "transform.rotation.z")
-            turn.fromValue = 0
-            turn.toValue = 2 * Double.pi
+            turn.preferredFrameRateRange = CAFrameRateRange(minimum: 15, maximum: 30, preferred: 30)
+            // On from where it rested.
+            let from = (ring.value(forKeyPath: "transform.rotation.z") as? Double) ?? 0
+            turn.fromValue = from
+            turn.toValue = from + 2 * Double.pi
             turn.duration = 3
             turn.repeatCount = .infinity
             ring.add(turn, forKey: "turn")
@@ -249,6 +284,7 @@ private struct AgentLayers: NSViewRepresentable {
             glow.duration = 1.7
             glow.autoreverses = true
             glow.repeatCount = .infinity
+            glow.preferredFrameRateRange = turn.preferredFrameRateRange
             edge.add(glow, forKey: "breathe")
         }
 
