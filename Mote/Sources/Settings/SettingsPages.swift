@@ -736,11 +736,11 @@ struct AboutSettings: View {
         VStack(spacing: 8) {
             Logomark().fill(Palette.ink).aspectRatio(Logomark.canvas.width / Logomark.canvas.height, contentMode: .fit).frame(height: 44)
             Text("Mote").font(.system(size: 17, weight: .semibold)).foregroundStyle(Palette.ink)
-            Text("Version \(Updater.version)").font(.system(size: 12)).foregroundStyle(Palette.muted)
+            Text("Version \(Updater.shownVersion)").font(.system(size: 12)).foregroundStyle(Palette.muted)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 6)
-        .settingsSearch(["About Mote", "version \(Updater.version)"])
+        .settingsSearch(["About Mote", "version \(Updater.shownVersion)"])
 
         SettingsSection("Updates") {
             if Updater.enabled {

@@ -40,6 +40,11 @@ final class Updater: ObservableObject {
     private static var testFeed: Bool { Storage.testing && ProcessInfo.processInfo.environment["MOTE_FEED"] != nil }
 
     nonisolated static var version: String { Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "dev" }
+    /// Not yet an official release: said beside the version wherever it shows,
+    /// while the version itself stays a plain number updates compare.
+    nonisolated static let beta = true
+    /// The version as people read it: "0.4.7 beta".
+    nonisolated static var shownVersion: String { version + (beta ? " beta" : "") }
     /// What updates compare.
     nonisolated static var build: Int { Int(Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "") ?? 0 }
 

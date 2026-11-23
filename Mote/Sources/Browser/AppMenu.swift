@@ -102,7 +102,7 @@ enum AppMenu {
                 [ShortcutID.screenshot, .inspector, .console, .viewSource, .responsive, .processes].map { id in
                     line(id.title, "", combo: browser.prefs.shortcuts.combos(for: id).first) { browser.perform(id) }
                 }),
-            line("About Mote", "info.circle") { NSApp.orderFrontStandardAboutPanel(nil) },
+            line("About Mote", "info.circle") { NSApp.orderFrontStandardAboutPanel(options: [.applicationVersion: Updater.shownVersion]) },
         ]
         return menu
     }

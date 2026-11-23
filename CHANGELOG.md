@@ -10,6 +10,34 @@ section becomes the release's notes (see `Tools/release/appcast`).
 
 ## Unreleased
 
+## 0.4.7 (beta)
+
+The assistant works on several tabs at once, with sub-agents you can watch, and Mote fills in forms, splits previews and shows what sites keep.
+
+### Added
+
+- Sub-agents run on their own, each in a card with what it's doing, its
+  tools and its tokens; their reports come back even when a reply has ended.
+- The assistant attaches files from folders you allow, reads and picks in
+  dropdowns pages draw themselves, and says what a click or scroll did.
+- Take control and Hand back on a page the assistant is working in; a
+  sparkle on each tab it works in; Work in the background (/background).
+- Notifications when the assistant asks you something or a plan is ready,
+  while you're elsewhere.
+- Fill in your contact details from your card in Contacts.
+- Split a link preview with its tab, or ⌥⇧-click a link into a split.
+- Website data in Settings › Privacy: what each site keeps and how much,
+  Free Up Space without signing out.
+- Keep Tab Awake, from the site menu.
+
+### Fixed
+
+- Tabs sleep after the time you set; a memory warning no longer cuts it.
+- Sign-in pop-ups open from the assistant's clicks; Gmail and other pages
+  load in tabs the assistant reads out of sight.
+- Claude Code sessions carry on across tabs and after Stop, and long pages
+  are read in parts, so a chat costs far fewer tokens.
+
 ## 0.4.6 — 2026-10-09
 
 Pages whose header sits in the normal flow now colour the window from their theme colour.

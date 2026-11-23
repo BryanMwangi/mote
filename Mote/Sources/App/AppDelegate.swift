@@ -205,7 +205,7 @@ enum DefaultBrowser {
 enum Feedback {
     static func write() {
         var issue = URLComponents(string: "https://github.com/mote-browser/mote/issues/new")!
-        let about = "Mote \(Updater.version), build \(Updater.build), macOS \(ProcessInfo.processInfo.operatingSystemVersionString)"
+        let about = "Mote \(Updater.shownVersion), build \(Updater.build), macOS \(ProcessInfo.processInfo.operatingSystemVersionString)"
         issue.queryItems = [URLQueryItem(name: "body", value: "\n\n—\n\(about)")]
         if let url = issue.url { NSWorkspace.shared.open(url) }
     }
