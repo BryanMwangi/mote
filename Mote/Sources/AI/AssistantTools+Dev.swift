@@ -181,17 +181,25 @@ extension AssistantTools {
                 ?? "The page has no request log yet: reload it, now that it's a developer site."
         default:
             let script = input["script"]?.string ?? ""
-            return await inPage(tab, script) ?? "It returned nothing, or failed; check console."
+            return await inPage(tab, script, logging: true) ?? "It returned nothing, or failed; check console."
         }
     }
 
     /// Runs script in the page's own world (developer sites only); its answer
     /// as text. A script that takes the page elsewhere, or runs past half a
-    /// minute, is answered at once rather than waited on.
-    private func inPage(_ tab: Tab, _ body: String, _ arguments: [String: Any] = [:]) async -> String? {
+    /// minute, is answered at once rather than waited on. With `logging`,
+    /// what it logs comes with the answer, sent out as it logs so a script
+    /// that leaves the page still says what it did.
+    private func inPage(_ tab: Tab, _ body: String, _ arguments: [String: Any] = [:], logging: Bool = false) async -> String? {
         guard let web = tab.built else { return nil }
+        let log = ScriptLog()
+        let controller = web.configuration.userContentController
+        // Only while it runs: the page has no way to it otherwise.
+        if logging { controller.add(log, contentWorld: .page, name: ScriptLog.name) }
+        defer { if logging { controller.removeScriptMessageHandler(forName: ScriptLog.name, contentWorld: .page) } }
+        let script = logging ? ScriptLog.wrap(body) : body
         let answer: Settled<String?> = await settle(tab, within: 30) { give in
-            web.callAsyncJavaScript(body, arguments: arguments, in: nil, in: .page) { result in
+            web.callAsyncJavaScript(script, arguments: arguments, in: nil, in: .page) { result in
                 let text: String? =
                     switch result {
                     case .success(let value as String): value
@@ -205,10 +213,13 @@ extension AssistantTools {
                 give(text)
             }
         }
+        let logged = log.lines.isEmpty ? "" : "\n\nIt logged:\n" + log.lines.joined(separator: "\n")
         switch answer {
-        case .done(let text): return text
-        case .went(let url): return "The script took the page to \(url?.absoluteString ?? "another page"); read the tab for what's there now."
-        case .late: return "The script was still running after 30 seconds; it's left running. Read the tab to see where it got to."
+        case .done(let text): return text.map { $0 + logged } ?? (logged.isEmpty ? nil : "It returned nothing." + logged)
+        case .went(let url):
+            return "The script took the page to \(url?.absoluteString ?? "another page"); read the tab for what's there now." + logged
+        case .late:
+            return "The script was still running after 30 seconds; it's left running. Read the tab to see where it got to." + logged
         }
     }
 
@@ -271,5 +282,43 @@ extension AssistantTools {
         guard let destination = CGImageDestinationCreateWithData(data, "public.jpeg" as CFString, 1, nil) else { return nil }
         CGImageDestinationAddImage(destination, small, [kCGImageDestinationLossyCompressionQuality: 0.75] as CFDictionary)
         return CGImageDestinationFinalize(destination) ? data as Data : nil
+    }
+}
+
+/// What a script run with run_script logs, sent to Mote line by line as it
+/// logs, so a script that navigates away still says what it did.
+final class ScriptLog: NSObject, WKScriptMessageHandler {
+    static let name = "moteScriptLog"
+    /// The last fifty lines.
+    private(set) var lines: [String] = []
+
+    func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
+        guard let line = message.body as? String else { return }
+        lines.append(String(line.prefix(300)))
+        if lines.count > 50 { lines.removeFirst(lines.count - 50) }
+    }
+
+    /// The script with console.log, info, warn and error also sent here, put back after.
+    static func wrap(_ body: String) -> String {
+        """
+        const __moteKept = {};
+        for (const kind of ['log', 'info', 'warn', 'error']) {
+          __moteKept[kind] = console[kind];
+          console[kind] = (...parts) => {
+            try {
+              const said = parts.map((part) => { if (typeof part === 'string') return part; try { return JSON.stringify(part); } catch { return String(part); } }).join(' ');
+              window.webkit.messageHandlers.\(name).postMessage((kind === 'log' ? '' : kind + ': ') + said);
+            } catch {}
+            __moteKept[kind].apply(console, parts);
+          };
+        }
+        try {
+          return await (async () => {
+        \(body)
+          })();
+        } finally {
+          for (const kind in __moteKept) console[kind] = __moteKept[kind];
+        }
+        """
     }
 }
