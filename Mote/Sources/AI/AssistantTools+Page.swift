@@ -139,9 +139,12 @@ extension AssistantTools {
         // The cursor gets there first.
         if box != nil, !Glow.stillness { try? await Task.sleep(for: .milliseconds(380)) }
         tab.built?.actedOnBehalf()
+        // What was open and where the page was, to tell what a click or key set off.
+        let had = Set(everyTab.map { ObjectIdentifier($0.tab) })
+        let from = tab.address
         switch call.name {
         case "click":
-            return Self.said(await page(tab, "click", args), n: n, done: "Clicked.")
+            return Self.said(await page(tab, "click", args), n: n, done: "Clicked.") + (await aftermath(of: tab, had: had, from: from))
         case "write", "fill":
             // What it held, to put back on undo.
             let was = n == nil ? nil : await page(tab, "read", args)
@@ -160,7 +163,7 @@ extension AssistantTools {
             args["on"] = input["on"]?.bool ?? true
             return Self.said(await page(tab, "check", args), n: n, done: input["on"]?.bool == false ? "Unticked." : "Ticked.")
         default:
-            return await press(input["key"]?.string ?? "Enter", in: tab, args: args)
+            return await press(input["key"]?.string ?? "Enter", in: tab, args: args) + (await aftermath(of: tab, had: had, from: from))
         }
     }
 

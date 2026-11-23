@@ -39,4 +39,19 @@ extension AssistantTools {
             }
         }
     }
+
+    /// What a click or a key set off beyond the page, watched for a second:
+    /// a tab it opened, or the page it went to. Nothing when neither.
+    func aftermath(of tab: Tab, had: Set<ObjectIdentifier>, from: URL?) async -> String {
+        let wasLoading = tab.loading
+        for _ in 0..<10 {
+            try? await Task.sleep(for: .milliseconds(100))
+            if let opened = everyTab.first(where: { !had.contains(ObjectIdentifier($0.tab)) && $0.tab.opener == tab.id })?.tab {
+                let going = (opened.pending ?? opened.address).map { ", for \($0.absoluteString)" } ?? ""
+                return " It opened a new tab, \(Self.id(opened))\(going); this tab stayed where it was."
+            }
+            if tab.address != from { return " The page went to \(tab.address?.absoluteString ?? "another page")." }
+        }
+        return !wasLoading && tab.loading ? " The page is loading something new; read it once it has." : ""
+    }
 }
