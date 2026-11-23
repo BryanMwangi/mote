@@ -207,7 +207,7 @@ extension Browser {
     }
 
     /// The tabs in a folder, at any depth.
-    private func tabs(inFolder id: UUID) -> [Tab] {
+    func tabs(inFolder id: UUID) -> [Tab] {
         let family = Folder.family(of: id, in: folders)
         return tabs.filter { $0.folder.map(family.contains) ?? false }
     }

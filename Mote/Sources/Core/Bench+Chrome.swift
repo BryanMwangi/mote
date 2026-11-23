@@ -15,9 +15,11 @@ extension Bench {
                 let data = WebsiteData()
                 Task {
                     await data.load()
+                    let languages = await MozillaTranslation.shared.downloaded()
                     call.answer([
                         "sized": data.sized, "sites": data.sites.count, "total": data.total, "cache": data.cache,
                         "top": data.sites.prefix(8).map { "\($0.name) \($0.size)" },
+                        "languages": languages.map { "\($0.language) \($0.bytes)" },
                     ])
                 }
             }, "ui": Self.ui, "consent": Self.consent,

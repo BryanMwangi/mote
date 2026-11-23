@@ -170,6 +170,30 @@ final class MozillaTranslation: NSObject, ObservableObject, WKURLSchemeHandler, 
         return needed
     }
 
+    /// The languages kept on this Mac to translate, and the room each takes.
+    func downloaded() async -> [(language: String, bytes: Int)] {
+        var bytes: [String: Int] = [:]
+        for (pair, files) in await pairs() where !files.isEmpty && files.values.allSatisfy(onDisk) {
+            bytes[Self.language(of: pair), default: 0] += files.values.reduce(0) { $0 + $1.size }
+        }
+        return bytes.map { ($0.key, $0.value) }.sorted { $0.bytes > $1.bytes }
+    }
+
+    /// A language's files gone from this Mac, and the engine with the last of them.
+    func remove(_ language: String) async {
+        let known = await pairs()
+        for (pair, files) in known where Self.language(of: pair) == language {
+            files.values.forEach { try? FileManager.default.removeItem(at: folder.appending(path: $0.hash)) }
+        }
+        // The engine's page let go: it holds the models it took in.
+        web = nil
+        loaded = [:]
+        done = [:]
+        if await downloaded().isEmpty { try? FileManager.default.removeItem(at: folder.appending(path: Self.engine.hash)) }
+    }
+
+    private func onDisk(_ file: File) -> Bool { FileManager.default.fileExists(atPath: folder.appending(path: file.hash).path) }
+
     /// The language a pair is for: the one that isn't English.
     private static func language(of pair: String) -> String {
         pair.split(separator: "-", maxSplits: 1).map(String.init).first { $0 != "en" } ?? "en"

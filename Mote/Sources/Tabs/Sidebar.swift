@@ -1035,7 +1035,16 @@ private struct FolderRow: View {
             Divider()
             Button("Unload All Tabs") { browser.unloadFolder(folder.id) }
             Button("Unpack Folder") { browser.unpackFolder(folder.id) }
-            Button("Delete Folder") { browser.deleteFolder(folder.id) }
+            Button("Delete Folder…") {
+                // Its tabs close with it: asked first, as Zen asks.
+                let count = browser.tabs(inFolder: folder.id).count
+                guard
+                    count == 0
+                        || Dialogs.confirm(
+                            "Delete “\(folder.name)”?", "Its \(count) tab\(count == 1 ? "" : "s") close with it.", button: "Delete Folder")
+                else { return }
+                browser.deleteFolder(folder.id)
+            }
         }
         .animation(Motion.hover, value: hovering)
         .accessibilityLabel("Folder \(folder.name), \(folder.collapsed ? "closed" : "open")")

@@ -171,6 +171,15 @@ enum Dialogs {
 
     static let fieldWidth: CGFloat = 260
 
+    /// Asked before something big that can't be taken back (clearing data,
+    /// forgetting everything, a folder's tabs): whether to go ahead.
+    @MainActor
+    static func confirm(_ title: String, _ text: String, button: String) -> Bool {
+        let alert = alert(title, text, buttons: [button, "Cancel"], style: .warning)
+        alert.buttons.first?.hasDestructiveAction = true
+        return alert.runModal() == .alertFirstButtonReturn
+    }
+
     static func alert(_ title: String, _ text: String, buttons: [String], style: NSAlert.Style = .informational) -> NSAlert {
         let alert = NSAlert()
         alert.messageText = title

@@ -256,7 +256,10 @@ private struct MenuBar: Commands {
         Button("Library…", action: browser.toggleLibrary).keyboardShortcut(keys(.library))
         Button("Downloads…") { browser.showingDownloads = true }.keyboardShortcut(keys(.downloads))
         Divider()
-        Button("Clear History", action: browser.clearHistory)
+        Button("Clear History…") {
+            guard Dialogs.confirm("Clear all history?", "Every page you've been to is forgotten, on this Mac.", button: "Clear History") else { return }
+            browser.clearHistory()
+        }
     }
 }
 

@@ -118,6 +118,8 @@ private struct ClearOptions: View {
             Card {
                 Line("History", "Everywhere you have been") {
                     Pill("Clear") {
+                        guard Dialogs.confirm("Clear all history?", "Every page you've been to is forgotten, on this Mac.", button: "Clear History")
+                        else { return }
                         browser.clearHistory()
                         cleared()
                         done()
@@ -125,7 +127,13 @@ private struct ClearOptions: View {
                 }
                 Rule()
                 Line("Cookies and sign-ins", "Signs you out of every site") {
-                    Pill("Sign out of everything") { browser.clearSites() }
+                    Pill("Sign out of everything") {
+                        guard
+                            Dialogs.confirm(
+                                "Sign out of every website?", "Cookies and what sites keep on this Mac are removed.", button: "Sign Out")
+                        else { return }
+                        browser.clearSites()
+                    }
                 }
                 Rule()
                 Line("Cache", "Only what was fetched to draw pages") {

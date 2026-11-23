@@ -681,7 +681,14 @@ struct PrivacySettings: View {
             }
             RowRule()
             SettingRow("Every answer", "Forget what you told each site; they ask again", symbol: "hand.raised", tint: Tint.gray) {
-                Pill("Forget") { browser.forgetSitePermissions() }
+                Pill("Forget") {
+                    guard
+                        Dialogs.confirm(
+                            "Forget every answer?", "Sites ask again for the camera, microphone, location and notifications.",
+                            button: "Forget")
+                    else { return }
+                    browser.forgetSitePermissions()
+                }
             }
         }
         .sheet(item: $managing) { SitePermissionsSheet(kind: $0) }

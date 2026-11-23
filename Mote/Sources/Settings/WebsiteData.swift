@@ -103,8 +103,9 @@ final class WebsiteData: ObservableObject {
 struct WebsiteDataSheet: View {
     @StateObject private var data = WebsiteData()
     @Environment(\.dismiss) private var dismiss
-    @State private var confirming = false
     @State private var working = false
+    /// Languages downloaded to translate pages (MozillaTranslation).
+    @State private var languages: [(language: String, bytes: Int)] = []
 
     var body: some View {
         VStack(spacing: 14) {
@@ -115,16 +116,40 @@ struct WebsiteDataSheet: View {
                 .font(.callout).foregroundStyle(.secondary).multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
             VStack(spacing: 0) {
                 action("Free Up Space", size: data.sized ? data.cache : nil, tint: Palette.ink) {
+                    guard
+                        Dialogs.confirm(
+                            "Free up space?", "Saved copies of pages are removed, and load again when needed. You stay signed in.",
+                            button: "Free Up Space")
+                    else { return }
                     await data.freeUpSpace()
                 }
                 Divider().padding(.leading, 12)
-                action("Clear Website Data", size: data.sized ? data.total : nil, tint: .red) { confirming = true }
+                action("Clear Website Data", size: data.sized ? data.total : nil, tint: .red) {
+                    guard
+                        Dialogs.confirm(
+                            "Clear all website data?", "Websites may sign you out, and lose what they kept on this Mac.",
+                            button: "Clear Website Data")
+                    else { return }
+                    await data.clearAll()
+                }
             }
             .background(Palette.wash.opacity(0.6), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
             Text(
                 "Free Up Space removes saved copies of pages, which load again when needed; you stay signed in. Clear Website Data also removes cookies and site storage, so you may be signed out of websites."
             )
             .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            if !languages.isEmpty {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Downloaded Languages").font(.caption.weight(.semibold)).foregroundStyle(.secondary).padding(.leading, 4)
+                    VStack(spacing: 0) {
+                        ForEach(languages, id: \.language) { kept in
+                            LanguageRow(name: Browser.languageName(kept.language), bytes: kept.bytes) { remove(kept.language) }
+                            if kept.language != languages.last?.language { Divider().padding(.leading, 12) }
+                        }
+                    }
+                    .background(Palette.wash.opacity(0.6), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                }
+            }
             List(data.sites) { site in SiteRow(site: site, sized: data.sized) { Task { await data.clear(site) } } }
                 .listStyle(.bordered(alternatesRowBackgrounds: false))
                 .overlay {
@@ -141,11 +166,7 @@ struct WebsiteDataSheet: View {
         .frame(width: 460, height: 620)
         .disabled(working)
         .task { await data.load() }
-        .confirmationDialog("Clear all website data?", isPresented: $confirming) {
-            Button("Clear Website Data", role: .destructive) { run { await data.clearAll() } }
-        } message: {
-            Text("Websites may sign you out, and lose what they kept on this Mac.")
-        }
+        .task { languages = await MozillaTranslation.shared.downloaded() }
     }
 
     private func action(_ title: String, size: UInt64?, tint: Color, _ act: @escaping () async -> Void) -> some View {
@@ -162,6 +183,18 @@ struct WebsiteDataSheet: View {
         .buttonStyle(.plain)
     }
 
+    private func remove(_ language: String) {
+        let name = Browser.languageName(language)
+        guard
+            Dialogs.confirm(
+                "Remove \(name)?", "Pages in \(name) download it again the next time you translate one.", button: "Remove")
+        else { return }
+        run {
+            await MozillaTranslation.shared.remove(language)
+            languages = await MozillaTranslation.shared.downloaded()
+        }
+    }
+
     private func run(_ act: @escaping () async -> Void) {
         working = true
         Task {
@@ -171,6 +204,28 @@ struct WebsiteDataSheet: View {
     }
 
     static func bytes(_ count: UInt64) -> String { ByteCountFormatter.string(fromByteCount: Int64(count), countStyle: .file) }
+}
+
+/// A language kept to translate pages: its name and size, Remove on hover.
+private struct LanguageRow: View {
+    let name: String
+    let bytes: Int
+    let remove: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        HStack {
+            Text(name)
+            Spacer()
+            if hovering {
+                Button("Remove", action: remove).buttonStyle(.borderless).controlSize(.small)
+            } else {
+                Text(WebsiteDataSheet.bytes(UInt64(bytes))).foregroundStyle(.secondary).monospacedDigit()
+            }
+        }
+        .padding(.horizontal, 12).padding(.vertical, 8).contentShape(Rectangle())
+        .onHover { hovering = $0 }
+    }
 }
 
 private struct SiteRow: View {

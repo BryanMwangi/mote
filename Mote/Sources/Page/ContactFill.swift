@@ -287,7 +287,12 @@ struct ContactsSheet: View {
                             Button("Duplicate and Edit") { editing = fill.duplicate(card) }.controlSize(.small)
                         } else {
                             Button("Edit") { editing = card }.controlSize(.small)
-                            Button("Remove", role: .destructive) { fill.remove(card) }.controlSize(.small)
+                            Button("Remove", role: .destructive) {
+                                guard Dialogs.confirm("Remove \(card.name.isEmpty ? "this contact" : card.name)?", "It's deleted from this Mac.", button: "Remove")
+                                else { return }
+                                fill.remove(card)
+                            }
+                            .controlSize(.small)
                         }
                     }
                 }

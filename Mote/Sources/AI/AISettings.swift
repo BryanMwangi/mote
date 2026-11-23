@@ -546,7 +546,11 @@ private struct MemorySection: View {
             if !memories.all.isEmpty {
                 RowRule()
                 SettingRow("Forget everything", "\(memories.all.count) kept", symbol: "trash", tint: Tint.gray) {
-                    Pill("Forget All") { memories.forgetAll() }
+                    Pill("Forget All") {
+                        guard Dialogs.confirm("Forget everything?", "The assistant forgets all it kept about you.", button: "Forget All")
+                        else { return }
+                        memories.forgetAll()
+                    }
                 }
             }
         }

@@ -56,7 +56,11 @@ struct SitePermissionsSheet: View {
             .frame(minHeight: 200)
             HStack {
                 Button("Remove Website") { sites.removeAll { $0.host == picked } }.disabled(picked == nil)
-                Button("Remove All Websites") { sites.removeAll() }.disabled(sites.isEmpty)
+                Button("Remove All Websites…") {
+                    guard Dialogs.confirm("Remove all websites?", "Each asks again next time.", button: "Remove All") else { return }
+                    sites.removeAll()
+                }
+                .disabled(sites.isEmpty)
             }
             Toggle("Block new requests asking to \(kind.what)", isOn: $blocksNew)
             Text("Websites not listed above won't be able to ask. Some may not work as they should.")
