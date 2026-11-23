@@ -159,6 +159,26 @@ describe('attach', () => {
   });
 });
 
+describe('scroll', () => {
+  it('says where the page is, how far it moved, and when it does not scroll', async () => {
+    const page = document.scrollingElement as HTMLElement;
+    let top = 0;
+    vi.spyOn(page, 'scrollHeight', 'get').mockReturnValue(3000);
+    vi.spyOn(page, 'clientHeight', 'get').mockReturnValue(1000);
+    vi.spyOn(page, 'scrollTop', 'get').mockImplementation(() => top);
+    page.scrollBy = ((options: ScrollToOptions) =>
+      (top = Math.min(2000, Math.max(0, top + (options.top ?? 0))))) as never;
+    page.scrollTo = ((options: ScrollToOptions) => (top = options.top ?? 0)) as never;
+    expect(await run('scroll', { by: 800 })).toBe('At 800 of 2000 px (moved down 800).');
+    expect(await run('scroll', { to: 'bottom' })).toBe('At 2000 of 2000 px (moved down 1200).');
+    expect(await run('scroll', { by: 500 })).toBe('Already at the bottom (2000 px).');
+    vi.restoreAllMocks();
+    vi.spyOn(page, 'scrollHeight', 'get').mockReturnValue(500);
+    vi.spyOn(page, 'clientHeight', 'get').mockReturnValue(500);
+    expect(await run('scroll', { by: 800 })).toBe('The page doesn’t scroll.');
+  });
+});
+
 describe('write', () => {
   it('replaces, appends and inserts in a field, as typing would', () => {
     document.body.innerHTML = '<input id="f" value="Hello">';

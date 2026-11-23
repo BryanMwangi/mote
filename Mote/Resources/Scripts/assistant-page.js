@@ -324,6 +324,55 @@ Object.defineProperty(exports, Symbol.toStringTag, { value: 'Module' });
 		press(option);
 		return "done";
 	}
+	/** What scrolls the page: the document, or when it doesn't move, the
+	* largest box of the page's own that does (a web app's main pane). */
+	function scroller() {
+		const page = document.scrollingElement ?? document.documentElement;
+		if (page.scrollHeight > page.clientHeight + 1) return page;
+		let best = page;
+		let most = 0;
+		for (const box of document.body?.querySelectorAll("*") ?? []) {
+			if (box.scrollHeight <= box.clientHeight + 1) continue;
+			const overflow = getComputedStyle(box).overflowY;
+			if (overflow !== "auto" && overflow !== "scroll") continue;
+			const area = box.clientWidth * box.clientHeight;
+			if (area > most) [best, most] = [box, area];
+		}
+		return best;
+	}
+	/** Scrolls, then says where the page is and how far it went: an agent can
+	* tell a page that moved from one that's at its end or doesn't scroll. */
+	async function scroll(target, args) {
+		const box = scroller();
+		const before = box.scrollTop;
+		const room = box.scrollHeight - box.clientHeight;
+		if (target) target.scrollIntoView({
+			block: "center",
+			behavior: "instant"
+		});
+		else if (args.to === "top") box.scrollTo({
+			top: 0,
+			behavior: "instant"
+		});
+		else if (args.to === "bottom") box.scrollTo({
+			top: room,
+			behavior: "instant"
+		});
+		else box.scrollBy({
+			top: args.by ?? box.clientHeight * .8,
+			behavior: "instant"
+		});
+		await new Promise((done) => setTimeout(done, 60));
+		const at = Math.round(box.scrollTop);
+		const most = Math.round(box.scrollHeight - box.clientHeight);
+		if (most <= 0) return target ? "Scrolled it into view; the page itself doesn’t scroll." : "The page doesn’t scroll.";
+		const moved = at - Math.round(before);
+		const where = `At ${at} of ${most} px`;
+		if (moved !== 0) return `${where} (moved ${moved > 0 ? "down" : "up"} ${Math.abs(moved)}).`;
+		if (at >= most - 1) return `Already at the bottom (${most} px).`;
+		if (at <= 0) return `Already at the top (of ${most} px).`;
+		return `${where}; it didn’t move.`;
+	}
 	/** Ticks or unticks a box, by clicking it so the page hears it. */
 	function check(target, on) {
 		if (!target) return "gone";
@@ -405,12 +454,7 @@ Object.defineProperty(exports, Symbol.toStringTag, { value: 'Module' });
 			case "read": return readField(target);
 			case "choose": return choose(target, args.value ?? "");
 			case "check": return check(target, args.on ?? true);
-			case "scroll":
-				if (target) target.scrollIntoView({ block: "center" });
-				else if (args.to === "top") window.scrollTo({ top: 0 });
-				else if (args.to === "bottom") window.scrollTo({ top: document.documentElement.scrollHeight });
-				else window.scrollBy({ top: args.by ?? window.innerHeight * .8 });
-				return "done";
+			case "scroll": return scroll(target, args);
 			case "key": {
 				const at = target ?? document.activeElement ?? document.body;
 				for (const type of [
@@ -457,6 +501,7 @@ exports.place = place;
 exports.problems = problems;
 exports.readField = readField;
 exports.run = run;
+exports.scroll = scroll;
 exports.shownValue = shownValue;
 exports.tables = tables;
 exports.write = write;
