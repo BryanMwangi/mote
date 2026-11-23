@@ -191,6 +191,7 @@ extension AssistantTools {
             if starting, !behind { bringForward(found) } else { Backstage.keep(found.tab) }
         }
         working(on: found.tab, caption)
+        onTab?(found.tab)
     }
 
     /// Once the work on a tab that has gone out of sight is done, a notice.

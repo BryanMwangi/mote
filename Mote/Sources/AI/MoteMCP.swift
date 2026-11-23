@@ -144,30 +144,38 @@ final class MoteMCP {
                     return
                 }
                 Task { @MainActor in
-                    let (status, body) = await self.answer(request)
+                    let (status, body, call) = await self.answer(request)
                     var head = "HTTP/1.1 \(status)\r\nContent-Length: \(body.count)\r\nConnection: close\r\n"
                     if !body.isEmpty { head += "Content-Type: application/json\r\n" }
-                    connection.send(content: Data((head + "\r\n").utf8) + body, completion: .contentProcessed { _ in connection.cancel() })
+                    connection.send(
+                        content: Data((head + "\r\n").utf8) + body,
+                        completion: .contentProcessed { error in
+                            // Reached the agent: reports it carried are had (an agent gone meanwhile can ask again).
+                            if error == nil, let call { MainActor.assumeIsolated { AgentRuns.shared.delivered(call) } }
+                            connection.cancel()
+                        })
                 }
             }
         }
     }
 
-    private func answer(_ request: HTTPRequest) async -> (String, Data) {
+    /// The answer, and the tool call it carries the result of, if any.
+    private func answer(_ request: HTTPRequest) async -> (String, Data, String?) {
         let said = request.headers["authorization"]
         // Mote's own agents, each turn by its token, or an agent from outside while that's on.
         let turn = turns.last { said == "Bearer \($0.token)" }?.tools.object
         let fromOutside = turn == nil
         if fromOutside {
-            guard outsideListener != nil, said == "Bearer \(outsideToken)" else { return ("401 Unauthorized", Data()) }
+            guard outsideListener != nil, said == "Bearer \(outsideToken)" else { return ("401 Unauthorized", Data(), nil) }
         }
-        guard request.method == "POST" else { return ("405 Method Not Allowed", Data()) }
+        guard request.method == "POST" else { return ("405 Method Not Allowed", Data(), nil) }
         guard let message = (try? JSONSerialization.jsonObject(with: request.body)) as? [String: Any],
             let method = message["method"] as? String
-        else { return ("400 Bad Request", Data()) }
+        else { return ("400 Bad Request", Data(), nil) }
         // A notification wants no answer.
-        guard let id = message["id"] else { return ("202 Accepted", Data()) }
+        guard let id = message["id"] else { return ("202 Accepted", Data(), nil) }
         let result: [String: Any]
+        var call: String?
         switch method {
         case "initialize":
             if fromOutside, let name = ((message["params"] as? [String: Any])?["clientInfo"] as? [String: Any])?["name"] as? String {
@@ -189,7 +197,9 @@ final class MoteMCP {
                 result = ["content": [["type": "text", "text": "Mote's tools are off."]], "isError": true]
                 break
             }
-            let said = await serving.run(ToolCall(id: UUID().uuidString, name: name, input: input))
+            let made = ToolCall(id: UUID().uuidString, name: name, input: input)
+            call = made.id
+            let said = await serving.run(made)
             var content: [[String: Any]] = [["type": "text", "text": said.text]]
             if let image = said.image { content.append(["type": "image", "data": image.base64EncodedString(), "mimeType": "image/jpeg"]) }
             // Said no to or failed: an error, so the agent's step shows it.
@@ -198,10 +208,10 @@ final class MoteMCP {
             result = [:]
         default:
             let error: [String: Any] = ["jsonrpc": "2.0", "id": id, "error": ["code": -32601, "message": "No such method"]]
-            return ("200 OK", (try? JSONSerialization.data(withJSONObject: error)) ?? Data())
+            return ("200 OK", (try? JSONSerialization.data(withJSONObject: error)) ?? Data(), nil)
         }
         let reply: [String: Any] = ["jsonrpc": "2.0", "id": id, "result": result]
-        return ("200 OK", (try? JSONSerialization.data(withJSONObject: reply)) ?? Data())
+        return ("200 OK", (try? JSONSerialization.data(withJSONObject: reply)) ?? Data(), call)
     }
 }
 

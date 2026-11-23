@@ -21,7 +21,7 @@ extension AssistantTools {
             Tool(
                 name: "wait_agents",
                 description:
-                    "Waits for sub-agents to finish, up to seconds (default 300, at most 600), and gives the reports of those done and what each still working is doing. Without ids, all this chat's agents whose reports you haven't had. Call it again to keep waiting.",
+                    "Waits for sub-agents to finish, up to seconds (default 300, at most 600): the reports of those done or stopped, and for each still working, the tab it's on and what it's doing. Without ids, all this chat's agents whose reports you haven't had; with ids, those, reports given before included. Call it again to keep waiting.",
                 schema: #"{"type":"object","properties":{"ids":{"type":"array","items":{"type":"string"}},"seconds":{"type":"integer"}}}"#
             ),
             Tool(
@@ -45,24 +45,27 @@ extension AssistantTools {
         case "wait_agents":
             let ids = call.input["ids"].map { $0.array.compactMap(\.string).map { $0.uppercased() } }
             let seconds = min(600, max(1, call.input["seconds"]?.int ?? 300))
-            return ToolOutput(await AgentRuns.shared.wait(ids, chat: chat, seconds: seconds))
+            return ToolOutput(await AgentRuns.shared.wait(ids, chat: chat, seconds: seconds, call: overMCP ? call.id : nil))
         default:
             let id = call.input["id"]?.string?.uppercased() ?? ""
-            return ToolOutput(AgentRuns.shared.stop(id, chat: chat))
+            return ToolOutput(AgentRuns.shared.stop(id, chat: chat, call: overMCP ? call.id : nil))
         }
     }
 
     /// A sub-agent's run: `task` through `base` with fresh tools of its own,
-    /// over MCP for an agent on the Mac, telling `progress` of each step as it
-    /// starts and ends, and what it has spent. Its tokens count toward the chat's.
+    /// over MCP for an agent on the Mac, telling `news` of each step as it
+    /// starts and ends, the tab it works on, and what it has spent. Its tokens
+    /// count toward the chat's.
     static func runAgent(
         _ task: String, through base: any ChatService, model: String, overMCP: Bool, chat: UUID?, driver: String,
-        progress: @escaping @MainActor (_ step: Activity?, _ spent: Usage?) -> Void = { _, _ in }
+        news: @escaping @MainActor (AgentNews) -> Void = { _ in }
     ) async -> ToolOutput {
         guard let tools = AssistantTools.current(chat: chat, driver: driver) else {
             return ToolOutput("Mote's tools are off.", outcome: .failed)
         }
         tools.subAgent = true
+        tools.overMCP = overMCP
+        tools.onTab = { news(.tab($0)) }
         let server = overMCP ? await MoteMCP.shared.server(for: tools) : nil
         let loop = ToolLoop(service: base, tools: tools.list, server: server, describe: AssistantTools.describe) { call in
             await tools.run(call)
@@ -78,11 +81,11 @@ extension AssistantTools {
                 case .text(let more): text += more
                 case .activity(let step):
                     if step.done { steps += 1 }
-                    progress(step, nil)
+                    news(.step(step))
                 case .usage(let used):
                     spent = spent + used
-                    progress(nil, spent)
-                case .spending(let sofar): progress(nil, spent.map { $0 + sofar } ?? sofar)
+                    news(.spent(spent ?? used))
+                case .spending(let sofar): news(.spent(spent.map { $0 + sofar } ?? sofar))
                 default: break
                 }
             }
@@ -102,8 +105,15 @@ extension AssistantTools {
         """
 }
 
-/// The sub-agents at work and done, by chat: what each is doing, what it has
-/// spent, and its report until the assistant has had it.
+/// What a sub-agent tells as it works.
+enum AgentNews {
+    case step(Activity)
+    case spent(Usage)
+    case tab(Tab)
+}
+
+/// The sub-agents at work and done, by chat: what each is doing and where,
+/// what it has spent, and its report until the assistant has had it.
 @MainActor
 final class AgentRuns {
     static let shared = AgentRuns()
@@ -117,8 +127,15 @@ final class AgentRuns {
         var steps = 0
         var spent: Usage?
         var report: ToolOutput?
-        /// The assistant has had its report.
+        /// The tab it last worked on, and when it last did anything.
+        weak var tab: Tab?
+        var heard = Date()
+        /// Stopped with stop_agent.
+        var stopped = false
+        /// The assistant has had its report; or the call that carries it,
+        /// until that answer is known to have reached the agent.
         var told = false
+        var telling: String?
 
         init(id: String, chat: UUID?, task: String) {
             self.id = id
@@ -139,36 +156,51 @@ final class AgentRuns {
             step.spent = spent.map { $0.input + $0.output }
             return step
         }
+
+        /// How it stands, for the assistant: where, doing what, since when.
+        var standing: String {
+            let since = Int(Date().timeIntervalSince(heard))
+            let place = tab.map { " on “\($0.label)” (\(AssistantTools.id($0)))" } ?? ""
+            if stopped { return "Agent \(id), stopping\(place)." }
+            return "Agent \(id), working\(place): \(doing), \(steps) step\(steps == 1 ? "" : "s") so far, last \(since) s ago."
+        }
     }
 
     private var runs: [Run] = []
     private var made = 0
 
     /// Starts `task` through `work`, shown in the chat, and returns at once.
-    func start(_ task: String, chat: UUID?, work: @escaping (String, @escaping @MainActor (Activity?, Usage?) -> Void) async -> ToolOutput)
-        -> Run
-    {
+    func start(
+        _ task: String, chat: UUID?, work: @escaping (String, String, @escaping @MainActor (AgentNews) -> Void) async -> ToolOutput
+    ) -> Run {
         made += 1
         let run = Run(id: "A\(made)", chat: chat, task: task)
         runs.append(run)
         show(run)
         run.job = Task { [weak self] in
-            let report = await work(task) { [weak self, weak run] step, spent in
+            let report = await work(task, run.id) { [weak self, weak run] news in
                 guard let self, let run, run.working else { return }
-                if let spent { run.spent = spent }
-                if let step {
-                    if !step.done { run.doing = step.title }
+                run.heard = Date()
+                switch news {
+                case .spent(let spent): run.spent = spent
+                case .tab(let tab): run.tab = tab
+                case .step(let step):
+                    run.doing = step.done ? "between steps" : step.title
                     if step.done { run.steps += 1 }
                     // Its own step, under it in the chat.
                     var own = step
                     own.id = "agent-\(run.id)-\(step.id)"
-                    self.show(run, step: own)
-                } else {
-                    self.show(run)
+                    return self.show(run, step: own)
                 }
+                self.show(run)
             }
             guard let self, run.working else { return }
-            run.report = report
+            run.report =
+                run.stopped
+                ? ToolOutput(
+                    "Stopped after \(run.steps) step\(run.steps == 1 ? "" : "s"). What it had written:\n\(report.text)", outcome: .failed,
+                    detail: "Stopped")
+                : report
             show(run)
             followUp(run.chat)
         }
@@ -176,8 +208,10 @@ final class AgentRuns {
     }
 
     /// Waits up to `seconds` for the runs named (or all this chat's untold
-    /// ones) to finish: the reports of those done, a line for each still working.
-    func wait(_ ids: [String]?, chat: UUID?, seconds: Int) async -> String {
+    /// ones) to finish: the reports of those done, a line for each still
+    /// working, read when it answers. Over MCP (`call`), a report counts as
+    /// had only once that answer has reached the agent (see `delivered`).
+    func wait(_ ids: [String]?, chat: UUID?, seconds: Int, call: String?) async -> String {
         let chosen = { self.runs.filter { $0.chat == chat && (ids?.contains($0.id) ?? !$0.told) } }
         guard !chosen().isEmpty else { return ids == nil ? "No agents are working, and every report has been given." : "No agent has those ids." }
         let end = ContinuousClock.now + .seconds(seconds)
@@ -185,17 +219,37 @@ final class AgentRuns {
             try? await Task.sleep(for: .milliseconds(500))
         }
         return chosen().map { run in
-            guard let report = run.report else { return "Agent \(run.id), still working: \(run.doing), \(run.steps) steps so far." }
-            run.told = true
-            return "Agent \(run.id) (\(report.outcome == .failed ? "stopped" : report.detail ?? "done")):\n\(report.text)"
+            guard let report = run.report else { return run.standing }
+            tell(run, by: call)
+            let how = run.stopped ? "stopped" : report.outcome == .failed ? "failed" : "done, \(report.detail ?? "")"
+            return "Agent \(run.id) (\(how)):\n\(report.text)"
         }.joined(separator: "\n\n")
     }
 
-    func stop(_ id: String, chat: UUID?) -> String {
+    func stop(_ id: String, chat: UUID?, call: String?) -> String {
         guard let run = runs.first(where: { $0.id == id && $0.chat == chat }) else { return "No agent has that id." }
-        guard run.working else { return "Agent \(id) had already finished; wait_agents gives its report." }
+        guard run.working else {
+            if run.told { return "Agent \(id) had already finished, and its report was given." }
+            tell(run, by: call)
+            return "Agent \(id) had already finished. Its report:\n\(run.report?.text ?? "")"
+        }
+        run.stopped = true
         run.job?.cancel()
-        return "Stopping agent \(id); wait_agents gives what it had written."
+        return "Stopping agent \(id) after \(run.steps) step\(run.steps == 1 ? "" : "s"); wait_agents gives what it had written."
+    }
+
+    /// A report handed to the assistant: had at once in a reply of Mote's
+    /// own, or once the MCP answer `call` is sent (`delivered`).
+    private func tell(_ run: Run, by call: String?) {
+        if let call { run.telling = call } else { run.told = true }
+    }
+
+    /// The MCP answer to `call` reached the agent: what it carried is had.
+    func delivered(_ call: String) {
+        for run in runs where run.telling == call {
+            run.told = true
+            run.telling = nil
+        }
     }
 
     private func show(_ run: Run, step: Activity? = nil) {
