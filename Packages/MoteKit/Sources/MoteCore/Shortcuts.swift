@@ -43,6 +43,7 @@ public struct KeyCombo: Hashable, Codable, Sendable {
         case " ": "Space"
         case "\u{7f}": "⌫"
         case "\r": "↩"
+        case KeyCombo.escape: "⎋"
         case KeyCombo.leftArrow: "←"
         case KeyCombo.rightArrow: "→"
         default: key.uppercased()
@@ -51,6 +52,8 @@ public struct KeyCombo: Hashable, Codable, Sendable {
 
     /// The arrow keys, as AppKit writes them.
     public static let leftArrow = "\u{F702}", rightArrow = "\u{F703}"
+    /// The Escape key, as AppKit writes it.
+    public static let escape = "\u{1b}"
 
     /// The US layout's key codes, for writing defaults by character.
     static let codes: [String: UInt16] = [
@@ -72,7 +75,7 @@ public enum ShortcutID: String, CaseIterable, Codable, CodingKeyRepresentable, S
     case newWindow, newPrivateWindow, newPrivateTab
     // Page
     case back, forward, reload, reloadFromOrigin, reader, find, findNext, findPrevious, print, savePage, screenshot
-    case floatVideo, pauseSound, pageChat, chatSide, hideElements, hiddenElements, zoomIn, zoomOut, actualSize
+    case floatVideo, pauseSound, pageChat, askSelection, chatSide, hideElements, hiddenElements, zoomIn, zoomOut, actualSize
     // View
     case toggleSidebar, foldTabs, compactMode, toggleToolbar
     // Spaces
@@ -97,7 +100,7 @@ public enum ShortcutID: String, CaseIterable, Codable, CodingKeyRepresentable, S
             .tabs
         case .newWindow, .newPrivateWindow, .newPrivateTab: .windows
         case .back, .forward, .reload, .reloadFromOrigin, .reader, .find, .findNext, .findPrevious, .print, .savePage, .screenshot,
-            .floatVideo, .pauseSound, .pageChat, .chatSide, .hideElements, .hiddenElements, .zoomIn, .zoomOut, .actualSize:
+            .floatVideo, .pauseSound, .pageChat, .askSelection, .chatSide, .hideElements, .hiddenElements, .zoomIn, .zoomOut, .actualSize:
             .page
         case .toggleSidebar, .foldTabs, .compactMode, .toggleToolbar: .view
         case .previousSpace, .nextSpace: .spaces
@@ -143,6 +146,7 @@ public enum ShortcutID: String, CaseIterable, Codable, CodingKeyRepresentable, S
         case .floatVideo: "Float Video"
         case .pauseSound: "Stop Sound in Tab"
         case .pageChat: "Chat about This Page"
+        case .askSelection: "Ask about Selection or Page"
         case .chatSide: "Move Chat to Other Side"
         case .hideElements: "Hide Elements"
         case .hiddenElements: "Hidden on This Site"
@@ -213,6 +217,7 @@ public enum ShortcutID: String, CaseIterable, Codable, CodingKeyRepresentable, S
         case .floatVideo: [.cmd("p", shift: true)]
         case .pauseSound: [.cmd("m", shift: true)]
         case .pageChat: [.cmd("a", shift: true)]
+        case .askSelection: [KeyCombo(KeyCombo.escape, code: 53, command: true)]
         case .hideElements: [.cmd("h", shift: true)]
         case .hiddenElements: [.cmd("u", shift: true)]
         // ⌘+ comes as "=" or "+", with or without shift, depending on the layout.
@@ -277,6 +282,7 @@ public enum ShortcutID: String, CaseIterable, Codable, CodingKeyRepresentable, S
         case .floatVideo: .floatVideo
         case .pauseSound: .pauseSound
         case .pageChat: .pageChat
+        case .askSelection: .askSelection
         case .hideElements: .hideElements
         case .hiddenElements: .hiddenElements
         case .zoomIn: .zoomIn

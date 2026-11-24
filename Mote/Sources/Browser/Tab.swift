@@ -534,9 +534,15 @@ final class Tab: ObservableObject, Identifiable {
     /// overwrite the selection (`replaces`).
     func openPageChat(withSelection selection: String) {
         guard let address, PageSharing.canShare(address), let draft = SelectionAsk.draft(for: selection) else { return }
-        ensurePageChat().attach(PageContext(url: address, title: title, selection: selection))
         pendingAsk = draft
         chatOpen = true
+        let title = title
+        // With where on the page it is, so the chat needn't read it all to tell.
+        Task { [weak self] in
+            let place = await self?.selectionPlace()
+            self?.ensurePageChat().attach(
+                PageContext(url: address, title: title, selection: selection, around: place?.around, heading: place?.heading))
+        }
     }
 
     /// Shares the page showing now with the chat about it. Returns whether
@@ -558,8 +564,19 @@ final class Tab: ObservableObject, Identifiable {
     /// has selected when anything is. Nil when there is nothing to share.
     func capturePageContext() async -> PageContext? {
         guard let address, PageSharing.canShare(address) else { return nil }
-        return PageContext(url: address, title: title, text: await pageText(), selection: await selectedText())
+        let selection = await selectedText()
+        let place = selection?.isEmpty == false ? await selectionPlace() : nil
+        return PageContext(url: address, title: title, text: await pageText(), selection: selection, around: place?.around, heading: place?.heading)
     }
+
+    /// The passage the selection sits in and the heading over it (Scripts/src/selection-place.ts).
+    private func selectionPlace() async -> (around: String, heading: String)? {
+        guard let built, let place = try? await built.callAsyncJavaScript(Self.placeScript, contentWorld: .defaultClient) as? [String: String]
+        else { return nil }
+        return (place["around"] ?? "", place["heading"] ?? "")
+    }
+
+    private static let placeScript = InjectedScript.call("selection-place")
 
     /// The page's text, read without changing the page. A tab whose view is
     /// asleep or gone has none to read.

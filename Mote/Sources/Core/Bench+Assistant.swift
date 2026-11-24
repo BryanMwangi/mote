@@ -130,6 +130,14 @@ extension Bench {
     }
 
     private static func describe(_ browser: Browser) -> [String: Any] {
+        // The chat sidebar's, when it's open: the page it holds, and the selection's place on it.
+        if let tab = browser.active, tab.chat == nil, tab.chatOpen, let side = tab.pageChat {
+            let page = side.page
+            return [
+                "chat": "sidebar", "draft": tab.pendingAsk ?? "", "page": page?.url.absoluteString ?? "", "selection": page?.selection ?? "",
+                "around": page?.around ?? "", "heading": page?.heading ?? "",
+            ]
+        }
         guard let tab = browser.active, let chat = tab.chat else { return ["chat": false] }
         let phase: String =
             switch chat.phase {

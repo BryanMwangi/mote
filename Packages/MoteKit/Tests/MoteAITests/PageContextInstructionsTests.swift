@@ -15,6 +15,19 @@ struct PageContextInstructionsTests {
         #expect(text.contains("this page"))
     }
 
+    @Test("A selection comes with where it sits: its passage and the heading over it")
+    func place() {
+        let page = PageContext(
+            url: url, title: "Lyon", selection: "chemical valley", around: "Lyon has a large chemical valley to the south.",
+            heading: "Economy")
+        let text = Instructions.page(page)
+        #expect(text.contains("> chemical valley"))
+        #expect(text.contains("It sits in this passage of the page (under the heading \"Economy\"):"))
+        #expect(text.contains("> Lyon has a large chemical valley to the south."))
+        let bare = Instructions.page(PageContext(url: url, title: "Lyon", selection: "chemical valley"))
+        #expect(!bare.contains("It sits in"))
+    }
+
     @Test("No page, or one no longer shared, tells the model nothing")
     func absent() {
         #expect(Instructions.page(nil).isEmpty)

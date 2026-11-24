@@ -14,15 +14,24 @@ public struct PageContext: Equatable, Sendable {
     public var text: String?
     /// What the person has selected on the page, when anything is.
     public var selection: String?
+    /// The passage the selection sits in, and the heading it falls under:
+    /// where on the page it is, without the whole page.
+    public var around: String?
+    public var heading: String?
     /// Whether the page is still shared with the model. Detached, the page is
     /// kept but the model no longer sees it.
     public private(set) var isAttached: Bool
 
-    public init(url: URL, title: String, text: String? = nil, selection: String? = nil, isAttached: Bool = true) {
+    public init(
+        url: URL, title: String, text: String? = nil, selection: String? = nil, around: String? = nil, heading: String? = nil,
+        isAttached: Bool = true
+    ) {
         self.url = url
         self.title = title.trimmingCharacters(in: .whitespacesAndNewlines)
         self.text = Self.clean(text)
         self.selection = Self.clean(selection)
+        self.around = Self.clean(around)
+        self.heading = Self.clean(heading)
         self.isAttached = isAttached
     }
 

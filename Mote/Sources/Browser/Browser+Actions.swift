@@ -38,6 +38,7 @@ extension Browser {
         case .pauseSound: pauseMedia()
         case .floatVideo: toggleFloat()
         case .pageChat: toggle(.chat)
+        case .askSelection: askAboutSelection()
         case .chatSide: move(.chat, to: prefs.chatSide == .left ? .right : .left)
         case .toggleSidebar: toggleSidebar()
         case .foldTabs: toggleFold()

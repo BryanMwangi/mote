@@ -53,6 +53,12 @@ public enum Instructions {
         if let selection = context.selection {
             lines += ["", "The person has selected this text on the page:"]
             lines += selection.split(separator: "\n", omittingEmptySubsequences: false).map { "> \($0)" }
+            if let around = context.around, around != selection {
+                let under = context.heading.map { " (under the heading \"\($0)\")" } ?? ""
+                lines += ["", "It sits in this passage of the page\(under):", "> \(around)"]
+            } else if let heading = context.heading {
+                lines += ["", "It falls under the heading \"\(heading)\"."]
+            }
         }
         return lines.joined(separator: "\n")
     }

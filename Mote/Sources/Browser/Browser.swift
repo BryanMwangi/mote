@@ -308,6 +308,20 @@ final class Browser: NSObject, ObservableObject {
         }
     }
 
+    /// ⌘⎋, as editors ask about the selected code: the chat about what's
+    /// selected on the page, where it sits included; with nothing selected,
+    /// the chat open with the page shared, whatever it held before.
+    func askAboutSelection() {
+        guard let tab = active, pageChatPossible, let web = tab.built else { return }
+        web.callAsyncJavaScript(PageView.selected, arguments: [:], in: nil, in: .defaultClient) { [weak self, weak tab] result in
+            guard let self, let tab else { return }
+            let words = ((try? result.get()) as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            if !words.isEmpty { return tab.openPageChat(withSelection: words) }
+            if !tab.chatOpen { self.togglePageChat() }
+            Task { await tab.attachCurrentPage() }
+        }
+    }
+
     /// A fresh chat in the chat sidebar (/new, New Chat): the one before is
     /// kept in the list of chats; tabs that shared it share the new one.
     func newPageChat() {

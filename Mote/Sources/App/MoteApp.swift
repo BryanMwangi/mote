@@ -194,6 +194,9 @@ private struct MenuBar: Commands {
         )
         .keyboardShortcut(keys(.pageChat))
         .disabled(!browser.pageChatPossible)
+        Button("Ask about Selection or Page") { browser.askAboutSelection() }
+            .keyboardShortcut(keys(.askSelection))
+            .disabled(!browser.pageChatPossible)
         Button(browser.prefs.chatSide == .left ? "Move Chat to Right" : "Move Chat to Left") {
             browser.run(.chatSide)
         }

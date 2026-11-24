@@ -54,7 +54,8 @@ final class KeyRouter {
             shift: flags.contains(.shift),
             option: flags.contains(.option), control: flags.contains(.control))
 
-        if press.code == KeyMap.escape { return escape(in: browser, inPage: Self.inPage(event.window?.firstResponder)) }
+        // Escape alone closes what's open; with ⌘ it's a shortcut (Ask about Selection).
+        if press.code == KeyMap.escape, !press.command { return escape(in: browser, inPage: Self.inPage(event.window?.firstResponder)) }
         // ⌘J in a new tab's composer or the floating search: Return asks the
         // assistant, or searches again.
         if KeyMap.switchesAsking(press, inComposer: browser.composing) {
