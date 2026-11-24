@@ -1235,6 +1235,16 @@ private struct ChatsSection: View {
     }
 
     var body: some View {
+        // The chat open in the sidebar follows the tab in front as it changes
+        // there, not only when the browser does.
+        if let tab = browser.active {
+            FrontChat(tab: tab) { open in content(sideChat: open) }
+        } else {
+            content(sideChat: sideChat)
+        }
+    }
+
+    @ViewBuilder private func content(sideChat: UUID?) -> some View {
         let entries = Self.newest(besides: tabs.count, open: Set(tabs.compactMap { $0.chat?.id }))
         VStack(alignment: .leading, spacing: 2) {
             header
@@ -1242,7 +1252,7 @@ private struct ChatsSection: View {
                 // Indented under the header, as a folder's tabs are.
                 ForEach(tabs) { row($0).padding(.leading, 14) }
                 // Opened, a chat becomes its tab, here where it was.
-                ForEach(entries) { line($0) }
+                ForEach(entries) { line($0, sideChat: sideChat) }
                 // Every chat, in the footer's own Chats popup.
                 ChatLine(symbol: "ellipsis", title: "Show All", time: nil, selected: false) { showingAll = true }
                     .menuPanel(isPresented: $showingAll, edge: .trailing) {
@@ -1252,9 +1262,16 @@ private struct ChatsSection: View {
                 // Folded, the chat you're in still shows, as a closed folder's selected tab does.
                 row(tab).padding(.leading, 14)
             } else if let open = entries.first(where: { $0.id == sideChat }) {
-                line(open)
+                line(open, sideChat: sideChat)
             }
         }
+    }
+
+    /// Watches the tab in front for the chat it has open in the sidebar.
+    private struct FrontChat<Content: View>: View {
+        @ObservedObject var tab: Tab
+        let content: (UUID?) -> Content
+        var body: some View { content(tab.chatOpen ? tab.pageChat?.id : nil) }
     }
 
     /// The header, as a folder's row: folds on a click, washed on hover.
@@ -1285,7 +1302,7 @@ private struct ChatsSection: View {
     }
 
     /// A chat without a tab: selected while it's the one open in the sidebar.
-    private func line(_ entry: ChatArchive.Entry) -> some View {
+    private func line(_ entry: ChatArchive.Entry, sideChat: UUID?) -> some View {
         ChatLine(
             symbol: "bubble.left", title: entry.title.isEmpty ? "New chat" : entry.title, time: ChatTime.text(entry.updated),
             selected: entry.id == sideChat
@@ -1311,7 +1328,7 @@ private struct ChatsSection: View {
                 Spacer(minLength: 4)
                 if let time { Text(time).font(.system(size: 11).monospacedDigit()).foregroundStyle(Palette.muted) }
             }
-            .padding(.leading, 24)
+            .padding(.leading, 10)
             .padding(.trailing, 10)
             .frame(maxWidth: .infinity, minHeight: Metrics.row, maxHeight: Metrics.row, alignment: .leading)
             .background {
@@ -1322,6 +1339,8 @@ private struct ChatsSection: View {
                 }
             }
             .contentShape(Rectangle())
+            // Indented as the chat tabs above it are, the same width.
+            .padding(.leading, 14)
             .onTapGesture(perform: open)
             .onHover { over in withAnimation(Motion.hover) { hovering = over } }
         }
