@@ -149,6 +149,10 @@ struct AISettings: View {
                     "One chat for all tabs", "The chat stays as you switch tabs, about the page in front", symbol: "bubble.left.and.text.bubble.right",
                     tint: Tint.indigo, on: $prefs.oneChat)
             }
+            RowRule()
+            SettingRow(
+                "Chats in the sidebar", "Your newest chats, as a folder above your pinned tabs", symbol: "bubble.left.and.bubble.right",
+                tint: Tint.indigo, keywords: ["chats", "conversations", "tabs"], on: $prefs.chatsInSidebar)
         }
 
         MemorySection()

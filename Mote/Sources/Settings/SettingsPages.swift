@@ -241,10 +241,6 @@ struct TabSettings: View {
         SettingsSection {
             if prefs.sidebar {
                 SettingRow(
-                    "Chats in the sidebar", "Your newest chats, as a folder above your pinned tabs", symbol: "bubble.left.and.bubble.right",
-                    tint: Tint.indigo, keywords: ["chats", "assistant", "conversations"], on: $prefs.chatsInSidebar)
-                RowRule()
-                SettingRow(
                     "Sidebar on the right", "The tabs on the window's right side; the traffic lights stay on the left",
                     symbol: "sidebar.right", tint: Tint.indigo, keywords: ["right side", "position"], on: $prefs.sideRight)
                 RowRule()

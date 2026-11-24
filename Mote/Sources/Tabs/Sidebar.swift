@@ -108,14 +108,17 @@ struct Sidebar: View {
             browser: browser, prefs: prefs, shown: browser.swipeOffset.shown, drag: $drag, keptDrag: $keptDrag, dropping: $dropping)
     }
 
+    /// Full-window chat tabs, which the Chats section holds when it shows.
+    private var chatTabs: Int { prefs.chatsInSidebar ? browser.tabs.filter { $0.section == .loose && $0.chat != nil }.count : 0 }
+
     /// Where the rows end and the window-dragging room starts. Worked out, not
     /// measured: a measurement is a frame late, and for that frame the whole
     /// sidebar would drag the window.
     private var rowsEnd: CGFloat {
         let pill = browser.navInSidebar ? AddressPill.height + Self.pillGap : 0
         let rows = Self.rowsHeight(
-            essentials: browser.essentialCount, kept: browser.keptCount, loose: browser.tabs.count - browser.pinnedCount,
-            width: prefs.sideWidth, named: browser.usesSpaces, chats: ChatsSection.lines(prefs))
+            essentials: browser.essentialCount, kept: browser.keptCount, loose: browser.tabs.count - browser.pinnedCount - chatTabs,
+            width: prefs.sideWidth, named: browser.usesSpaces, chats: ChatsSection.lines(prefs, tabs: chatTabs))
         return Self.top + pill + rows + 8
     }
 
@@ -291,7 +294,9 @@ private struct SpacePage: View {
         let tabs = tabs
         let essentials = tabs.filter { $0.section == .essential }
         let kept = tabs.filter { $0.section == .pinned }
-        let loose = tabs.filter { $0.section == .loose }
+        // Full-window chat tabs sit in the Chats section, when it shows, not among the rest.
+        let chatTabs = prefs.chatsInSidebar ? tabs.filter { $0.section == .loose && $0.chat != nil } : []
+        let loose = tabs.filter { tab in tab.section == .loose && !chatTabs.contains { $0 === tab } }
         let lines = keptLines(kept)
         VStack(alignment: .leading, spacing: 0) {
             if !essentials.isEmpty {
@@ -299,8 +304,6 @@ private struct SpacePage: View {
                     .padding(.bottom, 10)
             }
             if browser.usesSpaces { SpaceHeader(browser: browser, space: space).padding(.bottom, Self.gap) }
-            // Above the folders and pinned tabs, and kept there while they scroll.
-            if prefs.chatsInSidebar { ChatsSection(browser: browser, prefs: prefs).padding(.bottom, Self.divider) }
             // A plain stack until the tabs overflow, so the room below them
             // still drags the window. Worked out, not measured: ViewThatFits
             // lays the rows out twice, on every page, on every change.
@@ -310,15 +313,19 @@ private struct SpacePage: View {
             let overflows =
                 Sidebar.rowsHeight(
                     essentials: essentials.count, kept: lines.count, loose: loose.count, width: prefs.sideWidth, named: browser.usesSpaces,
-                    chats: ChatsSection.lines(prefs))
+                    chats: ChatsSection.lines(prefs, tabs: chatTabs.count))
                 > room
+            // Above the folders and pinned tabs, scrolling with them.
+            let chats = prefs.chatsInSidebar ? ChatsSection(browser: browser, prefs: prefs, tabs: chatTabs, row: row).padding(.bottom, Self.divider) : nil
             if !overflows {
+                chats
                 if !lines.isEmpty { keptRows(kept, lines: lines) }
                 listed(loose)
             } else {
                 ScrollViewReader { scroller in
                     ScrollView(.vertical) {
                         VStack(alignment: .leading, spacing: 0) {
+                            chats
                             if !lines.isEmpty { keptRows(kept, lines: lines) }
                             listed(loose, scrolls: true)
                         }
@@ -1192,18 +1199,23 @@ private struct FolderIconPick: View {
 private struct ChatsSection: View {
     let browser: Browser
     @ObservedObject var prefs: Preferences
+    /// The full-window chat tabs: drawn here as the tabs they are.
+    let tabs: [Tab]
+    let row: (Tab) -> SideRow
     @State private var hovering = false
+    @State private var showingAll = false
 
     private static let shown = 5
 
-    private static var newest: [ChatArchive.Entry] {
-        Array(Assistant.shared.chats.entries.filter { $0.archived != true }.prefix(shown))
+    /// The newest chats without a tab, to fill the section to five.
+    private static func newest(besides tabs: Int, open: Set<UUID>) -> [ChatArchive.Entry] {
+        Array(Assistant.shared.chats.entries.filter { $0.archived != true && !open.contains($0.id) }.prefix(max(0, shown - tabs)))
     }
 
-    /// How many rows it stands: its header, and unfolded its chats and Show All.
-    static func lines(_ prefs: Preferences) -> Int {
+    /// How many rows it stands: its header, and unfolded its chat tabs, chats and Show All.
+    static func lines(_ prefs: Preferences, tabs: Int) -> Int {
         guard prefs.chatsInSidebar else { return 0 }
-        return prefs.chatsFolded ? 1 : 2 + newest.count
+        return prefs.chatsFolded ? 1 : 2 + tabs + newest(besides: tabs, open: []).count
     }
 
     var body: some View {
@@ -1231,12 +1243,19 @@ private struct ChatsSection: View {
             .onTapGesture { withAnimation(Motion.settle) { prefs.chatsFolded.toggle() } }
             .onHover { hovering = $0 }
             if !prefs.chatsFolded {
-                ForEach(Self.newest) { entry in
+                // Indented under the header, as a folder's tabs are.
+                ForEach(tabs) { row($0).padding(.leading, 14) }
+                // Opened, a chat becomes its tab, here where it was.
+                ForEach(Self.newest(besides: tabs.count, open: Set(tabs.compactMap { $0.chat?.id }))) { entry in
                     ChatLine(symbol: "bubble.left", title: entry.title.isEmpty ? "New chat" : entry.title, time: Self.time(entry.updated)) {
                         browser.open(chat: entry.id)
                     }
                 }
-                ChatLine(symbol: "ellipsis", title: "Show All", time: nil, muted: true) { browser.showChats() }
+                // Every chat, in the footer's own Chats popup.
+                ChatLine(symbol: "ellipsis", title: "Show All", time: nil, muted: true) { showingAll = true }
+                    .menuPanel(isPresented: $showingAll, edge: .trailing) {
+                        ChatsPage(browser: browser, inPanel: true) { showingAll = false }.frame(width: 380, height: 440)
+                    }
             }
         }
     }
