@@ -17,7 +17,8 @@ struct SplitStage<Pane: View>: View {
     @State private var moving: Tab.ID?
 
     private var split: Bool { layout.count > 1 }
-    private static var corner: CGFloat { 10 }
+    /// The card's own corners, so a split's panes curve as the one page does.
+    private static var corner: CGFloat { ChromeLayout.corner }
 
     var body: some View {
         GeometryReader { proxy in

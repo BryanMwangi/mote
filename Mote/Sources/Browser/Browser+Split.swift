@@ -30,8 +30,8 @@ enum DragZone {
 /// the row; selecting any of them shows the group. Essentials stay out of
 /// groups; pinned tabs split with others from their own folder.
 extension Browser {
-    /// Between a split's pages.
-    static let splitGap: CGFloat = 8
+    /// Between a split's pages: the card's own gap from the sidebar and panels.
+    static var splitGap: CGFloat { ChromeLayout.gap }
 
     /// The group a tab is in.
     func group(of id: Tab.ID) -> UUID? { splitOf[id] }
