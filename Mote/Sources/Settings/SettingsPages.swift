@@ -45,6 +45,27 @@ struct GeneralSettings: View {
                 symbol: "hammer", tint: Tint.indigo, keywords: ["developer", "inspector", "user agent"], on: $prefs.developerMenu)
         }
 
+        SettingsSection("Searching", note: searchNote) {
+            SettingRow(
+                "Search with", "Used whenever what you type isn't an address", symbol: "magnifyingglass", tint: Tint.blue,
+                keywords: ["search engine"] + SearchEngine.allCases.map(\.title)
+            ) {
+                Picker("", selection: $prefs.engine) { ForEach(SearchEngine.allCases) { Text($0.title).tag($0) } }
+                    .labelsHidden()
+                    .pickerStyle(.menu)
+                    .fixedSize()
+            }
+            if prefs.engine == .custom {
+                RowRule()
+                TextField("", text: $prefs.customEngine, prompt: Text("https://example.com/search?q=%s"))
+                    .textFieldStyle(.plain)
+                    .textStyle(.row)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 7)
+                    .background(Palette.ground, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    .padding(EdgeInsets(top: 8, leading: 47, bottom: 10, trailing: 12))
+            }
+        }
         SettingsSection("Coming from another browser") {
             SettingRow(
                 "Import browser data", "Bookmarks, history and passwords from Chrome, Firefox, Safari, Zen, Arc and more",
