@@ -533,8 +533,9 @@ final class Tab: ObservableObject, Identifiable {
     /// guards against repeating (`takesUp`), and no read runs after it to
     /// overwrite the selection (`replaces`).
     func openPageChat(withSelection selection: String) {
-        guard let address, PageSharing.canShare(address), let draft = SelectionAsk.draft(for: selection) else { return }
-        pendingAsk = draft
+        guard let address, PageSharing.canShare(address), !selection.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        // No draft: the composer takes the keyboard, for the person's own question.
+        pendingAsk = ""
         chatOpen = true
         let title = title
         // With where on the page it is, so the chat needn't read it all to tell.

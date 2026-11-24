@@ -171,6 +171,15 @@ struct PageChatPanel: View {
                 .foregroundStyle(Palette.ink.opacity(0.85))
                 .lineLimit(1)
                 .truncationMode(.middle)
+            // What's asked about on it, so the composer can stay the person's own.
+            if let selection = page.selection {
+                Text("“\(selection)”")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Palette.muted)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .layoutPriority(-1)
+            }
         }
     }
 

@@ -318,6 +318,7 @@ final class Browser: NSObject, ObservableObject {
             let words = ((try? result.get()) as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
             if !words.isEmpty { return tab.openPageChat(withSelection: words) }
             if !tab.chatOpen { self.togglePageChat() }
+            tab.pendingAsk = ""
             Task { await tab.attachCurrentPage() }
         }
     }

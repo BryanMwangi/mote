@@ -198,11 +198,12 @@ struct ChatView<Accessory: View, Start: View>: View {
 
     private func retry() { Assistant.shared.retry(in: conversation) }
 
-    /// Takes up a seeded draft: the selection asked about, quoted, ready to
-    /// send or edit. Reported taken so the panel does not put it back.
+    /// Takes up a seed: the keyboard for the composer, and a draft when it
+    /// holds one. Reported taken so the panel does not put it back.
     private func take() {
-        guard let seed, !seed.isEmpty else { return }
-        draft.text = seed
+        guard let seed else { return }
+        if !seed.isEmpty { draft.text = seed }
+        focus += 1
         Task { @MainActor in took() }
     }
 
