@@ -43,6 +43,13 @@ extension Browser {
         })()
         """
 
+    /// The language a selection is in: its text, the page's own language
+    /// trusted as for pages (see `language(of:)`).
+    static func selectionLanguage(of text: String, page: String?) async -> String? {
+        let sample = (page ?? "") + "\n" + text
+        return await Task.detached(priority: .userInitiated) { language(of: sample) }.value
+    }
+
     /// The language of a page in `web`, any language: for tabs.detectLanguage.
     static func pageLanguage(in web: WKWebView) async -> String? {
         let sample: String? = await withCheckedContinuation { done in
@@ -264,7 +271,7 @@ extension Browser {
     /// The translations as they come back, by each text's place. The session
     /// works off the main actor; only the one `translationTask` task uses it.
     @available(macOS 15, *)
-    private nonisolated static func stream(_ texts: [String], in session: TranslationSession) -> AsyncThrowingStream<(Int, String), Error> {
+    nonisolated static func stream(_ texts: [String], in session: TranslationSession) -> AsyncThrowingStream<(Int, String), Error> {
         let held = Held(session: session)
         return AsyncThrowingStream { continuation in
             let work = Task {

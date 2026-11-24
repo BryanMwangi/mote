@@ -248,6 +248,11 @@ final class PageView: WKWebView {
             if let index = menu.items.firstIndex(of: search) {
                 menu.insertItem(ask(), at: index + 1)
             }
+            // macOS's Translate, as Mote's: languages macOS lacks go to Mozilla's engine.
+            if #available(macOS 15, *), let translate = menu.items.first(where: { $0.identifier?.rawValue == "WKMenuItemIdentifierTranslate" }) {
+                translate.target = self
+                translate.action = #selector(translateSelection(_:))
+            }
         }
         linkItems(in: menu)
         pageItems(in: menu)
@@ -403,6 +408,13 @@ final class PageView: WKWebView {
         let words = selection?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         guard !words.isEmpty else { return }
         onAsk?(words)
+    }
+
+    @available(macOS 15, *)
+    @objc private func translateSelection(_ item: NSMenuItem) {
+        let words = selection?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !words.isEmpty, let browser = Windows.shared.all.first(where: { $0.tab(for: self) != nil }) else { return }
+        SelectionTranslation.show(words, pageLanguage: browser.tab(for: self)?.pageLanguage, from: self, at: menuSpot, browser: browser)
     }
 
     @objc private func searchSelection(_ item: NSMenuItem) {
