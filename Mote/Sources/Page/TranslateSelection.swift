@@ -36,17 +36,16 @@ private struct SelectionTranslationView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            picker($source)
-            Text(text).font(.callout.weight(.medium)).lineLimit(3).truncationMode(.tail)
-            Divider()
-            picker($target)
+            picker($source, tint: .secondary)
+            Text(text).font(.system(size: 13, weight: .semibold)).lineLimit(1).truncationMode(.tail)
+            Divider().padding(.vertical, 4)
+            picker($target, tint: Color.accentColor)
             Group {
                 if let result {
-                    ScrollView {
-                        Text(result).font(.body).foregroundStyle(Color.accentColor).textSelection(.enabled)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    .frame(maxHeight: 220)
+                    // As tall as it is, as macOS's grows; a long one stops at twelve lines.
+                    Text(result).font(.system(size: 13, weight: .semibold)).foregroundStyle(Color.accentColor).textSelection(.enabled)
+                        .lineLimit(12).fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 } else if let problem {
                     Text(problem).foregroundStyle(.secondary)
                 } else if let downloaded {
@@ -83,13 +82,27 @@ private struct SelectionTranslationView: View {
         .task(id: "\(source)>\(target)") { await translate() }
     }
 
-    private func picker(_ code: Binding<String>) -> some View {
-        Picker("", selection: code) {
-            ForEach(languages.contains(code.wrappedValue) || code.wrappedValue.isEmpty ? languages : [code.wrappedValue] + languages, id: \.self) {
-                Text(Browser.languageName($0)).tag($0)
+    /// A language as macOS's popover shows it: its name and a small up-down
+    /// chevron, no button around it; a menu of the others on a click.
+    private func picker(_ code: Binding<String>, tint: some ShapeStyle) -> some View {
+        let shown = languages.contains(code.wrappedValue) || code.wrappedValue.isEmpty ? languages : [code.wrappedValue] + languages
+        return Menu {
+            Picker("", selection: code) {
+                ForEach(shown, id: \.self) { Text(Browser.languageName($0)).tag($0) }
             }
+            .pickerStyle(.inline)
+            .labelsHidden()
+        } label: {
+            HStack(spacing: 5) {
+                Text(code.wrappedValue.isEmpty ? "" : Browser.languageName(code.wrappedValue))
+                Image(systemName: "chevron.up.chevron.down").font(.system(size: 8, weight: .semibold))
+            }
+            .font(.system(size: 11.5))
+            .foregroundStyle(tint)
         }
-        .labelsHidden()
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .menuIndicator(.hidden)
         .fixedSize()
     }
 

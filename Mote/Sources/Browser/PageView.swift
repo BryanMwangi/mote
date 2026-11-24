@@ -412,9 +412,15 @@ final class PageView: WKWebView {
 
     @available(macOS 15, *)
     @objc private func translateSelection(_ item: NSMenuItem) {
-        let words = selection?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        guard !words.isEmpty, let browser = Windows.shared.all.first(where: { $0.tab(for: self) != nil }) else { return }
-        SelectionTranslation.show(words, pageLanguage: browser.tab(for: self)?.pageLanguage, from: self, at: menuSpot, browser: browser)
+        let spot = menuSpot
+        let show = { [weak self] (text: String?) in
+            let words = text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            guard let self, !words.isEmpty, let browser = Windows.shared.all.first(where: { $0.tab(for: self) != nil }) else { return }
+            SelectionTranslation.show(words, pageLanguage: browser.tab(for: self)?.pageLanguage, from: self, at: spot, browser: browser)
+        }
+        // Read when the menu opened; picked quicker than that, read now.
+        if let selection { return show(selection) }
+        callAsyncJavaScript(Self.selected, arguments: [:], in: nil, in: .defaultClient) { show((try? $0.get()) as? String) }
     }
 
     @objc private func searchSelection(_ item: NSMenuItem) {
