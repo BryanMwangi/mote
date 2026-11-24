@@ -123,7 +123,8 @@ final class MozillaTranslation: NSObject, ObservableObject, WKURLSchemeHandler, 
                         if let known = done[key + text] { continuation.yield((index, known)) } else { waiting.append(index) }
                     }
                     if !waiting.isEmpty { try await prepare(route) }
-                    var at = 0
+                    var at = 0, worked = false
+                    var failure: Error?
                     while at < waiting.count {
                         try Task.checkCancellation()
                         var batch: [Int] = []
@@ -134,19 +135,39 @@ final class MozillaTranslation: NSObject, ObservableObject, WKURLSchemeHandler, 
                             words += texts[waiting[at]].split(separator: " ").count
                             at += 1
                         }
-                        let out = try await call("return moteTranslationEngine.translate(route, texts)", ["route": route, "texts": batch.map { texts[$0] }]) as? [String] ?? []
+                        let out: [String]
+                        do {
+                            out = try await translate(batch.map { texts[$0] }, along: route)
+                        } catch {
+                            // A batch it can't take is passed over, not the rest of the page.
+                            failure = error
+                            continue
+                        }
+                        worked = true
                         for (index, text) in zip(batch, out) {
                             if done.count > 20_000 { done.removeAll() }
                             done[key + texts[index]] = text
                             continuation.yield((index, text))
                         }
                     }
+                    if let failure, !worked { throw failure }
                     continuation.finish()
                 } catch {
                     continuation.finish(throwing: error)
                 }
             }
             continuation.onTermination = { _ in work.cancel() }
+        }
+    }
+
+    /// One batch through the engine; tried again once, with the engine
+    /// started afresh if its page has gone (memory, a crash).
+    private func translate(_ batch: [String], along route: [String]) async throws -> [String] {
+        let run = { try await self.call("return moteTranslationEngine.translate(route, texts)", ["route": route, "texts": batch]) as? [String] ?? [] }
+        do { return try await run() } catch {
+            try Task.checkCancellation()
+            try await prepare(route)
+            return try await run()
         }
     }
 

@@ -383,6 +383,9 @@ struct TranslateButton: View {
                             .help("Downloading \(tab.languageName) to translate: \(Int(downloaded * 100))%")
                             .allowsHitTesting(false)
                             .transition(.opacity)
+                    } else if tab.translating {
+                        // Down and ready, the first words on their way.
+                        TranslatingRing().allowsHitTesting(false).transition(.opacity)
                     }
                 }
                 // The language it's translated to, as Firefox shows it.
@@ -413,4 +416,21 @@ struct TranslateButton: View {
 extension Tab {
     /// The page's language by name ("French"), for buttons and menus.
     var languageName: String { pageLanguage.map(Browser.languageName) ?? "another language" }
+}
+
+/// A short arc turning round the translate button while a page's first
+/// words are on their way.
+private struct TranslatingRing: View {
+    @State private var turned = false
+
+    var body: some View {
+        Circle()
+            .trim(from: 0, to: 0.28)
+            .stroke(Color.accentColor, style: StrokeStyle(lineWidth: 2, lineCap: .round))
+            .frame(width: 24, height: 24)
+            .rotationEffect(.degrees(turned ? 360 : 0))
+            .animation(.linear(duration: 0.9).repeatForever(autoreverses: false), value: turned)
+            .onAppear { turned = true }
+            .help("Translating…")
+    }
 }

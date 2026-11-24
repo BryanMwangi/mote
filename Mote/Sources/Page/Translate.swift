@@ -67,12 +67,15 @@ extension Browser {
             if let code = recognizer.dominantLanguage?.rawValue { shares[code, default: 0] += line.count }
         }
         let total = shares.values.reduce(0, +)
-        if let foreign = shares.filter({ !reads($0.key) }).max(by: { $0.value < $1.value }), foreign.value * 5 >= total {
-            return foreign.key
-        }
+        let foreign = shares.filter { !reads($0.key) }.max { $0.value < $1.value }
         recognizer.reset()
         recognizer.processString(text)
-        let code = recognizer.dominantLanguage?.rawValue ?? String(sample.prefix { $0 != "\n" }.prefix(2))
+        // What the page says it's in (its lang), trusted when the text reads
+        // foreign too: macOS doesn't know every language (Estonian reads to it
+        // as Finnish), and the page does.
+        let declared = sample.prefix { $0 != "\n" }.split(separator: "-").first.map { $0.lowercased() } ?? ""
+        let code = foreign.flatMap { $0.value * 5 >= total ? $0.key : nil } ?? recognizer.dominantLanguage?.rawValue ?? declared
+        if !declared.isEmpty, !reads(declared), !code.isEmpty, !reads(code) { return declared }
         return code.isEmpty ? nil : code
     }
 
@@ -144,11 +147,14 @@ extension Browser {
     /// the pair (through `translating` and TranslationHost), else Mozilla's engine.
     func translate(_ tab: Tab, from source: String, to target: String) {
         guard #available(macOS 15, *), source != target else { return }
+        tab.translating = true
         Task {
             let job = TranslationJob(tab: tab.id, source: source, target: target)
-            if let status = await Self.availability(from: source, to: target), status != .unsupported {
+            let status = await Self.availability(from: source, to: target)
+            if let status, status != .unsupported {
                 return translating = job
             }
+            defer { tab.translating = false }
             guard let route = await MozillaTranslation.shared.route(from: source, to: target) else {
                 return announce("Mote can't translate \(Self.languageName(source)) to \(Self.languageName(target)) yet")
             }
@@ -159,6 +165,14 @@ extension Browser {
                 let size = ByteCountFormatter.string(fromByteCount: Int64(needed.values.reduce(0, +)), countStyle: .file)
                 announce(Announcement("Downloading \(names) to translate (\(size))", detail: "Once only; then it translates on this Mac.", symbol: "arrow.down.circle"))
             }
+            // Down and ready before the page is read: the page is as it is then,
+            // and it isn't called translated while nothing is.
+            do { try await MozillaTranslation.shared.prepare(route) } catch {
+                return announce(
+                    needed.isEmpty
+                        ? "This page couldn't be translated"
+                        : "Couldn't download \(needed.keys.map(Self.languageName).sorted().joined(separator: " and ")); try again")
+            }
             await run(job) { MozillaTranslation.shared.stream($0, from: source, to: target) }
         }
     }
@@ -167,7 +181,10 @@ extension Browser {
     @available(macOS 15, *)
     func translate(with session: TranslationSession) async {
         guard let job = translating else { return }
-        defer { if translating == job { translating = nil } }
+        defer {
+            if translating == job { translating = nil }
+            self.tab(job.tab)?.translating = false
+        }
         await run(job) { Self.stream($0, in: session) }
     }
 
@@ -190,11 +207,16 @@ extension Browser {
                 let text = String(data: json, encoding: .utf8)
             else { return }
             web.evaluateInAppWorld("window.__moteTranslation && window.__moteTranslation.put(\(text))")
+            tab.translating = false
             pending = [:]
             flushed = .now
         }
         var translated = 0, failed = false
-        while tab.translation == job, let (base, texts) = await Self.next(in: web) {
+        // The page's text, then what it adds or redraws later, as Firefox follows it.
+        while tab.translation == job {
+          var stretch = await Self.next(in: web)
+          if stretch == nil, await Self.more(in: web) { stretch = await Self.next(in: web) }
+          guard let (base, texts) = stretch else { break }
           // The first hundred (the screen) start at once; the rest are sorted while they're translated.
           for part in [texts.indices.prefix(100), texts.indices.dropFirst(100)] where !part.isEmpty {
             // Only what's foreign to you, each keeping its place among them all.
@@ -216,6 +238,15 @@ extension Browser {
           }
         }
         if failed, translated == 0 { announce("This page couldn't be translated") }
+    }
+
+    /// Waits for the page to show new text; false once it's gone or shown as it was.
+    private static func more(in web: PageView) async -> Bool {
+        await withCheckedContinuation { done in
+            web.callInAppWorld("return window.__moteTranslation ? await window.__moteTranslation.more() : false", arguments: [:]) {
+                done.resume(returning: $0 as? Bool == true)
+            }
+        }
     }
 
     /// The page's next texts to translate, and the place of the first among
@@ -283,7 +314,36 @@ extension Browser {
           for (let b = first; b > 0; b -= size) stretches.push([Math.max(0, b - size), b]);
           const groups = new Map(), places = [], done = [];
           const write = (i, text) => { nodes[i].nodeValue = original[i].replace(original[i].trim(), text); };
+          // Text the page adds later, gathered a moment after it settles, as a
+          // stretch of its own. Its own nodes rewritten (put) aren't new.
+          const known = new WeakSet(nodes), fresh = new Set();
+          let waiting = null, timer = 0;
+          const take = n => {
+            if (n.nodeType === 3) {
+              const p = n.parentElement;
+              if (p && !known.has(n) && !skip.test(p.tagName) && n.nodeValue.trim().length > 1) fresh.add(n);
+            } else if (n.nodeType === 1 && !skip.test(n.tagName)) {
+              const w = document.createTreeWalker(n, NodeFilter.SHOW_TEXT);
+              for (let t = w.nextNode(); t; t = w.nextNode()) take(t);
+            }
+          };
+          const observer = new MutationObserver(records => {
+            for (const r of records) r.type === 'characterData' ? take(r.target) : r.addedNodes.forEach(take);
+            if (!fresh.size) return;
+            clearTimeout(timer);
+            timer = setTimeout(() => {
+              const start = nodes.length;
+              for (const n of fresh) if (n.isConnected) { nodes.push(n); original.push(n.nodeValue); known.add(n); }
+              fresh.clear();
+              if (nodes.length === start) return;
+              stretches.push([start, nodes.length]);
+              if (waiting) { waiting(true); waiting = null; }
+            }, 300);
+          });
+          observer.observe(document.body || document.documentElement, { childList: true, subtree: true, characterData: true });
           window.__moteTranslation = {
+            // Resolves when there's more to translate; false once it's shown as it was.
+            more: () => stretches.length ? Promise.resolve(true) : new Promise(r => { waiting = r; }),
             // The next stretch's new texts, nearest the screen first; texts
             // already translated are written in at once.
             next: () => {
@@ -314,7 +374,12 @@ extension Browser {
                 for (const i of places[g] || []) write(i, found[g]);
               }
             },
-            restore: () => nodes.forEach((n, i) => { n.nodeValue = original[i]; })
+            restore: () => {
+              observer.disconnect();
+              clearTimeout(timer);
+              if (waiting) { waiting(false); waiting = null; }
+              nodes.forEach((n, i) => { n.nodeValue = original[i]; });
+            }
           };
           return true;
         })()

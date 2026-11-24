@@ -143,6 +143,8 @@ final class Tab: ObservableObject, Identifiable {
     @Published var pageLanguage: String?
     /// What the page shows translated from and to, while it does.
     @Published var translation: TranslationJob?
+    /// Translating, before its first words are in: the button turns a ring.
+    @Published var translating = false
     var translated: Bool { translation != nil }
     /// As an essential or pinned tab, the address it was pinned at, which it
     /// can go back to.
