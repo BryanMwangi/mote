@@ -74,6 +74,10 @@ extension Bench {
             // The link preview's scale as drawn, mid-opening.
             "glanceScale": GlanceView.current?.host.layer?.presentation().map { Double($0.transform.m11) } ?? -1,
             "tabPreview": TabPreview.isUp,
+            // The docked Web Inspector's views beside the page in front.
+            "dockedInspector": browser.window.flatMap { StageView.find(in: $0.contentView) }.map { stage in
+                stage.subviews.filter { String(describing: type(of: $0)).hasPrefix("WKInspector") }.count
+            } ?? -1,
             "pageTracking": (browser.active?.built?.trackingAreas ?? []).map {
                 "\($0.owner.map { String(describing: type(of: $0)) } ?? "nil") \($0.options.rawValue)"
             }, "sharing": Browser.sharing,
@@ -237,6 +241,7 @@ extension Bench {
         if Storage.testing, let id = request.string("home"), let found = tab(id) { browser.goHome(found) }
         // The inspector at a panel: network, sources, storage, timeline.
         if let panel = request.string("inspect").flatMap({ InspectorPanel(rawValue: $0.capitalized) }) { browser.showInspector(panel) }
+        if Storage.testing, request.string("inspect") == "attach" { browser.dockInspector() }
         if request.flag("textdirection") { browser.switchTextDirection() }
         // A screenshot of the tab in front (test runs): visible, whole, copy, the
         // overlay, or region:X,Y,W,H in the page's coordinates, scrolled to the top.

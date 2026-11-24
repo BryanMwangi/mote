@@ -80,6 +80,9 @@ extension Browser {
             """)
     }
 
+    /// The Web Inspector docked beside the page, as its own Dock button does (the bench's).
+    func dockInspector() { inspector()?.unpublished("attach") }
+
     private func inspector() -> NSObject? {
         guard let tab = active, !tab.isBlank else { return nil }
         return tab.web.unpublishedObject("_inspector")

@@ -39,6 +39,21 @@ final class StageView: NSView {
     /// Around a device, so its edges and handles show.
     static let margin: CGFloat = 24
 
+    /// The page last in front, and each page's docked Web Inspector while
+    /// it's away: WebKit puts its views beside the page, here, and doesn't
+    /// put them back when the page comes back.
+    private weak var shown: NSView?
+    private let inspectors = NSMapTable<NSView, Docked>.weakToStrongObjects()
+
+    private final class Docked {
+        let views: [(NSView, NSRect)]
+        let page: NSRect
+        init(views: [(NSView, NSRect)], page: NSRect) {
+            self.views = views
+            self.page = page
+        }
+    }
+
     override func layout() {
         super.layout()
         settle()
@@ -54,6 +69,16 @@ final class StageView: NSView {
         // stand-in here; taking it back then leaves a black screen with the sound
         // still playing. WebKit returns it when full screen ends.
         if let web = wanted as? WKWebView, web.fullscreenState != .notInFullscreen { return }
+
+        // The page leaving takes its docked inspector with it, to have back.
+        if let away = shown, away !== wanted {
+            let docked = subviews.filter(Self.isInspector)
+            if !docked.isEmpty {
+                inspectors.setObject(Docked(views: docked.map { ($0, $0.frame) }, page: away.frame), forKey: away)
+                docked.forEach { $0.removeFromSuperview() }
+            }
+        }
+        shown = wanted
 
         // Everything else goes, except a docked Web Inspector: WebKit puts it
         // beside the page and narrows the page to fit, so removing it would leave
@@ -84,6 +109,17 @@ final class StageView: NSView {
             wanted.needsLayout = true
             wanted.needsDisplay = true
             wanted.layer?.setNeedsDisplay()
+        }
+        // Its inspector back beside it, where it was, if it's still open.
+        if let docked = inspectors.object(forKey: wanted) {
+            inspectors.removeObject(forKey: wanted)
+            if inspecting {
+                for (view, frame) in docked.views where view.superview !== self {
+                    addSubview(view, positioned: .above, relativeTo: wanted)
+                    view.frame = frame
+                }
+                wanted.frame = docked.page
+            }
         }
         // The page in front has the keyboard, as in Safari, unless a field or
         // panel holds it: a key pressed with nobody holding it (after launch,
@@ -144,6 +180,14 @@ final class StageView: NSView {
         else { return false }
         typealias Getter = @convention(c) (AnyObject, Selector) -> Bool
         return unsafeBitCast(object.method(for: visible), to: Getter.self)(object, visible)
+    }
+
+    /// The stage in a view tree (the bench's probe).
+    static func find(in view: NSView?) -> StageView? {
+        guard let view else { return nil }
+        if let stage = view as? StageView { return stage }
+        for sub in view.subviews { if let found = find(in: sub) { return found } }
+        return nil
     }
 
     private static func isInspector(_ view: NSView) -> Bool {
