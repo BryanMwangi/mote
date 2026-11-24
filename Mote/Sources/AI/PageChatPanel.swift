@@ -340,6 +340,7 @@ final class SiteChat: NSObject, WKUIDelegate {
         if self.page == nil || self.site != site { page.load(URLRequest(url: url)) }
         self.page = page
         self.site = site
+        Web.name(page, "Page chat · \(url.host() ?? site)")
         return page
     }
 

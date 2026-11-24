@@ -28,6 +28,7 @@ final class ExtensionPanels {
             let path = ExtensionShims.panelPath(for: id, tab: panel.tab, context: context)
         else { return nil }
         let web = WKWebView(frame: .zero, configuration: setup)
+        Web.name(web, "Extension panel · \(context.webExtension.displayName ?? "extension")")
         let page = PanelPage(web: web, browser: browser, panel: panel.id)
         web.uiDelegate = page
         web.navigationDelegate = page

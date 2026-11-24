@@ -267,7 +267,7 @@ struct BenchCall {
     func describe(_ tab: Tab) -> [String: Any] {
         [
             "id": BenchWire.short(tab.id), "url": tab.address?.absoluteString ?? "", "title": tab.title, "name": tab.name ?? "",
-            "loading": tab.loading, "hollow": tab.hollow, "view": tab.built?.url?.absoluteString ?? "", "bench": tab.bench,
+            "loading": tab.loading, "hollow": tab.hollow, "pid": tab.built?.unpublishedPID("_webProcessIdentifier") ?? 0, "view": tab.built?.url?.absoluteString ?? "", "bench": tab.bench,
             "active": tab.id == browser.activeID, "asleep": tab.asleep, "home": tab.home?.absoluteString ?? "", "wandered": tab.wandered,
             "folder": tab.folder?.uuidString ?? "",
             "shy": tab.shy, "noisy": tab.noisy, "muted": tab.muted,

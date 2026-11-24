@@ -38,6 +38,7 @@ final class ExtensionPopup: NSObject, WKUIDelegate, WKNavigationDelegate, NSPopo
         // Measured while hidden, in the popover at the last size: a page out
         // of any window is suspended by WebKit.
         let web = WKWebView(frame: NSRect(x: 0, y: 0, width: 25, height: 25), configuration: setup)
+        Web.name(web, "Extension pop-up · \(context.webExtension.displayName ?? "extension")")
         web.uiDelegate = self
         web.navigationDelegate = self
         web.alphaValue = 0

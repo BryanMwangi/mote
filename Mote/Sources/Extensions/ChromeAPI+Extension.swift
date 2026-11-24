@@ -90,6 +90,7 @@ extension ChromeAPI {
             page.load(
                 URLRequest(url: call.context.baseURL.appendingPathComponent(path.trimmingCharacters(in: CharacterSet(charactersIn: "/")))))
             ExtensionShims.offscreen[id] = page
+            Web.name(page, "Extension background page")
             // As Chrome does, only once it has loaded: workers message it at
             // once, and need it listening. Five seconds at most.
             for _ in 0..<250 where page.isLoading || page.url == nil { try? await Task.sleep(for: .milliseconds(20)) }

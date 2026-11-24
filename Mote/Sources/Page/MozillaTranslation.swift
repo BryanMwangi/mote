@@ -310,6 +310,7 @@ final class MozillaTranslation: NSObject, ObservableObject, WKURLSchemeHandler, 
         // Never shown, and never put to sleep for it.
         config.preferences.inactiveSchedulingPolicy = .none
         let made = WKWebView(frame: .zero, configuration: config)
+        Web.name(made, "Translation engine")
         made.navigationDelegate = self
         await withCheckedContinuation { done in
             loading = done

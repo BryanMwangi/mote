@@ -13,6 +13,12 @@ enum Web {
     /// Every page view alive, for the bench.
     @MainActor static let pages = NSHashTable<PageView>.weakObjects()
 
+    /// Web views that aren't tabs (the page chat, extension pages, the
+    /// translation engine), by what they are, for the Processes panel.
+    @MainActor static let named = NSMapTable<WKWebView, NSString>.weakToStrongObjects()
+
+    @MainActor static func name(_ web: WKWebView, _ label: String) { named.setObject(label as NSString, forKey: web) }
+
     /// Mote's message handler names, in the worlds they are registered in.
     @MainActor private static var handlers: [(String, WKContentWorld)] {
         [

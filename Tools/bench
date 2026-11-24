@@ -24,7 +24,7 @@ COMMANDS = {
     "open": ("url", "a bench tab at the end of the row → its id"),
     "go": ("id url", "send a bench tab somewhere else"),
     "wait": ("id [seconds:float]", "until the page has loaded"),
-    "sleep": ("id", "put a tab to sleep now, or say what keeps it awake"),
+    "sleep": ("id", "put a tab to sleep now, or say what keeps it awake; `idle` sleeps as Mote does on its own (test runs)"),
     "select": ("id", "bring a tab to the front — test runs only"),
     "text": ("id", "the page's text"),
     "eval": ("id js [mote]", "run JavaScript and print what it gives back; mote: in Mote's own world"),

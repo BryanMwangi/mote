@@ -89,6 +89,11 @@ extension Bench {
 
     /// Puts the tab to sleep now, if the usual checks allow; says which one didn't.
     private static func sleep(_ call: BenchCall) {
+        // Mote's own sleeping, as if every tab had been idle long enough (test runs).
+        if Storage.testing, call.request.string("id") == "idle" {
+            call.browser.sleepIdle(within: 0)
+            return call.answer(["slept": "idle"])
+        }
         guard let tab = call.tab() else { return }
         call.browser.sleep(tab) { said in call.answer(["said": said, "asleep": tab.asleep]) }
     }
