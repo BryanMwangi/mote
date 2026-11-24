@@ -248,6 +248,7 @@ final class PageView: WKWebView {
         // A link saved from the menu falls from where it was right-clicked.
         DownloadDrop.pressed = (NSEvent.mouseLocation, Date())
         findLinkBox(at: click)
+        findSelectionBox()
         // No Services: see `menuOpen`.
         menu.allowsContextMenuPlugIns = false
         if let search = menu.items.first(where: { $0.identifier?.rawValue == "WKMenuItemIdentifierSearchWeb" }) {
@@ -436,7 +437,7 @@ final class PageView: WKWebView {
 
     @available(macOS 15, *)
     @objc private func translateSelection(_ item: NSMenuItem) {
-        let spot = menuSpot
+        let spot = selectionBox ?? menuSpot
         withSelection { [weak self] words, browser in
             guard let self else { return }
             SelectionTranslation.show(words, pageLanguage: browser.tab(for: self)?.pageLanguage, from: self, at: spot, browser: browser)
@@ -444,7 +445,7 @@ final class PageView: WKWebView {
     }
 
     @objc private func lookUpSelection(_ item: NSMenuItem) {
-        let spot = menuSpot
+        let spot = selectionBox ?? menuSpot
         withSelection { [weak self] words, browser in
             guard let self else { return }
             LookUp.show(words, from: self, at: spot, browser: browser, tab: browser.tab(for: self))
@@ -515,6 +516,29 @@ final class PageView: WKWebView {
         const box = link.getBoundingClientRect();
         return [box.left, box.top, box.width, box.height];
         """
+
+    /// The selection's box, in this view, for what hangs from the selection
+    /// itself (Translate, Look Up), as macOS hangs its own; nil until read.
+    private var selectionBox: NSRect?
+
+    private static let selectionBoxScript = """
+        const selection = getSelection();
+        if (!selection || !selection.rangeCount || selection.isCollapsed) return null;
+        const box = selection.getRangeAt(0).getBoundingClientRect();
+        if (!box.width && !box.height) return null;
+        return [box.left, box.top, box.width, box.height];
+        """
+
+    private func findSelectionBox() {
+        selectionBox = nil
+        let scale = pageZoom * magnification
+        callAsyncJavaScript(Self.selectionBoxScript, arguments: [:], in: nil, in: .defaultClient) { [weak self] result in
+            guard let self, let box = (try? result.get()) as? [Double], box.count == 4 else { return }
+            let height = box[3] * scale
+            let y = isFlipped ? box[1] * scale : bounds.height - box[1] * scale - height
+            selectionBox = NSRect(x: box[0] * scale, y: y, width: box[2] * scale, height: height).intersection(bounds)
+        }
+    }
 
     private func findLinkBox(at click: NSPoint) {
         let scale = pageZoom * magnification
