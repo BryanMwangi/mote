@@ -36,13 +36,18 @@ struct SplitStage<Pane: View>: View {
                             .environment(\.paneCorner, split ? Self.corner : ChromeLayout.corner)
                             .frame(width: frame.width, height: frame.height)
                             .clipShape(shape)
-                            .overlay {
+                            // Each pane a card on the space's colours, as the one page is;
+                            // only the one you're in is outlined.
+                            .background {
                                 if split {
-                                    shape.strokeBorder(
-                                        id == browser.activeID ? Palette.ink.opacity(0.35) : Palette.edge,
-                                        lineWidth: id == browser.activeID ? 1.5 : 1
-                                    )
-                                    .allowsHitTesting(false)
+                                    shape.fill(browser.chromeGround)
+                                        .shadow(color: .black.opacity(0.06), radius: 1.5, y: 0.5)
+                                        .shadow(color: .black.opacity(0.05), radius: 12, y: 4)
+                                }
+                            }
+                            .overlay {
+                                if split, id == browser.activeID {
+                                    shape.strokeBorder(Palette.ink.opacity(0.3), lineWidth: 1.5).allowsHitTesting(false)
                                 }
                             }
                             .overlay(alignment: .top) {

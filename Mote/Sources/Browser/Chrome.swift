@@ -176,17 +176,18 @@ struct ChromeDetail: View {
                 if layout.strip != nil {
                     GeometryReader { proxy in
                         let card = RoundedRectangle(cornerRadius: layout.corner, style: .continuous)
+                        let split = (browser.shownSplit?.count ?? 0) > 1
                         let surface = TabCardShape(
                             card: layout.card, corner: layout.corner,
                             tab: anchor.anchors["tab"].map { proxy[$0].insetBy(dx: -TabShape.foot, dy: 0) },
                             viewport: anchor.dragging ? nil : anchor.anchors["viewport"].map { proxy[$0] },
-                            attachment: anchor.attachment, hole: (browser.shownSplit?.count ?? 0) > 1 ? layout.page : nil)
+                            attachment: anchor.attachment, hole: split ? layout.page : nil)
                         surface.fill(browser.chromeGround.opacity(browser.active?.isStart == true ? 0.92 : 1))
                             .compositingGroup()
-                            .shadow(color: .black.opacity(0.06), radius: 1.5, y: 0.5)
-                            .shadow(color: .black.opacity(0.05), radius: 12, y: 4)
+                            .shadow(color: .black.opacity(split ? 0 : 0.06), radius: 1.5, y: 0.5)
+                            .shadow(color: .black.opacity(split ? 0 : 0.05), radius: 12, y: 4)
                             .overlay(alignment: .topLeading) {
-                                card.strokeBorder(Palette.edge, lineWidth: 1)
+                                card.strokeBorder(split ? .clear : Palette.edge, lineWidth: 1)
                                     .frame(width: layout.card.width, height: layout.card.height)
                                     .offset(x: layout.card.minX, y: layout.card.minY)
                                     .frame(width: geo.size.width, height: geo.size.height, alignment: .topLeading)
@@ -364,10 +365,11 @@ private struct PageCard: View {
             if layout.strip != nil {
                 Color.clear
             } else if layout.corner > 0 {
+                // In a split the panes are the cards: no shadow or outline of its own.
                 CardGround(corner: layout.corner, hole: hole)
                     .fill(browser.chromeGround.opacity(browser.active?.isStart == true ? 0.92 : 1), style: FillStyle(eoFill: true))
-                    .shadow(color: .black.opacity(0.06), radius: 1.5, y: 0.5)
-                    .shadow(color: .black.opacity(0.05), radius: 12, y: 4)
+                    .shadow(color: .black.opacity(hole == nil ? 0.06 : 0), radius: 1.5, y: 0.5)
+                    .shadow(color: .black.opacity(hole == nil ? 0.05 : 0), radius: 12, y: 4)
             } else {
                 CardGround(corner: 0, hole: hole).fill(browser.chromeGround, style: FillStyle(eoFill: true))
             }
@@ -375,13 +377,13 @@ private struct PageCard: View {
         .clipShape(shape)
         .background {
             // Outside the clip, so the shadow can fall onto the sidebar.
-            if layout.sidebar != nil, layout.corner > 0 {
-                CardGround(corner: layout.corner, hole: hole).fill(browser.chromeGround, style: FillStyle(eoFill: true))
+            if layout.sidebar != nil, layout.corner > 0, hole == nil {
+                shape.fill(browser.chromeGround)
                     .shadow(color: .black.opacity(colorScheme == .dark ? 0.18 : 0.08), radius: 7, x: -1, y: 2)
             }
         }
         .overlay {
-            if layout.corner > 0, layout.strip == nil {
+            if layout.corner > 0, layout.strip == nil, hole == nil {
                 shape.strokeBorder(Palette.edge, lineWidth: 1).allowsHitTesting(false)
             }
         }
