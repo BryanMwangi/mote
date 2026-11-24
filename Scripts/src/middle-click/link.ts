@@ -26,3 +26,21 @@ function linkHref(link: Element): string {
     return '';
   }
 }
+
+/**
+ * A trusted left click with Shift or Option (and neither Command nor Control)
+ * on a web link: one Mote opens somewhere else (a preview, a split).
+ */
+export function isModifiedLinkClick(event: MouseEvent): boolean {
+  if (
+    !event.isTrusted ||
+    event.button !== 0 ||
+    !(event.shiftKey || event.altKey) ||
+    event.metaKey ||
+    event.ctrlKey
+  ) {
+    return false;
+  }
+  const href = middleClickAddress(event.composedPath());
+  return !!href && /^https?:/i.test(href);
+}

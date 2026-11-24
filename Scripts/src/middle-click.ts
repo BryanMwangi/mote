@@ -1,8 +1,11 @@
 // Reports the link under a middle click to Swift (MiddleRelay in Tab.swift), which
 // opens it in a new tab: WebKit delivers no navigation action for middle clicks.
-// Injected at document start into the main frame, in Mote's isolated content world.
+// And keeps a page's own script off a link clicked with Shift or Option, which
+// Mote opens as a preview or a split: a page that routes its links itself would
+// otherwise go there too, underneath. Injected at document start into the main
+// frame, in Mote's isolated content world.
 
-import { middleClickAddress } from './middle-click/link';
+import { isModifiedLinkClick, middleClickAddress } from './middle-click/link';
 
 declare global {
   interface Window {
@@ -22,4 +25,13 @@ if (!window.__moteMiddle) {
     const href = middleClickAddress(event.composedPath());
     if (href) window.webkit.messageHandlers.moteMiddle?.postMessage({ href });
   });
+  // Capture on the window, first of all: the page's listeners never hear it,
+  // and the link still follows (not prevented), for Mote to decide where.
+  window.addEventListener(
+    'click',
+    (event) => {
+      if (isModifiedLinkClick(event)) event.stopImmediatePropagation();
+    },
+    true,
+  );
 }

@@ -29,6 +29,15 @@
 			return "";
 		}
 	}
+	/**
+	* A trusted left click with Shift or Option (and neither Command nor Control)
+	* on a web link: one Mote opens somewhere else (a preview, a split).
+	*/
+	function isModifiedLinkClick(event) {
+		if (!event.isTrusted || event.button !== 0 || !(event.shiftKey || event.altKey) || event.metaKey || event.ctrlKey) return false;
+		const href = middleClickAddress(event.composedPath());
+		return !!href && /^https?:/i.test(href);
+	}
 
 //#endregion
 //#region src/middle-click.ts
@@ -41,6 +50,9 @@
 			const href = middleClickAddress(event.composedPath());
 			if (href) window.webkit.messageHandlers.moteMiddle?.postMessage({ href });
 		});
+		window.addEventListener("click", (event) => {
+			if (isModifiedLinkClick(event)) event.stopImmediatePropagation();
+		}, true);
 	}
 
 //#endregion
