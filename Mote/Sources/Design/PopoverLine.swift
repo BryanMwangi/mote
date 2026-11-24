@@ -10,14 +10,20 @@ struct PopoverLine: View {
     var image: NSImage?
     /// Goes up to ripple the image out (a file opening).
     var bump = 0
+    /// A tab's mark in the symbol's place: its icon, or its letter without one.
+    var mark: (icon: NSImage?, letter: String)?
     let act: () -> Void
     @State private var hovering = false
 
-    init(_ title: String, symbol: String? = nil, image: NSImage? = nil, bump: Int = 0, act: @escaping () -> Void) {
+    init(
+        _ title: String, symbol: String? = nil, image: NSImage? = nil, bump: Int = 0, mark: (icon: NSImage?, letter: String)? = nil,
+        act: @escaping () -> Void
+    ) {
         self.title = title
         self.symbol = symbol
         self.image = image
         self.bump = bump
+        self.mark = mark
         self.act = act
     }
 
@@ -26,7 +32,9 @@ struct PopoverLine: View {
             // An empty Group with a frame would collapse; the clear colour keeps the room.
             ZStack {
                 Color.clear
-                if let image {
+                if let mark {
+                    Mark(icon: mark.icon, letter: mark.letter, size: 14)
+                } else if let image {
                     Image(nsImage: image).resizable().frame(width: 16, height: 16)
                         .ripple(bump) { Image(nsImage: image).resizable().frame(width: 16, height: 16) }
                 } else if let symbol {

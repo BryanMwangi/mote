@@ -781,8 +781,9 @@ private struct SideRow: View {
             if renaming {
                 InlineField.rename(browser).frame(height: 16)
             } else {
-                if icons, !tab.isBlank || tab.isStart {
-                    Mark(icon: tab.icon, letter: tab.monogram, size: 16, dim: tab.asleep && tab.held, mote: tab.isStart)
+                if !tab.isBlank || tab.isStart {
+                    // Its site's icon, or with letters chosen (or no icon) its letter.
+                    Mark(icon: icons ? tab.icon : nil, letter: tab.monogram, size: 16, dim: tab.asleep && tab.held, mote: tab.isStart)
                         // In another profile than its space's: that profile's colour, at the corner.
                         .overlay(alignment: .bottomTrailing) {
                             if let profile = tab.profileOverride(in: browser.home(of: tab)) {
@@ -1025,7 +1026,8 @@ private struct FolderRow: View {
             let inside = browser.tabs.filter { $0.folder.map(family.contains) ?? false }
             let lines = VStack(alignment: .leading, spacing: 0) {
                 ForEach(inside) { tab in
-                    PopoverLine(tab.label, image: tab.icon) {
+                    // As the rows mark them: the site's icon, or its letter (Settings › Tabs › Beside each title).
+                    PopoverLine(tab.label, mark: (browser.prefs.glyph == .icons ? tab.icon : nil, tab.monogram)) {
                         listing = false
                         browser.select(tab)
                     }
