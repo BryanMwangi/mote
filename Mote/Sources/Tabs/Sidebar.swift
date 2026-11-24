@@ -491,7 +491,9 @@ private struct SpacePage: View {
     /// The box around a split group's rows, for the row at `index` of `tabs`.
     @ViewBuilder private func splitBox(at index: Int, in tabs: [Tab]) -> some View {
         if let run = browser.splitRun(at: index, in: tabs) {
-            SplitRun(axis: .vertical, first: run.first, last: run.last, gap: Self.gap)
+            // Hugging its rows, so it never runs under a selected or hovered
+            // row beside it; its corners then are the rows' own (10).
+            SplitRun(axis: .vertical, first: run.first, last: run.last, gap: Self.gap, bleed: 0)
         }
     }
 
