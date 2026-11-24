@@ -110,8 +110,9 @@ final class MozillaTranslation: NSObject, ObservableObject, WKURLSchemeHandler, 
     // MARK: - Translating
 
     /// The texts translated from `source` to `target`, each with its place,
-    /// as they're done: a few first (the screen), then about a thousand words
-    /// a call, which is what the engine takes in one go.
+    /// as they're done: a few first (the screen), growing each call, then
+    /// about a thousand words a call, which is what the engine takes in one go.
+    /// So the screen fills in steadily rather than in one long wait.
     func stream(_ texts: [String], from source: String, to target: String) -> AsyncThrowingStream<(Int, String), Error> {
         AsyncThrowingStream { continuation in
             let work = Task { @MainActor in
@@ -123,13 +124,13 @@ final class MozillaTranslation: NSObject, ObservableObject, WKURLSchemeHandler, 
                         if let known = done[key + text] { continuation.yield((index, known)) } else { waiting.append(index) }
                     }
                     if !waiting.isEmpty { try await prepare(route) }
-                    var at = 0, worked = false
+                    var at = 0, worked = false, most = 12
                     var failure: Error?
                     while at < waiting.count {
                         try Task.checkCancellation()
                         var batch: [Int] = []
                         var words = 0
-                        let most = at == 0 ? 12 : 128
+                        defer { most = min(128, most * 2) }
                         while at < waiting.count, batch.count < most, batch.isEmpty || words < 1000 {
                             batch.append(waiting[at])
                             words += texts[waiting[at]].split(separator: " ").count
