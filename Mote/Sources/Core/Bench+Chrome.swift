@@ -73,6 +73,7 @@ extension Bench {
             "tabListAt": tabList(of: browser).map { Int($0.contentView.bounds.minY) } ?? -1, "beepsSpared": PageKeySink.caught,
             // The link preview's scale as drawn, mid-opening.
             "glanceScale": GlanceView.current?.host.layer?.presentation().map { Double($0.transform.m11) } ?? -1,
+            "tabPreview": TabPreview.isUp,
             "pageTracking": (browser.active?.built?.trackingAreas ?? []).map {
                 "\($0.owner.map { String(describing: type(of: $0)) } ?? "nil") \($0.options.rawValue)"
             }, "sharing": Browser.sharing,
@@ -180,6 +181,10 @@ extension Bench {
             }
         }
         // A notice as it would show (test runs): an update's, or a plain line.
+        // A tab's hover card, as resting on its row shows it (test runs).
+        if Storage.testing, let id = request.string("tabpreview"), let tab = browser.tabs.first(where: { BenchWire.names(id, $0.id) }) {
+            TabPreview.show(tab, in: browser)
+        }
         if Storage.testing, let notice = request.string("notice") {
             let release = AppRelease(
                 version: "0.2.0", build: 2, archive: URL(string: "https://example.com/Mote.zip")!,

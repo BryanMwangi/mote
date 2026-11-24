@@ -520,17 +520,21 @@ enum TabPreview {
     /// The tab the pointer is on, for a picture that arrives late.
     private static var wanted: Tab.ID?
 
+    /// Whether a card is on screen.
+    static var isUp: Bool { panel?.isVisible == true }
+
     /// How long to rest on a row first: less when a card was just up.
     static var wait: Double { showing || Date().timeIntervalSince(shownAt) < 0.3 ? 0.15 : 0.5 }
 
     static func show(_ tab: Tab, in browser: Browser) {
-        hiding?.cancel()
-        guard NSEvent.pressedMouseButtons == 0, let window = browser.window else { return }
+        // The card up now goes as it would; it stays only if this one shows.
+        guard NSEvent.pressedMouseButtons == 0, let window = browser.window else { return leave() }
         wanted = tab.id
         let pointer = NSEvent.mouseLocation
         tab.previewPicture { image in
             MainActor.assumeIsolated {
-                guard wanted == tab.id, NSEvent.pressedMouseButtons == 0 else { return }
+                guard wanted == tab.id, NSEvent.pressedMouseButtons == 0 else { return leave() }
+                hiding?.cancel()
                 let panel = panel ?? made()
                 (panel.contentView as? NSHostingView<Card>)?.rootView = Card(image: image, title: tab.label, site: tab.address?.host() ?? "")
                 let size = panel.contentView?.fittingSize ?? .zero
@@ -541,6 +545,25 @@ enum TabPreview {
                 panel.setFrame(NSRect(x: x, y: pointer.y - size.height / 2, width: size.width, height: size.height), display: true)
                 panel.orderFrontRegardless()
                 showing = true
+                // The sidebar's strip of the window: once the pointer is out
+                // of it the card goes, whatever hover was missed on the way.
+                let strip = NSRect(
+                    x: browser.prefs.sideRight ? window.frame.maxX - side : window.frame.minX, y: window.frame.minY, width: side,
+                    height: window.frame.height)
+                watch(strip)
+            }
+        }
+    }
+
+    /// Checks, while the card is up, that the pointer is still over the sidebar.
+    private static var watching: Task<Void, Never>?
+
+    private static func watch(_ strip: NSRect) {
+        watching?.cancel()
+        watching = Task { @MainActor in
+            while showing, !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(0.25))
+                if !strip.contains(NSEvent.mouseLocation) { return leave() }
             }
         }
     }
@@ -555,6 +578,7 @@ enum TabPreview {
             guard !Task.isCancelled else { return }
             panel?.orderOut(nil)
             showing = false
+            watching?.cancel()
             shownAt = Date()
             hiding = nil
         }

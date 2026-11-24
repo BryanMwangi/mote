@@ -833,6 +833,8 @@ private struct SideRow: View {
             hovering = over
             if over { fading = true }
         }
+        // A row going while hovered (closed, moved) hears no hover end: its card goes with it.
+        .onDisappear { if hovering { TabPreview.leave() } }
         // Rested on a moment: a picture of its page beside it.
         .task(id: hovering) {
             guard hovering, !live, !renaming, NSEvent.pressedMouseButtons == 0 else { return TabPreview.leave() }
