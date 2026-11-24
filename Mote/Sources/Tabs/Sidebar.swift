@@ -118,7 +118,7 @@ struct Sidebar: View {
         let pill = browser.navInSidebar ? AddressPill.height + Self.pillGap : 0
         let rows = Self.rowsHeight(
             essentials: browser.essentialCount, kept: browser.keptCount, loose: browser.tabs.count - browser.pinnedCount - chatTabs,
-            width: prefs.sideWidth, named: browser.usesSpaces, chats: ChatsSection.lines(prefs, tabs: chatTabs))
+            width: prefs.sideWidth, named: browser.usesSpaces, chats: ChatsSection.lines(prefs, tabs: chatTabs, selected: false))
         return Self.top + pill + rows + 8
     }
 
@@ -296,6 +296,8 @@ private struct SpacePage: View {
         let kept = tabs.filter { $0.section == .pinned }
         // Full-window chat tabs sit in the Chats section, when it shows, not among the rest.
         let chatTabs = prefs.chatsInSidebar ? tabs.filter { $0.section == .loose && $0.chat != nil } : []
+        // The chat open in the sidebar on the tab in front, to show as selected.
+        let sideChat = front && browser.active?.chatOpen == true ? browser.active?.pageChat?.id : nil
         let loose = tabs.filter { tab in tab.section == .loose && !chatTabs.contains { $0 === tab } }
         let lines = keptLines(kept)
         VStack(alignment: .leading, spacing: 0) {
@@ -313,10 +315,10 @@ private struct SpacePage: View {
             let overflows =
                 Sidebar.rowsHeight(
                     essentials: essentials.count, kept: lines.count, loose: loose.count, width: prefs.sideWidth, named: browser.usesSpaces,
-                    chats: ChatsSection.lines(prefs, tabs: chatTabs.count))
+                    chats: ChatsSection.lines(prefs, tabs: chatTabs.count, selected: chatTabs.contains { $0.id == active } || sideChat != nil))
                 > room
             // Above the folders and pinned tabs, scrolling with them.
-            let chats = prefs.chatsInSidebar ? ChatsSection(browser: browser, prefs: prefs, tabs: chatTabs, row: row).padding(.bottom, Self.divider) : nil
+            let chats = prefs.chatsInSidebar ? ChatsSection(browser: browser, prefs: prefs, tabs: chatTabs, row: row, active: active, sideChat: sideChat).padding(.bottom, Self.divider) : nil
             if !overflows {
                 chats
                 if !lines.isEmpty { keptRows(kept, lines: lines) }
@@ -781,7 +783,10 @@ private struct SideRow: View {
             if renaming {
                 InlineField.rename(browser).frame(height: 16)
             } else {
-                if !tab.isBlank || tab.isStart {
+                if tab.chat != nil, tab.isBlank {
+                    // A chat's tab is marked as a chat, as the Chats section lists them.
+                    Image(systemName: "bubble.left").font(.system(size: 12)).foregroundStyle(colour).frame(width: 16, height: 16)
+                } else if !tab.isBlank || tab.isStart {
                     // Its site's icon, or with letters chosen (or no icon) its letter.
                     Mark(icon: icons ? tab.icon : nil, letter: tab.monogram, size: 16, dim: tab.asleep && tab.held, mote: tab.isStart)
                         // In another profile than its space's: that profile's colour, at the corner.
@@ -813,6 +818,11 @@ private struct SideRow: View {
                 // On hover the close button takes this place and the speaker moves left; a preview's mark stays.
                 .opacity(hovering && !speaker && preview == nil ? 0 : 1)
                 .padding(.trailing, hovering && speaker ? 26 : 0)
+            } else if let chat = tab.chat, tab.isBlank {
+                // When the chat was last used, where the close button shows on hover.
+                Spacer(minLength: 4)
+                Text(ChatTime.text(chat.updated)).font(.system(size: 11).monospacedDigit()).foregroundStyle(Palette.muted)
+                    .opacity(hovering ? 0 : 1)
             }
         }
         .padding(.leading, 10)
@@ -1204,6 +1214,9 @@ private struct ChatsSection: View {
     /// The full-window chat tabs: drawn here as the tabs they are.
     let tabs: [Tab]
     let row: (Tab) -> SideRow
+    /// The selected tab, and the chat open in the sidebar on it, if any.
+    let active: Tab.ID?
+    let sideChat: UUID?
     @State private var hovering = false
     @State private var showingAll = false
 
@@ -1214,82 +1227,112 @@ private struct ChatsSection: View {
         Array(Assistant.shared.chats.entries.filter { $0.archived != true && !open.contains($0.id) }.prefix(max(0, shown - tabs)))
     }
 
-    /// How many rows it stands: its header, and unfolded its chat tabs, chats and Show All.
-    static func lines(_ prefs: Preferences, tabs: Int) -> Int {
+    /// How many rows it stands: its header, and unfolded its chat tabs, chats
+    /// and Show All; folded, the selected chat under it if there is one.
+    static func lines(_ prefs: Preferences, tabs: Int, selected: Bool) -> Int {
         guard prefs.chatsInSidebar else { return 0 }
-        return prefs.chatsFolded ? 1 : 2 + tabs + newest(besides: tabs, open: []).count
+        return prefs.chatsFolded ? 1 + (selected ? 1 : 0) : 2 + tabs + newest(besides: tabs, open: []).count
     }
 
     var body: some View {
+        let entries = Self.newest(besides: tabs.count, open: Set(tabs.compactMap { $0.chat?.id }))
         VStack(alignment: .leading, spacing: 2) {
-            HStack(spacing: 8) {
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 9, weight: .semibold))
-                    .foregroundStyle(Palette.muted)
-                    .rotationEffect(.degrees(prefs.chatsFolded ? 0 : 90))
-                    .frame(width: 10)
-                Text("Chats").font(TextStyle.body.font).foregroundStyle(Palette.ink.opacity(0.8))
-                Spacer(minLength: 0)
-                if hovering {
-                    Button(action: browser.newAskingTab) {
-                        Image(systemName: "square.and.pencil").font(.system(size: 12)).foregroundStyle(Palette.muted)
-                    }
-                    .buttonStyle(.plain)
-                    .help("New Chat")
-                }
-            }
-            .padding(.leading, 6)
-            .padding(.trailing, 10)
-            .frame(maxWidth: .infinity, minHeight: Metrics.row, maxHeight: Metrics.row, alignment: .leading)
-            .contentShape(Rectangle())
-            .onTapGesture { withAnimation(Motion.settle) { prefs.chatsFolded.toggle() } }
-            .onHover { hovering = $0 }
+            header
             if !prefs.chatsFolded {
                 // Indented under the header, as a folder's tabs are.
                 ForEach(tabs) { row($0).padding(.leading, 14) }
                 // Opened, a chat becomes its tab, here where it was.
-                ForEach(Self.newest(besides: tabs.count, open: Set(tabs.compactMap { $0.chat?.id }))) { entry in
-                    ChatLine(symbol: "bubble.left", title: entry.title.isEmpty ? "New chat" : entry.title, time: Self.time(entry.updated)) {
-                        browser.open(chat: entry.id)
-                    }
-                }
+                ForEach(entries) { line($0) }
                 // Every chat, in the footer's own Chats popup.
-                ChatLine(symbol: "ellipsis", title: "Show All", time: nil, muted: true) { showingAll = true }
+                ChatLine(symbol: "ellipsis", title: "Show All", time: nil, selected: false) { showingAll = true }
                     .menuPanel(isPresented: $showingAll, edge: .trailing) {
                         ChatsPage(browser: browser, inPanel: true) { showingAll = false }.frame(width: 380, height: 440)
                     }
+            } else if let tab = tabs.first(where: { $0.id == active }) {
+                // Folded, the chat you're in still shows, as a closed folder's selected tab does.
+                row(tab).padding(.leading, 14)
+            } else if let open = entries.first(where: { $0.id == sideChat }) {
+                line(open)
             }
         }
     }
 
-    /// Today's time, as "10:43"; else the day, as "21 Nov".
-    private static func time(_ date: Date) -> String {
-        Calendar.current.isDateInToday(date)
-            ? date.formatted(date: .omitted, time: .shortened) : date.formatted(.dateTime.day().month(.abbreviated))
+    /// The header, as a folder's row: folds on a click, washed on hover.
+    private var header: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "chevron.right")
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundStyle(Palette.muted)
+                .rotationEffect(.degrees(prefs.chatsFolded ? 0 : 90))
+                .frame(width: 10)
+            Text("Chats").font(TextStyle.body.font).foregroundStyle(Palette.ink.opacity(0.8))
+            Spacer(minLength: 0)
+            if hovering {
+                Button(action: browser.newAskingTab) {
+                    Image(systemName: "square.and.pencil").font(.system(size: 12)).foregroundStyle(Palette.muted)
+                }
+                .buttonStyle(.plain)
+                .help("New Chat")
+            }
+        }
+        .padding(.leading, 6)
+        .padding(.trailing, 10)
+        .frame(maxWidth: .infinity, minHeight: Metrics.row, maxHeight: Metrics.row, alignment: .leading)
+        .background { if hovering { RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Palette.veil) } }
+        .contentShape(Rectangle())
+        .onTapGesture { withAnimation(Motion.settle) { prefs.chatsFolded.toggle() } }
+        .onHover { over in withAnimation(Motion.hover) { hovering = over } }
     }
 
+    /// A chat without a tab: selected while it's the one open in the sidebar.
+    private func line(_ entry: ChatArchive.Entry) -> some View {
+        ChatLine(
+            symbol: "bubble.left", title: entry.title.isEmpty ? "New chat" : entry.title, time: ChatTime.text(entry.updated),
+            selected: entry.id == sideChat
+        ) { browser.open(chat: entry.id) }
+    }
+
+    /// A line as a tab's row: muted until hovered or selected, the
+    /// selected tab's lift when it's the chat in front.
     private struct ChatLine: View {
         let symbol: String
         let title: String
         let time: String?
-        var muted = false
+        let selected: Bool
         let open: () -> Void
         @State private var hovering = false
 
+        private var colour: Color { selected ? Palette.ink : Palette.ink.opacity(hovering ? 0.8 : 0.62) }
+
         var body: some View {
             HStack(spacing: 8) {
-                Image(systemName: symbol).font(.system(size: 12)).foregroundStyle(Palette.muted).frame(width: 16)
-                Text(title).font(TextStyle.body.font).foregroundStyle(muted ? Palette.muted : Palette.ink).lineLimit(1)
+                Image(systemName: symbol).font(.system(size: 12)).foregroundStyle(colour).frame(width: 16)
+                Text(title).font(TextStyle.body.font).foregroundStyle(colour).lineLimit(1)
                 Spacer(minLength: 4)
                 if let time { Text(time).font(.system(size: 11).monospacedDigit()).foregroundStyle(Palette.muted) }
             }
             .padding(.leading, 24)
             .padding(.trailing, 10)
             .frame(maxWidth: .infinity, minHeight: Metrics.row, maxHeight: Metrics.row, alignment: .leading)
-            .background { if hovering { RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Palette.veil) } }
+            .background {
+                if selected {
+                    Lifted(corner: 10) {}
+                } else if hovering {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Palette.veil)
+                }
+            }
             .contentShape(Rectangle())
             .onTapGesture(perform: open)
-            .onHover { hovering = $0 }
+            .onHover { over in withAnimation(Motion.hover) { hovering = over } }
         }
+    }
+}
+
+/// When a chat was last used, as the sidebar shows it: today's time, as
+/// "10:43"; else the day, as "21 Nov".
+private enum ChatTime {
+    static func text(_ date: Date) -> String {
+        Calendar.current.isDateInToday(date)
+            ? date.formatted(date: .omitted, time: .shortened) : date.formatted(.dateTime.day().month(.abbreviated))
     }
 }
