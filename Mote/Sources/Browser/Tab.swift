@@ -533,16 +533,17 @@ final class Tab: ObservableObject, Identifiable {
     /// guards against repeating (`takesUp`), and no read runs after it to
     /// overwrite the selection (`replaces`).
     func openPageChat(withSelection selection: String) {
-        guard let address, PageSharing.canShare(address), !selection.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-        // No draft: the composer takes the keyboard, for the person's own question.
-        pendingAsk = ""
+        guard let address, PageSharing.canShare(address), let draft = SelectionAsk.draft(for: selection) else { return }
+        // Shared at once, before anything else reads the page: the keyboard
+        // leaving it for the composer leaves nothing selected to read.
+        ensurePageChat().attach(PageContext(url: address, title: title, selection: selection))
+        pendingAsk = draft
         chatOpen = true
         let title = title
-        // With where on the page it is, so the chat needn't read it all to tell.
+        // Then where on the page it sits, so the chat needn't read it all to tell.
         Task { [weak self] in
-            let place = await self?.selectionPlace()
-            self?.ensurePageChat().attach(
-                PageContext(url: address, title: title, selection: selection, around: place?.around, heading: place?.heading))
+            guard let place = await self?.selectionPlace(), self?.pageChat?.page?.selection == selection else { return }
+            self?.pageChat?.attach(PageContext(url: address, title: title, selection: selection, around: place.around, heading: place.heading))
         }
     }
 
@@ -565,8 +566,13 @@ final class Tab: ObservableObject, Identifiable {
     /// has selected when anything is. Nil when there is nothing to share.
     func capturePageContext() async -> PageContext? {
         guard let address, PageSharing.canShare(address) else { return nil }
-        let selection = await selectedText()
-        let place = selection?.isEmpty == false ? await selectionPlace() : nil
+        var selection = await selectedText()
+        var place = selection?.isEmpty == false ? await selectionPlace() : nil
+        // A selection asked about stays, once the keyboard has left the page for the chat.
+        if selection?.isEmpty != false, let kept = pageChat?.page, kept.url == address, let asked = kept.selection {
+            selection = asked
+            place = kept.around.map { ($0, kept.heading ?? "") }
+        }
         return PageContext(url: address, title: title, text: await pageText(), selection: selection, around: place?.around, heading: place?.heading)
     }
 

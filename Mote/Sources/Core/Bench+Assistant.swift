@@ -136,6 +136,7 @@ extension Bench {
             return [
                 "chat": "sidebar", "draft": tab.pendingAsk ?? "", "page": page?.url.absoluteString ?? "", "selection": page?.selection ?? "",
                 "around": page?.around ?? "", "heading": page?.heading ?? "",
+                "messages": side.messages.map { ["role": $0.role.rawValue, "text": $0.text] },
             ]
         }
         guard let tab = browser.active, let chat = tab.chat else { return ["chat": false] }
