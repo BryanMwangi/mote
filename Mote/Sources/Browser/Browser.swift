@@ -116,6 +116,8 @@ final class Browser: NSObject, ObservableObject {
     @Published var toolbarRevealed = false
     /// The space icon picker open now, and the view it hangs from.
     @Published var pickingIcon: IconPick?
+    /// The folder whose icon is being picked (Change Icon…).
+    @Published var pickingFolderIcon: UUID?
     /// The folder a dragged tab would drop into, and where each folder's row
     /// is (see Browser+Folders.swift).
     @Published var folderHover: UUID?

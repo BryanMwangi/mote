@@ -7,6 +7,8 @@ import SwiftUI
 struct IconPicker: View {
     /// The icon now: a symbol's name or an emoji.
     let current: String?
+    /// Back to the default (a folder's own symbol), when there's one to go back to.
+    var reset: (() -> Void)?
     let choose: (String) -> Void
 
     private enum Kind: Hashable { case symbols, emoji }
@@ -15,8 +17,9 @@ struct IconPicker: View {
     @State private var query = ""
     @FocusState private var searching: Bool
 
-    init(current: String?, choose: @escaping (String) -> Void) {
+    init(current: String?, reset: (() -> Void)? = nil, choose: @escaping (String) -> Void) {
         self.current = current
+        self.reset = reset
         self.choose = choose
         _kind = State(initialValue: current.map(Space.isEmoji) == true ? .emoji : .symbols)
     }
@@ -30,6 +33,9 @@ struct IconPicker: View {
             Group { if kind == .symbols { symbols } else { emoji } }
                 .frame(height: Self.room, alignment: .top)
                 .transaction { $0.animation = nil }
+            if let reset, current != nil {
+                Button("Use the Default Icon", action: reset).buttonStyle(.link).font(.system(size: 11.5))
+            }
         }
         .padding(10)
         .frame(width: 280)

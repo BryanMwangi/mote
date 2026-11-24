@@ -173,17 +173,14 @@ extension Browser {
         }
     }
 
-    /// Change Icon…: an emoji of its own, or none for the folder symbol.
-    func changeFolderIcon(_ id: UUID) {
-        guard let folder = folders.first(where: { $0.id == id }) else { return }
-        Prompt.name(
-            "Folder Icon", placeholder: "📁", initial: folder.icon ?? "", detail: "An emoji, or nothing for the folder.", confirm: "Use"
-        ) { [weak self] text in
-            guard let self else { return }
-            let icon = text.first.map(String.init)
-            FolderStore.shared.change(spaceID) { folders in
-                if let at = folders.firstIndex(where: { $0.id == id }) { folders[at].icon = icon }
-            }
+    /// Change Icon…: the spaces' picker, of symbols and emoji, from the folder's row.
+    func changeFolderIcon(_ id: UUID) { pickingFolderIcon = id }
+
+    /// A symbol or an emoji of its own, or none for the folder symbol.
+    func setFolderIcon(_ id: UUID, to icon: String?) {
+        pickingFolderIcon = nil
+        FolderStore.shared.change(spaceID) { folders in
+            if let at = folders.firstIndex(where: { $0.id == id }) { folders[at].icon = icon }
         }
     }
 

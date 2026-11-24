@@ -277,6 +277,7 @@ extension Bench {
                 }
             case ("unpack", let name?): named(name).map { browser.unpackFolder($0.id) }
             case ("delete", let name?): named(name).map { browser.deleteFolder($0.id) }
+            case ("icon", let name?): named(name).map { browser.changeFolderIcon($0.id) }
             // drag:TAB:NAME, a drag that ends over the folder's row, as a pointer would.
             case ("drag", let spec?):
                 let bits = spec.split(separator: ":", maxSplits: 1).map(String.init)

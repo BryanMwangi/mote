@@ -957,7 +957,7 @@ private struct FolderRow: View {
                 .frame(width: 10)
             Group {
                 if let icon = folder.icon {
-                    Text(icon).font(.system(size: 13))
+                    SpaceGlyph(icon, size: 12).foregroundStyle(Palette.ink.opacity(0.7))
                 } else {
                     Image(systemName: folder.live != nil ? "dot.radiowaves.left.and.right" : folder.collapsed ? "folder" : "folder.fill")
                         .contentTransition(.symbolEffect(.replace))
@@ -969,6 +969,7 @@ private struct FolderRow: View {
             Text(folder.name).font(TextStyle.body.font).foregroundStyle(Palette.ink.opacity(0.8)).lineLimit(1)
             Spacer(minLength: 0)
         }
+        .background { if live && showing { FolderIconPick(browser: browser, folder: folder) } }
         .padding(.leading, 6)
         .padding(.trailing, 10)
         .frame(maxWidth: .infinity, minHeight: Metrics.row, maxHeight: Metrics.row, alignment: .leading)
@@ -1158,5 +1159,22 @@ private struct ListSpot: FillsRoom {
         }
 
         override func hitTest(_ point: NSPoint) -> NSView? { nil }
+    }
+}
+
+/// The icon picker over a folder's row, while Change Icon… is open for it.
+/// Apart from the row, so only this watches the browser.
+private struct FolderIconPick: View {
+    @ObservedObject var browser: Browser
+    let folder: Folder
+
+    var body: some View {
+        Color.clear.popover(
+            isPresented: Binding(
+                get: { browser.pickingFolderIcon == folder.id }, set: { if !$0, browser.pickingFolderIcon == folder.id { browser.pickingFolderIcon = nil } }),
+            arrowEdge: .trailing
+        ) {
+            IconPicker(current: folder.icon, reset: { browser.setFolderIcon(folder.id, to: nil) }) { browser.setFolderIcon(folder.id, to: $0) }
+        }
     }
 }
