@@ -219,8 +219,16 @@ final class PageView: WKWebView {
         return unsafeBitCast(method(for: check), to: Read.self)(self, check)
     }
 
-    /// A context menu is up: the page offers Services nothing (see willOpenMenu).
+    /// A context menu is on its way or up: the page offers Services nothing,
+    /// as macOS's list does nothing useful for what's under the pointer.
+    /// AppKit asks what the page can send as the click comes in, before
+    /// WebKit hands over the menu, and adds Services from the answers.
     private var menuOpen = false
+
+    override func rightMouseDown(with event: NSEvent) {
+        menuOpen = true
+        super.rightMouseDown(with: event)
+    }
 
     override func validRequestor(forSendType sendType: NSPasteboard.PasteboardType?, returnType: NSPasteboard.PasteboardType?) -> Any? {
         menuOpen ? nil : super.validRequestor(forSendType: sendType, returnType: returnType)
@@ -229,38 +237,6 @@ final class PageView: WKWebView {
     override func didCloseMenu(_ menu: NSMenu, with event: NSEvent?) {
         super.didCloseMenu(menu, with: event)
         menuOpen = false
-        servicesWatch.forEach(NotificationCenter.default.removeObserver)
-        servicesWatch = []
-    }
-
-    /// Before AppKit builds the menu, and asks what the page can send.
-    override func menu(for event: NSEvent) -> NSMenu? {
-        menuOpen = true
-        return super.menu(for: event)
-    }
-
-    /// Watching the page's menu while it's up, for a Services item added to it.
-    private var servicesWatch: [NSObjectProtocol] = []
-
-    /// Takes Services out of `menu` whenever AppKit puts it in: as it's built,
-    /// and as it opens.
-    private func keepServicesOut(of menu: NSMenu) {
-        let services = NSApp.servicesMenu?.title ?? "Services"
-        let prune = { [weak menu] in
-            guard let menu else { return }
-            for item in menu.items where item.submenu != nil && (item.submenu?.title == services || item.title == services) {
-                menu.removeItem(item)
-            }
-            // No rule left hanging at the end.
-            while menu.items.last?.isSeparatorItem == true { menu.removeItem(at: menu.items.count - 1) }
-        }
-        prune()
-        servicesWatch = [NSMenu.didAddItemNotification, NSMenu.didBeginTrackingNotification].map { name in
-            NotificationCenter.default.addObserver(forName: name, object: menu, queue: .main) { _ in
-                // A beat later: not while AppKit is still adding to the menu.
-                DispatchQueue.main.async { prune() }
-            }
-        }
     }
 
     override func willOpenMenu(_ menu: NSMenu, with event: NSEvent) {
@@ -272,12 +248,8 @@ final class PageView: WKWebView {
         // A link saved from the menu falls from where it was right-clicked.
         DownloadDrop.pressed = (NSEvent.mouseLocation, Date())
         findLinkBox(at: click)
-        // No Services: macOS's list does nothing useful for what's under the
-        // pointer. AppKit adds it as the menu goes up, from what the page says
-        // it can send (validRequestor), so the page says nothing until it closes.
+        // No Services: see `menuOpen`.
         menu.allowsContextMenuPlugIns = false
-        menuOpen = true
-        keepServicesOut(of: menu)
         if let search = menu.items.first(where: { $0.identifier?.rawValue == "WKMenuItemIdentifierSearchWeb" }) {
             // Read the selection once, for both items: the search, and the
             // chat about the page the selection sits on. WebKit offers its own
@@ -517,6 +489,9 @@ final class PageView: WKWebView {
     func actedOnBehalf() { used = Date() }
 
     override func mouseDown(with event: NSEvent) {
+        // A control-click is a right click (its menu offers no Services); any
+        // other click ends a menu that never came.
+        menuOpen = event.modifierFlags.contains(.control)
         used = Date()
         DownloadDrop.pressed = (NSEvent.mouseLocation, Date())
         onTouch?()
