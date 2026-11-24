@@ -11,11 +11,13 @@ extension View {
     ///   are a rounded card in a panel of its own, as a popover takes the keyboard.
     /// - Parameter stays: open until answered or Escape, not closed by a
     ///   click elsewhere, for a site's question.
+    /// - Parameter plain: without the keyboard, the plain card a tab's hover
+    ///   picture shows on (no outline, its corners), for what shows on hover.
     func menuPanel<Content: View>(
-        isPresented: Binding<Bool>, edge: Edge, keyboard: Bool = true, stays: Bool = false,
+        isPresented: Binding<Bool>, edge: Edge, keyboard: Bool = true, stays: Bool = false, plain: Bool = false,
         @ViewBuilder content: @escaping () -> Content
     ) -> some View {
-        background(MenuPanelAnchor(isPresented: isPresented, edge: edge, keyboard: keyboard, stays: stays, content: content))
+        background(MenuPanelAnchor(isPresented: isPresented, edge: edge, keyboard: keyboard, stays: stays, plain: plain, content: content))
     }
 }
 
@@ -25,6 +27,7 @@ private struct MenuPanelAnchor<Content: View>: FillsRoom {
     let edge: Edge
     let keyboard: Bool
     let stays: Bool
+    let plain: Bool
     let content: () -> Content
 
     func makeCoordinator() -> MenuPanel { MenuPanel() }
@@ -38,7 +41,7 @@ private struct MenuPanelAnchor<Content: View>: FillsRoom {
             if keyboard {
                 menu.pop(AnyView(content()), from: anchor, edge: edge, stays: stays)
             } else {
-                menu.show(AnyView(content()), from: anchor, edge: edge, keyboard: false)
+                menu.show(AnyView(content()), from: anchor, edge: edge, keyboard: false, plain: plain)
             }
         } else {
             menu.close()
@@ -161,17 +164,21 @@ final class MenuPanel: NSObject, NSPopoverDelegate {
         dismissed()
     }
 
-    func show(_ content: AnyView, from anchor: NSView, edge: Edge, keyboard: Bool = true) {
-        // On frosted glass, as the frosted editors and the system's menus.
-        let card = AnyView(
-            content
-                .background(Frost(radius: MenuPanel.cornerRadius))
-                .clipShape(RoundedRectangle(cornerRadius: MenuPanel.cornerRadius, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: MenuPanel.cornerRadius, style: .continuous)
-                        .strokeBorder(Palette.hairline, lineWidth: 1)
-                )
-        )
+    func show(_ content: AnyView, from anchor: NSView, edge: Edge, keyboard: Bool = true, plain: Bool = false) {
+        // On frosted glass, as the frosted editors and the system's menus; or,
+        // plain, as a tab's hover picture is (TabPreview.Card).
+        let card =
+            plain
+            ? AnyView(content.background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous)))
+            : AnyView(
+                content
+                    .background(Frost(radius: MenuPanel.cornerRadius))
+                    .clipShape(RoundedRectangle(cornerRadius: MenuPanel.cornerRadius, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: MenuPanel.cornerRadius, style: .continuous)
+                            .strokeBorder(Palette.hairline, lineWidth: 1)
+                    )
+            )
         guard !closing else { return }
         if let host, isShown {
             host.rootView = card

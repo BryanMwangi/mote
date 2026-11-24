@@ -1018,7 +1018,7 @@ private struct FolderRow: View {
             try? await Task.sleep(for: .seconds(0.5))
             if !Task.isCancelled { listing = true }
         }
-        .menuPanel(isPresented: $listing, edge: .trailing, keyboard: false) {
+        .menuPanel(isPresented: $listing, edge: .trailing, keyboard: false, plain: true) {
             // Its subfolders' tabs too, a line each. Past a height (a dozen
             // lines, or less of a short screen) it scrolls, with no bar.
             let family = Folder.family(of: folder.id, in: browser.folders)
