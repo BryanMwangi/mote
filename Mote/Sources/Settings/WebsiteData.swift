@@ -108,6 +108,25 @@ struct WebsiteDataSheet: View {
     @State private var languages: [(language: String, bytes: Int)] = []
 
     var body: some View {
+        VStack(spacing: 0) {
+            // All of it in one scroll, at the sheet's height: the languages and
+            // the sites below them can be any length.
+            ScrollView { content.padding(20) }
+            Divider()
+            HStack {
+                Spacer()
+                Button("Done") { dismiss() }.keyboardShortcut(.defaultAction)
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 14)
+        }
+        .frame(width: 460, height: 620)
+        .disabled(working)
+        .task { await data.load() }
+        .task { languages = await MozillaTranslation.shared.downloaded() }
+    }
+
+    private var content: some View {
         VStack(spacing: 14) {
             Image(systemName: "internaldrive").font(.system(size: 24, weight: .regular)).foregroundStyle(Palette.ink.opacity(0.8))
                 .frame(width: 52, height: 52).background(Palette.wash, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
@@ -150,23 +169,21 @@ struct WebsiteDataSheet: View {
                     .background(Palette.wash.opacity(0.6), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                 }
             }
-            List(data.sites) { site in SiteRow(site: site, sized: data.sized) { Task { await data.clear(site) } } }
-                .listStyle(.bordered(alternatesRowBackgrounds: false))
-                .overlay {
-                    if !data.loaded { ProgressView().controlSize(.small) }
-                    else if data.sites.isEmpty { Text("No website keeps anything.").foregroundStyle(.secondary) }
+            // The sites, as rows of the same scroll.
+            LazyVStack(spacing: 0) {
+                ForEach(data.sites) { site in
+                    SiteRow(site: site, sized: data.sized) { Task { await data.clear(site) } }
+                        .padding(.horizontal, 12).padding(.vertical, 7)
+                    if site.id != data.sites.last?.id { Divider().padding(.leading, 38) }
                 }
-                .frame(minHeight: 200)
-            HStack {
-                Spacer()
-                Button("Done") { dismiss() }.keyboardShortcut(.defaultAction)
             }
+            .frame(maxWidth: .infinity, minHeight: 60)
+            .overlay {
+                if !data.loaded { ProgressView().controlSize(.small) }
+                else if data.sites.isEmpty { Text("No website keeps anything.").foregroundStyle(.secondary) }
+            }
+            .background(Palette.wash.opacity(0.6), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
         }
-        .padding(20)
-        .frame(width: 460, height: 620)
-        .disabled(working)
-        .task { await data.load() }
-        .task { languages = await MozillaTranslation.shared.downloaded() }
     }
 
     private func action(_ title: String, size: UInt64?, tint: Color, _ act: @escaping () async -> Void) -> some View {
