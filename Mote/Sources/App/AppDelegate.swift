@@ -64,7 +64,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    /// Web addresses, and local .html and .xhtml files (declared in Info.plist).
+    /// Web addresses, and local files: pages (.html, .xhtml, .webarchive), PDFs, images, text and media (declared in Info.plist).
     func application(_ application: NSApplication, open urls: [URL]) {
         for url in urls {
             MainActor.assumeIsolated { Self.take(url) }

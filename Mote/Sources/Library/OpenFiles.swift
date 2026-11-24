@@ -33,7 +33,7 @@ enum OpenFiles: String, CaseIterable, Identifiable {
         switch self {
         case .pdf: [.pdf]
         case .images: [.png, .jpeg, .gif, .webP, .heic, .svg, .tiff, .bmp]
-        case .text: [.html, .plainText, .json, .xml, UTType("net.daringfireball.markdown")].compactMap { $0 }
+        case .text: [.html, .webArchive, .plainText, .json, .xml, UTType("net.daringfireball.markdown")].compactMap { $0 }
         case .media: [.mpeg4Movie, .quickTimeMovie, .mpeg4Audio, .mp3, .wav]
         }
     }
@@ -44,7 +44,7 @@ enum OpenFiles: String, CaseIterable, Identifiable {
         if type.conforms(to: .pdf) { return .pdf }
         if type.conforms(to: .image) { return .images }
         if type.conforms(to: .audiovisualContent) { return .media }
-        if type.conforms(to: .html) || type.conforms(to: .plainText) || type.conforms(to: .json) || type.conforms(to: .xml) { return .text }
+        if type.conforms(to: .html) || type.conforms(to: .webArchive) || type.conforms(to: .plainText) || type.conforms(to: .json) || type.conforms(to: .xml) { return .text }
         return nil
     }
 
