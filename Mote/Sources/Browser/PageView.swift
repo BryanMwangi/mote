@@ -268,6 +268,11 @@ final class PageView: WKWebView {
                 translate.action = #selector(translateSelection(_:))
             }
         }
+        // Look Up, as Mote's: the dictionary and a few results from the web.
+        if let lookUp = menu.items.first(where: { $0.identifier?.rawValue == "WKMenuItemIdentifierLookUp" }) {
+            lookUp.target = self
+            lookUp.action = #selector(lookUpSelection(_:))
+        }
         linkItems(in: menu)
         pageItems(in: menu)
         passwordItems(in: menu)
@@ -427,14 +432,30 @@ final class PageView: WKWebView {
     @available(macOS 15, *)
     @objc private func translateSelection(_ item: NSMenuItem) {
         let spot = menuSpot
-        let show = { [weak self] (text: String?) in
-            let words = text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            guard let self, !words.isEmpty, let browser = Windows.shared.all.first(where: { $0.tab(for: self) != nil }) else { return }
+        withSelection { [weak self] words, browser in
+            guard let self else { return }
             SelectionTranslation.show(words, pageLanguage: browser.tab(for: self)?.pageLanguage, from: self, at: spot, browser: browser)
         }
-        // Read when the menu opened; picked quicker than that, read now.
-        if let selection { return show(selection) }
-        callAsyncJavaScript(Self.selected, arguments: [:], in: nil, in: .defaultClient) { show((try? $0.get()) as? String) }
+    }
+
+    @objc private func lookUpSelection(_ item: NSMenuItem) {
+        let spot = menuSpot
+        withSelection { [weak self] words, browser in
+            guard let self else { return }
+            LookUp.show(words, from: self, at: spot, browser: browser, tab: browser.tab(for: self))
+        }
+    }
+
+    /// The selected words and this page's window, for a menu item that acts
+    /// on them: read when the menu opened, or now if picked quicker than that.
+    private func withSelection(_ use: @escaping (String, Browser) -> Void) {
+        let take = { [weak self] (text: String?) in
+            let words = text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            guard let self, !words.isEmpty, let browser = Windows.shared.all.first(where: { $0.tab(for: self) != nil }) else { return }
+            use(words, browser)
+        }
+        if let selection { return take(selection) }
+        callAsyncJavaScript(Self.selected, arguments: [:], in: nil, in: .defaultClient) { take((try? $0.get()) as? String) }
     }
 
     @objc private func searchSelection(_ item: NSMenuItem) {
