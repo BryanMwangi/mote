@@ -219,6 +219,18 @@ final class PageView: WKWebView {
         return unsafeBitCast(method(for: check), to: Read.self)(self, check)
     }
 
+    /// A context menu is up: the page offers Services nothing (see willOpenMenu).
+    private var menuOpen = false
+
+    override func validRequestor(forSendType sendType: NSPasteboard.PasteboardType?, returnType: NSPasteboard.PasteboardType?) -> Any? {
+        menuOpen ? nil : super.validRequestor(forSendType: sendType, returnType: returnType)
+    }
+
+    override func didCloseMenu(_ menu: NSMenu, with event: NSEvent?) {
+        super.didCloseMenu(menu, with: event)
+        menuOpen = false
+    }
+
     override func willOpenMenu(_ menu: NSMenu, with event: NSEvent) {
         super.willOpenMenu(menu, with: event)
         // Where it was opened, for what hangs from the link (Share), then the
@@ -228,9 +240,11 @@ final class PageView: WKWebView {
         // A link saved from the menu falls from where it was right-clicked.
         DownloadDrop.pressed = (NSEvent.mouseLocation, Date())
         findLinkBox(at: click)
-        // No Services: macOS's list does nothing useful for what's under the pointer.
+        // No Services: macOS's list does nothing useful for what's under the
+        // pointer. AppKit adds it as the menu goes up, from what the page says
+        // it can send (validRequestor), so the page says nothing until it closes.
         menu.allowsContextMenuPlugIns = false
-        for item in menu.items where item.submenu != nil && item.submenu === NSApp.servicesMenu { menu.removeItem(item) }
+        menuOpen = true
         if let search = menu.items.first(where: { $0.identifier?.rawValue == "WKMenuItemIdentifierSearchWeb" }) {
             // Read the selection once, for both items: the search, and the
             // chat about the page the selection sits on. WebKit offers its own
