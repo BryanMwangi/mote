@@ -229,6 +229,38 @@ final class PageView: WKWebView {
     override func didCloseMenu(_ menu: NSMenu, with event: NSEvent?) {
         super.didCloseMenu(menu, with: event)
         menuOpen = false
+        servicesWatch.forEach(NotificationCenter.default.removeObserver)
+        servicesWatch = []
+    }
+
+    /// Before AppKit builds the menu, and asks what the page can send.
+    override func menu(for event: NSEvent) -> NSMenu? {
+        menuOpen = true
+        return super.menu(for: event)
+    }
+
+    /// Watching the page's menu while it's up, for a Services item added to it.
+    private var servicesWatch: [NSObjectProtocol] = []
+
+    /// Takes Services out of `menu` whenever AppKit puts it in: as it's built,
+    /// and as it opens.
+    private func keepServicesOut(of menu: NSMenu) {
+        let services = NSApp.servicesMenu?.title ?? "Services"
+        let prune = { [weak menu] in
+            guard let menu else { return }
+            for item in menu.items where item.submenu != nil && (item.submenu?.title == services || item.title == services) {
+                menu.removeItem(item)
+            }
+            // No rule left hanging at the end.
+            while menu.items.last?.isSeparatorItem == true { menu.removeItem(at: menu.items.count - 1) }
+        }
+        prune()
+        servicesWatch = [NSMenu.didAddItemNotification, NSMenu.didBeginTrackingNotification].map { name in
+            NotificationCenter.default.addObserver(forName: name, object: menu, queue: .main) { _ in
+                // A beat later: not while AppKit is still adding to the menu.
+                DispatchQueue.main.async { prune() }
+            }
+        }
     }
 
     override func willOpenMenu(_ menu: NSMenu, with event: NSEvent) {
@@ -245,6 +277,7 @@ final class PageView: WKWebView {
         // it can send (validRequestor), so the page says nothing until it closes.
         menu.allowsContextMenuPlugIns = false
         menuOpen = true
+        keepServicesOut(of: menu)
         if let search = menu.items.first(where: { $0.identifier?.rawValue == "WKMenuItemIdentifierSearchWeb" }) {
             // Read the selection once, for both items: the search, and the
             // chat about the page the selection sits on. WebKit offers its own
