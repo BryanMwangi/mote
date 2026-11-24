@@ -1,3 +1,4 @@
+import MoteAI
 import MoteCore
 import SwiftUI
 import UniformTypeIdentifiers
@@ -114,18 +115,19 @@ struct Sidebar: View {
         let pill = browser.navInSidebar ? AddressPill.height + Self.pillGap : 0
         let rows = Self.rowsHeight(
             essentials: browser.essentialCount, kept: browser.keptCount, loose: browser.tabs.count - browser.pinnedCount,
-            width: prefs.sideWidth, named: browser.usesSpaces)
+            width: prefs.sideWidth, named: browser.usesSpaces, chats: ChatsSection.lines(prefs))
         return Self.top + pill + rows + 8
     }
 
     /// How tall a space's page stands: its essentials, name, pinned tabs,
     /// the rest and "New tab".
-    static func rowsHeight(essentials pins: Int, kept: Int, loose: Int, width: CGFloat, named: Bool) -> CGFloat {
+    static func rowsHeight(essentials pins: Int, kept: Int, loose: Int, width: CGFloat, named: Bool, chats: Int = 0) -> CGFloat {
         let grid = PinGrid(count: pins, width: width - 20, gap: pinGap)
         let essentials = pins == 0 ? 0 : grid.height(pins) + 10
         let keptRows = kept == 0 ? 0 : CGFloat(kept) * (row + gap) - gap + divider
         let header = named ? SpaceHeader.height + gap : 0
-        return essentials + header + keptRows + CGFloat(loose) * (row + gap) + row
+        let chatRows = chats == 0 ? 0 : CGFloat(chats) * (row + gap) - gap + divider
+        return essentials + header + chatRows + keptRows + CGFloat(loose) * (row + gap) + row
     }
 
     /// The user's buttons, every space, and a plus for a new tab or space.
@@ -297,6 +299,8 @@ private struct SpacePage: View {
                     .padding(.bottom, 10)
             }
             if browser.usesSpaces { SpaceHeader(browser: browser, space: space).padding(.bottom, Self.gap) }
+            // Above the folders and pinned tabs, and kept there while they scroll.
+            if prefs.chatsInSidebar { ChatsSection(browser: browser, prefs: prefs).padding(.bottom, Self.divider) }
             // A plain stack until the tabs overflow, so the room below them
             // still drags the window. Worked out, not measured: ViewThatFits
             // lays the rows out twice, on every page, on every change.
@@ -305,7 +309,8 @@ private struct SpacePage: View {
             // big open folder can't push the ones after it out of reach.
             let overflows =
                 Sidebar.rowsHeight(
-                    essentials: essentials.count, kept: lines.count, loose: loose.count, width: prefs.sideWidth, named: browser.usesSpaces)
+                    essentials: essentials.count, kept: lines.count, loose: loose.count, width: prefs.sideWidth, named: browser.usesSpaces,
+                    chats: ChatsSection.lines(prefs))
                 > room
             if !overflows {
                 if !lines.isEmpty { keptRows(kept, lines: lines) }
@@ -1175,6 +1180,93 @@ private struct FolderIconPick: View {
             arrowEdge: .trailing
         ) {
             IconPicker(current: folder.icon, reset: { browser.setFolderIcon(folder.id, to: nil) }) { browser.setFolderIcon(folder.id, to: $0) }
+        }
+    }
+}
+
+/// The newest chats, as a folder at the top of the sidebar (Settings › Tabs ›
+/// Chats in the sidebar): folds like one, a click opens a chat, and Show All
+/// opens every chat.
+private struct ChatsSection: View {
+    let browser: Browser
+    @ObservedObject var prefs: Preferences
+    @State private var hovering = false
+
+    private static let shown = 5
+
+    private static var newest: [ChatArchive.Entry] {
+        Array(Assistant.shared.chats.entries.filter { $0.archived != true }.prefix(shown))
+    }
+
+    /// How many rows it stands: its header, and unfolded its chats and Show All.
+    static func lines(_ prefs: Preferences) -> Int {
+        guard prefs.chatsInSidebar else { return 0 }
+        return prefs.chatsFolded ? 1 : 2 + newest.count
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 8) {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(Palette.muted)
+                    .rotationEffect(.degrees(prefs.chatsFolded ? 0 : 90))
+                    .frame(width: 10)
+                Text("Chats").font(TextStyle.body.font).foregroundStyle(Palette.ink.opacity(0.8))
+                Spacer(minLength: 0)
+                if hovering {
+                    Button(action: browser.newAskingTab) {
+                        Image(systemName: "square.and.pencil").font(.system(size: 12)).foregroundStyle(Palette.muted)
+                    }
+                    .buttonStyle(.plain)
+                    .help("New Chat")
+                }
+            }
+            .padding(.leading, 6)
+            .padding(.trailing, 10)
+            .frame(maxWidth: .infinity, minHeight: Metrics.row, maxHeight: Metrics.row, alignment: .leading)
+            .contentShape(Rectangle())
+            .onTapGesture { withAnimation(Motion.settle) { prefs.chatsFolded.toggle() } }
+            .onHover { hovering = $0 }
+            if !prefs.chatsFolded {
+                ForEach(Self.newest) { entry in
+                    ChatLine(symbol: "bubble.left", title: entry.title.isEmpty ? "New chat" : entry.title, time: Self.time(entry.updated)) {
+                        browser.open(chat: entry.id)
+                    }
+                }
+                ChatLine(symbol: "ellipsis", title: "Show All", time: nil, muted: true) { browser.showChats() }
+            }
+        }
+    }
+
+    /// Today's time, as "10:43"; else the day, as "21 Nov".
+    private static func time(_ date: Date) -> String {
+        Calendar.current.isDateInToday(date)
+            ? date.formatted(date: .omitted, time: .shortened) : date.formatted(.dateTime.day().month(.abbreviated))
+    }
+
+    private struct ChatLine: View {
+        let symbol: String
+        let title: String
+        let time: String?
+        var muted = false
+        let open: () -> Void
+        @State private var hovering = false
+
+        var body: some View {
+            HStack(spacing: 8) {
+                Image(systemName: symbol).font(.system(size: 12)).foregroundStyle(Palette.muted).frame(width: 16)
+                Text(title).font(TextStyle.body.font).foregroundStyle(muted ? Palette.muted : Palette.ink).lineLimit(1)
+                Spacer(minLength: 4)
+                if let time { Text(time).font(.system(size: 11).monospacedDigit()).foregroundStyle(Palette.muted) }
+            }
+            .padding(.leading, 24)
+            .padding(.trailing, 10)
+            .frame(maxWidth: .infinity, minHeight: Metrics.row, maxHeight: Metrics.row, alignment: .leading)
+            .background { if hovering { RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Palette.veil) } }
+            .contentShape(Rectangle())
+            .onTapGesture(perform: open)
+            .onHover { hovering = $0 }
         }
     }
 }

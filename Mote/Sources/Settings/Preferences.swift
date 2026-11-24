@@ -145,6 +145,9 @@ final class Preferences: ObservableObject {
     @Published var chatSite: String
     /// Mote's chat is one conversation that stays as the tabs change.
     @Published var oneChat: Bool
+    /// The newest chats in the sidebar, as a folder above the pinned tabs, and whether it's folded.
+    @Published var chatsInSidebar: Bool
+    @Published var chatsFolded: Bool
     /// The assistant may read the tabs, pages, history and bookmarks.
     @Published var aiReads: Bool
     /// The assistant may open tabs and click and type in pages, asking each time.
@@ -292,6 +295,8 @@ final class Preferences: ObservableObject {
         sideWidth = min(Metrics.sideMax, max(Metrics.sideMin, store.value("sidebar.width", or: Metrics.side)))
         chatSite = store.value("ai.sidebar.site", or: "")
         oneChat = store.value("ai.oneChat", or: false)
+        chatsInSidebar = store.value("sidebar.chats", or: false)
+        chatsFolded = store.value("sidebar.chatsFolded", or: false)
         aiReads = store.value("ai.tools.read", or: true)
         aiActs = store.value("ai.tools.act", or: false)
         aiBackground = store.value("ai.background", or: false)
@@ -406,6 +411,8 @@ final class Preferences: ObservableObject {
         keep($panelSides, "panel.sides")
         keep($chatSite, "ai.sidebar.site")
         keep($oneChat, "ai.oneChat")
+        keep($chatsInSidebar, "sidebar.chats")
+        keep($chatsFolded, "sidebar.chatsFolded")
         keep($aiReads, "ai.tools.read")
         keep($aiActs, "ai.tools.act")
         keep($aiBackground, "ai.background")
