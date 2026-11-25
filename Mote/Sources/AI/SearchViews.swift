@@ -321,7 +321,10 @@ struct SourcesStrip: View {
             }
             .padding(.vertical, 1)
         }
-        .frame(height: 68)
+        // The column's width, never its cards': as they arrive, a strip asking
+        // for all of them widened the whole chat for a moment, its text off
+        // the edge, until the next layout.
+        .frame(maxWidth: .infinity, minHeight: 68, maxHeight: 68, alignment: .leading)
         .scrollClipDisabled()
     }
 }
