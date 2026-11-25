@@ -123,7 +123,6 @@ struct AISettings: View {
 
         SettingsSection(
             "Chat sidebar",
-            note: "A site stays as you move between tabs, signed in as it is in the space it opened in. ⇧⌘A opens and closes it."
         ) {
             SettingRow(
                 "Sidebar shows", "Mote's chat, or an AI app's site", symbol: "sidebar.right", tint: Tint.purple,
@@ -156,7 +155,7 @@ struct AISettings: View {
                 tint: Tint.indigo, keywords: ["chats", "conversations", "tabs"], on: $prefs.chatsInSidebar)
             RowRule()
             SettingRow(
-                "Chat storage", "How much room each chat takes with its attached files, to delete what you don't need",
+                "Chat storage", "See how much space a chat and its attachments consume",
                 symbol: "internaldrive", tint: Tint.gray, keywords: ["chats", "files", "attachments", "space", "storage"]
             ) {
                 Pill("Manage") { managingChats = true }
@@ -169,7 +168,7 @@ struct AISettings: View {
         SettingsSection(
             "On this Mac",
             note:
-                "Agents use their own accounts and work in a folder of Mote's own. Claude Code gets only web search and page reading; Codex runs read-only; opencode's planning agent writes no files but may run commands."
+                "Agents use their own accounts and work in a folder owned by Mote"
         ) {
             ForEach(Array(Provider.all.filter { $0.kind != .cloud }.enumerated()), id: \.element.id) { index, item in
                 if index > 0 { RowRule() }
@@ -183,7 +182,7 @@ struct AISettings: View {
             }
         }
 
-        SettingsSection("With an API key", note: "Keys stay in the Mac's keychain. Questions go straight to the provider you choose.") {
+        SettingsSection("With an API key", note: "Keys stay in the Mac's keychain.") {
             ForEach(Array(Provider.all.filter { $0.kind == .cloud }.enumerated()), id: \.element.id) { index, item in
                 if index > 0 { RowRule() }
                 ProviderRow(provider: item)
