@@ -1042,6 +1042,8 @@ final class Tab: ObservableObject, Identifiable {
     /// Removes the web view, and with it the document WebKit would keep in its
     /// back-forward cache. The tab keeps its address; `web` makes a new view.
     private func letPageGo() {
+        // Its hover picture too: taken again from the page or its sleeping picture when next wanted.
+        preview = nil
         stale = false
         pull = nil
         media = nil

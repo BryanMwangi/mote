@@ -14,7 +14,13 @@ final class Favicons {
     var arrived: ((String, NSImage) -> Void)?
 
     private let files = IconFiles()
-    private var loaded: [String: NSImage] = [:]
+    /// The icons in memory, which the system may trim when it's short: those
+    /// on disk are read again when next asked for, the rest fetched again.
+    private let loaded: NSCache<NSString, NSImage> = {
+        let cache = NSCache<NSString, NSImage>()
+        cache.countLimit = 400
+        return cache
+    }()
     /// Names known to have no file, so long lists don't ask the disk per row.
     private var unfiled: Set<String> = []
     /// Sites being fetched, and sites with no icon to be had this session.
@@ -36,18 +42,18 @@ final class Favicons {
     }
 
     private func image(_ name: String) -> NSImage? {
-        if let image = loaded[name] { return image }
+        if let image = loaded.object(forKey: name as NSString) { return image }
         guard !unfiled.contains(name) else { return nil }
         guard let image = files.read(name) else {
             unfiled.insert(name)
             return nil
         }
-        loaded[name] = image
+        loaded.setObject(image, forKey: name as NSString)
         return image
     }
 
     private func keep(_ image: NSImage, as name: String, host: String, onDisk: Bool) {
-        loaded[name] = image
+        loaded.setObject(image, forKey: name as NSString)
         if onDisk { files.write(image, as: name) }
         arrived?(host, image)
     }
