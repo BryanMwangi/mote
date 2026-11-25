@@ -117,8 +117,10 @@ extension Bench {
             guard call.testRun("it would open a chat in your browser") else { return }
             let service = DemoReply(
                 sources: request.int("sources") ?? 400, delay: request.double("delay") ?? 0, plain: request.flag("plain"))
-            if browser.active?.isStart != true { browser.newTab() }
-            let chat = Conversation()
+            // again: one more turn in the chat in front, for a long chat.
+            let again = request.flag("again") ? browser.active?.chat : nil
+            if again == nil, browser.active?.isStart != true { browser.newTab() }
+            let chat = again ?? Conversation()
             chat.send(
                 "Demo: a long researched reply",
                 via: Conversation.Route(provider: "demo", model: "", author: "Mote · demo", service: service, search: true))
