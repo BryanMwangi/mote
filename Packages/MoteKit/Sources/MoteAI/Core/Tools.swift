@@ -298,6 +298,7 @@ extension ToolLoop {
         case "list_folders": return "Looking at your folders"
         case "rename_folder": return "Renaming a folder"
         case "delete_folder": return "Deleting a folder"
+        case "watch_page": return "Leaving a watch on the page"
         case "task_list":
             switch input?["action"]?.string {
             case "set": return "Setting out the task list"

@@ -148,7 +148,7 @@ final class AssistantTools {
         outside || subAgent
             ? tabTools + pageTools + pdfTools + workTools + (subAgent ? fileTools : []) + devTools
             : tabTools + spaceTools + pageTools + pdfTools + workTools + fileTools + signInTools + devTools + dataTools + ledgerTools + askTools
-                + taskTools
+                + taskTools + watchTools
                 + agentTools
     }
 
@@ -187,6 +187,7 @@ final class AssistantTools {
         if !outside, let said = await runSpaces(call) { return ToolOutput(said) }
         if !outside, let said = await runLedger(call) { return ToolOutput(said) }
         if !outside, let said = await runTasks(call) { return ToolOutput(said) }
+        if !outside, let said = await runWatch(call) { return ToolOutput(said) }
         if !outside, let said = await runSignIn(call) { return ToolOutput(said) }
         if !outside, let said = await runFiles(call) { return ToolOutput(said) }
         if !outside, let said = await runData(call) { return ToolOutput(said) }
