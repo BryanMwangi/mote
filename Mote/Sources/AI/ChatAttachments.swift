@@ -303,40 +303,25 @@ struct StepShot: Identifiable, Equatable {
     }
 }
 
-/// What a step looked at, under its line in the steps' list: at its own
-/// shape, opening in Quick Look among the reply's others.
-struct StepPreview: View {
-    let shot: StepShot
-    let all: [StepShot]
-    @State private var image: NSImage?
-    @State private var hovering = false
-
-    var body: some View {
-        Group {
-            if let image {
-                let ratio = image.size.width / max(1, image.size.height)
-                Image(nsImage: image).resizable().scaledToFit()
-                    .frame(width: min(280, max(60, 150 * ratio)), height: min(150, 280 / max(ratio, 0.01)))
-            } else {
-                Palette.wash.frame(width: 120, height: 80)
-            }
-        }
-        .clipShape(Rounded.row)
-        .overlay(Rounded.row.strokeBorder(hovering ? Palette.ink.opacity(0.3) : Palette.hairline))
-        .onHover { hovering = $0 }
-        .file(shot.url, among: all.map(\.url))
-        .task(id: shot.url) { image = await Thumbnail.of(shot.url, side: 560) }
-    }
-}
-
 /// What a reply's steps looked at, small at the end of its steps' line:
 /// the last few, with how many more. Over one, a larger look below, clear
 /// of them; a click shows them all in Quick Look.
 struct StepShots: View {
     let shots: [StepShot]
     @State private var over: StepShot?
+    /// Room in the chat under the line and over it, and the larger look's height.
+    @State private var room = (below: CGFloat.infinity, above: CGFloat.zero)
+    @State private var cardHeight: CGFloat = 250
+
+    /// What the composer covers at the chat's foot.
+    static let foot: CGFloat = 150
+
+    /// Below the line when it fits there, else above it if it fits there.
+    private var below: Bool { room.below >= cardHeight + 16 || room.above < cardHeight + 16 }
 
     static let shown = 3
+    /// The small ones' side.
+    static let side: CGFloat = 24
 
     var body: some View {
         let shown = Array(shots.suffix(Self.shown))
@@ -345,40 +330,61 @@ struct StepShots: View {
                 Text("+\(shots.count - shown.count)").font(.system(size: 11.5)).foregroundStyle(Palette.muted).padding(.trailing, 2)
             }
             ForEach(shown) { shot in
-                StepThumb(url: shot.url, over: over == shot)
-                    .file(shot.url, among: shots.map(\.url))
+                StepFile(url: shot.url, all: shots.map(\.url), lit: over == shot)
                     .onHover { inside in
                         if inside { over = shot } else if over == shot { over = nil }
                     }
             }
         }
-        .overlay(alignment: .bottomTrailing) {
+        .overlay(alignment: .topTrailing) {
             if let over, let index = shots.firstIndex(of: over) {
                 ShotCard(shot: over, place: shots.count > 1 ? "\(index + 1) of \(shots.count)" : nil)
-                    // At its own size, not the line's, its top just under the line.
+                    // At its own size, not the line's, clear of the line either way.
                     .fixedSize()
-                    .alignmentGuide(.bottom) { $0[.top] - 8 }
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { cardHeight = $0 }
+                    .offset(y: below ? StepShots.side + 8 : -(cardHeight + 8))
                     .allowsHitTesting(false)
                     .transition(.opacity)
             }
+        }
+        .onGeometryChange(for: CGRect.self) { proxy in
+            let view = proxy.bounds(of: .named("chat"))?.height ?? .infinity
+            let line = proxy.frame(in: .named("chat"))
+            return CGRect(x: 0, y: line.minY, width: 0, height: view - Self.foot - line.maxY)
+        } action: { measured in
+            room = (below: measured.height, above: measured.minY)
         }
         .animation(Motion.quick, value: over)
     }
 }
 
-private struct StepThumb: View {
+/// What a step looked at, small (a square at a line's end) or open (at
+/// its own shape, under its step): one view either way, so it moves
+/// between the two rather than being made again. A click shows it in Quick
+/// Look among `all`.
+struct StepFile: View {
     let url: URL
-    let over: Bool
+    var all: [URL] = []
+    var open = false
+    var lit = false
     @State private var image: NSImage?
+    @State private var hovering = false
 
     var body: some View {
+        let ratio = image.map { $0.size.width / max(1, $0.size.height) } ?? 1.5
+        let size =
+            open ? CGSize(width: min(280, max(60, 150 * ratio)), height: min(150, 280 / max(ratio, 0.01))) : CGSize(width: StepShots.side, height: StepShots.side)
         Group {
-            if let image { Image(nsImage: image).resizable().scaledToFill() } else { Palette.wash }
+            if let image { Image(nsImage: image).resizable().aspectRatio(contentMode: open ? .fit : .fill) } else { Palette.wash }
         }
-        .frame(width: 24, height: 24)
-        .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 4, style: .continuous).strokeBorder(over ? Palette.ink.opacity(0.4) : Palette.hairline))
-        .task(id: url) { image = await Thumbnail.of(url, side: 48) }
+        .frame(width: size.width, height: size.height)
+        .clipShape(RoundedRectangle(cornerRadius: open ? 8 : 4, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: open ? 8 : 4, style: .continuous)
+                .strokeBorder(lit || hovering ? Palette.ink.opacity(0.35) : Palette.hairline))
+        .onHover { hovering = $0 }
+        .file(url, among: all.isEmpty ? [url] : all)
+        .task(id: url) { image = await Thumbnail.of(url, side: 560) }
     }
 }
 

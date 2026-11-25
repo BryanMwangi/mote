@@ -208,14 +208,16 @@ struct StepsSummary: View {
             HStack(spacing: 8) {
                 fold
                 Spacer(minLength: 0)
-                if !shots.isEmpty { StepShots(shots: shots) }
+                // Open, each step shows its own.
+                if !shots.isEmpty, !open { StepShots(shots: shots) }
             }
             if open {
                 VStack(alignment: .leading, spacing: 7) {
                     ForEach(steps, id: \.id) { step in StepLine(step: step, shot: shots.first { $0.step == step.id }, shots: shots) }
                 }
                 .padding(.leading, 2)
-                .transition(.opacity)
+                // Easing down out of the line as it opens, back up as it folds.
+                .transition(.opacity.combined(with: .offset(y: -8)))
             }
         }
         // What went wrong shows without asking.
@@ -261,6 +263,8 @@ struct StepLine: View {
     var shot: StepShot?
     var shots: [StepShot] = []
     @State private var whole = false
+    /// Its file shown under it; folded, a small one at the line's end.
+    @State private var expanded = false
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 7) {
@@ -269,16 +273,40 @@ struct StepLine: View {
                 .foregroundStyle(tint)
                 .frame(width: 14)
             VStack(alignment: .leading, spacing: 2) {
-                Text(step.title + (label.map { " · " + $0 } ?? "")).font(.system(size: 12.5)).lineLimit(1).truncationMode(.middle)
                 if let shot {
-                    StepPreview(shot: shot, all: shots).padding(.top, 4)
-                } else if let detail = step.detail {
+                    // Its file at the line's end, or under it: the same view, moved.
+                    let layout = expanded ? AnyLayout(VStackLayout(alignment: .leading, spacing: 6)) : AnyLayout(HStackLayout(spacing: 8))
+                    layout {
+                        HStack(spacing: 8) {
+                            Button {
+                                withAnimation(Motion.settle) { expanded.toggle() }
+                            } label: {
+                                HStack(spacing: 5) {
+                                    title
+                                    Image(systemName: "chevron.right").font(.system(size: 8, weight: .bold))
+                                        .rotationEffect(.degrees(expanded ? 90 : 0))
+                                }
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            Spacer(minLength: 0)
+                        }
+                        StepFile(url: shot.url, all: shots.map(\.url), open: expanded)
+                    }
+                } else {
+                    title
+                }
+                if shot == nil, let detail = step.detail {
                     Text(detail).font(.system(size: 11.5)).foregroundStyle(Palette.faint).lineLimit(whole ? nil : 2).textSelection(.enabled)
                         .onTapGesture { whole.toggle() }
                 }
             }
         }
         .foregroundStyle(Palette.muted)
+    }
+
+    private var title: some View {
+        Text(step.title + (label.map { " · " + $0 } ?? "")).font(.system(size: 12.5)).lineLimit(1).truncationMode(.middle)
     }
 
     private var mark: String {

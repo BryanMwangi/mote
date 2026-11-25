@@ -60,7 +60,7 @@ struct ChatView<Accessory: View, Start: View>: View {
                 // Opens at the end; what scrolls inside it (sources, wide tables
                 // and code) opens at its start, the anchor not passed down.
                 follow(
-                    ScrollView { transcript.defaultScrollAnchor(.topLeading) }.defaultScrollAnchor(.bottom).floatingScrollBar()
+                    ScrollView { transcript.defaultScrollAnchor(.topLeading) }.modifier(OpensAtEnd()).floatingScrollBar()
                         .coordinateSpace(name: "chat"), scroller)
                     .onChange(of: distance) { _, now in if now == .end { pinned = true } }
                     .onScrollUp { pinned = false }
@@ -1212,6 +1212,20 @@ private struct UsageCard: View {
         HStack(spacing: 8) {
             Text(title).font(.system(size: 12.5, weight: .medium)).foregroundStyle(Palette.ink)
             Text(spent.map(spentLine) ?? "—").font(.system(size: 12.5)).foregroundStyle(Palette.muted).monospacedDigit()
+        }
+    }
+}
+
+/// The chat opens at its end; where macOS allows, only then. Held at its
+/// end as content changed size, a step list opened lower down pushed
+/// everything above it up at once, rather than growing down into view.
+/// Following a reply as it comes is `follow`'s, not this.
+private struct OpensAtEnd: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(macOS 15, *) {
+            content.defaultScrollAnchor(.bottom, for: .initialOffset)
+        } else {
+            content.defaultScrollAnchor(.bottom)
         }
     }
 }
