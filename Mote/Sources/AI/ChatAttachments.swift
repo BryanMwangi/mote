@@ -51,7 +51,7 @@ struct AttachButton: View {
         } label: {
             Image(systemName: "paperclip").font(.system(size: 12, weight: .medium))
                 .foregroundStyle(hovering ? Palette.ink.opacity(0.7) : Palette.muted)
-                .frame(width: 24, height: 22).contentShape(Rectangle())
+                .frame(width: 20, height: 22).contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .onHover { hovering = $0 }

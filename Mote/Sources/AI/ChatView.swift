@@ -1003,9 +1003,14 @@ private struct ChatComposer: View {
                 }
             }
             HStack(spacing: 8) {
-                if conversation.folder != nil { AttachButton(attach: attach) }
-                ToolToggles()
-                if browser.prefs.aiActs { ModeChip(chat: conversation.id) }
+                // Whole, close together: in a narrow sidebar the model's name gives way first.
+                HStack(spacing: 2) {
+                    if conversation.folder != nil { AttachButton(attach: attach) }
+                    ToolToggles()
+                }
+                .fixedSize()
+                .layoutPriority(1)
+                if browser.prefs.aiActs { ModeChip(chat: conversation.id).fixedSize().layoutPriority(1) }
                 Spacer(minLength: 0)
                 AIChip(browser: browser)
                 if conversation.busy, !hasText, conversation.attached.isEmpty {

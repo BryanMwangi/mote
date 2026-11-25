@@ -44,7 +44,8 @@ struct AIChip: View {
                 .contentShape(Capsule())
         }
         .buttonStyle(Pressed())
-        .fixedSize()
+        // Its name shortens when there's no room for the rest, rather than them.
+        .fixedSize(horizontal: false, vertical: true)
         .onHover { inside in
             hovering = inside
             if inside { assistant.prepare() }
