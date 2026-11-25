@@ -126,16 +126,13 @@ struct StepPictures: View {
     var body: some View {
         let taken = steps.compactMap { step in step.picture.map { (step: step, file: $0) } }
         if let folder, !taken.isEmpty {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 6) {
-                    ForEach(taken, id: \.file) { shot in
-                        StepPicture(url: folder.appendingPathComponent(shot.file), title: shot.step.title)
-                    }
+            // Wrapping, not scrolling: a scroll inside the chat's took clicks
+            // meant for the steps' fold above it.
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 96, maximum: 96), spacing: 6)], alignment: .leading, spacing: 6) {
+                ForEach(taken, id: \.file) { shot in
+                    StepPicture(url: folder.appendingPathComponent(shot.file), title: shot.step.title)
                 }
-                .padding(.vertical, 1)
             }
-            .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
-            .frame(height: 64)
         }
     }
 }
