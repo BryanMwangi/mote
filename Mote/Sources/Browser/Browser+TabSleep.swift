@@ -28,6 +28,32 @@ extension Browser {
         }
         source.resume()
         pressure = source
+        Self.watchMemory()
+    }
+
+    /// Once for the app: when memory gets short (a warning, before it's
+    /// critical), what Mote keeps for speed and can make again goes.
+    private static var relief: DispatchSourceMemoryPressure?
+
+    private static func watchMemory() {
+        guard relief == nil else { return }
+        let source = DispatchSource.makeMemoryPressureSource(eventMask: [.warning, .critical], queue: .main)
+        source.setEventHandler { MainActor.assumeIsolated { relieve() } }
+        source.resume()
+        relief = source
+    }
+
+    /// Lets go of what can be made again: the translation engine and its
+    /// models, a chat sidebar's AI site while its panel is closed, and link
+    /// previews waiting with tabs that aren't in front. Tabs themselves are
+    /// left to sleep as they do (critical pressure, idle time).
+    static func relieve() {
+        MozillaTranslation.shared.rest()
+        for browser in Windows.shared.all {
+            if !browser.chatting { browser.siteChat.drop() }
+            browser.parkedPeeks.values.forEach { $0.tab.close() }
+            browser.parkedPeeks = [:]
+        }
     }
 
     /// Puts every tab idle for `limit` to sleep, other spaces' included, longest idle first.

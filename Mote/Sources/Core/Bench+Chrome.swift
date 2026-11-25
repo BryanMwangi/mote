@@ -185,6 +185,8 @@ extension Bench {
             }
         }
         // A notice as it would show (test runs): an update's, or a plain line.
+        // Memory short, as a warning from the system would say (test runs).
+        if Storage.testing, request.string("relieve") != nil { Browser.relieve() }
         // The off-screen room put on screen as macOS did, then the displays "change" (test runs).
         if Storage.testing, request.string("roompark") != nil {
             BenchRoom.made.setFrameOrigin(NSPoint(x: 160, y: 100))
