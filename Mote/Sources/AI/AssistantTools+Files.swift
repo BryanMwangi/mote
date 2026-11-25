@@ -73,10 +73,28 @@ extension AssistantTools {
         }
     }
 
+    /// Where the assistant may go: a web address, or a local page (file://)
+    /// in a folder allowed for this chat, asked for first if it isn't. The
+    /// address, or why not; neither for what isn't an address at all.
+    func destination(_ text: String?) async -> (url: URL?, refusal: String?) {
+        if let url = web(text) { return (url, nil) }
+        guard let text, let given = URL(string: text), given.isFileURL else { return (nil, nil) }
+        let file = given.standardizedFileURL.resolvingSymlinksInPath()
+        guard FileManager.default.fileExists(atPath: file.path) else { return (nil, "There's no file at \(file.path).") }
+        let folder = file.deletingLastPathComponent().path
+        if !allowed(folder), !(await allow(folder)) {
+            return (nil, "The person didn't allow the assistant into \((folder as NSString).abbreviatingWithTildeInPath).")
+        }
+        return (file, nil)
+    }
+
     /// Whether files in `folder` may be attached: it, or a folder it is in,
     /// is allowed for good or for this chat.
     private func allowed(_ folder: String) -> Bool {
-        let granted = prefs.aiFolders + Array(chat.flatMap { Self.chatFolders[$0] } ?? [])
+        // Both sides as the file system resolves them: /private/tmp and /tmp are one folder.
+        let real = { (path: String) in URL(fileURLWithPath: (path as NSString).expandingTildeInPath).resolvingSymlinksInPath().path }
+        let folder = real(folder)
+        let granted = (prefs.aiFolders + Array(chat.flatMap { Self.chatFolders[$0] } ?? [])).map(real)
         return granted.contains { folder == $0 || folder.hasPrefix($0.hasSuffix("/") ? $0 : $0 + "/") }
     }
 
@@ -89,8 +107,8 @@ extension AssistantTools {
         let thisChat = "Allow for this chat", always = "Always allow", deny = "Don't allow"
         guard let conversation = Assistant.shared.conversation(chat), conversation.busy else {
             let alert = NSAlert()
-            alert.messageText = "Let the assistant attach files from \(shown) to pages?"
-            alert.informativeText = subAgent ? "One of its helpers asks, working on your task." : "The assistant asks, working on your task."
+            alert.messageText = "Let the assistant use files from \(shown)?"
+            alert.informativeText = (subAgent ? "One of its helpers asks, working on your task." : "The assistant asks, working on your task.") + " It can open them and attach them to pages."
             alert.addButton(withTitle: "Allow for This Chat")
             alert.addButton(withTitle: "Always Allow")
             alert.addButton(withTitle: "Don't Allow").keyEquivalent = "\u{1b}"
@@ -108,7 +126,7 @@ extension AssistantTools {
             return true
         }
         let question = Conversation.Question(
-            text: "Let the assistant attach files from \(shown) to pages?",
+            text: "Let the assistant use files from \(shown): open them, and attach them to pages?",
             options: [
                 .init(label: thisChat, description: "Until this chat is over"),
                 .init(label: always, description: "Listed in Settings › AI, where you can take it back"),

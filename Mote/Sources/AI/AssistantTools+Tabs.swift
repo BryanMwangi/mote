@@ -78,8 +78,10 @@ extension AssistantTools {
             bringForward(found)
             return "\(Self.line(found.tab)) is in front."
         case "open_tab":
-            guard let url = web(input["url"]?.string) else { return "That isn't a web address." }
-            guard await permit(.inPage(url), "Open \(url.absoluteString) in a new tab?") else { return refused }
+            let (target, refusal) = await destination(input["url"]?.string)
+            guard let url = target else { return refusal ?? "That isn't a web address, or a file:// one." }
+            // A local page's folder is allowed already; a site is asked about.
+            if !url.isFileURL, !(await permit(.inPage(url), "Open \(url.absoluteString) in a new tab?")) { return refused }
             let tab = browser.open(url, foreground: input["background"]?.bool != true)
             let undo = record("Opened \(url.absoluteString)") { [weak browser] in
                 guard let browser, browser.tab(tab.id) != nil else { return "It was already closed." }
@@ -432,8 +434,9 @@ extension AssistantTools {
             go == "back" ? tab.back() : tab.forward()
             return "Went \(go) in \(Self.line(tab))."
         }
-        guard let url = web(input["url"]?.string) else { return "Give an address, or go: back or forward." }
-        guard await permit(.inPage(url), "Go to \(url.absoluteString) in “\(tab.label)”?") else { return refused }
+        let (target, refusal) = await destination(input["url"]?.string)
+        guard let url = target else { return refusal ?? "Give an address, or go: back or forward." }
+        if !url.isFileURL, !(await permit(.inPage(url), "Go to \(url.absoluteString) in “\(tab.label)”?")) { return refused }
         found.browser.go(tab, to: url)
         return "Going to \(url.absoluteString) in tab \(Self.id(tab)), from \(was?.absoluteString ?? "nothing")."
             + record("Took \(Self.line(tab)) to \(url.absoluteString)") { tab.back(); return "Went back." }

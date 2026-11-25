@@ -62,7 +62,8 @@ extension AssistantTools {
         let input = call.input
         switch call.name {
         case "read_page":
-            guard let url = web(input["url"]?.string) else { return "That isn't a web address." }
+            let (target, refusal) = await destination(input["url"]?.string)
+            guard let url = target else { return refusal ?? "That isn't a web address, or a file:// one." }
             // A PDF: its text page by page, not WebKit's viewer.
             if url.pathExtension.lowercased() == "pdf", let (data, _) = try? await URLSession.shared.data(from: url),
                 let document = PDFDocument(data: data)
@@ -273,7 +274,8 @@ final class ReadAway: NSObject, WKNavigationDelegate {
         BenchRoom.made.contentView?.addSubview(page)
         defer { page.removeFromSuperview() }
         page.navigationDelegate = reader
-        page.load(URLRequest(url: url))
+        // A local page reads what's beside it in its folder, as a tab does.
+        if url.isFileURL { page.loadFileURL(url, allowingReadAccessTo: url.deletingLastPathComponent()) } else { page.load(URLRequest(url: url)) }
         await withCheckedContinuation { done in
             reader.done = done
             Task { @MainActor in
