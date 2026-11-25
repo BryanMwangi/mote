@@ -341,7 +341,39 @@ final class MozillaTranslation: NSObject, ObservableObject, WKURLSchemeHandler, 
     @discardableResult
     private func call(_ body: String, _ arguments: [String: Any]) async throws -> Any? {
         let page = await view()
+        calling += 1
+        defer {
+            calling -= 1
+            restLater()
+        }
         return try await page.callAsyncJavaScript(body, arguments: arguments, contentWorld: .page)
+    }
+
+    // MARK: - Letting go
+
+    /// Calls under way; the engine isn't let go while there are any.
+    private var calling = 0
+    private var resting: Task<Void, Never>?
+    /// How long it's kept after its last use: the next page is likely soon.
+    private static let keptFor: Duration = .seconds(180)
+
+    /// The engine's page, and the models in it, go a while after the last use.
+    private func restLater() {
+        resting?.cancel()
+        resting = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: Self.keptFor)
+            guard !Task.isCancelled else { return }
+            self?.rest()
+        }
+    }
+
+    /// Lets the engine's page and its models go (unused a while, or memory is
+    /// short); the next translation starts it again, from the files on disk.
+    func rest() {
+        guard calling == 0, making == nil, web != nil else { return }
+        web = nil
+        loaded = [:]
+        done = [:]
     }
 
     // MARK: - Files for the page
