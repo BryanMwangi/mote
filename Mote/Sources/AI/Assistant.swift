@@ -150,7 +150,7 @@ final class Assistant {
 
     func hasKey(for provider: Provider) -> Bool {
         _ = keysChanged
-        return secrets.key(for: provider.id) != nil
+        return secrets.hasKey(for: provider.id)
     }
 
     @discardableResult

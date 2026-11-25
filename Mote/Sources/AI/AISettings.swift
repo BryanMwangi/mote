@@ -106,12 +106,12 @@ struct AISettings: View {
                 RowRule()
                 // For the agent chosen to ask with, or any agent.
                 let agent = provider.agent
-                let setup = MoteMCP.shared.setup(for: agent)
-                SettingRow(agent == nil ? "Set up an agent" : "Set up \(provider.name)", setup.detail, symbol: "doc.on.clipboard", tint: Tint.indigo) {
+                SettingRow(
+                    agent == nil ? "Set up an agent" : "Set up \(provider.name)", MoteMCP.shared.setupDetail(for: agent), symbol: "doc.on.clipboard", tint: Tint.indigo) {
                     HStack(spacing: 8) {
                         Pill(agent == nil ? "Copy Address" : "Copy for \(provider.name)") {
                             NSPasteboard.general.clearContents()
-                            NSPasteboard.general.setString(setup.text, forType: .string)
+                            NSPasteboard.general.setString(MoteMCP.shared.setup(for: agent), forType: .string)
                         }
                         Pill("Reset Token") { MoteMCP.shared.resetOutsideToken() }
                             .help("Agents set up before can no longer use Mote")

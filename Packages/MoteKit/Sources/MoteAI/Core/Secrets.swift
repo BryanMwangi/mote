@@ -6,6 +6,12 @@ public protocol Secrets: Sendable {
     func key(for provider: String) -> String?
     /// Saves the key, or forgets it when empty.
     @discardableResult func setKey(_ key: String, for provider: String) -> Bool
+    /// Whether a key is kept, without reading it.
+    func hasKey(for provider: String) -> Bool
+}
+
+extension Secrets {
+    public func hasKey(for provider: String) -> Bool { key(for: provider) != nil }
 }
 
 /// API keys in the macOS keychain, as generic passwords under one service,
@@ -32,6 +38,15 @@ public struct KeychainSecrets: Secrets {
         guard SecItemCopyMatching(query as CFDictionary, &found) == errSecSuccess, let data = found as? Data else { return nil }
         let key = String(decoding: data, as: UTF8.self)
         return key.isEmpty ? nil : key
+    }
+
+    /// By the item's attributes alone, which the keychain gives without
+    /// asking: reading the key asks again for each new build of Mote.
+    public func hasKey(for provider: String) -> Bool {
+        var query = query(provider)
+        query[kSecReturnAttributes as String] = true
+        query[kSecMatchLimit as String] = kSecMatchLimitOne
+        return SecItemCopyMatching(query as CFDictionary, nil) == errSecSuccess
     }
 
     @discardableResult

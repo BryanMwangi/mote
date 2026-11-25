@@ -53,28 +53,29 @@ final class MoteMCP {
         Assistant.shared.secrets.setKey(UUID().uuidString + UUID().uuidString, for: Self.tokenKey)
     }
 
-    /// How to give an agent Mote's tools: what the setting says, and what
-    /// it copies. Without an agent, the address and header any agent takes.
-    func setup(for agent: Provider.Agent?) -> (detail: String, text: String) {
-        let url = "http://127.0.0.1:\(Self.outsidePort)/mcp"
-        let header = "Authorization: Bearer \(outsideToken)"
+    /// How to give an agent Mote's tools, as its setting says: shown without
+    /// the token, which is read from the keychain only when copied.
+    func setupDetail(for agent: Provider.Agent?) -> String {
         switch agent {
-        case .claudeCode:
-            return ("A command to run in Terminal", "claude mcp add --transport http mote \(url) --header \"\(header)\"")
-        case .geminiCLI:
-            return ("A command to run in Terminal", "gemini mcp add --transport http --header \"\(header)\" mote \(url)")
-        case .codex:
-            return (
-                "Lines for ~/.codex/config.toml",
-                "[mcp_servers.mote]\nurl = \"\(url)\"\nhttp_headers = { Authorization = \"Bearer \(outsideToken)\" }"
-            )
-        case .openCode:
-            return (
-                "For the \"mcp\" part of opencode.json",
-                "\"mote\": { \"type\": \"remote\", \"url\": \"\(url)\", \"headers\": { \"Authorization\": \"Bearer \(outsideToken)\" } }"
-            )
-        case nil:
-            return ("Any agent that takes an MCP server over HTTP: its address and header", "\(url)\n\(header)")
+        case .claudeCode, .geminiCLI: "A command to run in Terminal"
+        case .codex: "Lines for ~/.codex/config.toml"
+        case .openCode: "For the \"mcp\" part of opencode.json"
+        case nil: "Any agent that takes an MCP server over HTTP: its address and header"
+        }
+    }
+
+    /// What to copy to set `agent` up, token and all. Without an agent, the
+    /// address and header any agent takes.
+    func setup(for agent: Provider.Agent?) -> String {
+        let url = "http://127.0.0.1:\(Self.outsidePort)/mcp"
+        let token = outsideToken
+        let header = "Authorization: Bearer \(token)"
+        return switch agent {
+        case .claudeCode: "claude mcp add --transport http mote \(url) --header \"\(header)\""
+        case .geminiCLI: "gemini mcp add --transport http --header \"\(header)\" mote \(url)"
+        case .codex: "[mcp_servers.mote]\nurl = \"\(url)\"\nhttp_headers = { Authorization = \"Bearer \(token)\" }"
+        case .openCode: "\"mote\": { \"type\": \"remote\", \"url\": \"\(url)\", \"headers\": { \"Authorization\": \"Bearer \(token)\" } }"
+        case nil: "\(url)\n\(header)"
         }
     }
 
