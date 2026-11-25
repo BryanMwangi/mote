@@ -40,7 +40,7 @@ COMMANDS = {
     "push": ("", "sites' push subscriptions, whether Mote is connected to the push server, and how the last pushes went"),
     "websitedata": ("", "what sites keep, as Settings › Privacy › Website data lists it: the largest, and sizes when WebKit tells them"),
     "chat": ("[show|ask|follow|attach PATH…|answer|acting|wait|use|mode|lead|search|providers] [args…]", "the chat in front; ask TEXT as the new tab's Ask does, follow TEXT in the chat "
-             "(test run); answer TEXT: the question it waits on, as an option's label or words of your own (test run); acting asks|auto|plan (test run); wait [SECONDS] for its reply; use PROVIDER [MODEL] [ADDRESS], mode chat|search|research, search on|off, demo [SOURCES] [MS] [plain] [again] (a long researched reply, streamed from Mote itself; plain: without research steps; again: in the chat in front; test run); providers: how each stands"),
+             "(test run); answer TEXT: the question it waits on, as an option's label or words of your own (test run); acting asks|auto|plan (test run); wait [SECONDS] for its reply; use PROVIDER [MODEL] [ADDRESS], mode chat|search|research, search on|off, demo [SOURCES] [MS] [plain] [again] [side] (a long researched reply, streamed from Mote itself; plain: without research steps; again: in the chat in front; side: in the page chat; test run); providers: how each stands"),
     "ui": ("key value", "settings/passwords/welcome/history/downloads/bookmarks/hidden, chats, sidebar, spaces, hides, bar, folded, peek, device NAME|off, essential|unessential|newwindow|source TAB, split TAB:left|right|top|bottom / grid|across|down|off, home TAB, peekclick shift|option, settingsquery TEXT|-, shortcut ID=cmd+e|ID=none|reset, screenshot visible|whole|copy|overlay|region:X,Y,W,H, inspect network|sources|storage|timeline|attach, processes on|off, fullscreen on|off, import on|off, appfront on, zoomrow PATH, dockicon PATH, textdirection on, folder new:NAME[/PARENT]|toggle:NAME|unpack:NAME|delete:NAME|icon:NAME|TAB:NAME, route HOST:SPACEINDEX|clear, theme N|off|light|dark|auto, profile new:NAME|delete:ID, boost dim|tint|reset|editor|close, "
            "pages120 on|off; sitecard on|off|security|row; pageinfo General|Media|Permissions|Security; notice update|ready|manual|TEXT (test run); look light|dark|system; permission allow|block|once; passwordoffer keep|drop; peeklink keep|close; edittab TEXT; finishedit on"),
     "press": ("code:int chars [mods…]", "a key on the whole app (cmd shift ctrl opt fn, repeat) — test runs only"),
@@ -245,11 +245,12 @@ def read_chat(args):
         return {"action": action}
     if action == "search" and len(rest) == 1 and rest[0] in ("on", "off"):
         return {"action": action, "on": rest[0] == "on"}
-    if action == "demo" and len(rest) <= 4:
+    if action == "demo" and len(rest) <= 5:
         request = {"action": action}
-        if "again" in rest:
-            request["again"] = True
-            rest = [r for r in rest if r != "again"]
+        for flag in ("again", "side"):
+            if flag in rest:
+                request[flag] = True
+                rest = [r for r in rest if r != flag]
         if rest:
             request["sources"] = int(rest[0])
         if len(rest) > 1:

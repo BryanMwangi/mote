@@ -73,7 +73,9 @@ extension Bench {
             let deadline = Date().addingTimeInterval(request.double("seconds") ?? 30)
             @MainActor func poll() {
                 // A question waiting is the bench's to answer: no use waiting on it.
-                let busy = browser.active?.chat.map { $0.busy && $0.question == nil } == true
+                // The tab's own chat, or the page chat open beside it.
+                let chat = browser.active?.chat ?? (browser.active?.chatOpen == true ? browser.active?.pageChat : nil)
+                let busy = chat.map { $0.busy && $0.question == nil } == true
                 guard busy, Date() < deadline else {
                     var out = describe(browser)
                     out["timeout"] = busy
@@ -117,16 +119,23 @@ extension Bench {
             guard call.testRun("it would open a chat in your browser") else { return }
             let service = DemoReply(
                 sources: request.int("sources") ?? 400, delay: request.double("delay") ?? 0, plain: request.flag("plain"))
-            // again: one more turn in the chat in front, for a long chat.
-            let again = request.flag("again") ? browser.active?.chat : nil
-            if again == nil, browser.active?.isStart != true { browser.newTab() }
-            let chat = again ?? Conversation()
+            // side: in the page chat of the tab in front, a fresh one; again: one
+            // more turn in the chat in front, for a long chat.
+            let side = request.flag("side")
+            let again = request.flag("again") ? (side ? browser.active?.pageChat : browser.active?.chat) : nil
+            if again == nil {
+                // A tab of its own: with new tabs opening the floating search, newTab makes none.
+                if side { browser.newPageChat() } else if browser.active?.isStart != true { browser.show(Tab(), adopting: true) }
+            }
+            guard let chat = again ?? (side ? browser.active?.pageChat : Conversation()) else { return call.fail("no tab for its page chat") }
             chat.send(
                 "Demo: a long researched reply",
                 via: Conversation.Route(provider: "demo", model: "", author: "Mote · demo", service: service, search: true))
-            browser.active?.chat = chat
-            browser.editing = false
-            browser.field.clear()
+            if !side {
+                browser.active?.chat = chat
+                browser.editing = false
+                browser.field.clear()
+            }
             call.answer(describe(browser))
         case "providers":
             Task {
