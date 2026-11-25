@@ -337,10 +337,11 @@ private struct PageCard: View {
             // The page takes its new size at once, without animating, and keeps to the
             // card's far corner while the card's near edge slides over it or away; a
             // picture of how it was dissolves on top (see `Browser.dissolvingPage`).
+            // Only the size: what moves inside (a chat tab's) keeps its own motion.
             stage
                 .frame(width: layout.page.width, height: layout.page.height)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
-                .transaction { $0.animation = nil }
+                .transaction(value: layout.page) { $0.animation = nil }
                 .overlay(alignment: .bottomTrailing) {
                     if let veil = browser.pageVeil {
                         Image(nsImage: veil)

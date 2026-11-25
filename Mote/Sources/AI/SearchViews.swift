@@ -199,6 +199,11 @@ private struct AgentRow: View {
 /// What a search reply did: a line saying how many searches and pages,
 /// opening to the list of them.
 struct StepsSummary: View {
+    /// Posted by the bench with whether to open (`ui steps`); a step's own
+    /// file goes with it on `benchFile`.
+    static let benchFold = Notification.Name("io.github.mote-browser.bench.steps")
+    static let benchFile = Notification.Name("io.github.mote-browser.bench.stepfile")
+
     let steps: [Activity]
     var shots: [StepShot] = []
     @State private var open = false
@@ -222,6 +227,10 @@ struct StepsSummary: View {
         }
         // What went wrong shows without asking.
         .onAppear { if steps.contains(where: { $0.outcome != nil && $0.outcome != .done }) { open = true } }
+        // The bench opens and folds them, as a click does (test runs).
+        .onReceive(NotificationCenter.default.publisher(for: Self.benchFold)) { note in
+            withAnimation(Motion.settle) { open = note.object as? Bool ?? !open }
+        }
     }
 
     /// The line that opens and folds the steps.
@@ -300,6 +309,9 @@ struct StepLine: View {
                     Text(detail).font(.system(size: 11.5)).foregroundStyle(Palette.faint).lineLimit(whole ? nil : 2).textSelection(.enabled)
                         .onTapGesture { whole.toggle() }
                 }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: StepsSummary.benchFile)) { note in
+                withAnimation(Motion.settle) { expanded = note.object as? Bool ?? !expanded }
             }
         }
         .foregroundStyle(Palette.muted)

@@ -407,7 +407,9 @@ struct StepFile: View {
         let size =
             open ? CGSize(width: min(280, max(60, 150 * ratio)), height: min(150, 280 / max(ratio, 0.01))) : CGSize(width: StepShots.side, height: StepShots.side)
         Group {
-            if let image { Image(nsImage: image).resizable().aspectRatio(contentMode: open ? .fit : .fill) } else { Palette.wash }
+            // Filling either way: open, its frame is already at its shape, and a
+            // switch between filling and fitting can't move smoothly.
+            if let image { Image(nsImage: image).resizable().scaledToFill() } else { Palette.wash }
         }
         .frame(width: size.width, height: size.height)
         .clipShape(RoundedRectangle(cornerRadius: open ? 8 : 4, style: .continuous))

@@ -187,6 +187,10 @@ extension Bench {
         // A notice as it would show (test runs): an update's, or a plain line.
         // Memory short, as a warning from the system would say (test runs).
         if Storage.testing, request.string("relieve") != nil { Browser.relieve() }
+        // Replies' steps, and their files, opened or folded as a click does (test runs).
+        for (key, name) in [("steps", StepsSummary.benchFold), ("stepfile", StepsSummary.benchFile)] where Storage.testing {
+            if let how = request.string(key) { NotificationCenter.default.post(name: name, object: how == "open") }
+        }
         // A chat's files in Quick Look, as a click on one shows them (test runs).
         if Storage.testing, let paths = request.string("quicklook") {
             QuickLook.shared.show(paths.split(separator: ",").map { URL(fileURLWithPath: String($0)) }, at: 1)
