@@ -46,7 +46,9 @@ extension AssistantTools {
         }
         // Each folder not yet allowed is the person's to allow.
         for folder in Set(files.map { $0.deletingLastPathComponent().path }) where !allowed(folder) {
-            guard await allow(folder) else { return Self.declined }
+            guard await allow(folder) else {
+                return "The person didn't allow files from \((folder as NSString).abbreviatingWithTildeInPath) to be attached."
+            }
         }
         let names = files.map(\.lastPathComponent).joined(separator: ", ")
         let site = Address.siteHost(of: address) ?? "this page"
@@ -78,11 +80,33 @@ extension AssistantTools {
         return granted.contains { folder == $0 || folder.hasPrefix($0.hasSuffix("/") ? $0 : $0 + "/") }
     }
 
-    /// Asks the person, in the chat, to let files from `folder` be attached.
+    /// Asks the person to let files from `folder` be attached: in the chat
+    /// while its reply runs, else in an alert, as a helper working after the
+    /// reply has ended asks (it was refused, unasked, before).
     private func allow(_ folder: String) async -> Bool {
-        guard let chat, let conversation = Assistant.shared.conversation(chat), conversation.busy else { return false }
+        guard let chat else { return false }
         let shown = (folder as NSString).abbreviatingWithTildeInPath
         let thisChat = "Allow for this chat", always = "Always allow", deny = "Don't allow"
+        guard let conversation = Assistant.shared.conversation(chat), conversation.busy else {
+            let alert = NSAlert()
+            alert.messageText = "Let the assistant attach files from \(shown) to pages?"
+            alert.informativeText = subAgent ? "One of its helpers asks, working on your task." : "The assistant asks, working on your task."
+            alert.addButton(withTitle: "Allow for This Chat")
+            alert.addButton(withTitle: "Always Allow")
+            alert.addButton(withTitle: "Don't Allow").keyEquivalent = "\u{1b}"
+            let answer: NSApplication.ModalResponse
+            if let window = browser.window {
+                answer = await withCheckedContinuation { done in alert.beginSheetModal(for: window) { done.resume(returning: $0) } }
+            } else {
+                answer = alert.runModal()
+            }
+            switch answer {
+            case .alertFirstButtonReturn: Self.chatFolders[chat, default: []].insert(folder)
+            case .alertSecondButtonReturn: if !prefs.aiFolders.contains(folder) { prefs.aiFolders.append(folder) }
+            default: return false
+            }
+            return true
+        }
         let question = Conversation.Question(
             text: "Let the assistant attach files from \(shown) to pages?",
             options: [
