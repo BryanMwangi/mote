@@ -340,7 +340,7 @@ private struct Question: View {
     var body: some View {
         VStack(alignment: .trailing, spacing: 6) {
             if !files.isEmpty {
-                FileChips(files: files, folder: folder).padding(.leading, 90).frame(maxWidth: .infinity, alignment: .trailing)
+                if let folder { SentFiles(files: files, folder: folder).padding(.leading, 90).frame(maxWidth: .infinity, alignment: .trailing) }
             }
             if !text.isEmpty { said }
         }
@@ -433,10 +433,9 @@ private struct Answer: View {
                 // Sub-agents in a card of their own, each with its own steps; the rest summed up.
                 let (agents, others) = AgentsCard.split(message.steps)
                 if !agents.isEmpty { AgentsCard(steps: agents) }
-                if !others.isEmpty { StepsSummary(steps: others) }
+                // Pictures it took at the end of the line, in sight whether the steps are open or not.
+                if !others.isEmpty { StepsSummary(steps: others, shots: StepShot.of(others, in: folder)) }
             }
-            // Pictures it took, in sight whether the steps are open or not.
-            StepPictures(steps: message.steps, folder: folder)
             if !entries.isEmpty { SourcesStrip(entries: entries).padding(.bottom, 2) }
             if !message.reasoning.isEmpty { thoughts }
             if !text.isEmpty { ReplyText(text: text, cites: rendered.cites, reply: message.id, streaming: streaming) }

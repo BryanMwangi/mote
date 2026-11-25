@@ -1,7 +1,9 @@
 import AppKit
 import MoteAI
+import Quartz
 import QuickLookThumbnailing
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// Files in a chat: what the person attaches, copied into the chat's own
 /// folder (`ChatFiles`) so the agent reads them by path, and the pictures
@@ -60,12 +62,69 @@ struct AttachButton: View {
     }
 }
 
-/// A file in the chat, as a chip: its picture or icon, and its name. Opens
-/// the kept copy; with `remove`, lets it go.
+/// Files shown with Quick Look's own panel: a picture, a PDF, a document,
+/// with the arrows between them when there are several.
+@MainActor
+final class QuickLook: NSObject, @preconcurrency QLPreviewPanelDataSource, @preconcurrency QLPreviewPanelDelegate {
+    static let shared = QuickLook()
+    private var items: [URL] = []
+
+    func show(_ urls: [URL], at index: Int = 0) {
+        guard !urls.isEmpty, let panel = QLPreviewPanel.shared() else { return }
+        items = urls
+        panel.dataSource = self
+        panel.delegate = self
+        panel.reloadData()
+        panel.currentPreviewItemIndex = min(max(0, index), urls.count - 1)
+        panel.makeKeyAndOrderFront(nil)
+    }
+
+    func numberOfPreviewItems(in panel: QLPreviewPanel!) -> Int { items.count }
+
+    func previewPanel(_ panel: QLPreviewPanel!, previewItemAt index: Int) -> QLPreviewItem! {
+        items.indices.contains(index) ? items[index] as NSURL : nil
+    }
+}
+
+extension View {
+    /// A file in the chat: a click shows it in Quick Look (among `all`, to
+    /// step through), and the context menu has what else to do with it.
+    func file(_ url: URL, among all: [URL]? = nil) -> some View {
+        let all = all ?? [url]
+        return contentShape(Rectangle())
+            .onTapGesture { QuickLook.shared.show(all, at: all.firstIndex(of: url) ?? 0) }
+            .contextMenu {
+                Button("Quick Look") { QuickLook.shared.show(all, at: all.firstIndex(of: url) ?? 0) }
+                Button("Open") { NSWorkspace.shared.open(url) }
+                Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([url]) }
+                Divider()
+                Button("Copy") {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.writeObjects([url as NSURL])
+                }
+                Button("Save As…") { FileSaving.save(url) }
+            }
+    }
+}
+
+/// Saving a copy of a chat's file where the person picks.
+@MainActor
+enum FileSaving {
+    static func save(_ url: URL) {
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = url.lastPathComponent
+        guard panel.runModal() == .OK, let target = panel.url else { return }
+        try? FileManager.default.removeItem(at: target)
+        try? FileManager.default.copyItem(at: url, to: target)
+    }
+}
+
+/// A file attached for the next message, as a chip: its picture or icon,
+/// its name, and a way to let it go.
 struct FileChip: View {
     let file: Attachment
     let folder: URL?
-    var remove: (() -> Void)?
+    let remove: () -> Void
     @State private var icon: NSImage?
 
     private var url: URL? { folder?.appendingPathComponent(file.file) }
@@ -78,31 +137,36 @@ struct FileChip: View {
             .frame(width: 18, height: 18).clipShape(RoundedRectangle(cornerRadius: 3, style: .continuous))
             Text(file.name).font(.system(size: 11.5)).foregroundStyle(Palette.ink.opacity(0.8)).lineLimit(1).truncationMode(.middle)
                 .frame(maxWidth: 160, alignment: .leading)
-            if let remove {
-                Button(action: remove) {
-                    Image(systemName: "xmark").font(.system(size: 8, weight: .semibold)).foregroundStyle(Palette.muted)
-                        .frame(width: 16, height: 16).contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .help("Don't attach this file")
+            Button(action: remove) {
+                Image(systemName: "xmark").font(.system(size: 8, weight: .semibold)).foregroundStyle(Palette.muted)
+                    .frame(width: 16, height: 16).contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
+            .help("Don't attach this file")
         }
-        .padding(.leading, 5).padding(.trailing, remove == nil ? 9 : 4)
+        .padding(.leading, 5).padding(.trailing, 4)
         .frame(height: 28)
         .background(Palette.wash, in: Rounded.row)
         .overlay(Rounded.row.strokeBorder(Palette.hairline))
-        .contentShape(Rounded.row)
-        .onTapGesture { if let url { NSWorkspace.shared.open(url) } }
+        .modifier(FileAt(url: url))
         .help("\(file.name), \(ChatFiles.size(file.bytes))")
         .task(id: file.file) { icon = await Thumbnail.of(url, side: 36) }
     }
 }
 
-/// Files in a row, scrolling across the column when they don't fit.
+/// Quick Look and the menu, for a file that may not be there.
+private struct FileAt: ViewModifier {
+    let url: URL?
+    func body(content: Content) -> some View {
+        if let url { content.file(url) } else { content }
+    }
+}
+
+/// Files attached for the next message, in a row that scrolls when they don't fit.
 struct FileChips: View {
     let files: [Attachment]
     let folder: URL?
-    var remove: ((Attachment) -> Void)?
+    let remove: (Attachment) -> Void
 
     var body: some View {
         ViewThatFits(in: .horizontal) {
@@ -113,48 +177,207 @@ struct FileChips: View {
 
     private var chips: some View {
         HStack(spacing: 6) {
-            ForEach(files) { file in FileChip(file: file, folder: folder, remove: remove.map { remove in { remove(file) } }) }
+            ForEach(files) { file in FileChip(file: file, folder: folder) { remove(file) } }
         }
     }
 }
 
-/// The pictures a reply's steps took (screenshots), small, each opening full size.
-struct StepPictures: View {
-    let steps: [Activity]
-    let folder: URL?
+/// Files sent with a message, over it at its side: pictures at their own
+/// shape, other files as a card of their first page or their name, with
+/// their kind. Wrapping, never scrolling.
+struct SentFiles: View {
+    let files: [Attachment]
+    let folder: URL
 
     var body: some View {
-        let taken = steps.compactMap { step in step.picture.map { (step: step, file: $0) } }
-        if let folder, !taken.isEmpty {
-            // Wrapping, not scrolling: a scroll inside the chat's took clicks
-            // meant for the steps' fold above it.
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 96, maximum: 96), spacing: 6)], alignment: .leading, spacing: 6) {
-                ForEach(taken, id: \.file) { shot in
-                    StepPicture(url: folder.appendingPathComponent(shot.file), title: shot.step.title)
-                }
+        let urls = files.map { folder.appendingPathComponent($0.file) }
+        TrailingFlow(spacing: 6) {
+            ForEach(files) { file in
+                SentFile(file: file, url: folder.appendingPathComponent(file.file)).file(folder.appendingPathComponent(file.file), among: urls)
             }
         }
     }
 }
 
-private struct StepPicture: View {
+private struct SentFile: View {
+    let file: Attachment
     let url: URL
-    let title: String
-    @State private var image: NSImage?
+    @State private var thumbnail: NSImage?
     @State private var hovering = false
+
+    static let height: CGFloat = 110
+    private var kind: String { (file.name as NSString).pathExtension.uppercased() }
+    private var picture: Bool { UTType(filenameExtension: (file.name as NSString).pathExtension)?.conforms(to: .image) == true }
+
+    var body: some View {
+        Group {
+            if picture, let thumbnail {
+                // At the picture's shape, within bounds.
+                let ratio = thumbnail.size.width / max(1, thumbnail.size.height)
+                Image(nsImage: thumbnail).resizable().scaledToFill()
+                    .frame(width: min(240, max(70, Self.height * ratio)), height: Self.height)
+            } else {
+                card
+            }
+        }
+        .clipShape(Rounded.card)
+        .overlay(Rounded.card.strokeBorder(hovering ? Palette.ink.opacity(0.3) : Palette.hairline))
+        .onHover { hovering = $0 }
+        .help("\(file.name), \(ChatFiles.size(file.bytes))")
+        .task(id: url) { thumbnail = await Thumbnail.of(url, side: 240) }
+    }
+
+    /// Its first page when there's one to show, else its name; its kind below.
+    private var card: some View {
+        ZStack(alignment: .bottomLeading) {
+            if let thumbnail, !picture {
+                Color.white
+                Image(nsImage: thumbnail).resizable().scaledToFit().padding(.horizontal, 6).padding(.top, 6)
+            } else {
+                Palette.wash
+                Text(file.name).font(.system(size: 12)).foregroundStyle(Palette.ink.opacity(0.85)).lineLimit(3)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading).padding(10)
+            }
+            if !kind.isEmpty {
+                Text(kind).font(.system(size: 9.5, weight: .semibold)).foregroundStyle(.white.opacity(0.9))
+                    .padding(.horizontal, 6).padding(.vertical, 2.5)
+                    .background(.black.opacity(0.6), in: Capsule())
+                    .padding(7)
+            }
+        }
+        .frame(width: 110, height: Self.height)
+    }
+}
+
+/// Views in rows from the trailing edge, wrapping onto the next.
+struct TrailingFlow: Layout {
+    var spacing: CGFloat
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let rows = rows(subviews, width: proposal.width ?? .infinity)
+        let width = rows.map(\.width).max() ?? 0
+        let height = rows.reduce(0) { $0 + $1.height } + spacing * CGFloat(max(0, rows.count - 1))
+        return CGSize(width: proposal.width.map { min($0, width) } ?? width, height: height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var y = bounds.minY
+        for row in rows(subviews, width: bounds.width) {
+            var x = bounds.maxX - row.width
+            for index in row.items {
+                let size = subviews[index].sizeThatFits(.unspecified)
+                subviews[index].place(at: CGPoint(x: x, y: y + row.height - size.height), proposal: .unspecified)
+                x += size.width + spacing
+            }
+            y += row.height + spacing
+        }
+    }
+
+    private func rows(_ subviews: Subviews, width: CGFloat) -> [(items: [Int], width: CGFloat, height: CGFloat)] {
+        var rows: [(items: [Int], width: CGFloat, height: CGFloat)] = []
+        for (index, view) in subviews.enumerated() {
+            let size = view.sizeThatFits(.unspecified)
+            if let last = rows.last, last.width + spacing + size.width <= width {
+                rows[rows.count - 1] = (last.items + [index], last.width + spacing + size.width, max(last.height, size.height))
+            } else {
+                rows.append(([index], size.width, size.height))
+            }
+        }
+        return rows
+    }
+}
+
+/// A picture a step took, and what the step was.
+struct StepShot: Identifiable, Equatable {
+    let title: String
+    let url: URL
+    var id: URL { url }
+
+    static func of(_ steps: [Activity], in folder: URL?) -> [StepShot] {
+        guard let folder else { return [] }
+        return steps.compactMap { step in step.picture.map { StepShot(title: step.title, url: folder.appendingPathComponent($0)) } }
+    }
+}
+
+/// The pictures a reply's steps took, small at the end of its steps' line:
+/// the last few, with how many more. Over one, a larger look above; a
+/// click shows them all in Quick Look.
+struct StepShots: View {
+    let shots: [StepShot]
+    @State private var over: StepShot?
+
+    static let shown = 3
+
+    var body: some View {
+        let shown = Array(shots.suffix(Self.shown))
+        HStack(spacing: 5) {
+            if shots.count > shown.count {
+                Text("+\(shots.count - shown.count)").font(.system(size: 11.5)).foregroundStyle(Palette.muted).padding(.trailing, 2)
+            }
+            ForEach(shown) { shot in
+                StepThumb(url: shot.url, over: over == shot)
+                    .file(shot.url, among: shots.map(\.url))
+                    .onHover { inside in
+                        if inside { over = shot } else if over == shot { over = nil }
+                    }
+            }
+        }
+        // The larger look, above the line, ending at its trailing edge.
+        .overlay(alignment: .topTrailing) {
+            if let over, let index = shots.firstIndex(of: over) {
+                ShotCard(shot: over, place: "\(index + 1) of \(shots.count)")
+                    .alignmentGuide(.top) { $0[.bottom] + 8 }
+                    .allowsHitTesting(false)
+                    .transition(.opacity)
+            }
+        }
+        .animation(Motion.quick, value: over)
+    }
+}
+
+private struct StepThumb: View {
+    let url: URL
+    let over: Bool
+    @State private var image: NSImage?
 
     var body: some View {
         Group {
             if let image { Image(nsImage: image).resizable().scaledToFill() } else { Palette.wash }
         }
-        .frame(width: 96, height: 62)
-        .clipShape(Rounded.row)
-        .overlay(Rounded.row.strokeBorder(hovering ? Palette.ink.opacity(0.3) : Palette.hairline))
-        .contentShape(Rounded.row)
-        .onTapGesture { NSWorkspace.shared.open(url) }
-        .onHover { hovering = $0 }
-        .help("\(title): a picture the assistant took. Click to see it whole")
-        .task(id: url) { image = await Thumbnail.of(url, side: 192) }
+        .frame(width: 24, height: 24)
+        .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 4, style: .continuous).strokeBorder(over ? Palette.ink.opacity(0.4) : Palette.hairline))
+        .task(id: url) { image = await Thumbnail.of(url, side: 48) }
+    }
+}
+
+/// A step's picture, larger, with what took it and where it is among them.
+private struct ShotCard: View {
+    let shot: StepShot
+    let place: String
+    @State private var image: NSImage?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Group {
+                if let image { Image(nsImage: image).resizable().scaledToFit() } else { Palette.wash.frame(width: 300, height: 200) }
+            }
+            .frame(maxWidth: 360, maxHeight: 260)
+            .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+            HStack {
+                Text(shot.title).lineLimit(1).truncationMode(.middle)
+                Spacer(minLength: 12)
+                Text(place).foregroundStyle(Palette.muted).monospacedDigit()
+            }
+            .font(.system(size: 12))
+            .foregroundStyle(Palette.ink.opacity(0.85))
+        }
+        .padding(10)
+        .frame(width: 380)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Palette.hairline))
+        .shadow(color: .black.opacity(0.25), radius: 18, y: 6)
+        .task(id: shot.url) { image = await Thumbnail.of(shot.url, side: 720) }
     }
 }
 

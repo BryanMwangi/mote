@@ -200,25 +200,16 @@ private struct AgentRow: View {
 /// opening to the list of them.
 struct StepsSummary: View {
     let steps: [Activity]
+    var shots: [StepShot] = []
     @State private var open = false
 
     var body: some View {
-        let searches = steps.filter { $0.kind == .search }.count
-        let reads = steps.filter { $0.kind == .read }.count
         VStack(alignment: .leading, spacing: 8) {
-            Button {
-                withAnimation(Motion.settle) { open.toggle() }
-            } label: {
-                HStack(spacing: 5) {
-                    Text(summary(searches: searches, reads: reads)).font(.system(size: 12.5))
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 8.5, weight: .bold))
-                        .rotationEffect(.degrees(open ? 90 : 0))
-                }
-                .foregroundStyle(Palette.muted)
-                .contentShape(Rectangle())
+            HStack(spacing: 8) {
+                fold
+                Spacer(minLength: 0)
+                if !shots.isEmpty { StepShots(shots: shots) }
             }
-            .buttonStyle(.plain)
             if open {
                 VStack(alignment: .leading, spacing: 7) {
                     ForEach(steps, id: \.id) { step in StepLine(step: step) }
@@ -229,6 +220,24 @@ struct StepsSummary: View {
         }
         // What went wrong shows without asking.
         .onAppear { if steps.contains(where: { $0.outcome != nil && $0.outcome != .done }) { open = true } }
+    }
+
+    /// The line that opens and folds the steps.
+    private var fold: some View {
+        Button {
+            withAnimation(Motion.settle) { open.toggle() }
+        } label: {
+            HStack(spacing: 5) {
+                Text(summary(searches: steps.filter { $0.kind == .search }.count, reads: steps.filter { $0.kind == .read }.count))
+                    .font(.system(size: 12.5))
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 8.5, weight: .bold))
+                    .rotationEffect(.degrees(open ? 90 : 0))
+            }
+            .foregroundStyle(Palette.muted)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     private func summary(searches: Int, reads: Int) -> String {
