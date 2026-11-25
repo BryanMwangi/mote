@@ -39,7 +39,10 @@ extension Bench {
             call.answer(describe(browser))
         case "answer":
             guard call.testRun("it would answer in your browser") else { return }
-            guard let chat = browser.active?.chat, chat.question != nil, let text = request.string("text") else {
+            // A chat tab's question, or the open chat sidebar's.
+            let side = browser.active?.chatOpen == true ? browser.active?.pageChat : nil
+            guard let chat = [browser.active?.chat, side].compactMap({ $0 }).first(where: { $0.question != nil }), let text = request.string("text")
+            else {
                 return call.fail("chat answer needs a chat in front waiting on a question, and the answer")
             }
             chat.answer(text)
@@ -137,6 +140,8 @@ extension Bench {
                 "chat": "sidebar", "draft": tab.pendingAsk ?? "", "page": page?.url.absoluteString ?? "", "selection": page?.selection ?? "",
                 "around": page?.around ?? "", "heading": page?.heading ?? "",
                 "messages": side.messages.map { ["role": $0.role.rawValue, "text": $0.text] },
+                "question": side.question.map { ["text": $0.text, "options": $0.options.map(\.label)] } ?? NSNull(),
+                "busy": side.busy, "mode": ChatModes.shared.mode(of: side.id).rawValue,
             ]
         }
         guard let tab = browser.active, let chat = tab.chat else { return ["chat": false] }

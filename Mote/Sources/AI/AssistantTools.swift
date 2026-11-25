@@ -340,43 +340,79 @@ final class AssistantTools {
     static let declined = "The person said no."
     static let planOnly = "Plan mode: nothing is done yet. Put this in your plan as a step instead, and carry on looking."
 
-    /// `site`: one this chat may be allowed to act on from now on.
+    /// `site`: one this chat may be allowed to act on from now on. Three
+    /// choices, so a long task needn't stop at every step: this site for
+    /// the rest of the chat, every site with the chat switched to Auto, or
+    /// Cancel. (`once`, a single Allow, stays for a question that can't be
+    /// trusted ahead: one with no site.)
     private func ask(_ question: String, trusting site: String?) async -> Bool {
+        let site = site.map(Self.trustKey)
         if let chat, let site, Self.trusted[chat]?.contains(site) == true { return true }
+        let once = "Allow", session = "Allow for this session", everything = "Allow all sites in this chat and switch to Auto",
+            cancel = "Cancel"
+        let first = site == nil ? once : session
         // In the chat, where the reply is: an alert only with no chat to ask in.
         if let chat, let conversation = Assistant.shared.conversation(chat), conversation.busy {
-            let allow = "Allow", trust = site.map { "Allow on \($0) for this chat" }, deny = "Deny"
-            let options = [allow, trust, deny].compactMap { $0 }.map { Conversation.Question.Option(label: $0) }
+            let options = [
+                Conversation.Question.Option(label: first, description: site.map { "On \($0), while Mote is open" }),
+                .init(label: everything, description: "No more of these questions; Auto still asks before what can't be undone"),
+                .init(label: cancel),
+            ]
             let answer = await asking(conversation, Conversation.Question(text: question, options: options))
-            if let trust, let site, answer == trust { Self.trusted[chat, default: []].insert(site) }
-            if answer == allow || (trust != nil && answer == trust) { return true }
-            // Words of their own instead: a no, with what they said told to the model.
-            if let answer, answer != deny, answer != Conversation.dismissed { conversation.addSteering(answer) }
-            return false
+            return decide(answer, first: first, everything: everything, cancel: cancel, site: site, chat: chat, conversation: conversation)
         }
         let alert = NSAlert()
         alert.messageText = question
         alert.informativeText = "The assistant asks to do this for you."
-        alert.addButton(withTitle: "Allow")
+        alert.addButton(withTitle: first)
+        alert.addButton(withTitle: "Allow All Sites and Switch to Auto")
         // Escape is a no, as in the chat.
-        alert.addButton(withTitle: "Deny").keyEquivalent = "\u{1b}"
-        alert.showsSuppressionButton = chat != nil && site != nil
-        alert.suppressionButton?.title = "Allow on \(site ?? "") for this chat"
+        alert.addButton(withTitle: cancel).keyEquivalent = "\u{1b}"
         let answer: NSApplication.ModalResponse
         if let window = browser.window {
-            // A stopped reply takes its question away, as Deny: a late Allow can't act.
+            // A stopped reply takes its question away, as Cancel: a late Allow can't act.
             answer = await withTaskCancellationHandler {
                 await withCheckedContinuation { done in alert.beginSheetModal(for: window) { done.resume(returning: $0) } }
             } onCancel: {
-                Task { @MainActor in window.endSheet(alert.window, returnCode: .alertSecondButtonReturn) }
+                Task { @MainActor in window.endSheet(alert.window, returnCode: .alertThirdButtonReturn) }
             }
             guard !Task.isCancelled else { return false }
         } else {
             answer = alert.runModal()
         }
-        guard answer == .alertFirstButtonReturn else { return false }
-        if let chat, let site, alert.suppressionButton?.state == .on { Self.trusted[chat, default: []].insert(site) }
-        return true
+        let picked = answer == .alertFirstButtonReturn ? first : answer == .alertSecondButtonReturn ? everything : cancel
+        return decide(picked, first: first, everything: everything, cancel: cancel, site: site, chat: chat, conversation: nil)
+    }
+
+    /// What a permission answer does: trusts the site, or every site with the
+    /// chat on Auto; words of the person's own are a no, told to the model.
+    private func decide(
+        _ answer: String?, first: String, everything: String, cancel: String, site: String?, chat: UUID?, conversation: Conversation?
+    ) -> Bool {
+        switch answer {
+        case first?:
+            if let chat, let site { Self.trusted[chat, default: []].insert(site) }
+            return true
+        case everything?:
+            if let chat { ChatModes.shared.set(chat, .auto) }
+            return true
+        case let answer?:
+            if answer != cancel, answer != Conversation.dismissed { conversation?.addSteering(answer) }
+            return false
+        case nil:
+            return false
+        }
+    }
+
+    /// A site as permission counts it: its own domain, so a task moving
+    /// between its subdomains (jobs. to apply.) isn't asked again. The last
+    /// two labels, or three under a country's second level (co.uk, co.ke).
+    static func trustKey(_ host: String) -> String {
+        let labels = host.split(separator: ".")
+        guard labels.count > 2 else { return host }
+        let second = labels[labels.count - 2], top = labels[labels.count - 1]
+        let countryLevel = top.count == 2 && ["co", "com", "org", "net", "ac", "gov", "edu", "or", "ne", "go"].contains(String(second))
+        return labels.suffix(countryLevel ? 3 : 2).joined(separator: ".")
     }
 
     // MARK: - Tabs, wherever they are
