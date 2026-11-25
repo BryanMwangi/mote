@@ -204,6 +204,9 @@ final class Extensions: NSObject, ObservableObject {
     func unload(_ id: String, keepingProxy: Bool = false) {
         guard let context = contexts[id] else { return }
         ExtensionPanels.shared.close(extension: id)
+        // Its offscreen document, a page of its own, goes with it.
+        ExtensionShims.offscreen[context.uniqueIdentifier]?.removeFromSuperview()
+        ExtensionShims.offscreen[context.uniqueIdentifier] = nil
         try? controller.unload(context)
         if !keepingProxy { ExtensionProxy.release(id) }
         // WebKit says its ports closed only on the next turn of the run loop.
