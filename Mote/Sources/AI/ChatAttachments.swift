@@ -317,10 +317,17 @@ struct StepShot: Identifiable, Equatable {
 struct StepShots: View {
     let shots: [StepShot]
     @State private var over: StepShot?
-    @Environment(\.raise) private var raise
-    /// Room in the chat under the line and over it, and the larger look's height.
-    @State private var room = (below: CGFloat.infinity, above: CGFloat.zero)
+    @Environment(\.chatRows) private var rows
+    @Environment(\.message) private var message
+    /// Room in the chat under the line and over it, kept as the chat scrolls
+    /// without drawing again: only the larger look reads it, when it shows.
+    @State private var room = Room()
     @State private var cardHeight: CGFloat = 250
+
+    private final class Room {
+        var below = CGFloat.infinity
+        var above = CGFloat.zero
+    }
 
     /// What the composer covers at the chat's foot.
     static let foot: CGFloat = 150
@@ -360,11 +367,12 @@ struct StepShots: View {
             let view = proxy.bounds(of: .named("chat"))?.height ?? .infinity
             let line = proxy.frame(in: .named("chat"))
             return CGRect(x: 0, y: line.minY, width: 0, height: view - Self.foot - line.maxY)
-        } action: { measured in
-            room = (below: measured.height, above: measured.minY)
+        } action: { [room] measured in
+            room.below = measured.height
+            room.above = measured.minY
         }
         // Its message over the ones after it while the larger look is up.
-        .onChange(of: over != nil) { _, up in raise(up) }
+        .onChange(of: over != nil) { _, up in rows?.raise(message, up) }
         .animation(Motion.quick, value: over)
     }
 }

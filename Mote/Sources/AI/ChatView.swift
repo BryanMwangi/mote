@@ -37,8 +37,9 @@ struct ChatView<Accessory: View, Start: View>: View {
     @State private var draft = Draft()
     @State private var inputHeight = ChatInput.line
     @State private var focus = 0
-    /// A scroll to the end is on its way (see `follow`).
-    @State private var endQueued = false
+    /// How it keeps to its end (see `follow`). Not observed: it changes as
+    /// the reply grows, which would draw the chat again for nothing.
+    @State private var follower = Follower()
     /// /usage: what the chat has spent, over the composer until closed.
     @State private var showsUsage = false
     /// How far the end of the conversation is below the view: only which
@@ -47,33 +48,44 @@ struct ChatView<Accessory: View, Start: View>: View {
     /// Keeping to the end as the reply grows; scrolling up to read lets go,
     /// and coming back down takes it up again.
     @State private var pinned = true
+    /// A reply is coming in, or just came: what grows the chat then is
+    /// followed (see `follow`).
+    @State private var following = false
     /// Where a file waiting in the composer and the same file sent meet, so it moves between them.
     @Namespace private var tiles
-    /// The message whose larger look is up, drawn over those after it.
-    @State private var raised: UUID?
+    /// What the rows ask of the chat, handed down once: the same object every
+    /// draw, so passing it never redraws them.
+    @State private var rows = ChatRows()
     /// How tall what sits over the end is: the page chip, mentions, composer.
     @State private var overEnd: CGFloat = 0
 
     static var column: CGFloat { 720 }
-    private static var end: String { "end" }
+    static var end: String { "end" }
 
     var body: some View {
         ScrollViewReader { scroller in
             ZStack(alignment: .bottom) {
-                // The thin thumb the tab list has, with no track or border.
-                // Opens at the end; what scrolls inside it (sources, wide tables
-                // and code) opens at its start, the anchor not passed down.
-                follow(
-                    ScrollView { transcript.defaultScrollAnchor(.topLeading) }.modifier(OpensAtEnd()).floatingScrollBar()
-                        .coordinateSpace(name: "chat"), scroller)
+                follow(scroller)
                     .onChange(of: distance) { _, now in if now == .end { pinned = true } }
-                    .onScrollUp { pinned = false }
+                    // Up lets go; down at the end takes it up again, so a nudge up
+                    // there (a trackpad settling) never leaves it let go at the end.
+                    .modifier(
+                        ByHand { up in
+                            if up { pinned = false } else if distance == .end { pinned = true }
+                        })
 
                 VStack(spacing: 10) {
                     if distance == .far {
                         JumpDown {
                             pinned = true
-                            withAnimation(Motion.glide) { scroller.scrollTo(Self.end, anchor: .bottom) }
+                            // Following waits for the glide down, then takes up from where it lands.
+                            follower.jumping = true
+                            withAnimation(Motion.glide) {
+                                scroller.scrollTo(Self.end, anchor: .bottom)
+                            } completion: {
+                                follower.jumping = false
+                                toEnd(scroller)
+                            }
                         }
                         .transition(.scale(scale: 0.8).combined(with: .opacity))
                     }
@@ -111,7 +123,7 @@ struct ChatView<Accessory: View, Start: View>: View {
                     LinearGradient(
                         colors: [(fade ?? ground).opacity(0), fade ?? ground], startPoint: .top, endPoint: .init(x: 0.5, y: 0.45)
                     )
-                    .frame(height: max(inputHeight + 110, overEnd + 24))
+                    .frame(height: overEnd + 46)
                     .allowsHitTesting(false)
                 }
                 .animation(Motion.quick, value: distance == .far)
@@ -139,103 +151,74 @@ struct ChatView<Accessory: View, Start: View>: View {
             })
     }
 
-    /// The messages at the end always laid out (see `transcript`).
-    static var laidOut: Int { 10 }
-
-    /// The messages, the working line, and room at the end for what sits over it.
-    private var transcript: some View {
-        let messages = conversation.messages
-        // Where the chat was summarised, before the first message after.
-        let summarisedAt =
-            conversation.summarised > 0 && conversation.summarised < messages.count ? messages[conversation.summarised].id : nil
-        return VStack(alignment: .leading, spacing: 26) {
-            if messages.isEmpty { start() }
-            // Older ones built as they scroll into view, so a long chat lays out
-            // only what shows; the last few always, so the end is never left
-            // unmeasured. A lazy list told to go to its end as its last row
-            // changed size (a research's progress turning into its report)
-            // could draw nothing there until the chat was shown again.
-            let recent = max(0, messages.count - Self.laidOut)
-            let older = messages[..<recent]
-            LazyVStack(alignment: .leading, spacing: 26) {
-                ForEach(older) { message in
-                    row(message, last: false, summarisedBefore: message.id == summarisedAt)
-                }
-            }
-            .zIndex(older.contains { $0.id == raised } ? 1 : 0)
-            VStack(alignment: .leading, spacing: 26) {
-                ForEach(messages[recent...]) { message in
-                    row(message, last: message.id == messages.last?.id, summarisedBefore: message.id == summarisedAt)
-                }
-            }
-            Status(browser: browser, conversation: conversation, retry: retry)
-            if conversation.summarised == conversation.messages.count, conversation.summarised > 0, let summary = conversation.summary {
-                SummaryDivider(summary: summary)
-            }
-            // Room for everything over the end; scrolling to it shows the last line above them.
-            Color.clear.frame(height: max(inputHeight + 96, overEnd + 28)).id(Self.end)
-                .onGeometryChange(for: ScrollDistance.self) { proxy in
-                    let view = proxy.bounds(of: .named("chat"))?.height ?? 0
-                    return ScrollDistance(below: proxy.frame(in: .named("chat")).maxY - view)
-                } action: {
-                    distance = $0
-                }
-        }
-        .frame(maxWidth: Self.column, alignment: .leading)
-        .padding(.horizontal, 28)
-        .padding(.top, 32)
-        .frame(maxWidth: .infinity)
-    }
-
-    @ViewBuilder
-    private func row(_ message: Message, last: Bool, summarisedBefore: Bool) -> some View {
-        if summarisedBefore, let summary = conversation.summary {
-            SummaryDivider(summary: summary)
-        }
-        MessageRow(message: message, last: last, streaming: last && conversation.busy, folder: conversation.folder, tiles: tiles).equatable()
-            .environment(\.chatActions, actions)
-            .environment(\.raise) { on in
-                if on { raised = message.id } else if raised == message.id { raised = nil }
-            }
-            .zIndex(raised == message.id ? 1 : 0)
-            // A question sent rises into place from the composer's side.
-            .transition(
-                message.role == .user
-                    ? .opacity.combined(with: .scale(scale: 0.96, anchor: .bottomTrailing)).combined(with: .offset(y: 14))
-                    : .opacity.combined(with: .offset(y: 6)))
-    }
-
-    /// Keeps to the end as the reply grows, unless scrolled up to read; opens there.
+    /// The conversation, kept to its end as the reply grows unless scrolled
+    /// up to read; it opens there.
     ///
-    /// Once a turn of the run loop, however many things grew it, and without
-    /// animating: a turn's end changes several at once, and a lazy list told
-    /// to scroll over and over, animated, while its tall rows were still
-    /// unmeasured, could draw none of them, leaving the chat blank.
-    private func follow(_ view: some View, _ scroller: ScrollViewProxy) -> some View {
-        let toEnd = {
-            guard pinned, !endQueued else { return }
-            endQueued = true
-            DispatchQueue.main.async {
-                endQueued = false
-                scroller.scrollTo(Self.end, anchor: .bottom)
-            }
+    /// Whatever grows it counts: words the typewriter shows, steps changing
+    /// in place, pictures loading. Only while a reply comes and just after: a
+    /// step list opened in a quiet chat grows down into view rather than
+    /// pushing the rest up, and the composer growing as it's typed in leaves
+    /// the chat where it is. On macOS 15 the scroll view holds its end itself
+    /// as it grows, within the same layout; before, it's scrolled there.
+    private func follow(_ scroller: ScrollViewProxy) -> some View {
+        // The thin thumb the tab list has, with no track or border. What
+        // scrolls inside it (sources, wide tables and code) opens at its
+        // start, the anchor not passed down.
+        ScrollView {
+            Transcript(
+                browser: browser, conversation: conversation, rows: rows, tiles: tiles, endRoom: overEnd + 32, distance: $distance,
+                retry: retry, start: start
+            )
+            .equatable()
+            .defaultScrollAnchor(.topLeading)
+            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { _ in grew(scroller) }
         }
-        return
-            view
-            .onChange(of: conversation.messages.last?.text) { toEnd() }
-            .onChange(of: conversation.messages.count) {
-                pinned = true
-                toEnd()
-            }
-            // Steps, the working line and what's over the end grow it too, not only the text.
-            .onChange(of: conversation.messages.last?.steps.count) { toEnd() }
-            .onChange(of: conversation.activities.count) { toEnd() }
-            .onChange(of: conversation.phase) { toEnd() }
-            .onChange(of: overEnd) { toEnd() }
-            .onAppear { DispatchQueue.main.async { scroller.scrollTo(Self.end, anchor: .bottom) } }
+        .modifier(OpensAtEnd(following: pinned && following)).floatingScrollBar()
+        .coordinateSpace(name: "chat")
+        .environment(\.chatRows, rows)
+        .onChange(of: conversation.messages.count) {
+            pinned = true
+            toEnd(scroller)
+        }
+        .onChange(of: conversation.busy) { _, busy in
+            if busy { following = true } else { followBriefly() }
+        }
+        .onChange(of: overEnd) { grew(scroller) }
+        .onChange(of: conversation.id) { rows.conversation = conversation }
+        .onAppear {
+            rows.conversation = conversation
+            // What's over the end is measured as it opens.
+            if conversation.busy { following = true } else { followBriefly() }
+            DispatchQueue.main.async { scroller.scrollTo(Self.end, anchor: .bottom) }
+        }
     }
 
-    private var actions: ChatActions { ChatActions(retry: retry) }
+    /// Following a moment longer: the typewriter's last words and the buttons
+    /// under a reply just done, or what's over the end measured as it opens.
+    private func followBriefly() {
+        following = true
+        Task {
+            try? await Task.sleep(for: .seconds(1))
+            if !conversation.busy { following = false }
+        }
+    }
+
+    private func grew(_ scroller: ScrollViewProxy) {
+        if #unavailable(macOS 15), following { toEnd(scroller) }
+    }
+
+    /// To the end, once a turn of the run loop however many things grew it,
+    /// and without animating: a lazy list told to scroll over and over,
+    /// animated, while its tall rows were still unmeasured, could draw none
+    /// of them, leaving the chat blank.
+    private func toEnd(_ scroller: ScrollViewProxy) {
+        guard pinned, !follower.queued, !follower.jumping else { return }
+        follower.queued = true
+        DispatchQueue.main.async { [follower] in
+            follower.queued = false
+            scroller.scrollTo(Self.end, anchor: .bottom)
+        }
+    }
 
     private func send() {
         let text = draft.text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -316,6 +299,92 @@ extension ChatView where Accessory == EmptyView, Start == EmptyView {
     }
 }
 
+/// The messages, the working line, and room at the end for what sits over
+/// it. A view of its own, compared by what it shows: the chat around it
+/// draws again for its own reasons (the page chat's tab and browser change
+/// all the time), and that never builds the conversation again. What it
+/// reads of the conversation, it follows by itself.
+private struct Transcript<Start: View>: View, Equatable {
+    let browser: Browser
+    let conversation: Conversation
+    let rows: ChatRows
+    let tiles: Namespace.ID
+    /// How tall the room at the end is.
+    let endRoom: CGFloat
+    let distance: Binding<ScrollDistance>
+    let retry: () -> Void
+    @ViewBuilder let start: () -> Start
+
+    nonisolated static func == (a: Self, b: Self) -> Bool {
+        // An empty chat shows `start`, which reads what's around it.
+        MainActor.assumeIsolated {
+            a.conversation === b.conversation && a.endRoom == b.endRoom && a.tiles == b.tiles && !a.conversation.messages.isEmpty
+        }
+    }
+
+    /// The messages at the end always laid out (see `body`).
+    static var laidOut: Int { 10 }
+
+    var body: some View {
+        let messages = conversation.messages
+        // Where the chat was summarised, before the first message after.
+        let summarisedAt =
+            conversation.summarised > 0 && conversation.summarised < messages.count ? messages[conversation.summarised].id : nil
+        return VStack(alignment: .leading, spacing: 26) {
+            if messages.isEmpty { start() }
+            // Older ones built as they scroll into view, so a long chat lays out
+            // only what shows; the last few always, so the end is never left
+            // unmeasured. A lazy list told to go to its end as its last row
+            // changed size (a research's progress turning into its report)
+            // could draw nothing there until the chat was shown again.
+            let recent = max(0, messages.count - Self.laidOut)
+            let older = messages[..<recent]
+            LazyVStack(alignment: .leading, spacing: 26) {
+                ForEach(older) { message in
+                    row(message, last: false, summarisedBefore: message.id == summarisedAt)
+                }
+            }
+            .zIndex(older.contains { $0.id == rows.raised } ? 1 : 0)
+            VStack(alignment: .leading, spacing: 26) {
+                ForEach(messages[recent...]) { message in
+                    row(message, last: message.id == messages.last?.id, summarisedBefore: message.id == summarisedAt)
+                }
+            }
+            Status(browser: browser, conversation: conversation, retry: retry)
+            if conversation.summarised == conversation.messages.count, conversation.summarised > 0, let summary = conversation.summary {
+                SummaryDivider(summary: summary)
+            }
+            // Room for everything over the end; scrolling to it shows the last line above them.
+            Color.clear.frame(height: endRoom).id(ChatView<EmptyView, EmptyView>.end)
+                .onGeometryChange(for: ScrollDistance.self) { proxy in
+                    let view = proxy.bounds(of: .named("chat"))?.height ?? 0
+                    return ScrollDistance(below: proxy.frame(in: .named("chat")).maxY - view)
+                } action: {
+                    distance.wrappedValue = $0
+                }
+        }
+        .frame(maxWidth: ChatView<EmptyView, EmptyView>.column, alignment: .leading)
+        .padding(.horizontal, 28)
+        .padding(.top, 32)
+        .frame(maxWidth: .infinity)
+    }
+
+    @ViewBuilder
+    private func row(_ message: Message, last: Bool, summarisedBefore: Bool) -> some View {
+        if summarisedBefore, let summary = conversation.summary {
+            SummaryDivider(summary: summary)
+        }
+        MessageRow(message: message, last: last, streaming: last && conversation.busy, folder: conversation.folder, tiles: tiles).equatable()
+            .environment(\.message, message.id)
+            .zIndex(rows.raised == message.id ? 1 : 0)
+            // A question sent rises into place from the composer's side.
+            .transition(
+                message.role == .user
+                    ? .opacity.combined(with: .scale(scale: 0.96, anchor: .bottomTrailing)).combined(with: .offset(y: 14))
+                    : .opacity.combined(with: .offset(y: 6)))
+    }
+}
+
 /// How far below the view the end of the conversation is.
 nonisolated enum ScrollDistance: Equatable, Sendable {
     /// At the end, or nearly: following the reply.
@@ -330,16 +399,59 @@ nonisolated enum ScrollDistance: Equatable, Sendable {
     }
 }
 
-/// What a message's buttons do, handed down to the rows.
-struct ChatActions {
-    var retry: () -> Void = {}
+/// What a message's rows ask of the chat: asking again, and drawing one
+/// over those after it while what opens out of it (the larger look over a
+/// step's file) is up.
+@MainActor
+@Observable
+final class ChatRows {
+    private(set) var raised: UUID?
+    @ObservationIgnored weak var conversation: Conversation?
+
+    func retry() { conversation.map { Assistant.shared.retry(in: $0) } }
+
+    func raise(_ message: UUID?, _ on: Bool) {
+        if on { raised = message } else if raised == message { raised = nil }
+    }
+}
+
+/// Calls `moved` with which way the person scrolls the chat, true toward
+/// the top: by hand, with its momentum, never scrolling done in code. On
+/// macOS 15 from the scroll view itself; before, from the wheel's events.
+private struct ByHand: ViewModifier {
+    let moved: (_ up: Bool) -> Void
+    @State private var hand = Hand()
+
+    private final class Hand {
+        var on = false
+    }
+
+    func body(content: Content) -> some View {
+        if #available(macOS 15, *) {
+            content
+                .onScrollPhaseChange { [hand] _, phase in hand.on = phase == .interacting || phase == .decelerating }
+                .onScrollGeometryChange(for: CGFloat.self) { $0.contentOffset.y } action: { [hand] old, new in
+                    if hand.on, abs(new - old) > 0.5 { moved(new < old) }
+                }
+        } else {
+            content.onScrollWheel(moved)
+        }
+    }
+}
+
+/// How the chat keeps to its end: not observed, as it changes all the time.
+@MainActor
+private final class Follower {
+    /// A scroll to the end is on its way.
+    var queued = false
+    /// Gliding down to the end, which following leaves alone.
+    var jumping = false
 }
 
 extension EnvironmentValues {
-    @Entry var chatActions = ChatActions()
-    /// Draws a message over those after it (true) or lets it back: for what
-    /// opens out of it, the larger look over a step's file.
-    @Entry var raise: (Bool) -> Void = { _ in }
+    @Entry var chatRows: ChatRows? = nil
+    /// The message a view is part of.
+    @Entry var message: UUID? = nil
 }
 
 // MARK: - Messages
@@ -439,7 +551,7 @@ private struct Answer: View {
     let streaming: Bool
     let folder: URL?
 
-    @Environment(\.chatActions) private var actions
+    @Environment(\.chatRows) private var rows
     /// Read only by the buttons: the answer's own body doesn't redraw as the
     /// pointer comes and goes, which scrolling past does all the time.
     @State private var pointer = Pointer()
@@ -475,7 +587,7 @@ private struct Answer: View {
                 Text("Stopped").font(.system(size: 11.5)).foregroundStyle(Palette.muted)
             }
             if !message.text.isEmpty, !streaming {
-                AnswerButtons(text: message.text, last: last, retry: actions.retry, pointer: pointer)
+                AnswerButtons(text: message.text, last: last, retry: { rows?.retry() }, pointer: pointer)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -1247,14 +1359,16 @@ private struct UsageCard: View {
     }
 }
 
-/// The chat opens at its end; where macOS allows, only then. Held at its
-/// end as content changed size, a step list opened lower down pushed
-/// everything above it up at once, rather than growing down into view.
-/// Following a reply as it comes is `follow`'s, not this.
+/// The chat opens at its end; where macOS allows, it's held there as it
+/// grows only while `following`. Held there always, a step list opened
+/// lower down pushed everything above it up at once, rather than growing
+/// down into view.
 private struct OpensAtEnd: ViewModifier {
+    let following: Bool
+
     func body(content: Content) -> some View {
         if #available(macOS 15, *) {
-            content.defaultScrollAnchor(.bottom, for: .initialOffset)
+            content.defaultScrollAnchor(.bottom, for: .initialOffset).defaultScrollAnchor(following ? .bottom : nil, for: .sizeChanges)
         } else {
             content.defaultScrollAnchor(.bottom)
         }

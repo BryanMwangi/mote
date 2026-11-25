@@ -33,21 +33,22 @@ private struct CommandKeyWatch: ViewModifier {
 }
 
 extension View {
-    /// Calls `act` when the person scrolls toward the top with a wheel or
-    /// trackpad over this view; scrolling done in code doesn't count.
-    func onScrollUp(_ act: @escaping () -> Void) -> some View {
-        background(ScrollUpWatch(act: act))
+    /// Calls `act` with which way the person scrolls with a wheel or
+    /// trackpad over this view, true toward the top; scrolling done in code
+    /// doesn't count.
+    func onScrollWheel(_ act: @escaping (_ up: Bool) -> Void) -> some View {
+        background(ScrollWheelWatch(act: act))
     }
 }
 
-private struct ScrollUpWatch: FillsRoom {
-    let act: () -> Void
+private struct ScrollWheelWatch: FillsRoom {
+    let act: (Bool) -> Void
 
     func makeNSView(context: Context) -> Watcher { Watcher() }
     func updateNSView(_ view: Watcher, context: Context) { view.act = act }
 
     final class Watcher: NSView {
-        var act: () -> Void = {}
+        var act: (Bool) -> Void = { _ in }
         private var monitor: Any?
 
         override func hitTest(_ point: NSPoint) -> NSView? { nil }
@@ -58,10 +59,10 @@ private struct ScrollUpWatch: FillsRoom {
             monitor = nil
             guard window != nil else { return }
             monitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { [weak self] event in
-                guard let self, event.window === self.window, event.scrollingDeltaY > 0,
+                guard let self, event.window === self.window, event.scrollingDeltaY != 0,
                     self.bounds.contains(self.convert(event.locationInWindow, from: nil))
                 else { return event }
-                self.act()
+                self.act(event.scrollingDeltaY > 0)
                 return event
             }
         }
