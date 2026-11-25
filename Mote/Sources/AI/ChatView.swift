@@ -47,6 +47,10 @@ struct ChatView<Accessory: View, Start: View>: View {
     /// Keeping to the end as the reply grows; scrolling up to read lets go,
     /// and coming back down takes it up again.
     @State private var pinned = true
+    /// Where a file waiting in the composer and the same file sent meet, so it moves between them.
+    @Namespace private var tiles
+    /// The message whose larger look is up, drawn over those after it.
+    @State private var raised: UUID?
     /// How tall what sits over the end is: the page chip, mentions, composer.
     @State private var overEnd: CGFloat = 0
 
@@ -78,8 +82,12 @@ struct ChatView<Accessory: View, Start: View>: View {
                         accessory()
                         if !conversation.mentions.isEmpty { mentioned(conversation) }
                         if !conversation.attached.isEmpty {
-                            FileChips(files: conversation.attached, folder: conversation.folder) { Assistant.shared.unattach($0, from: conversation) }
+                            if let folder = conversation.folder {
+                                FileTiles(
+                                    files: conversation.attached, folder: folder, height: FileTile.waiting, trailing: false, space: tiles
+                                ) { Assistant.shared.unattach($0, from: conversation) }
                                 .frame(maxWidth: Self.column, alignment: .leading)
+                            }
                         }
                         ChatTray(conversation: conversation).frame(maxWidth: Self.column)
                         ChatComposer(
@@ -148,11 +156,13 @@ struct ChatView<Accessory: View, Start: View>: View {
             // changed size (a research's progress turning into its report)
             // could draw nothing there until the chat was shown again.
             let recent = max(0, messages.count - Self.laidOut)
+            let older = messages[..<recent]
             LazyVStack(alignment: .leading, spacing: 26) {
-                ForEach(messages[..<recent]) { message in
+                ForEach(older) { message in
                     row(message, last: false, summarisedBefore: message.id == summarisedAt)
                 }
             }
+            .zIndex(older.contains { $0.id == raised } ? 1 : 0)
             VStack(alignment: .leading, spacing: 26) {
                 ForEach(messages[recent...]) { message in
                     row(message, last: message.id == messages.last?.id, summarisedBefore: message.id == summarisedAt)
@@ -182,9 +192,17 @@ struct ChatView<Accessory: View, Start: View>: View {
         if summarisedBefore, let summary = conversation.summary {
             SummaryDivider(summary: summary)
         }
-        MessageRow(message: message, last: last, streaming: last && conversation.busy, folder: conversation.folder).equatable()
+        MessageRow(message: message, last: last, streaming: last && conversation.busy, folder: conversation.folder, tiles: tiles).equatable()
             .environment(\.chatActions, actions)
-            .transition(.opacity.combined(with: .offset(y: 6)))
+            .environment(\.raise) { on in
+                if on { raised = message.id } else if raised == message.id { raised = nil }
+            }
+            .zIndex(raised == message.id ? 1 : 0)
+            // A question sent rises into place from the composer's side.
+            .transition(
+                message.role == .user
+                    ? .opacity.combined(with: .scale(scale: 0.96, anchor: .bottomTrailing)).combined(with: .offset(y: 14))
+                    : .opacity.combined(with: .offset(y: 6)))
     }
 
     /// Keeps to the end as the reply grows, unless scrolled up to read; opens there.
@@ -230,10 +248,11 @@ struct ChatView<Accessory: View, Start: View>: View {
             return browser.announce(behind ? "This chat works in the background: tabs stay behind the one you're on" : "This chat brings each tab it starts on forward")
         }
         if text == Skill.new.prompt || text == Skill.clear.prompt { return (newChat ?? browser.newAskingTab)() }
-        guard let beforeSend else { return Assistant.shared.ask(text, in: conversation) }
+        // Sent with motion: the question rises into place, its files move to it from over the composer.
+        guard let beforeSend else { return withAnimation(Motion.settle) { Assistant.shared.ask(text, in: conversation) } }
         Task {
             await beforeSend()
-            Assistant.shared.ask(text, in: conversation)
+            withAnimation(Motion.settle) { Assistant.shared.ask(text, in: conversation) }
         }
     }
 
@@ -318,6 +337,9 @@ struct ChatActions {
 
 extension EnvironmentValues {
     @Entry var chatActions = ChatActions()
+    /// Draws a message over those after it (true) or lets it back: for what
+    /// opens out of it, the larger look over a step's file.
+    @Entry var raise: (Bool) -> Void = { _ in }
 }
 
 // MARK: - Messages
@@ -329,10 +351,11 @@ private struct MessageRow: View, Equatable {
     let streaming: Bool
     /// Where the chat's files are, for those attached and pictures taken.
     let folder: URL?
+    let tiles: Namespace.ID
 
     var body: some View {
         switch message.role {
-        case .user: Question(text: message.text, files: message.files ?? [], folder: folder)
+        case .user: Question(text: message.text, files: message.files ?? [], folder: folder, tiles: tiles)
         case .assistant: Answer(message: message, last: last, streaming: streaming, folder: folder)
         }
     }
@@ -342,12 +365,13 @@ private struct Question: View {
     let text: String
     let files: [Attachment]
     let folder: URL?
+    let tiles: Namespace.ID
     @State private var pointer = Pointer()
 
     var body: some View {
         VStack(alignment: .trailing, spacing: 6) {
             if !files.isEmpty {
-                if let folder { SentFiles(files: files, folder: folder).padding(.leading, 90).frame(maxWidth: .infinity, alignment: .trailing) }
+                if let folder { FileTiles(files: files, folder: folder, space: tiles).padding(.leading, 90).frame(maxWidth: .infinity, alignment: .trailing) }
             }
             if !text.isEmpty { said }
         }

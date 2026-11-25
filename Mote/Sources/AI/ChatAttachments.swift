@@ -151,109 +151,84 @@ enum FileSaving {
     }
 }
 
-/// A file attached for the next message, as a chip: its picture or icon,
-/// its name, and a way to let it go.
-struct FileChip: View {
-    let file: Attachment
-    let folder: URL?
-    let remove: () -> Void
-    @State private var icon: NSImage?
-
-    private var url: URL? { folder?.appendingPathComponent(file.file) }
-
-    var body: some View {
-        HStack(spacing: 6) {
-            Group {
-                if let icon { Image(nsImage: icon).resizable().scaledToFill() } else { Image(systemName: "doc").foregroundStyle(Palette.muted) }
-            }
-            .frame(width: 18, height: 18).clipShape(RoundedRectangle(cornerRadius: 3, style: .continuous))
-            Text(file.name).font(.system(size: 11.5)).foregroundStyle(Palette.ink.opacity(0.8)).lineLimit(1).truncationMode(.middle)
-                .frame(maxWidth: 160, alignment: .leading)
-            Button(action: remove) {
-                Image(systemName: "xmark").font(.system(size: 8, weight: .semibold)).foregroundStyle(Palette.muted)
-                    .frame(width: 16, height: 16).contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .help("Don't attach this file")
-        }
-        .padding(.leading, 5).padding(.trailing, 4)
-        .frame(height: 28)
-        .background(Palette.wash, in: Rounded.row)
-        .overlay(Rounded.row.strokeBorder(Palette.hairline))
-        .modifier(FileAt(url: url))
-        .help("\(file.name), \(ChatFiles.size(file.bytes))")
-        .task(id: file.file) { icon = await Thumbnail.of(url, side: 36) }
-    }
-}
-
-/// Quick Look and the menu, for a file that may not be there.
-private struct FileAt: ViewModifier {
-    let url: URL?
-    func body(content: Content) -> some View {
-        if let url { content.file(url) } else { content }
-    }
-}
-
-/// Files attached for the next message, in a row that scrolls when they don't fit.
-struct FileChips: View {
-    let files: [Attachment]
-    let folder: URL?
-    let remove: (Attachment) -> Void
-
-    var body: some View {
-        ViewThatFits(in: .horizontal) {
-            chips
-            ScrollView(.horizontal, showsIndicators: false) { chips.padding(.vertical, 1) }
-        }
-    }
-
-    private var chips: some View {
-        HStack(spacing: 6) {
-            ForEach(files) { file in FileChip(file: file, folder: folder) { remove(file) } }
-        }
-    }
-}
-
-/// Files sent with a message, over it at its side: pictures at their own
-/// shape, other files as a card of their first page or their name, with
-/// their kind. Wrapping, never scrolling.
-struct SentFiles: View {
+/// Files in a chat, as tiles in rows that wrap: those waiting in the
+/// composer (smaller, each with a way to let it go) and those sent with a
+/// message (beside it). The same tile in both, matched by `space`, so a
+/// file sent moves from over the composer to over its message.
+struct FileTiles: View {
     let files: [Attachment]
     let folder: URL
+    var height: CGFloat = FileTile.sent
+    /// From the trailing edge, as a message's; else from the leading.
+    var trailing = true
+    var space: Namespace.ID?
+    var remove: ((Attachment) -> Void)?
 
     var body: some View {
         let urls = files.map { folder.appendingPathComponent($0.file) }
-        TrailingFlow(spacing: 6) {
+        Flow(spacing: 6, trailing: trailing) {
             ForEach(files) { file in
-                SentFile(file: file, url: folder.appendingPathComponent(file.file)).file(folder.appendingPathComponent(file.file), among: urls)
+                let url = folder.appendingPathComponent(file.file)
+                FileTile(file: file, url: url, height: height, remove: remove.map { remove in { remove(file) } })
+                    .file(url, among: urls)
+                    .modifier(Matched(id: file.file, space: space))
             }
         }
     }
 }
 
-private struct SentFile: View {
+/// One view across two places, when there's a namespace to match it in.
+private struct Matched: ViewModifier {
+    let id: String
+    let space: Namespace.ID?
+    func body(content: Content) -> some View {
+        if let space { content.matchedGeometryEffect(id: id, in: space) } else { content }
+    }
+}
+
+/// A file: a picture at its own shape within bounds, another file as a
+/// card of its first page or its name, with its kind.
+struct FileTile: View {
     let file: Attachment
     let url: URL
+    var height: CGFloat = Self.sent
+    var remove: (() -> Void)?
     @State private var thumbnail: NSImage?
     @State private var hovering = false
 
-    static let height: CGFloat = 110
+    /// Its height with a message, and waiting in the composer.
+    static let sent: CGFloat = 110
+    static let waiting: CGFloat = 64
+
     private var kind: String { (file.name as NSString).pathExtension.uppercased() }
     private var picture: Bool { UTType(filenameExtension: (file.name as NSString).pathExtension)?.conforms(to: .image) == true }
+    private var scale: CGFloat { height / Self.sent }
 
     var body: some View {
         Group {
             if picture, let thumbnail {
-                // At the picture's shape, within bounds.
                 let ratio = thumbnail.size.width / max(1, thumbnail.size.height)
                 Image(nsImage: thumbnail).resizable().scaledToFill()
-                    .frame(width: min(240, max(70, Self.height * ratio)), height: Self.height)
+                    .frame(width: min(240 * scale, max(70 * scale, height * ratio)), height: height)
             } else {
                 card
             }
         }
-        .clipShape(Rounded.card)
-        .overlay(Rounded.card.strokeBorder(hovering ? Palette.ink.opacity(0.3) : Palette.hairline))
+        .clipShape(RoundedRectangle(cornerRadius: 11 * max(scale, 0.75), style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 11 * max(scale, 0.75), style: .continuous).strokeBorder(hovering ? Palette.ink.opacity(0.3) : Palette.hairline))
+        .overlay(alignment: .topTrailing) {
+            if let remove {
+                Button(action: remove) {
+                    Image(systemName: "xmark").font(.system(size: 7.5, weight: .bold)).foregroundStyle(.white)
+                        .frame(width: 18, height: 18).background(.black.opacity(0.65), in: Circle())
+                        .contentShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .padding(4)
+                .help("Don't attach this file")
+                .accessibilityLabel("Don't attach \(file.name)")
+            }
+        }
         .onHover { hovering = $0 }
         .help("\(file.name), \(ChatFiles.size(file.bytes))")
         .task(id: url) { thumbnail = await Thumbnail.of(url, side: 240) }
@@ -264,26 +239,27 @@ private struct SentFile: View {
         ZStack(alignment: .bottomLeading) {
             if let thumbnail, !picture {
                 Color.white
-                Image(nsImage: thumbnail).resizable().scaledToFit().padding(.horizontal, 6).padding(.top, 6)
+                Image(nsImage: thumbnail).resizable().scaledToFit().padding(.horizontal, 6 * scale).padding(.top, 6 * scale)
             } else {
                 Palette.wash
-                Text(file.name).font(.system(size: 12)).foregroundStyle(Palette.ink.opacity(0.85)).lineLimit(3)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading).padding(10)
+                Text(file.name).font(.system(size: 12 * max(scale, 0.85))).foregroundStyle(Palette.ink.opacity(0.85)).lineLimit(3)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading).padding(10 * scale)
             }
             if !kind.isEmpty {
                 Text(kind).font(.system(size: 9.5, weight: .semibold)).foregroundStyle(.white.opacity(0.9))
                     .padding(.horizontal, 6).padding(.vertical, 2.5)
                     .background(.black.opacity(0.6), in: Capsule())
-                    .padding(7)
+                    .padding(7 * max(scale, 0.7))
             }
         }
-        .frame(width: 110, height: Self.height)
+        .frame(width: height, height: height)
     }
 }
 
-/// Views in rows from the trailing edge, wrapping onto the next.
-struct TrailingFlow: Layout {
+/// Views in rows, wrapping onto the next: from the trailing edge, or the leading.
+struct Flow: Layout {
     var spacing: CGFloat
+    var trailing = true
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         let rows = rows(subviews, width: proposal.width ?? .infinity)
@@ -295,7 +271,7 @@ struct TrailingFlow: Layout {
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
         var y = bounds.minY
         for row in rows(subviews, width: bounds.width) {
-            var x = bounds.maxX - row.width
+            var x = trailing ? bounds.maxX - row.width : bounds.minX
             for index in row.items {
                 let size = subviews[index].sizeThatFits(.unspecified)
                 subviews[index].place(at: CGPoint(x: x, y: y + row.height - size.height), proposal: .unspecified)
@@ -341,6 +317,7 @@ struct StepShot: Identifiable, Equatable {
 struct StepShots: View {
     let shots: [StepShot]
     @State private var over: StepShot?
+    @Environment(\.raise) private var raise
     /// Room in the chat under the line and over it, and the larger look's height.
     @State private var room = (below: CGFloat.infinity, above: CGFloat.zero)
     @State private var cardHeight: CGFloat = 250
@@ -386,6 +363,8 @@ struct StepShots: View {
         } action: { measured in
             room = (below: measured.height, above: measured.minY)
         }
+        // Its message over the ones after it while the larger look is up.
+        .onChange(of: over != nil) { _, up in raise(up) }
         .animation(Motion.quick, value: over)
     }
 }
