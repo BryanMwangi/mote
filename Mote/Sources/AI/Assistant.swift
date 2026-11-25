@@ -367,15 +367,50 @@ final class Assistant {
     }
 
     /// Sends `text` in `conversation` to the chosen provider.
-    func ask(_ text: String, in conversation: Conversation) {
+    /// `carrying`: Mote's own nudge to go on with the task list, not the
+    /// person's words, which start the count of nudges again.
+    func ask(_ text: String, in conversation: Conversation, carrying: Bool = false) {
         answering[conversation.id] = WeakChat(conversation)
-        // A plan done while the person is elsewhere: macOS tells them it's ready.
+        if !carrying { carried[conversation.id] = nil }
         conversation.finished = { [weak self] chat in
+            self?.carryOn(chat)
+            // A plan done while the person is elsewhere: macOS tells them it's ready.
             guard ChatModes.shared.mode(of: chat.id) == .plan, !WebNotifications.sees(chat: chat.id) else { return }
             let name = self?.provider.name ?? "The assistant"
             Task { await WebNotifications.shared.tell(chat: chat.id, "Plan ready for review", "\(name) has a plan for “\(chat.title)”") }
         }
         conversation.send(text, routing: { [self] in try await route(chat: conversation.id) })
+    }
+
+    // MARK: - Carrying on
+
+    /// The most nudges in a row before it waits for the person.
+    static let mostCarries = 12
+    /// Each chat's nudges in a row, and its task list when last nudged.
+    private var carried: [UUID: (count: Int, tasks: [TaskItem])] = [:]
+
+    /// A turn ended cleanly (not stopped, not failed). A chat on Auto with its
+    /// task list still open goes on by itself, as a person would say "carry
+    /// on", up to `mostCarries` times in a row. Not when it ended by asking
+    /// the person something, nor when the last nudge got the list no further.
+    private func carryOn(_ chat: Conversation) {
+        let open = chat.tasks.filter { $0.state == .open }.count
+        let before = carried[chat.id]
+        let asked = chat.messages.last?.steps.contains { $0.title == "Asking you" } == true
+        guard ChatModes.shared.mode(of: chat.id) == .auto, open > 0, !asked, chat.queued.isEmpty,
+            (before?.count ?? 0) < Self.mostCarries, before.map({ $0.tasks != chat.tasks }) ?? true
+        else { return carried[chat.id] = nil }
+        let count = (before?.count ?? 0) + 1
+        carried[chat.id] = (count, chat.tasks)
+        Task { @MainActor [weak self, weak chat] in
+            try? await Task.sleep(for: .seconds(1))
+            // Anything else meanwhile (the person wrote, or stopped it) comes first.
+            guard let self, let chat, !chat.busy, chat.queued.isEmpty, case .idle = chat.phase else { return }
+            self.ask(
+                "Carry on with your task list: \(open) item\(open == 1 ? "" : "s") still open. "
+                    + "(Mote carries on by itself in Auto, \(count) of \(Self.mostCarries) in a row; mark items as you go.)",
+                in: chat, carrying: true)
+        }
     }
 
     /// Conversations asked something, by id, so a tool's Stop can stop one.
