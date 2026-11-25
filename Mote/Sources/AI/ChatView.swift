@@ -110,6 +110,13 @@ struct ChatView<Accessory: View, Start: View>: View {
             }
         }
         .background(ground)
+        // Files dropped anywhere on the chat are attached to the next message.
+        .dropDestination(for: URL.self) { urls, _ in
+            let files = urls.filter(\.isFileURL)
+            guard !files.isEmpty, conversation.folder != nil else { return false }
+            Assistant.shared.attach(files, to: conversation) { [browser] in browser.announce($0) }
+            return true
+        }
         .onAppear {
             focus += 1
             take()
@@ -914,6 +921,12 @@ private struct ChatComposer: View {
         }
     }
 
+    /// Files pasted or dropped in the field, for a chat that keeps them.
+    private var takesFiles: (([URL]) -> Void)? {
+        guard conversation.folder != nil else { return nil }
+        return { attach($0) }
+    }
+
     private func attach(_ urls: [URL]) {
         Assistant.shared.attach(urls, to: conversation) { [browser] in browser.announce($0) }
     }
@@ -991,7 +1004,8 @@ private struct ChatComposer: View {
                     guard browser.prefs.aiActs else { return false }
                     ChatModes.shared.toggle(conversation.id)
                     return true
-                }
+                },
+                files: takesFiles
             )
             .frame(height: height)
             .overlay(alignment: .topLeading) {
@@ -1032,13 +1046,6 @@ private struct ChatComposer: View {
         }
         .overlay {
             RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Palette.hairline, lineWidth: 1).allowsHitTesting(false)
-        }
-        // Files dropped on it are attached.
-        .dropDestination(for: URL.self) { urls, _ in
-            let files = urls.filter(\.isFileURL)
-            guard !files.isEmpty, conversation.folder != nil else { return false }
-            attach(files)
-            return true
         }
         .animation(Motion.quick, value: conversation.busy)
         .animation(Motion.quick, value: pickerItems)

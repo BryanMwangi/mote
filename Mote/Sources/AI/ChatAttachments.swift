@@ -68,6 +68,27 @@ struct AttachButton: View {
 final class QuickLook: NSObject, @preconcurrency QLPreviewPanelDataSource, @preconcurrency QLPreviewPanelDelegate {
     static let shared = QuickLook()
     private var items: [URL] = []
+    /// Closes it on a click elsewhere in Mote, while it's up.
+    private var clicks: Any?
+
+    private var panel: QLPreviewPanel? { QLPreviewPanel.sharedPreviewPanelExists() ? QLPreviewPanel.shared() : nil }
+
+    /// Escape while it's up closes it; true when it did. Mote's own keys see
+    /// Escape first, so they ask here before using it.
+    func escape(_ event: NSEvent) -> Bool {
+        guard event.keyCode == 53, let panel, panel.isVisible else { return false }
+        close()
+        return true
+    }
+
+    /// Whether a key belongs to the panel (its arrows), not to Mote.
+    func owns(_ event: NSEvent) -> Bool { event.window != nil && event.window === panel }
+
+    private func close() {
+        panel?.orderOut(nil)
+        if let clicks { NSEvent.removeMonitor(clicks) }
+        clicks = nil
+    }
 
     func show(_ urls: [URL], at index: Int = 0) {
         guard !urls.isEmpty, let panel = QLPreviewPanel.shared() else { return }
@@ -77,6 +98,17 @@ final class QuickLook: NSObject, @preconcurrency QLPreviewPanelDataSource, @prec
         panel.reloadData()
         panel.currentPreviewItemIndex = min(max(0, index), urls.count - 1)
         panel.makeKeyAndOrderFront(nil)
+        guard clicks == nil else { return }
+        // A click anywhere else closes it, and still does what it does.
+        clicks = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown]) { [weak self] event in
+            let window = event.window.map { ObjectIdentifier($0) }
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                if let panel = self.panel, panel.isVisible, window == ObjectIdentifier(panel) { return }
+                self.close()
+            }
+            return event
+        }
     }
 
     func numberOfPreviewItems(in panel: QLPreviewPanel!) -> Int { items.count }

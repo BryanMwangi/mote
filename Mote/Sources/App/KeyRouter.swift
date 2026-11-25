@@ -35,6 +35,9 @@ final class KeyRouter {
     }
 
     private func take(_ event: NSEvent) -> Bool {
+        // Quick Look's: Escape closes it, and its own keys (arrows) are its.
+        if QuickLook.shared.escape(event) { return true }
+        if QuickLook.shared.owns(event) { return false }
         // A sheet (the assistant asking to act, a save panel) has keys of its
         // own: Escape there is its Cancel, not Stop for the window behind.
         if event.window?.isSheet == true { return false }

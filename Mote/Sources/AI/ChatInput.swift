@@ -20,6 +20,8 @@ struct ChatInput: NSViewRepresentable {
     let escape: () -> Bool
     /// ⇧⇥; true when it was used (the chat's Ask or Auto).
     var backtab: (() -> Bool)? = nil
+    /// Files pasted or dropped in, to attach; without it they go in as text.
+    var files: (([URL]) -> Void)? = nil
 
     static let font = NSFont.systemFont(ofSize: 14)
     static var line: CGFloat { ceil(font.ascender - font.descender + font.leading) + 2 }
@@ -28,11 +30,16 @@ struct ChatInput: NSViewRepresentable {
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
     func makeNSView(context: Context) -> NSScrollView {
-        let scroll = NSTextView.scrollableTextView()
+        let scroll = FileTakingTextView.scrollableTextView()
         scroll.drawsBackground = false
         // Scrolls past eight lines, with no bar.
         scroll.hasVerticalScroller = false
-        let view = scroll.documentView as! NSTextView
+        let view = scroll.documentView as! FileTakingTextView
+        view.files = { [weak coordinator = context.coordinator] urls in
+            guard let take = coordinator?.parent.files else { return false }
+            take(urls)
+            return true
+        }
         view.delegate = context.coordinator
         view.isRichText = false
         view.importsGraphics = false
@@ -127,5 +134,37 @@ struct ChatInput: NSViewRepresentable {
                 return false
             }
         }
+    }
+}
+
+/// The composer's text view, which hands files pasted or dropped on it to
+/// be attached, where a plain one would write their paths. A picture
+/// copied without a file (a screenshot to the clipboard) is saved to one.
+final class FileTakingTextView: NSTextView {
+    /// Takes the files; false when they aren't wanted, and go in as text.
+    var files: (([URL]) -> Bool)?
+
+    override func paste(_ sender: Any?) {
+        if let urls = Self.files(on: .general), files?(urls) == true { return }
+        super.paste(sender)
+    }
+
+    override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
+        if let urls = Self.files(on: sender.draggingPasteboard), files?(urls) == true { return true }
+        return super.performDragOperation(sender)
+    }
+
+    /// Files on the pasteboard, or a picture on it saved to a file; nil for text.
+    static func files(on board: NSPasteboard) -> [URL]? {
+        if let urls = board.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL], !urls.isEmpty {
+            return urls
+        }
+        guard board.string(forType: .string) == nil, let image = NSImage(pasteboard: board), let tiff = image.tiffRepresentation,
+            let png = NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:])
+        else { return nil }
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("Pasted \(UUID().uuidString.prefix(8))")
+        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let file = folder.appendingPathComponent("Pasted image.png")
+        return (try? png.write(to: file)) != nil ? [file] : nil
     }
 }
