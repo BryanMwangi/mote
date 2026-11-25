@@ -120,7 +120,7 @@ struct WebsiteDataSheet: View {
             .padding(.horizontal, 20)
             .padding(.vertical, 14)
         }
-        .frame(width: 460, height: 620)
+        .frame(width: 460, height: 550)
         .disabled(working)
         .task { await data.load() }
         .task { languages = await MozillaTranslation.shared.downloaded() }
