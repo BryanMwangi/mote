@@ -37,6 +37,8 @@ struct ChatView<Accessory: View, Start: View>: View {
     @State private var draft = Draft()
     @State private var inputHeight = ChatInput.line
     @State private var focus = 0
+    /// A scroll to the end is on its way (see `follow`).
+    @State private var endQueued = false
     /// /usage: what the chat has spent, over the composer until closed.
     @State private var showsUsage = false
     /// How far the end of the conversation is below the view: only which
@@ -55,7 +57,7 @@ struct ChatView<Accessory: View, Start: View>: View {
         ScrollViewReader { scroller in
             ZStack(alignment: .bottom) {
                 // The thin thumb the tab list has, with no track or border.
-                follow(ScrollView { transcript }.floatingScrollBar().coordinateSpace(name: "chat"), scroller)
+                follow(ScrollView { transcript }.defaultScrollAnchor(.bottom).floatingScrollBar().coordinateSpace(name: "chat"), scroller)
                     .onChange(of: distance) { _, now in if now == .end { pinned = true } }
                     .onScrollUp { pinned = false }
 
@@ -145,7 +147,6 @@ struct ChatView<Accessory: View, Start: View>: View {
         .padding(.horizontal, 28)
         .padding(.top, 32)
         .frame(maxWidth: .infinity)
-        .animation(Motion.settle, value: conversation.messages.count)
     }
 
     @ViewBuilder
@@ -159,14 +160,26 @@ struct ChatView<Accessory: View, Start: View>: View {
     }
 
     /// Keeps to the end as the reply grows, unless scrolled up to read; opens there.
+    ///
+    /// Once a turn of the run loop, however many things grew it, and without
+    /// animating: a turn's end changes several at once, and a lazy list told
+    /// to scroll over and over, animated, while its tall rows were still
+    /// unmeasured, could draw none of them, leaving the chat blank.
     private func follow(_ view: some View, _ scroller: ScrollViewProxy) -> some View {
-        let toEnd = { if pinned { scroller.scrollTo(Self.end, anchor: .bottom) } }
+        let toEnd = {
+            guard pinned, !endQueued else { return }
+            endQueued = true
+            DispatchQueue.main.async {
+                endQueued = false
+                scroller.scrollTo(Self.end, anchor: .bottom)
+            }
+        }
         return
             view
             .onChange(of: conversation.messages.last?.text) { toEnd() }
             .onChange(of: conversation.messages.count) {
                 pinned = true
-                withAnimation(Motion.settle) { scroller.scrollTo(Self.end, anchor: .bottom) }
+                toEnd()
             }
             // Steps, the working line and what's over the end grow it too, not only the text.
             .onChange(of: conversation.messages.last?.steps.count) { toEnd() }
