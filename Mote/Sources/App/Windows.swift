@@ -113,6 +113,13 @@ final class Windows {
         }
         browser.tabs.forEach { $0.close() }
         browser.parkedTabs.forEach { $0.close() }
+        // And what lives with the window but isn't a tab: its link previews,
+        // its sidebar site and its extensions' panels.
+        browser.peekTab?.close()
+        browser.parkedPeeks.values.forEach { $0.tab.close() }
+        browser.parkedPeeks = [:]
+        browser.siteChat.drop()
+        if #available(macOS 15.4, *) { ExtensionPanels.shared.drop(windowOf: browser) }
         if Browser.front === browser { Browser.front = main }
         save()
     }

@@ -51,6 +51,17 @@ final class ExtensionPanels {
         Extensions.shared.controller.didCloseTab(page, windowIsClosing: false)
     }
 
+    /// A window closed: its panels' pages go with it, each told to the
+    /// extension as a tab closing with its window.
+    func drop(windowOf browser: Browser) {
+        let window = ObjectIdentifier(browser)
+        for (key, page) in pages where key.window == window {
+            pages[key] = nil
+            page.web?.removeFromSuperview()
+            Extensions.shared.controller.didCloseTab(page, windowIsClosing: true)
+        }
+    }
+
     /// An extension switched off or removed: its panels close everywhere.
     func close(extension id: String) {
         for browser in Windows.shared.all { browser.closePanel(id: "ext:" + id) }

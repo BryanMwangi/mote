@@ -373,6 +373,13 @@ final class SiteChat: NSObject, WKUIDelegate {
     /// The panel opened again: the page stays.
     func keep() { resting?.cancel() }
 
+    /// Its window closed: the page goes now.
+    func drop() {
+        resting?.cancel()
+        page?.removeFromSuperview()
+        page = nil
+    }
+
     func webView(
         _ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration, for action: WKNavigationAction,
         windowFeatures: WKWindowFeatures
