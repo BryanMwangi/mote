@@ -11,6 +11,7 @@ struct AISettings: View {
 
     @State private var keyDraft = ""
     @State private var checking = false
+    @State private var managingChats = false
     @State private var checked: (provider: String, result: String)?
     private var assistant: Assistant { .shared }
 
@@ -153,7 +154,15 @@ struct AISettings: View {
             SettingRow(
                 "Chats in the sidebar", "Your newest chats, as a folder above your pinned tabs", symbol: "bubble.left.and.bubble.right",
                 tint: Tint.indigo, keywords: ["chats", "conversations", "tabs"], on: $prefs.chatsInSidebar)
+            RowRule()
+            SettingRow(
+                "Chat storage", "How much room each chat takes with its attached files, to delete what you don't need",
+                symbol: "internaldrive", tint: Tint.gray, keywords: ["chats", "files", "attachments", "space", "storage"]
+            ) {
+                Pill("Manage") { managingChats = true }
+            }
         }
+        .sheet(isPresented: $managingChats) { ChatStorageSheet() }
 
         MemorySection()
 
