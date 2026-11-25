@@ -124,6 +124,9 @@ struct ChatView<Accessory: View, Start: View>: View {
             })
     }
 
+    /// The messages at the end always laid out (see `transcript`).
+    static var laidOut: Int { 10 }
+
     /// The messages, the working line, and room at the end for what sits over it.
     private var transcript: some View {
         let messages = conversation.messages
@@ -132,9 +135,19 @@ struct ChatView<Accessory: View, Start: View>: View {
             conversation.summarised > 0 && conversation.summarised < messages.count ? messages[conversation.summarised].id : nil
         return VStack(alignment: .leading, spacing: 26) {
             if messages.isEmpty { start() }
-            // Built as they scroll into view: a long chat lays out only what shows.
+            // Older ones built as they scroll into view, so a long chat lays out
+            // only what shows; the last few always, so the end is never left
+            // unmeasured. A lazy list told to go to its end as its last row
+            // changed size (a research's progress turning into its report)
+            // could draw nothing there until the chat was shown again.
+            let recent = max(0, messages.count - Self.laidOut)
             LazyVStack(alignment: .leading, spacing: 26) {
-                ForEach(messages) { message in
+                ForEach(messages[..<recent]) { message in
+                    row(message, last: false, summarisedBefore: message.id == summarisedAt)
+                }
+            }
+            VStack(alignment: .leading, spacing: 26) {
+                ForEach(messages[recent...]) { message in
                     row(message, last: message.id == messages.last?.id, summarisedBefore: message.id == summarisedAt)
                 }
             }
