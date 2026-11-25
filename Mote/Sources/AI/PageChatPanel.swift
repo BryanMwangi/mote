@@ -99,8 +99,10 @@ struct PageChatPanel: View {
         }
         .onChange(of: tab.chatOpen) { _, open in
             if open {
+                browser.siteChat.keep()
                 show()
             } else {
+                browser.siteChat.restSoon()
                 // Let the conversation ride the slide out, then let it go. The
                 // check reads the live state, so reopening (or a tab whose own
                 // panel is open taking over) keeps the conversation.
@@ -352,6 +354,24 @@ final class SiteChat: NSObject, WKUIDelegate {
         Web.name(page, "Page chat · \(url.host() ?? site)")
         return page
     }
+
+    private var resting: Task<Void, Never>?
+
+    /// The panel closed: the site's page, a whole web process signed in to
+    /// an AI app, goes two minutes later unless the panel opens again. It
+    /// loads afresh then, still signed in.
+    func restSoon() {
+        resting?.cancel()
+        resting = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(120))
+            guard !Task.isCancelled, let self, self.browser?.chatting != true, self.page?.isLoading != true else { return }
+            self.page?.removeFromSuperview()
+            self.page = nil
+        }
+    }
+
+    /// The panel opened again: the page stays.
+    func keep() { resting?.cancel() }
 
     func webView(
         _ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration, for action: WKNavigationAction,

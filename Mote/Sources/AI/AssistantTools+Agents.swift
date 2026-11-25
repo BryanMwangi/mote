@@ -176,6 +176,9 @@ final class AgentRuns {
         made += 1
         let run = Run(id: "A\(made)", chat: chat, task: task)
         runs.append(run)
+        // Kept for asking after, not for good: the oldest finished runs whose
+        // reports have been had go once there are more than 30.
+        while runs.count > 30, let old = runs.firstIndex(where: { $0.told && $0.report != nil }) { runs.remove(at: old) }
         show(run)
         run.job = Task { [weak self] in
             let report = await work(task, run.id) { [weak self, weak run] news in

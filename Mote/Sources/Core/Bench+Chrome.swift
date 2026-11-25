@@ -161,7 +161,7 @@ extension Bench {
             ("hidden", { browser.reviewing = $0 }), ("pages120", { prefs.fastPages = $0 }), ("sidebar", { prefs.sidebar = $0 }),
             ("spaces", { prefs.usesSpaces = $0 }), ("hides", { prefs.sideHides = $0 }), ("folded", { browser.folded = $0 }),
             ("peek", { browser.peeking = $0 }), ("bar", { if $0 { browser.edit() } else { browser.dismiss() } }),
-            ("chats", { if $0 { browser.showChats() } }), ("peeklinks", { prefs.peeksLinks = $0 }),
+            ("chats", { if $0 { browser.showChats() } }), ("pagechat", { if $0 != browser.chatting { browser.togglePageChat() } }), ("peeklinks", { prefs.peeksLinks = $0 }),
             ("processes", { browser.showingProcesses = $0 }), ("import", { browser.importing = $0 }),
             ("sideright", { prefs.sideRight = $0 }), ("reveal", { browser.toolbarRevealed = $0 }),
             // The app brought forward, where focus moves as it does for a person.
