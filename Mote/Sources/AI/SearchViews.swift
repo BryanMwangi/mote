@@ -353,6 +353,13 @@ struct StepLine: View {
 struct SourcesStrip: View {
     let entries: [Citations.Entry]
     @State private var all = false
+    /// Which edges have cards past them, to fade there and only there.
+    @State private var past = Edges()
+
+    nonisolated struct Edges: Equatable, Sendable {
+        var start = false
+        var end = true
+    }
 
     /// Uncited pages shown before the rest fold into a count: a research
     /// can read hundreds, and a card each would be more than anyone reads.
@@ -374,7 +381,14 @@ struct SourcesStrip: View {
                 }
             }
             .padding(.vertical, 1)
+            // Only which edges are passed, so scrolling draws it again at the ends alone.
+            .onGeometryChange(for: Edges.self) { proxy in
+                let cards = proxy.frame(in: .named(Self.strip))
+                let width = proxy.bounds(of: .named(Self.strip))?.width ?? cards.width
+                return Edges(start: cards.minX < -1, end: cards.maxX > width + 1)
+            } action: { past = $0 }
         }
+        .coordinateSpace(name: Self.strip)
         // The column's width, never its cards': as they arrive, a strip asking
         // for all of them widened the whole chat for a moment, its text off
         // the edge, until the next layout.
@@ -383,12 +397,15 @@ struct SourcesStrip: View {
         // edges rather than cut off, or drawn past it over the margin.
         .mask {
             HStack(spacing: 0) {
-                LinearGradient(colors: [.clear, .black], startPoint: .leading, endPoint: .trailing).frame(width: 16)
+                LinearGradient(colors: [past.start ? .clear : .black, .black], startPoint: .leading, endPoint: .trailing).frame(width: 16)
                 Color.black
-                LinearGradient(colors: [.black, .clear], startPoint: .leading, endPoint: .trailing).frame(width: 16)
+                LinearGradient(colors: [.black, past.end ? .clear : .black], startPoint: .leading, endPoint: .trailing).frame(width: 16)
             }
+            .animation(Motion.quick, value: past)
         }
     }
+
+    private static let strip = "sources"
 }
 
 /// The pages folded away, as a card that shows them.
