@@ -156,6 +156,8 @@ public struct Activity: Equatable, Codable, Sendable {
     public var spent: Int?
     /// A picture it took, by its name in the chat's folder.
     public var picture: String?
+    /// A file on the Mac it read (read_file), by its path.
+    public var file: String?
 
     public init(id: String, title: String, done: Bool = false, kind: Kind = .tool, outcome: Outcome? = nil, detail: String? = nil) {
         self.id = id

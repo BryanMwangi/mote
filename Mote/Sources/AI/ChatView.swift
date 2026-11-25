@@ -434,7 +434,8 @@ private struct Answer: View {
                 let (agents, others) = AgentsCard.split(message.steps)
                 if !agents.isEmpty { AgentsCard(steps: agents) }
                 // Pictures it took at the end of the line, in sight whether the steps are open or not.
-                if !others.isEmpty { StepsSummary(steps: others, shots: StepShot.of(others, in: folder)) }
+                // Over what follows: its larger look opens below the line.
+                if !others.isEmpty { StepsSummary(steps: others, shots: StepShot.of(others, in: folder)).zIndex(1) }
             }
             if !entries.isEmpty { SourcesStrip(entries: entries).padding(.bottom, 2) }
             if !message.reasoning.isEmpty { thoughts }

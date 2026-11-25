@@ -212,7 +212,7 @@ struct StepsSummary: View {
             }
             if open {
                 VStack(alignment: .leading, spacing: 7) {
-                    ForEach(steps, id: \.id) { step in StepLine(step: step) }
+                    ForEach(steps, id: \.id) { step in StepLine(step: step, shot: shots.first { $0.step == step.id }, shots: shots) }
                 }
                 .padding(.leading, 2)
                 .transition(.opacity)
@@ -257,6 +257,9 @@ struct StepsSummary: View {
 /// A step, with how it went and what it came to: "Closed “GitHub”, “Hacker News”".
 struct StepLine: View {
     let step: Activity
+    /// What it looked at, shown under it in place of its line of result.
+    var shot: StepShot?
+    var shots: [StepShot] = []
     @State private var whole = false
 
     var body: some View {
@@ -267,7 +270,9 @@ struct StepLine: View {
                 .frame(width: 14)
             VStack(alignment: .leading, spacing: 2) {
                 Text(step.title + (label.map { " · " + $0 } ?? "")).font(.system(size: 12.5)).lineLimit(1).truncationMode(.middle)
-                if let detail = step.detail {
+                if let shot {
+                    StepPreview(shot: shot, all: shots).padding(.top, 4)
+                } else if let detail = step.detail {
                     Text(detail).font(.system(size: 11.5)).foregroundStyle(Palette.faint).lineLimit(whole ? nil : 2).textSelection(.enabled)
                         .onTapGesture { whole.toggle() }
                 }

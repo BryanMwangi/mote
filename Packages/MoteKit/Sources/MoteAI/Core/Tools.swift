@@ -198,7 +198,7 @@ public struct ToolLoop: ChatService {
                     // Calls that may run together do, when the round is all of them.
                     var ready: [String: ToolOutput] = [:]
                     if calls.count > 1, calls.allSatisfy({ together.contains($0.name) && $0.input != ToolCall.cutOff }) {
-                        for call in calls { continuation.yield(.activity(Activity(id: call.id, title: describe(call)))) }
+                        for call in calls { continuation.yield(.activity(Self.step(call.id, name: call.name, input: call.input, title: describe(call)))) }
                         ready = await withTaskGroup(of: (String, ToolOutput).self) { group in
                             for call in calls { group.addTask { (call.id, await run(call)) } }
                             var all: [String: ToolOutput] = [:]
@@ -207,7 +207,7 @@ public struct ToolLoop: ChatService {
                         }
                     }
                     for (index, call) in calls.enumerated() {
-                        let step = Activity(id: call.id, title: describe(call))
+                        let step = Self.step(call.id, name: call.name, input: call.input, title: describe(call))
                         if ready[call.id] == nil { continuation.yield(.activity(step)) }
                         let result: ToolOutput
                         if call.input == ToolCall.cutOff {
@@ -243,6 +243,13 @@ public struct ToolLoop: ChatService {
 }
 
 extension ToolLoop {
+    /// A step for one of Mote's tools: its line, and the file it reads.
+    public static func step(_ id: String, name: String, input: JSON?, title: String? = nil) -> Activity {
+        var step = Activity(id: id, title: title ?? Self.title(of: name, input: input))
+        if name == "read_file" { step.file = input?["path"]?.string.map { ($0 as NSString).expandingTildeInPath } }
+        return step
+    }
+
     /// A step's line for one of Mote's tools, by name.
     public static func title(of name: String, input: JSON?) -> String {
         let site = input?["url"]?.string.flatMap(URL.init(string:)).map { Source(url: $0, title: "").site }

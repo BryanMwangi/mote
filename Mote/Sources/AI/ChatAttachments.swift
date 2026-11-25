@@ -287,21 +287,51 @@ struct TrailingFlow: Layout {
     }
 }
 
-/// A picture a step took, and what the step was.
+/// What a step looked at: a picture it took, or a file it read, and the step.
 struct StepShot: Identifiable, Equatable {
+    let step: String
     let title: String
     let url: URL
-    var id: URL { url }
+    var id: String { step }
 
+    /// A picture kept in the chat's folder first: it stays when a file read moves.
     static func of(_ steps: [Activity], in folder: URL?) -> [StepShot] {
-        guard let folder else { return [] }
-        return steps.compactMap { step in step.picture.map { StepShot(title: step.title, url: folder.appendingPathComponent($0)) } }
+        steps.compactMap { step in
+            let url = step.picture.flatMap { name in folder?.appendingPathComponent(name) } ?? step.file.map { URL(fileURLWithPath: $0) }
+            return url.map { StepShot(step: step.id, title: step.title, url: $0) }
+        }
     }
 }
 
-/// The pictures a reply's steps took, small at the end of its steps' line:
-/// the last few, with how many more. Over one, a larger look above; a
-/// click shows them all in Quick Look.
+/// What a step looked at, under its line in the steps' list: at its own
+/// shape, opening in Quick Look among the reply's others.
+struct StepPreview: View {
+    let shot: StepShot
+    let all: [StepShot]
+    @State private var image: NSImage?
+    @State private var hovering = false
+
+    var body: some View {
+        Group {
+            if let image {
+                let ratio = image.size.width / max(1, image.size.height)
+                Image(nsImage: image).resizable().scaledToFit()
+                    .frame(width: min(280, max(60, 150 * ratio)), height: min(150, 280 / max(ratio, 0.01)))
+            } else {
+                Palette.wash.frame(width: 120, height: 80)
+            }
+        }
+        .clipShape(Rounded.row)
+        .overlay(Rounded.row.strokeBorder(hovering ? Palette.ink.opacity(0.3) : Palette.hairline))
+        .onHover { hovering = $0 }
+        .file(shot.url, among: all.map(\.url))
+        .task(id: shot.url) { image = await Thumbnail.of(shot.url, side: 560) }
+    }
+}
+
+/// What a reply's steps looked at, small at the end of its steps' line:
+/// the last few, with how many more. Over one, a larger look below, clear
+/// of them; a click shows them all in Quick Look.
 struct StepShots: View {
     let shots: [StepShot]
     @State private var over: StepShot?
@@ -322,11 +352,12 @@ struct StepShots: View {
                     }
             }
         }
-        // The larger look, above the line, ending at its trailing edge.
-        .overlay(alignment: .topTrailing) {
+        .overlay(alignment: .bottomTrailing) {
             if let over, let index = shots.firstIndex(of: over) {
-                ShotCard(shot: over, place: "\(index + 1) of \(shots.count)")
-                    .alignmentGuide(.top) { $0[.bottom] + 8 }
+                ShotCard(shot: over, place: shots.count > 1 ? "\(index + 1) of \(shots.count)" : nil)
+                    // At its own size, not the line's, its top just under the line.
+                    .fixedSize()
+                    .alignmentGuide(.bottom) { $0[.top] - 8 }
                     .allowsHitTesting(false)
                     .transition(.opacity)
             }
@@ -351,33 +382,40 @@ private struct StepThumb: View {
     }
 }
 
-/// A step's picture, larger, with what took it and where it is among them.
+/// What a step looked at, larger: the picture at its shape, and under it
+/// the step and where it is among them.
 private struct ShotCard: View {
     let shot: StepShot
-    let place: String
+    let place: String?
     @State private var image: NSImage?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(spacing: 0) {
             Group {
-                if let image { Image(nsImage: image).resizable().scaledToFit() } else { Palette.wash.frame(width: 300, height: 200) }
+                if let image {
+                    let ratio = image.size.width / max(1, image.size.height)
+                    Image(nsImage: image).resizable().scaledToFit()
+                        .frame(width: min(340, max(160, 220 * ratio)), height: min(220, 340 / max(ratio, 0.01)))
+                } else {
+                    Color.white.opacity(0.06).frame(width: 300, height: 180)
+                }
             }
-            .frame(maxWidth: 360, maxHeight: 260)
-            .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
             HStack {
                 Text(shot.title).lineLimit(1).truncationMode(.middle)
                 Spacer(minLength: 12)
-                Text(place).foregroundStyle(Palette.muted).monospacedDigit()
+                if let place { Text(place).foregroundStyle(.white.opacity(0.6)).monospacedDigit() }
             }
-            .font(.system(size: 12))
-            .foregroundStyle(Palette.ink.opacity(0.85))
+            .font(.system(size: 11.5))
+            .foregroundStyle(.white.opacity(0.9))
+            .padding(.horizontal, 10).padding(.vertical, 7)
+            .frame(maxWidth: .infinity)
+            .background(Color(white: 0.14))
         }
-        .padding(10)
-        .frame(width: 380)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Palette.hairline))
-        .shadow(color: .black.opacity(0.25), radius: 18, y: 6)
-        .task(id: shot.url) { image = await Thumbnail.of(shot.url, side: 720) }
+        .background(Color(white: 0.14))
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(.white.opacity(0.1)))
+        .shadow(color: .black.opacity(0.3), radius: 16, y: 6)
+        .task(id: shot.url) { image = await Thumbnail.of(shot.url, side: 680) }
     }
 }
 

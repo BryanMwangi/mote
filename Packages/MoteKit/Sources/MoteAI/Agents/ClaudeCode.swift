@@ -176,7 +176,7 @@ public struct ClaudeCodeDecoder: LineDecoder {
         case "WebFetch": .read(id, input?["url"]?.string)
         // Mote's own, over MCP.
         case _ where name.hasPrefix("mcp__\(ToolServer.name)__"):
-            Activity(id: id, title: ToolLoop.title(of: String(name.dropFirst("mcp__\(ToolServer.name)__".count)), input: input))
+            ToolLoop.step(id, name: String(name.dropFirst("mcp__\(ToolServer.name)__".count)), input: input)
         default: Activity(id: id, title: name)
         }
     }
