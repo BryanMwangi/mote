@@ -149,11 +149,15 @@ final class KeyRouter {
             // The pick goes before the field does.
             (browser.field.picked != nil, { browser.field.picked = nil }),
             (browser.editing && browser.active?.isStart == false, browser.dismiss),
-            // Last, so Escape first closes whatever is over the chat.
+            // Last, so Escape first closes whatever is over the chat. A question
+            // the chat waits on is answered no, and the reply goes on; Escape
+            // again stops it.
+            (browser.active?.chat?.question != nil, { browser.active?.chat?.dismissQuestion() }),
             (browser.active?.chat?.busy == true, { browser.active?.chat?.stop() }),
             // The chat about the page: Escape stops its answer first, then the
             // panel itself. It sits above the page but under the sheets and
             // overlays earlier in the list, so those close first.
+            (!inPage && browser.active?.pageChat?.question != nil, { browser.active?.pageChat?.dismissQuestion() }),
             (!inPage && browser.active?.pageChat?.busy == true, { browser.active?.pageChat?.stop() }),
             (!inPage && browser.chatting, { browser.closePanel(id: SidePanel.chat.id) }),
         ]

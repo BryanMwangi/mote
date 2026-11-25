@@ -239,9 +239,13 @@ final class AssistantTools {
         for (index, question) in questions.enumerated() {
             var question = question
             if questions.count > 1 { question.place = "\(index + 1) of \(questions.count)" }
+            let got = answers.isEmpty ? "" : " Answered before then: " + answers.joined(separator: "; ") + "."
             guard let answer = await asking(conversation, question) else {
-                let got = answers.isEmpty ? "" : " Answered before then: " + answers.joined(separator: "; ") + "."
                 return "The person didn't answer: the reply was stopped." + got
+            }
+            if answer == Conversation.dismissed {
+                return "The person closed the question without answering." + got
+                    + " Don't wait for an answer: carry on as best you can, and say what you assumed."
             }
             answers.append(questions.count == 1 ? answer : "“\(question.text)” → \(answer)")
         }
@@ -347,14 +351,15 @@ final class AssistantTools {
             if let trust, let site, answer == trust { Self.trusted[chat, default: []].insert(site) }
             if answer == allow || (trust != nil && answer == trust) { return true }
             // Words of their own instead: a no, with what they said told to the model.
-            if let answer, answer != deny { conversation.addSteering(answer) }
+            if let answer, answer != deny, answer != Conversation.dismissed { conversation.addSteering(answer) }
             return false
         }
         let alert = NSAlert()
         alert.messageText = question
         alert.informativeText = "The assistant asks to do this for you."
         alert.addButton(withTitle: "Allow")
-        alert.addButton(withTitle: "Deny")
+        // Escape is a no, as in the chat.
+        alert.addButton(withTitle: "Deny").keyEquivalent = "\u{1b}"
         alert.showsSuppressionButton = chat != nil && site != nil
         alert.suppressionButton?.title = "Allow on \(site ?? "") for this chat"
         let answer: NSApplication.ModalResponse

@@ -942,7 +942,8 @@ private struct ChatComposer: View {
                         return true
                     }
                     guard conversation.busy else { return false }
-                    conversation.stop()
+                    // A question waiting is answered no; the reply goes on. Escape again stops it.
+                    if !conversation.dismissQuestion() { conversation.stop() }
                     return true
                 },
                 backtab: {

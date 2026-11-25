@@ -329,7 +329,9 @@ public final class Conversation: Identifiable {
 
     /// Stops the reply, keeping what arrived. `why` is told to the model
     /// with the next question.
-    public func stop(why: String = "The person stopped your last reply before it finished.") {
+    public func stop(
+        why: String = "The person stopped your last reply (Escape or Stop) before it finished: their choice, not a failure."
+    ) {
         guard busy else { return }
         answer(nil)
         unsteer()
@@ -357,7 +359,7 @@ public final class Conversation: Identifiable {
         var note = why
         if !finished.isEmpty { note += " Done before then: " + finished.joined(separator: "; ") + "." }
         if !unfinished.isEmpty { note += " Not done or not finished: " + unfinished.joined(separator: "; ") + "." }
-        return note + " Check how things stand now before carrying on, and say what was left undone."
+        return note + " Check how things stand now, say what was left undone, and don't carry on with it unless they ask."
     }
 
     /// Stops the reply and sends a queued message now.
@@ -410,6 +412,18 @@ public final class Conversation: Identifiable {
         } onCancel: {
             Task { @MainActor [weak self] in self?.answer(nil) }
         }
+    }
+
+    /// The answer a question closed with Escape gets: a no, the reply going on.
+    public static let dismissed = "(closed without an answer)"
+
+    /// Escape on a question waiting: it's answered as closed, and the reply
+    /// carries on without it rather than being stopped. Whether there was one.
+    @discardableResult
+    public func dismissQuestion() -> Bool {
+        guard question != nil else { return false }
+        answer(Self.dismissed)
+        return true
     }
 
     /// Answers the question waiting, or lets it go with nil.

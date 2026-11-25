@@ -364,6 +364,23 @@ struct ConversationTests {
         #expect(conversation.messages.map(\.text).contains("Then close it"))
     }
 
+    @Test("Escape on a question answers it as closed, and the reply goes on; Escape again stops it")
+    func dismissed() async throws {
+        let service = ScriptedService()
+        service.hold = true
+        let conversation = Conversation()
+        conversation.send("Fill in the form", via: route(service))
+        await waitForRequest(service, count: 1)
+        let asked = Task { await conversation.ask(.init(text: "Allow typing on example.com?", options: [.init(label: "Allow")])) }
+        for _ in 0..<100 where conversation.question == nil { try await Task.sleep(for: .milliseconds(5)) }
+        #expect(conversation.dismissQuestion())
+        #expect(await asked.value == Conversation.dismissed)
+        #expect(conversation.busy)
+        #expect(!conversation.dismissQuestion())
+        conversation.stop()
+        #expect(!conversation.busy)
+    }
+
     @Test("A question waits for the answer; sending answers it, and stopping lets it go")
     func question() async throws {
         let service = ScriptedService()
