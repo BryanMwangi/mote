@@ -201,6 +201,7 @@ public final class Conversation: Identifiable {
         originHeld = saved.originHeld.flatMap(UUID.init(uuidString:))
         archived = saved.archived ?? false
         chatSpent = saved.spent
+        tasks = saved.tasks ?? []
         title = SavedChat.title(of: saved.messages)
         sessions = saved.sessions.mapValues { ($0.id, $0.heard, $0.search, nil) }
     }
@@ -224,7 +225,42 @@ public final class Conversation: Identifiable {
         saved.originHeld = originHeld?.uuidString
         saved.archived = archived ? true : nil
         saved.spent = chatSpent
+        saved.tasks = tasks.isEmpty ? nil : tasks
         return saved
+    }
+
+    // MARK: - The task list
+
+    /// The assistant's list for a long task (task_list), told to it with the
+    /// question whenever it changed or its session started afresh.
+    public private(set) var tasks: [TaskItem] = []
+    /// The list as last told, to tell it again only when it changed.
+    @ObservationIgnored private var tasksTold: [TaskItem]?
+
+    /// A new list, numbered from 1, replacing the one before.
+    public func setTasks(_ texts: [String]) {
+        tasks = texts.enumerated().map { TaskItem(id: $0.offset + 1, text: $0.element) }
+        touch()
+    }
+
+    /// Items added at the end; their numbers.
+    @discardableResult
+    public func addTasks(_ texts: [String]) -> [Int] {
+        let first = (tasks.map(\.id).max() ?? 0) + 1
+        let added = texts.enumerated().map { TaskItem(id: first + $0.offset, text: $0.element) }
+        tasks += added
+        touch()
+        return added.map(\.id)
+    }
+
+    /// An item marked as it stands, with a note; false when there's no such item.
+    @discardableResult
+    public func markTask(_ id: Int, _ state: TaskItem.State, note: String? = nil) -> Bool {
+        guard let at = tasks.firstIndex(where: { $0.id == id }) else { return false }
+        tasks[at].state = state
+        if let note, !note.isEmpty { tasks[at].note = note }
+        touch()
+        return true
     }
 
     private func touch() {
@@ -496,7 +532,8 @@ public final class Conversation: Identifiable {
         Summarise this conversation between a person and their browser's assistant so the assistant can carry on \
         without it. Keep: what the person wants and has decided, facts and figures found, tabs, pages, files and ids \
         named, what the assistant did (and whether it worked), and anything left to do. Leave out pleasantries. \
-        Write it as notes, under 400 words.
+        The assistant's task list, if it keeps one, is kept apart and given to it anyway: don't copy it, only what \
+        it doesn't say. Write it as notes, under 400 words.
         """
 
     /// What a reply did on the way, for the summary: its steps' titles.
@@ -615,6 +652,11 @@ public final class Conversation: Identifiable {
         // standing instructions, which stay the same and so stay cached.
         // The note stays until a reply gets through, so a try made again tells it too.
         var told = cutShort.map { [$0] } ?? []
+        // The task list when it changed, or when the session starts afresh (after summarising, say).
+        if !tasks.isEmpty, carried == nil || tasksTold != tasks {
+            told.append(TaskList.told(tasks))
+            tasksTold = tasks
+        }
         if carried == nil || carried?.shared != shared {
             told += [Instructions.page(page), Instructions.mentions(mentions)].filter { !$0.isEmpty }
             if carried?.shared?.page != nil, shared?.page == nil { told.append(Instructions.unshared) }

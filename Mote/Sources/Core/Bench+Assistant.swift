@@ -25,6 +25,8 @@ extension Bench {
             guard call.testRun("it would ask in your browser") else { return }
             guard let text = request.string("text"), !text.isEmpty else { return call.fail("chat ask needs some text") }
             if browser.active?.isStart != true { browser.newTab() }
+            // As the new tab's own Ask: not the floating search's question about a page.
+            browser.field.launching = false
             browser.field.typed = text
             browser.ask()
             call.answer(describe(browser))
@@ -154,6 +156,7 @@ extension Bench {
             }
         return [
             "chat": true, "tab": BenchWire.short(tab.id), "title": chat.title, "label": tab.label, "phase": phase,
+            "tasks": chat.tasks.map { "\($0.id) \($0.state.rawValue) \($0.text)" + ($0.note.map { " (\($0))" } ?? "") },
             "activities": chat.activities.map(\.title),
             "question": chat.question.map { ["text": $0.text, "options": $0.options.map(\.label)] } ?? NSNull(),
             "spent": chat.spentSoFar.map { ["in": $0.input, "out": $0.output] } ?? NSNull(),

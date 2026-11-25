@@ -298,6 +298,14 @@ extension ToolLoop {
         case "list_folders": return "Looking at your folders"
         case "rename_folder": return "Renaming a folder"
         case "delete_folder": return "Deleting a folder"
+        case "task_list":
+            switch input?["action"]?.string {
+            case "set": return "Setting out the task list"
+            case "add": return "Adding to the task list"
+            case "done": return "Ticking off item \(input?["id"]?.int ?? 0)"
+            case "skip": return "Skipping item \(input?["id"]?.int ?? 0)"
+            default: return "Reading the task list"
+            }
         case "undo_actions": return (input?["ids"]?.array.isEmpty ?? true) && input?["last_turn"]?.bool != true ? "Looking at what can be undone" : "Undoing"
         case "pdf_fields": return "Reading the PDF's form fields"
         case "fill_pdf_fields": return "Filling in the PDF"

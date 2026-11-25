@@ -35,6 +35,8 @@ public struct SavedChat: Codable, Equatable, Sendable {
     public var archived: Bool?
     /// Every token the chat has spent; nil in older files.
     public var spent: Usage?
+    /// The assistant's task list for the chat; nil when it kept none.
+    public var tasks: [TaskItem]?
 
     public init(id: UUID, messages: [Message], sessions: [String: Session] = [:], created: Date, updated: Date) {
         self.id = id

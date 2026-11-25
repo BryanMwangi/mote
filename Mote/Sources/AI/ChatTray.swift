@@ -16,6 +16,10 @@ struct ChatTray: View {
             if let question = conversation.question {
                 QuestionCard(question: question, answer: conversation.answer)
             }
+            // The task list while any of it is open: a line, opening to the list.
+            if conversation.tasks.contains(where: { $0.state == .open }) {
+                TaskStrip(tasks: conversation.tasks)
+            }
             ForEach(conversation.queued) { queued in
                 QueuedRow(
                     queued: queued, busy: conversation.busy,
@@ -196,5 +200,53 @@ private struct TrayLink: View {
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
         .help(help)
+    }
+}
+
+/// The assistant's task list, folded to how far it has got; open, each item
+/// ticked, skipped or still to do, with where it stands.
+private struct TaskStrip: View {
+    let tasks: [TaskItem]
+    @State private var open = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Button {
+                withAnimation(Motion.quick) { open.toggle() }
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "checklist").font(.system(size: 11))
+                    Text("Tasks · \(tasks.filter { $0.state != .open }.count) of \(tasks.count) done").font(.system(size: 11.5))
+                    Image(systemName: "chevron.right").font(.system(size: 8, weight: .semibold)).rotationEffect(.degrees(open ? 90 : 0))
+                    Spacer(minLength: 0)
+                }
+                .foregroundStyle(Palette.muted)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            if open {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 4) {
+                        ForEach(tasks) { item in
+                            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                                Image(systemName: item.state == .done ? "checkmark.circle.fill" : item.state == .skipped ? "minus.circle" : "circle")
+                                    .font(.system(size: 10)).foregroundStyle(item.state == .done ? Palette.ink : Palette.muted)
+                                VStack(alignment: .leading, spacing: 1) {
+                                    Text(item.text).font(.system(size: 12)).foregroundStyle(item.state == .open ? Palette.ink : Palette.muted)
+                                        .strikethrough(item.state == .skipped)
+                                    if let note = item.note { Text(note).font(.system(size: 11)).foregroundStyle(Palette.muted) }
+                                }
+                            }
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .frame(maxHeight: 180)
+                .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 7)
+        .background(Palette.wash.opacity(0.6), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 }

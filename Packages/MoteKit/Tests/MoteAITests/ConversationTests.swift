@@ -364,6 +364,33 @@ struct ConversationTests {
         #expect(conversation.messages.map(\.text).contains("Then close it"))
     }
 
+    @Test("The task list is numbered, marked, kept with the chat, and told only when it changed")
+    func tasks() async throws {
+        let service = ScriptedService()
+        service.events = [.session("s-1"), .text("On it.")]
+        let conversation = Conversation()
+        conversation.setTasks(["Apply to EIDU", "Apply to KTSM"])
+        #expect(conversation.addTasks(["Report back"]) == [3])
+        #expect(conversation.markTask(1, .done, note: "sent, tab 4a1"))
+        #expect(!conversation.markTask(9, .done))
+        conversation.send("Go on", via: route(service))
+        await settle(conversation)
+        let told = said(service.requests.last)
+        #expect(told.contains("2 of 3 open"))
+        #expect(told.contains("[x] 1. Apply to EIDU (sent, tab 4a1)"))
+        #expect(told.contains("[ ] 2. Apply to KTSM"))
+        // The session carries on, and the list hasn't changed: not told again.
+        conversation.send("And?", via: route(service))
+        await settle(conversation)
+        #expect(!said(service.requests.last).contains("task list"))
+        conversation.markTask(2, .skipped, note: "closed")
+        conversation.send("Next", via: route(service))
+        await settle(conversation)
+        #expect(said(service.requests.last).contains("[-] 2. Apply to KTSM (closed)"))
+        // Kept with the chat.
+        #expect(Conversation(saved: conversation.saved).tasks == conversation.tasks)
+    }
+
     @Test("Escape on a question answers it as closed, and the reply goes on; Escape again stops it")
     func dismissed() async throws {
         let service = ScriptedService()
