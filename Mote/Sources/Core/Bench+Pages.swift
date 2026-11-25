@@ -191,18 +191,45 @@ extension Bench {
 enum BenchRoom {
     private(set) static var window: NSWindow?
 
+    /// Where it's kept: far off every screen.
+    private static let away = NSRect(x: -20000, y: -20000, width: 1280, height: 800)
+
     static var made: NSWindow {
         if let window { return window }
-        let room = NSWindow(
-            contentRect: NSRect(x: -20000, y: -20000, width: 1280, height: 800), styleMask: [.borderless], backing: .buffered, defer: false)
+        let room = Room(contentRect: away, styleMask: [.borderless], backing: .buffered, defer: false)
         room.isReleasedWhenClosed = false
         room.isExcludedFromWindowsMenu = true
         room.collectionBehavior = [.transient, .ignoresCycle, .stationary]
         room.level = NSWindow.Level(rawValue: NSWindow.Level.normal.rawValue - 1)
         room.hasShadow = false
+        room.ignoresMouseEvents = true
         room.orderBack(nil)
+        // When the displays change (one comes or goes, the Mac wakes), macOS
+        // brings windows it finds off every screen back onto one: this one
+        // showed as a grey box on the desktop. Put back where it belongs.
+        for (center, name) in [
+            (NotificationCenter.default, NSApplication.didChangeScreenParametersNotification),
+            (NSWorkspace.shared.notificationCenter, NSWorkspace.screensDidWakeNotification),
+        ] {
+            center.addObserver(forName: name, object: nil, queue: .main) { _ in
+                MainActor.assumeIsolated { park() }
+            }
+        }
         window = room
         return room
+    }
+
+    /// Back off every screen, if anything moved it.
+    static func park() {
+        guard let window, window.frame.origin != away.origin else { return }
+        window.setFrameOrigin(away.origin)
+    }
+
+    /// Never placed on a screen by AppKit, never key or main.
+    private final class Room: NSWindow {
+        override func constrainFrameRect(_ frameRect: NSRect, to screen: NSScreen?) -> NSRect { frameRect }
+        override var canBecomeKey: Bool { false }
+        override var canBecomeMain: Bool { false }
     }
 
     /// A background bench tab's page moves in here; picking the tab takes it back.

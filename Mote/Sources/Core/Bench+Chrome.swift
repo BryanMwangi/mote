@@ -185,6 +185,11 @@ extension Bench {
             }
         }
         // A notice as it would show (test runs): an update's, or a plain line.
+        // The off-screen room put on screen as macOS did, then the displays "change" (test runs).
+        if Storage.testing, request.string("roompark") != nil {
+            BenchRoom.made.setFrameOrigin(NSPoint(x: 160, y: 100))
+            NotificationCenter.default.post(name: NSApplication.didChangeScreenParametersNotification, object: NSApp)
+        }
         // A tab's hover card, as resting on its row shows it (test runs).
         if Storage.testing, let id = request.string("tabpreview"), let tab = browser.tabs.first(where: { BenchWire.names(id, $0.id) }) {
             TabPreview.show(tab, in: browser)
