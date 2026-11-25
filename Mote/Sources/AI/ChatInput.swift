@@ -94,18 +94,20 @@ struct ChatInput: NSViewRepresentable {
         func textDidChange(_ notification: Notification) {
             guard let view else { return }
             parent.text = view.string
-            measure()
+            measure(now: true)
         }
 
         @objc func resized() { measure() }
 
-        /// Reports the height the text needs, after the current view update.
-        func measure() {
+        /// Reports the height the text needs: eased at once as it's typed,
+        /// after the current view update otherwise.
+        func measure(now: Bool = false) {
             guard let view, let manager = view.layoutManager, let container = view.textContainer else { return }
             manager.ensureLayout(for: container)
             let used = max(manager.usedRect(for: container).height, ChatInput.line)
             let wanted = min(ceil(used), ChatInput.most)
             guard abs(wanted - parent.height) > 0.5 else { return }
+            if now { return withAnimation(Motion.quick) { parent.height = wanted } }
             DispatchQueue.main.async { [weak self] in self?.parent.height = wanted }
         }
 
@@ -143,6 +145,16 @@ struct ChatInput: NSViewRepresentable {
 final class FileTakingTextView: NSTextView {
     /// Takes the files; false when they aren't wanted, and go in as text.
     var files: (([URL]) -> Bool)?
+
+    /// While the text still fits, the field grows to show it instead:
+    /// scrolled within the frame it's about to leave, the text would jump up
+    /// a line and back.
+    override func scrollRangeToVisible(_ range: NSRange) {
+        if let manager = layoutManager, let container = textContainer, manager.usedRect(for: container).height < ChatInput.most {
+            return
+        }
+        super.scrollRangeToVisible(range)
+    }
 
     override func paste(_ sender: Any?) {
         if let urls = Self.files(on: .general), files?(urls) == true { return }
