@@ -325,7 +325,15 @@ struct SourcesStrip: View {
         // for all of them widened the whole chat for a moment, its text off
         // the edge, until the next layout.
         .frame(maxWidth: .infinity, minHeight: 68, maxHeight: 68, alignment: .leading)
-        .scrollClipDisabled()
+        // Kept to the column as it scrolls, the cards fading out at both its
+        // edges rather than cut off, or drawn past it over the margin.
+        .mask {
+            HStack(spacing: 0) {
+                LinearGradient(colors: [.clear, .black], startPoint: .leading, endPoint: .trailing).frame(width: 16)
+                Color.black
+                LinearGradient(colors: [.black, .clear], startPoint: .leading, endPoint: .trailing).frame(width: 16)
+            }
+        }
     }
 }
 

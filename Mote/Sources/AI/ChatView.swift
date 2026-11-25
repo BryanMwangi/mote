@@ -57,7 +57,11 @@ struct ChatView<Accessory: View, Start: View>: View {
         ScrollViewReader { scroller in
             ZStack(alignment: .bottom) {
                 // The thin thumb the tab list has, with no track or border.
-                follow(ScrollView { transcript }.defaultScrollAnchor(.bottom).floatingScrollBar().coordinateSpace(name: "chat"), scroller)
+                // Opens at the end; what scrolls inside it (sources, wide tables
+                // and code) opens at its start, the anchor not passed down.
+                follow(
+                    ScrollView { transcript.defaultScrollAnchor(.topLeading) }.defaultScrollAnchor(.bottom).floatingScrollBar()
+                        .coordinateSpace(name: "chat"), scroller)
                     .onChange(of: distance) { _, now in if now == .end { pinned = true } }
                     .onScrollUp { pinned = false }
 
