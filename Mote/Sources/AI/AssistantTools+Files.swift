@@ -1,6 +1,7 @@
 import AppKit
 import MoteAI
 import MoteCore
+import PDFKit
 import UniformTypeIdentifiers
 
 /// Files from the Mac put into a page's upload field, from folders the
@@ -15,7 +16,14 @@ extension AssistantTools {
                     "Attaches files from this Mac to an upload field read_tab listed: the file field (shown or hidden), or the button or area over it. Give full paths, or paths starting with ~. Only from folders the person allows: Mote asks them the first time for each folder. Up to 25 MB a file. Doesn't submit the form.",
                 schema:
                     "{\"type\":\"object\",\"properties\":{\(tab),\"element\":{\"type\":\"integer\",\"description\":\"The number read_tab gave\"},\"paths\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}}},\"required\":[\"tab\",\"element\",\"paths\"]}"
-            )
+            ),
+            Tool(
+                name: "read_file",
+                description:
+                    "Reads a file from this Mac: a text file's text, a PDF's text, or an image, shown to you. For files the person attached (their paths are in their message) and folders they allow. Long text comes a part at a time: pass `from` to go on.",
+                schema:
+                    #"{"type":"object","properties":{"path":{"type":"string"},"from":{"type":"integer","description":"For long text: the character to start at"}},"required":["path"]}"#
+            ),
         ]
     }
 
@@ -25,6 +33,44 @@ extension AssistantTools {
     /// The most of one file attached: pages refuse far less, and it goes
     /// through the page's script as text.
     static let largestFile = 25 << 20
+
+    /// The most text one read gives.
+    static let readLength = 60_000
+
+    func readFile(_ call: ToolCall) async -> ToolOutput? {
+        guard call.name == "read_file" else { return nil }
+        guard let path = call.input["path"]?.string, !path.isEmpty else { return ToolOutput("Give the file's path.") }
+        let url = URL(fileURLWithPath: (path as NSString).expandingTildeInPath).standardizedFileURL.resolvingSymlinksInPath()
+        guard (try? url.resourceValues(forKeys: [.isRegularFileKey]))?.isRegularFile == true else { return ToolOutput("There's no file at \(path).") }
+        let folder = url.deletingLastPathComponent().path
+        if !allowed(folder), !(await allow(folder)) {
+            return ToolOutput("The person didn't allow the assistant into \((folder as NSString).abbreviatingWithTildeInPath).", outcome: .refused)
+        }
+        let name = url.lastPathComponent
+        let type = UTType(filenameExtension: url.pathExtension)
+        if type?.conforms(to: .image) == true {
+            let jpeg = await Task.detached(priority: .userInitiated) { () -> Data? in
+                guard let source = CGImageSourceCreateWithURL(url as CFURL, nil), let cg = CGImageSourceCreateImageAtIndex(source, 0, nil) else { return nil }
+                return Self.jpeg(cg)
+            }.value
+            guard let jpeg else { return ToolOutput("\(name) couldn't be read as a picture.", outcome: .failed) }
+            return ToolOutput("The picture \(name).", image: jpeg)
+        }
+        let text: String? = await Task.detached(priority: .userInitiated) {
+            if type?.conforms(to: .pdf) == true { return PDFDocument(url: url)?.string }
+            guard let data = try? Data(contentsOf: url, options: .mappedIfSafe), !data.prefix(4096).contains(0) else { return nil }
+            return String(data: data, encoding: .utf8) ?? String(data: data, encoding: .isoLatin1)
+        }.value
+        guard let text else {
+            let size = ChatFiles.size(Int64((try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? 0))
+            return ToolOutput("\(name) (\(size)) isn't text, a PDF or a picture, so it can't be read here; it can still be attached to a page with attach_file.")
+        }
+        let from = max(0, min(call.input["from"]?.int ?? 0, text.count))
+        let part = text.dropFirst(from).prefix(Self.readLength)
+        let end = from + part.count
+        let rest = end < text.count ? "\n\n(Characters \(from)–\(end) of \(text.count); read on with from: \(end).)" : ""
+        return ToolOutput("\(name):\n\n" + part + rest, detail: "Read \(name)")
+    }
 
     func runFiles(_ call: ToolCall) async -> String? {
         guard call.name == "attach_file" else { return nil }
@@ -94,7 +140,9 @@ extension AssistantTools {
         // Both sides as the file system resolves them: /private/tmp and /tmp are one folder.
         let real = { (path: String) in URL(fileURLWithPath: (path as NSString).expandingTildeInPath).resolvingSymlinksInPath().path }
         let folder = real(folder)
-        let granted = (prefs.aiFolders + Array(chat.flatMap { Self.chatFolders[$0] } ?? [])).map(real)
+        // The chat's own files (attached, pictures taken) are its to use.
+        let own = chat.map { [Assistant.shared.chats.files(of: $0).path] } ?? []
+        let granted = (prefs.aiFolders + own + Array(chat.flatMap { Self.chatFolders[$0] } ?? [])).map(real)
         return granted.contains { folder == $0 || folder.hasPrefix($0.hasSuffix("/") ? $0 : $0 + "/") }
     }
 

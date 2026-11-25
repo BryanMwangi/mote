@@ -91,7 +91,19 @@ public final class ChatArchive {
             entries = Self.rebuild(in: folder)
         }
         entries.sort { $0.updated > $1.updated }
+        // Files of chats deleted last run, kept only for undoing.
+        let deleted = deleted
+        writer.async { try? FileManager.default.removeItem(at: deleted) }
     }
+
+    /// Where a chat's files are kept: what was attached, pictures steps took.
+    public func files(of id: UUID) -> URL { folder.appendingPathComponent("Files").appendingPathComponent(id.uuidString) }
+
+    /// The chat's own file and its files folder, for how much room it takes.
+    public func storage(of id: UUID) -> (chat: URL, files: URL) { (file(id), files(of: id)) }
+
+    /// Deleted chats' files until the next launch, so undoing brings them back.
+    private var deleted: URL { folder.appendingPathComponent("Files").appendingPathComponent(".Deleted") }
 
     /// Keeps `chat`, or its newer version. A chat with no question is not kept.
     public func save(_ chat: SavedChat) {
@@ -115,6 +127,8 @@ public final class ChatArchive {
     /// Keeps a deleted chat again, undoing the deletion.
     public func restore(_ chat: SavedChat) {
         gone.remove(chat.id)
+        let (from, to) = (deleted.appendingPathComponent(chat.id.uuidString), files(of: chat.id))
+        writer.async { try? FileManager.default.moveItem(at: from, to: to) }
         save(chat)
     }
 
@@ -125,13 +139,21 @@ public final class ChatArchive {
         save(chat)
     }
 
-    public func delete(_ id: UUID) {
+    /// Deletes a chat; its files wait until the next launch in case it's
+    /// undone, or go at once when `forGood`.
+    public func delete(_ id: UUID, forGood: Bool = false) {
         gone.insert(id)
         entries.removeAll { $0.id == id }
-        let (file, index, listed) = (file(id), index, entries)
+        let (file, index, listed, files, deleted) = (file(id), index, entries, files(of: id), deleted)
         writer.async {
             try? FileManager.default.removeItem(at: file)
             Self.write(listed, to: index)
+            if forGood {
+                try? FileManager.default.removeItem(at: files)
+            } else {
+                try? FileManager.default.createDirectory(at: deleted, withIntermediateDirectories: true)
+                try? FileManager.default.moveItem(at: files, to: deleted.appendingPathComponent(id.uuidString))
+            }
         }
     }
 

@@ -143,6 +143,8 @@ public final class Conversation: Identifiable {
     public struct Queued: Identifiable, Equatable, Sendable {
         public let id: UUID
         public var text: String
+        /// Files attached with it.
+        public var files: [Attachment]?
         /// Handed to the reply under way, at its next step, rather than
         /// waiting for it to end.
         public var steering = false
@@ -234,6 +236,11 @@ public final class Conversation: Identifiable {
     /// The assistant's list for a long task (task_list), told to it with the
     /// question whenever it changed or its session started afresh.
     public private(set) var tasks: [TaskItem] = []
+    /// Where the chat's files are kept (`ChatArchive.files(of:)`): what the
+    /// person attaches, and pictures steps take. Nil for a chat not kept.
+    public var folder: URL?
+    /// Files attached for the next message, already copied into `folder`.
+    public var attached: [Attachment] = []
     /// The list as last told, to tell it again only when it changed.
     @ObservationIgnored private var tasksTold: [TaskItem]?
 
@@ -339,15 +346,17 @@ public final class Conversation: Identifiable {
     /// while a question waits, it's the answer.
     public func send(_ text: String, routing: @escaping Routing) {
         let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty else { return }
+        guard !text.isEmpty || !attached.isEmpty else { return }
         self.routing = routing
-        if question != nil { return answer(text) }
+        if question != nil, attached.isEmpty { return answer(text) }
+        let files = attached.isEmpty ? nil : attached
+        attached = []
         if busy {
-            queued.append(Queued(id: UUID(), text: text))
+            queued.append(Queued(id: UUID(), text: text, files: files))
             return
         }
         archived = false
-        messages.append(Message(role: .user, text: text))
+        messages.append(Message(role: .user, text: text, files: files))
         if messages.count == 1 { title = SavedChat.title(of: messages) }
         ask(routing: routing)
         touch()
@@ -401,9 +410,10 @@ public final class Conversation: Identifiable {
     /// Stops the reply and sends a queued message now.
     public func sendNow(_ id: Queued.ID) {
         guard let index = queued.firstIndex(where: { $0.id == id }), let routing else { return }
-        let text = queued.remove(at: index).text
+        let next = queued.remove(at: index)
         stop()
-        send(text, routing: routing)
+        attached = next.files ?? []
+        send(next.text, routing: routing)
     }
 
     /// Hands a queued message to the reply under way at its next step.
@@ -662,6 +672,12 @@ public final class Conversation: Identifiable {
             if carried?.shared?.page != nil, shared?.page == nil { told.append(Instructions.unshared) }
             if carried?.shared?.mentions.isEmpty == false, shared?.mentions.isEmpty != false { told.append(Instructions.unmentioned) }
         }
+        // Files attached, by where their copies are, for the agent to read or attach to pages.
+        if let folder {
+            for index in sent.indices where sent[index].files?.isEmpty == false {
+                sent[index].text += "\n\n" + Instructions.attached(sent[index].files ?? [], in: folder)
+            }
+        }
         if !told.isEmpty, let question = sent.lastIndex(where: { $0.role == .user }) {
             sent[question].text = (told + [Instructions.question + sent[question].text]).joined(separator: "\n\n")
         }
@@ -719,7 +735,9 @@ public final class Conversation: Identifiable {
         case .reasoning(let more):
             held.reasoning += more
             show(last)
-        case .activity(let activity):
+        case .activity(var activity):
+            // A picture it took stays as the step changes.
+            activity.picture = activity.picture ?? messages[last].steps.first { $0.id == activity.id }?.picture
             if let index = activities.firstIndex(where: { $0.id == activity.id }) {
                 activities[index] = activity
             } else {
@@ -737,6 +755,11 @@ public final class Conversation: Identifiable {
             chatSpent = chatSpent + spent
         case .spending(let sofar):
             spending = sofar
+        case .picture(let step, let data):
+            guard let folder, let index = messages[last].steps.firstIndex(where: { $0.id == step }),
+                let name = ChatFiles.picture(data, in: folder)
+            else { break }
+            messages[last].steps[index].picture = name
         case .source(let source):
             if !messages[last].sources.contains(where: { $0.id == source.id }) { messages[last].sources.append(source) }
         case .toolCall:
@@ -759,7 +782,11 @@ public final class Conversation: Identifiable {
             phase = .idle
             touch()
             // The next message waiting goes now.
-            if !queued.isEmpty, let routing { send(queued.removeFirst().text, routing: routing) }
+            if !queued.isEmpty, let routing {
+                let next = queued.removeFirst()
+                attached = next.files ?? []
+                send(next.text, routing: routing)
+            }
             return
         }
         let reason = (failure as? LocalizedError)?.errorDescription ?? failure.localizedDescription

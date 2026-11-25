@@ -189,6 +189,7 @@ final class AssistantTools {
         if !outside, let said = await runTasks(call) { return ToolOutput(said) }
         if !outside, let said = await runWatch(call) { return ToolOutput(said) }
         if !outside, let said = await runSignIn(call) { return ToolOutput(said) }
+        if !outside, let said = await readFile(call) { return said }
         if !outside, let said = await runFiles(call) { return ToolOutput(said) }
         if !outside, let said = await runData(call) { return ToolOutput(said) }
         if !outside, let said = await runAsk(call) { return ToolOutput(said) }

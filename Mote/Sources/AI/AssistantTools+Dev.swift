@@ -266,7 +266,7 @@ extension AssistantTools {
     }
 
     /// At most 1600 wide and 7800 tall, as a model takes them.
-    nonisolated private static func jpeg(_ cg: CGImage) -> Data? {
+    nonisolated static func jpeg(_ cg: CGImage) -> Data? {
         let scale = min(1, 1600 / CGFloat(cg.width), 7800 / CGFloat(cg.height))
         let width = Int(CGFloat(cg.width) * scale)
         let height = Int(CGFloat(cg.height) * scale)

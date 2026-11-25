@@ -69,6 +69,12 @@ public enum Instructions {
     /// Each is a block of its own, named by title and address, its text in a
     /// block apart when it was read. No mentioned tabs, or none still shared,
     /// says nothing. Joins after the page's block without disturbing it.
+    /// Files the person attached to a message, by where Mote keeps their copies.
+    public static func attached(_ files: [Attachment], in folder: URL) -> String {
+        "Attached by the person (copies Mote keeps with this chat; open or read them, or attach them to pages with attach_file):\n"
+            + files.map { "- \($0.name) (\(ChatFiles.size($0.bytes))): \(folder.appendingPathComponent($0.file).path)" }.joined(separator: "\n")
+    }
+
     public static func mentions(_ contexts: [PageContext]) -> String {
         let pages = contexts.filter(\.isActive)
         guard !pages.isEmpty else { return "" }

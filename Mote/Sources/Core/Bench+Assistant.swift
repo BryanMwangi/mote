@@ -39,6 +39,19 @@ extension Bench {
             }
             Assistant.shared.ask(text, in: chat)
             call.answer(describe(browser))
+        case "attach":
+            // Files for the next message of the chat in front, as the paperclip attaches them.
+            guard call.testRun("it would attach files in your browser") else { return }
+            let side = browser.active?.chatOpen == true ? browser.active?.pageChat : nil
+            guard let chat = browser.active?.chat ?? side, let paths = request.string("text") else {
+                return call.fail("chat attach needs a chat in front and paths")
+            }
+            var refusal: String?
+            Assistant.shared.attach(paths.split(separator: "\n").map { URL(fileURLWithPath: String($0)) }, to: chat) { refusal = $0 }
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(1))
+                call.answer(["attached": chat.attached.map(\.name), "refused": refusal ?? ""])
+            }
         case "answer":
             guard call.testRun("it would answer in your browser") else { return }
             // A chat tab's question, or the open chat sidebar's.

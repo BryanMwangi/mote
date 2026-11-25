@@ -160,7 +160,13 @@ public struct ClaudeCodeDecoder: LineDecoder {
                 activity.detail = first.count > 240 ? String(first.prefix(239)) + "…" : String(first)
             }
             tools[id] = activity
-            return Self.sources(in: result, for: activity) + [.activity(activity)]
+            // A picture in the result (Mote's screenshot), to show with its step.
+            let pictures: [ChatEvent] = (block["content"]?.array ?? []).compactMap { part in
+                guard part["type"]?.string == "image", let data = part["source"]?["data"]?.string.flatMap({ Data(base64Encoded: $0) })
+                else { return nil }
+                return .picture(step: id, data)
+            }
+            return Self.sources(in: result, for: activity) + pictures + [.activity(activity)]
         }
     }
 

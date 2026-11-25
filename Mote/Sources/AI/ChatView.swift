@@ -77,6 +77,10 @@ struct ChatView<Accessory: View, Start: View>: View {
                         if showsUsage { UsageCard(conversation: conversation) { showsUsage = false }.frame(maxWidth: Self.column) }
                         accessory()
                         if !conversation.mentions.isEmpty { mentioned(conversation) }
+                        if !conversation.attached.isEmpty {
+                            FileChips(files: conversation.attached, folder: conversation.folder) { Assistant.shared.unattach($0, from: conversation) }
+                                .frame(maxWidth: Self.column, alignment: .leading)
+                        }
                         ChatTray(conversation: conversation).frame(maxWidth: Self.column)
                         ChatComposer(
                             browser: browser, conversation: conversation,
@@ -158,7 +162,7 @@ struct ChatView<Accessory: View, Start: View>: View {
         if summarisedBefore, let summary = conversation.summary {
             SummaryDivider(summary: summary)
         }
-        MessageRow(message: message, last: last, streaming: last && conversation.busy).equatable()
+        MessageRow(message: message, last: last, streaming: last && conversation.busy, folder: conversation.folder).equatable()
             .environment(\.chatActions, actions)
             .transition(.opacity.combined(with: .offset(y: 6)))
     }
@@ -197,7 +201,7 @@ struct ChatView<Accessory: View, Start: View>: View {
 
     private func send() {
         let text = draft.text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty else { return }
+        guard !text.isEmpty || !conversation.attached.isEmpty else { return }
         draft.text = ""
         if text == Skill.compact.prompt { return Assistant.shared.compact(conversation) }
         if text == Skill.usage.prompt { return withAnimation(Motion.quick) { showsUsage = true } }
@@ -303,20 +307,33 @@ private struct MessageRow: View, Equatable {
     let message: Message
     let last: Bool
     let streaming: Bool
+    /// Where the chat's files are, for those attached and pictures taken.
+    let folder: URL?
 
     var body: some View {
         switch message.role {
-        case .user: Question(text: message.text)
-        case .assistant: Answer(message: message, last: last, streaming: streaming)
+        case .user: Question(text: message.text, files: message.files ?? [], folder: folder)
+        case .assistant: Answer(message: message, last: last, streaming: streaming, folder: folder)
         }
     }
 }
 
 private struct Question: View {
     let text: String
+    let files: [Attachment]
+    let folder: URL?
     @State private var pointer = Pointer()
 
     var body: some View {
+        VStack(alignment: .trailing, spacing: 6) {
+            if !files.isEmpty {
+                FileChips(files: files, folder: folder).padding(.leading, 90).frame(maxWidth: .infinity, alignment: .trailing)
+            }
+            if !text.isEmpty { said }
+        }
+    }
+
+    private var said: some View {
         HStack(alignment: .top, spacing: 6) {
             Spacer(minLength: 90)
             Revealed(pointer: pointer) { CopyButton(text: text) }
@@ -376,6 +393,7 @@ private struct Answer: View {
     let last: Bool
     /// Still arriving: its buttons wait until it's done.
     let streaming: Bool
+    let folder: URL?
 
     @Environment(\.chatActions) private var actions
     /// Read only by the buttons: the answer's own body doesn't redraw as the
@@ -404,6 +422,8 @@ private struct Answer: View {
                 if !agents.isEmpty { AgentsCard(steps: agents) }
                 if !others.isEmpty { StepsSummary(steps: others) }
             }
+            // Pictures it took, in sight whether the steps are open or not.
+            StepPictures(steps: message.steps, folder: folder)
             if !entries.isEmpty { SourcesStrip(entries: entries).padding(.bottom, 2) }
             if !message.reasoning.isEmpty { thoughts }
             if !text.isEmpty { ReplyText(text: text, cites: rendered.cites, reply: message.id, streaming: streaming) }
@@ -876,9 +896,13 @@ private struct ChatComposer: View {
         if let expanded = Skill.expand(draft) {
             draft = expanded
             send()
-        } else if !conversation.busy || hasText {
+        } else if !conversation.busy || hasText || !conversation.attached.isEmpty {
             send()
         }
+    }
+
+    private func attach(_ urls: [URL]) {
+        Assistant.shared.attach(urls, to: conversation) { [browser] in browser.announce($0) }
     }
 
     @discardableResult
@@ -966,15 +990,16 @@ private struct ChatComposer: View {
                 }
             }
             HStack(spacing: 8) {
+                if conversation.folder != nil { AttachButton(attach: attach) }
                 ToolToggles()
                 if browser.prefs.aiActs { ModeChip(chat: conversation.id) }
                 Spacer(minLength: 0)
                 AIChip(browser: browser)
-                if conversation.busy, !hasText {
+                if conversation.busy, !hasText, conversation.attached.isEmpty {
                     RoundButton(symbol: "stop.fill", filled: true, help: "Stop   esc") { conversation.stop() }
                 } else {
                     RoundButton(
-                        symbol: "arrow.up", filled: hasText, help: conversation.busy ? "Send after this reply   ↩" : "Send   ↩", act: send)
+                        symbol: "arrow.up", filled: hasText || !conversation.attached.isEmpty, help: conversation.busy ? "Send after this reply   ↩" : "Send   ↩", act: send)
                 }
             }
         }
@@ -989,6 +1014,13 @@ private struct ChatComposer: View {
         }
         .overlay {
             RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Palette.hairline, lineWidth: 1).allowsHitTesting(false)
+        }
+        // Files dropped on it are attached.
+        .dropDestination(for: URL.self) { urls, _ in
+            let files = urls.filter(\.isFileURL)
+            guard !files.isEmpty, conversation.folder != nil else { return false }
+            attach(files)
+            return true
         }
         .animation(Motion.quick, value: conversation.busy)
         .animation(Motion.quick, value: pickerItems)

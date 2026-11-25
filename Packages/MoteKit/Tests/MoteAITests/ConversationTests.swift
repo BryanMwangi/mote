@@ -391,6 +391,25 @@ struct ConversationTests {
         #expect(Conversation(saved: conversation.saved).tasks == conversation.tasks)
     }
 
+    @Test("Attached files go with their message, told by where their copies are; a step's picture is kept in the chat's folder")
+    func attached() async throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let service = ScriptedService()
+        service.events = [.activity(Activity(id: "t1", title: "Looking")), .picture(step: "t1", Data([1, 2, 3])), .activity(Activity(id: "t1", title: "Looking", done: true))]
+        let conversation = Conversation()
+        conversation.folder = folder
+        conversation.attached = [Attachment(file: "cv 2.pdf", name: "cv.pdf", bytes: 2048)]
+        // A message of files alone goes too.
+        conversation.send("", via: route(service))
+        await settle(conversation)
+        #expect(conversation.attached.isEmpty)
+        #expect(conversation.messages.first?.files?.map(\.name) == ["cv.pdf"])
+        #expect(said(service.requests.last).contains("- cv.pdf (2 KB): \(folder.appendingPathComponent("cv 2.pdf").path)"))
+        let picture = try #require(conversation.messages.last?.steps.first?.picture)
+        #expect(FileManager.default.contents(atPath: folder.appendingPathComponent(picture).path) == Data([1, 2, 3]))
+    }
+
     @Test("Escape on a question answers it as closed, and the reply goes on; Escape again stops it")
     func dismissed() async throws {
         let service = ScriptedService()

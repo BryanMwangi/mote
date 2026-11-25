@@ -222,6 +222,7 @@ public struct ToolLoop: ChatService {
                         done.done = true
                         if result.outcome != .done { done.outcome = result.outcome }
                         done.detail = result.line.isEmpty ? nil : result.line
+                        if let image = result.image { continuation.yield(.picture(step: call.id, image)) }
                         continuation.yield(.activity(done))
                         request.exchanges.append(
                             ToolExchange(call: call, result: result.text, image: result.image, said: index == 0 ? said : ""))
@@ -275,6 +276,7 @@ extension ToolLoop {
         case "new_test_tab": return "Opening a test tab"
         case "close_test_tabs": return "Closing test tabs"
         case "attach_file": return "Attaching a file"
+        case "read_file": return input?["path"]?.string.map { "Reading \(($0 as NSString).lastPathComponent)" } ?? "Reading a file"
         case "sign_in": return "Signing in"
         case "ask_for_credentials": return "Asking you to sign in"
         case "ask_person": return "Asking you"

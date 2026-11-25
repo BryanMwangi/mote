@@ -344,6 +344,7 @@ final class Assistant {
     /// Keeps `conversation` in the archive from now on, as it changes.
     func keep(_ conversation: Conversation) {
         conversation.changed = { [chats] in chats.save($0.saved) }
+        conversation.folder = chats.files(of: conversation.id)
         // Known by its id, so opening it again finds this one rather than a copy.
         if reopened[conversation.id]?.chat == nil { reopened[conversation.id] = WeakChat(conversation) }
     }

@@ -118,7 +118,7 @@ public struct Research: ChatService {
         for try await event in service.reply(to: writing) {
             switch event {
             case .text, .reasoning, .usage, .spending: emit(event)
-            case .session, .activity, .source, .toolCall: break
+            case .session, .activity, .source, .toolCall, .picture: break
             }
         }
         emit(.activity(Activity(id: "write", title: "Writing the report", done: true, kind: .phase)))
@@ -173,7 +173,7 @@ public struct Research: ChatService {
                     activity.id = "\(id)-\(activity.id)"
                     emit(.activity(activity))
                 // Researchers run at once: only their totals add up.
-                case .session, .reasoning, .toolCall, .spending: break
+                case .session, .reasoning, .toolCall, .spending, .picture: break
                 }
             }
         }

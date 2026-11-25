@@ -23,10 +23,12 @@ public struct Message: Identifiable, Equatable, Codable, Sendable {
     public var sources: [Source]
     /// What was done on the way to the reply: searches, pages read.
     public var steps: [Activity]
+    /// Files the person attached, kept with the chat; nil when none.
+    public var files: [Attachment]?
 
     public init(
         id: UUID = UUID(), role: Role, text: String, reasoning: String = "", author: String? = nil, interrupted: Bool = false,
-        sources: [Source] = [], steps: [Activity] = []
+        sources: [Source] = [], steps: [Activity] = [], files: [Attachment]? = nil
     ) {
         self.id = id
         self.role = role
@@ -36,6 +38,24 @@ public struct Message: Identifiable, Equatable, Codable, Sendable {
         self.interrupted = interrupted
         self.sources = sources
         self.steps = steps
+        self.files = files
+    }
+}
+
+/// A file the person attached to a message: a copy Mote keeps in the chat's
+/// folder (`ChatArchive.files(of:)`), so it stays when the original goes.
+public struct Attachment: Codable, Equatable, Hashable, Sendable, Identifiable {
+    /// The copy's name in the chat's folder.
+    public var file: String
+    /// The original's name, as it shows.
+    public var name: String
+    public var bytes: Int64
+    public var id: String { file }
+
+    public init(file: String, name: String, bytes: Int64) {
+        self.file = file
+        self.name = name
+        self.bytes = bytes
     }
 }
 
@@ -83,6 +103,8 @@ public enum ChatEvent: Equatable, Sendable {
     case reasoning(String)
     /// Something the model is doing on the way, such as using a tool.
     case activity(Activity)
+    /// A picture a step took (a screenshot), as JPEG, to show with the step.
+    case picture(step: String, Data)
     /// What the turn cost, once known.
     case usage(Usage)
     /// What the turn has spent so far, for a provider that only says what it
@@ -132,6 +154,8 @@ public struct Activity: Equatable, Codable, Sendable {
     public var detail: String?
     /// Tokens it took, when it ran a model of its own (a sub-agent).
     public var spent: Int?
+    /// A picture it took, by its name in the chat's folder.
+    public var picture: String?
 
     public init(id: String, title: String, done: Bool = false, kind: Kind = .tool, outcome: Outcome? = nil, detail: String? = nil) {
         self.id = id
