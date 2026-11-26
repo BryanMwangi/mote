@@ -69,7 +69,7 @@ COMMANDS = {
     "pages": ("on|off", "test run: let a hidden run's pages paint, off every screen (for picture)"),
     "picture": ("path:path", "test run: the whole window, pages included, drawn to a PNG"),
     "frames": ("[fold|peek|unpeek|scroll|chat|chatdown|tab|space|swipe|tabs|foldspam|devicedrag] [seconds:float]", "test run: run that animation and time the frames drawn — missed ones"),
-    "film": ("peek|unpeek|fold|none path:path [frames:int] [every:float]", "test run: the window drawn again and again while it animates → PATH-00.png…"),
+    "film": ("peek|unpeek|fold|space|swipe|none path:path [frames:int] [every:float]", "test run: the window drawn again and again while it animates → PATH-00.png…"),
     "strip": ("path:path [width:float]", "the row of tabs, drawn off screen to a PNG"),
     "column": ("path:path [height:float]", "the column of tabs, drawn off screen to a PNG"),
     "fold": ("path:path [width:float]", "test run: the folded tabs out over the page (ui folded on, ui peek on), drawn over red"),
