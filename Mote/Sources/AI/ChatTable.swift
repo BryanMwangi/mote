@@ -55,6 +55,8 @@ struct ChatTable: NSViewRepresentable {
     // MARK: - Rows
 
     enum Key: Hashable {
+        /// Over the first message taken up while older ones are still to come: a spinner.
+        case older
         case message(UUID)
         /// Where the chat was summarised: before this message, or at the end (nil).
         case summary(UUID?)
@@ -210,7 +212,7 @@ struct ChatTable: NSViewRepresentable {
         /// The rows for the messages from `from`: each message, the summary's
         /// place, and the status line last.
         static func keys(_ messages: [Message], from: Int, summarised: Int, summary: String?) -> [Key] {
-            var keys: [Key] = []
+            var keys: [Key] = from > 0 ? [.older] : []
             for index in messages.indices where index >= from {
                 if summary != nil, summarised > 0, index == summarised { keys.append(.summary(messages[index].id)) }
                 keys.append(.message(messages[index].id))
@@ -244,6 +246,8 @@ struct ChatTable: NSViewRepresentable {
                 body = AnyView(SummaryDivider(summary: summary))
             case .status:
                 body = AnyView(Status(browser: parent.browser, conversation: parent.conversation, retry: parent.retry))
+            case .older:
+                body = AnyView(Ring(size: 14).frame(maxWidth: .infinity).frame(height: 24).accessibilityLabel("Loading earlier messages"))
             }
             let report = { [weak self] (height: CGFloat) in self?.measured(key, height) }
             return AnyView(
@@ -361,7 +365,19 @@ struct ChatTable: NSViewRepresentable {
         }
 
         func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
-            keys.indices.contains(row) ? host(keys[row])?.view : nil
+            guard keys.indices.contains(row), let view = host(keys[row])?.view else { return nil }
+            // An older message taken up fades in the first time it shows, quickly, rather than popping in.
+            if arriving.remove(keys[row]) != nil {
+                view.alphaValue = 0
+                DispatchQueue.main.async {
+                    NSAnimationContext.runAnimationGroup { context in
+                        context.duration = 0.2
+                        context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                        view.animator().alphaValue = 1
+                    }
+                }
+            }
+            return view
         }
 
         func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? {
@@ -443,7 +459,7 @@ struct ChatTable: NSViewRepresentable {
             lastY = y
             publish()
             // Near the first message taken up: the ones before it, once the chat is still.
-            if from > 0, taking == nil, y + scroll.contentInsets.top < scroll.contentView.bounds.height * 3 { takeOlderSoon() }
+            if from > 0, taking == nil, nearTop { takeOlderSoon() }
             // Near the first message taken up, the ones before it.
             if let window = scroll.window {
                 let visible = scroll.contentView.convert(scroll.contentView.bounds, to: nil)
@@ -474,35 +490,66 @@ struct ChatTable: NSViewRepresentable {
         }
 
         private var taking: Task<Void, Never>?
+        /// Older messages taken up and not shown yet, to fade in when they are.
+        private var arriving: Set<Key> = []
 
-        /// A few older messages, near the top of what's taken up: each
+        /// Older messages, near the top of what's taken up: a batch at once,
         /// measured once the chat is still (measuring holds the main thread a
-        /// while), then put in above with the view held where it was.
+        /// while), then put in above together with the view held where it
+        /// was. Still near the top after, scrolling takes up the next.
         private func takeOlderSoon() {
             taking = Task { @MainActor [weak self] in
-                for _ in 0..<ChatTable.opening * 2 {
-                    guard let self, self.from > 0, !Task.isCancelled else { break }
+                guard let self else { return }
+                // Batch after batch while the top is still near: short messages may not fill the screens above.
+                repeat {
                     while !self.still || self.width <= 100, !Task.isCancelled { try? await Task.sleep(for: .milliseconds(100)) }
-                    guard !Task.isCancelled else { break }
-                    self.takeOne()
+                    guard !Task.isCancelled, self.from > 0 else { break }
+                    self.takeBatch()
                     try? await Task.sleep(for: .milliseconds(16))
-                }
-                self?.taking = nil
+                } while self.from > 0 && self.nearTop && !Task.isCancelled
+                self.taking = nil
             }
         }
 
-        private func takeOne() {
+        /// Within three screens of the top of what's taken up.
+        private var nearTop: Bool {
+            scroll.contentView.bounds.origin.y + scroll.contentInsets.top < scroll.contentView.bounds.height * 3
+        }
+
+        /// The most older messages that go in at a time, and the measuring a
+        /// batch may take: short ones come several together, a long reply on
+        /// its own, so taking them up never holds a frame long.
+        static let batch = 8
+        static let measuring: Duration = .milliseconds(8)
+
+        private func takeBatch() {
             guard let parent else { return }
-            let older = from - 1
+            // Measured one by one, oldest last, until the batch is full or its time is spent.
+            let clock = ContinuousClock(), start = clock.now
+            var older = from
+            while older > 0, from - older < Self.batch {
+                older -= 1
+                for key in Self.keys(parent.messages, from: older, summarised: parent.summarised, summary: parent.summary)
+                where key != .older && heights[key] == nil { measure(key) }
+                if clock.now - start > Self.measuring { break }
+            }
             let next = Self.keys(parent.messages, from: older, summarised: parent.summarised, summary: parent.summary)
-            let added = Array(next.prefix(max(0, next.count - keys.count)))
-            let rise = added.reduce(0) { $0 + measure($1) + ChatTable.spacing }
+            // The spinner stays first while there are older ones still; with the last of them, it goes.
+            let (had, has) = (keys.first == .older, next.first == .older)
+            let rows = next.dropFirst(has ? 1 : 0), before = keys.dropFirst(had ? 1 : 0)
+            let added = Array(rows.prefix(max(0, rows.count - before.count)))
+            var rise = added.reduce(0) { $0 + height($1) + ChatTable.spacing }
+            if had, !has { rise -= height(.older) + ChatTable.spacing }
             for key in added { if case .message(let id) = key, let message = parent.messages.first(where: { $0.id == id }) { shown[id] = message } }
+            arriving.formUnion(added)
             from = older
             keys = next
             let clip = scroll.contentView
             let y = clip.bounds.origin.y
-            table.insertRows(at: IndexSet(integersIn: 0..<added.count), withAnimation: [])
+            table.beginUpdates()
+            if had, !has { table.removeRows(at: IndexSet(integer: 0), withAnimation: []) }
+            table.insertRows(at: IndexSet(integersIn: (has ? 1 : 0)..<((has ? 1 : 0) + added.count)), withAnimation: [])
+            table.endUpdates()
             if !pinned {
                 move(to: y + rise)
             } else {
