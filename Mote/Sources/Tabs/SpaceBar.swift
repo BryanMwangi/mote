@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import MoteCore
 import SwiftUI
 
@@ -86,7 +87,17 @@ struct SpaceIcons: View {
                     ScrollView(.horizontal) {
                         HStack(spacing: Self.gap) {
                             ForEach(browser.spaces) { space in
-                                SpaceIcon(browser: browser, space: space, dot: dotted, listing: overflows).id(space.id)
+                                SpaceIcon(browser: browser, space: space, dot: dotted, listing: overflows, slides: !dotted).id(space.id)
+                            }
+                        }
+                        // The mark on the space in front, moving to the next with the
+                        // sidebar's pages (SwipeOffset); dots keep their own.
+                        .background(alignment: .leading) {
+                            if !dotted {
+                                SpaceMark(
+                                    swipe: browser.swipeOffset, here: browser.spaces.firstIndex { $0.id == browser.spaceID } ?? 0,
+                                    count: browser.spaces.count, step: SpaceDot.width + Self.gap, page: prefs.sideWidth,
+                                    tint: browser.spaceTint.map { NSColor($0) })
                             }
                         }
                     }
@@ -156,6 +167,8 @@ private struct SpaceIcon: View {
     let dot: Bool
     /// The row overflows: a right-click lists every space.
     let listing: Bool
+    /// The mark on the space in front is the row's, sliding (SpaceMark).
+    var slides = false
 
     @State private var hovering = false
     @State private var warming: Task<Void, Never>?
@@ -180,7 +193,9 @@ private struct SpaceIcon: View {
             }
             .frame(width: small ? SpaceIcons.dot : SpaceDot.width, height: 26)
             // The space's own wash, as the tab in front has.
-            .background { if here || hovering { Tinted(shape: Rounded.row, fill: here ? Palette.wash : Palette.hover) } }
+            .background {
+                if here && !slides || hovering && !here { Tinted(shape: Rounded.row, fill: here ? Palette.wash : Palette.hover) }
+            }
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -443,5 +458,127 @@ private struct IconPickerHost: ViewModifier {
                 }
             }
             .onDisappear { if mine { browser.pickingIcon = nil } }
+    }
+}
+
+/// The mark on the space in front: the row's one wash, at its icon at rest,
+/// carried to the next by the sidebar's pages as they move (SwipeOffset),
+/// eased by their spring. A layer, so a swipe draws nothing in SwiftUI.
+private struct SpaceMark: NSViewRepresentable {
+    let swipe: SwipeOffset
+    let here: Int
+    let count: Int
+    /// From one icon to the next.
+    let step: CGFloat
+    /// How far the pages move for one space.
+    let page: CGFloat
+    let tint: NSColor?
+
+    func makeNSView(context: Context) -> Holder { Holder(swipe: swipe) }
+
+    func updateNSView(_ holder: Holder, context: Context) {
+        holder.update(here: here, count: count, step: step, page: page, tint: tint)
+    }
+
+    final class Holder: NSView {
+        private let swipe: SwipeOffset
+        private let mark = CALayer()
+        private let wash = CALayer()
+        private var here = 0
+        private var count = 1
+        private var step: CGFloat = 28
+        private var page: CGFloat = 1
+        private var tint: NSColor?
+        /// The icon it's on its way to, and how far.
+        private var going: Int?
+        private var progress: CGFloat = 0
+        private var watch: AnyCancellable?
+
+        init(swipe: SwipeOffset) {
+            self.swipe = swipe
+            super.init(frame: .zero)
+            wantsLayer = true
+            mark.cornerRadius = 8
+            mark.cornerCurve = .continuous
+            wash.cornerRadius = 8
+            wash.cornerCurve = .continuous
+            mark.addSublayer(wash)
+            layer?.addSublayer(mark)
+            watch = swipe.$value.sink { [weak self] x in MainActor.assumeIsolated { self?.follow(x) } }
+        }
+
+        @available(*, unavailable)
+        required init?(coder: NSCoder) { fatalError() }
+
+        override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+        override func viewDidChangeEffectiveAppearance() {
+            super.viewDidChangeEffectiveAppearance()
+            paint()
+        }
+
+        func update(here: Int, count: Int, step: CGFloat, page: CGFloat, tint: NSColor?) {
+            let moved = here != self.here
+            (self.here, self.count, self.step, self.page, self.tint) = (here, count, step, max(page, 1), tint)
+            paint()
+            // At rest, on the space in front; mid-switch, the pages say.
+            if moved, progress == 0 { place(at: CGFloat(here) * step, easing: false) }
+            if !moved { place(at: x(), easing: false) }
+        }
+
+        /// The wash as the icons' had it (Tinted): the space's colour over the row's.
+        private func paint() {
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            effectiveAppearance.performAsCurrentDrawingAppearance {
+                mark.backgroundColor = Palette.NS.wash.cgColor
+                let dark = effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+                wash.backgroundColor = tint?.withAlphaComponent(dark ? 0.28 : 0.16).cgColor
+            }
+            CATransaction.commit()
+        }
+
+        private func x() -> CGFloat {
+            let from = CGFloat(here) * step
+            guard let going, progress > 0 else { return from }
+            return from + (CGFloat(going) * step - from) * progress
+        }
+
+        private func follow(_ value: CGFloat) {
+            // Landed on it: the mark stays on its icon, which is the one in front now.
+            if value == 0, !swipe.easing, progress > 0.99, let going {
+                (here, progress, self.going) = (going, 0, nil)
+                return place(at: CGFloat(here) * step, easing: false)
+            }
+            let target = swipe.heading?.target ?? (value < 0 ? here + 1 : here - 1)
+            going = min(max(target, 0), max(count - 1, 0))
+            progress = value == 0 ? 0 : min(1, abs(value) / page)
+            place(at: x(), easing: swipe.easing)
+        }
+
+        private func place(at x: CGFloat, easing: Bool) {
+            let frame = CGRect(x: x, y: (bounds.height - 26) / 2, width: SpaceDot.width, height: 26)
+            let was = mark.presentation()?.position ?? mark.position
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            mark.removeAnimation(forKey: "slide")
+            mark.frame = frame
+            wash.frame = mark.bounds
+            if easing, window != nil, was != mark.position {
+                // The pages' spring (SwipeTrack.Holder.move): 0.25 s, critically damped.
+                let animation = CASpringAnimation(keyPath: "position")
+                animation.stiffness = pow(2 * .pi / 0.25, 2)
+                animation.damping = 4 * .pi / 0.25
+                animation.duration = animation.settlingDuration
+                animation.fromValue = was
+                mark.add(animation, forKey: "slide")
+            }
+            CATransaction.commit()
+        }
+
+        override func layout() {
+            super.layout()
+            place(at: x(), easing: false)
+        }
     }
 }
