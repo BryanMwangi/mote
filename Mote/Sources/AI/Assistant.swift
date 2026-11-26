@@ -382,6 +382,9 @@ final class Assistant {
             let name = self?.provider.name ?? "The assistant"
             Task { await WebNotifications.shared.tell(chat: chat.id, "Plan ready for review", "\(name) has a plan for “\(chat.title)”") }
         }
+        // The person's size to summarise at, if they set one (Settings › AI).
+        let set = Storage.settings.integer(forKey: "ai.summariseAt")
+        conversation.summariseAt = set > 0 ? set : nil
         conversation.send(text, routing: { [self] in try await route(chat: conversation.id) }, quiet: quiet)
     }
 

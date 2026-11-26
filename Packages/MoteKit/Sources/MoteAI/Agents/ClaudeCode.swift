@@ -208,7 +208,13 @@ public struct ClaudeCodeDecoder: LineDecoder {
         var events: [ChatEvent] = []
         if let id = json["session_id"]?.string { events += started(id) }
         if let usage = json["usage"] {
-            events.append(.usage(Usage(input: heard ?? Self.input(usage), output: usage["output_tokens"]?.int ?? 0, cost: json["total_cost_usd"]?.double)))
+            // Each model's window, by model: the largest is the chat's.
+            let window = json["modelUsage"]?.fields?.values.compactMap { $0["contextWindow"]?.int }.max()
+            events.append(
+                .usage(
+                    Usage(
+                        input: heard ?? Self.input(usage), output: usage["output_tokens"]?.int ?? 0, cost: json["total_cost_usd"]?.double,
+                        window: window)))
         }
         return events
     }

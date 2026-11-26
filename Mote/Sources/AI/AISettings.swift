@@ -46,6 +46,20 @@ struct AISettings: View {
                 symbol: "number", tint: Tint.gray, keywords: ["tokens", "usage", "cost"], on: $prefs.showsTokens)
             RowRule()
             SettingRow(
+                "Summarise long chats at", "Larger means fewer summaries, but each call late in a long chat reads more and costs more",
+                symbol: "text.append", tint: Tint.gray, keywords: ["summary", "compact", "context", "tokens"]
+            ) {
+                Picker("", selection: $prefs.summariseAt) {
+                    Text("Auto (90% of the model's window)").tag(0)
+                    Text("100k tokens").tag(100_000)
+                    Text("200k tokens").tag(200_000)
+                    Text("500k tokens").tag(500_000)
+                }
+                .labelsHidden()
+                .fixedSize()
+            }
+            RowRule()
+            SettingRow(
                 "Search the web", provider.searches ? webDetail(provider) : "\(provider.name) can't search the web", symbol: "globe",
                 tint: Tint.blue, on: Binding(get: { assistant.searchesWeb }, set: { assistant.searchesWeb = $0 })
             )

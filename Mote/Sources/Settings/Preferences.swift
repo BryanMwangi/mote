@@ -158,6 +158,8 @@ final class Preferences: ObservableObject {
     @Published var tabAsks: Bool
     /// A chat shows the tokens its reply has spent while it works.
     @Published var showsTokens: Bool
+    /// Where long chats are summarised, in tokens: 0 for Auto (90% of the model's window).
+    @Published var summariseAt: Int
     /// How the assistant may act (see AssistantTools.permit).
     @Published var aiMode: AIMode
     /// Sites it may act on without asking, in Trusted mode: "github.com", "localhost:3000".
@@ -302,6 +304,7 @@ final class Preferences: ObservableObject {
         aiBackground = store.value("ai.background", or: false)
         tabAsks = store.value("ai.tabAsks", or: false)
         showsTokens = store.value("ai.showsTokens", or: false)
+        summariseAt = store.value("ai.summariseAt", or: 0)
         // Its own key: "ai.mode" is the chat's (chat, search, research), and the
         // two overwrote each other. One saved there before comes along.
         aiMode = store.value("ai.actMode", or: store.value("ai.mode", or: .ask))
@@ -418,6 +421,7 @@ final class Preferences: ObservableObject {
         keep($aiBackground, "ai.background")
         keep($tabAsks, "ai.tabAsks")
         keep($showsTokens, "ai.showsTokens")
+        keep($summariseAt, "ai.summariseAt")
         keep($aiMode, "ai.actMode")
         keep($aiTrusted, "ai.trusted")
         keep($aiDevSites, "ai.devSites")

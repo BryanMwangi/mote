@@ -431,6 +431,15 @@ struct ConversationTests {
         #expect(Conversation(saved: conversation.saved).messages.last(where: { $0.role == .user })?.mote == true)
     }
 
+    @Test("A chat is summarised at 90% of the model's window, or the size set if less; without a window, that size or 100k")
+    func summariseLimit() {
+        #expect(Conversation.limit(window: 1_000_000, set: nil) == 900_000)
+        #expect(Conversation.limit(window: 1_000_000, set: 200_000) == 200_000)
+        #expect(Conversation.limit(window: 200_000, set: 500_000) == 180_000)
+        #expect(Conversation.limit(window: nil, set: nil) == 100_000)
+        #expect(Conversation.limit(window: nil, set: 200_000) == 200_000)
+    }
+
     @Test("Escape on a question answers it as closed, and the reply goes on; Escape again stops it")
     func dismissed() async throws {
         let service = ScriptedService()

@@ -45,6 +45,13 @@ struct ClaudeCodeDecoderTests {
         #expect(try decode(ClaudeCodeDecoder(), lines) == [.usage(Usage(input: 16007, output: 9))])
     }
 
+    @Test("The model's context window comes with the turn's usage, the largest of the models used")
+    func window() throws {
+        let line =
+            #"{"type":"result","subtype":"success","is_error":false,"usage":{"input_tokens":3,"output_tokens":4},"modelUsage":{"claude-haiku-5-5":{"contextWindow":200000},"claude-sonnet-5-5":{"contextWindow":1000000}}}"#
+        #expect(try decode(ClaudeCodeDecoder(), [line]) == [.usage(Usage(input: 3, output: 4, window: 1_000_000))])
+    }
+
     @Test("While it works, what the turn has spent so far: the chat's size, and every call's words")
     func spendingLive() throws {
         let event = { (json: String) in #"{"type":"stream_event","event":"# + json + #","parent_tool_use_id":null}"# }

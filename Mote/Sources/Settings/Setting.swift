@@ -35,6 +35,14 @@ extension [String]: Storable {
     var stored: Any { self }
 }
 
+extension Int: Storable {
+    init?(stored: Any) {
+        guard let value = stored as? Int ?? (stored as? String).flatMap(Int.init) else { return nil }
+        self = value
+    }
+    var stored: Any { self }
+}
+
 extension CGFloat: Storable {
     init?(stored: Any) {
         guard let value = stored as? Double ?? (stored as? String).flatMap(Double.init) else { return nil }

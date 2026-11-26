@@ -193,6 +193,9 @@ extension Bench {
             "activities": chat.activities.map(\.title),
             "question": chat.question.map { ["text": $0.text, "options": $0.options.map(\.label)] } ?? NSNull(),
             "spent": chat.spentSoFar.map { ["in": $0.input, "out": $0.output] } ?? NSNull(),
+            // The model's window once a reply said it, and where the chat will be summarised.
+            "window": chat.contextWindow ?? NSNull(),
+            "summariseAt": Conversation.limit(window: chat.contextWindow, set: chat.summariseAt),
             "messages": chat.messages.map { message in
                 [
                     "role": message.role.rawValue, "text": message.text, "author": message.author ?? "",

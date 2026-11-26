@@ -105,8 +105,21 @@ public final class Conversation: Identifiable {
     @ObservationIgnored public var originHeld: UUID?
     /// Put away in the list of chats; asking in it again takes it out.
     @ObservationIgnored public var archived = false
-    /// A turn that heard this many tokens or more summarises the chat before the next.
+    /// Where a chat is summarised before its next turn when the model's
+    /// window isn't known (API providers) and no size is set.
     public static let compactAt = 100_000
+    /// The model's context window, once a reply has said it.
+    @ObservationIgnored public var contextWindow: Int?
+    /// A size the person set to summarise at (Settings › AI); nil for Auto.
+    @ObservationIgnored public var summariseAt: Int?
+
+    /// How far a chat grows before it's summarised: 90% of the model's
+    /// window, or the size the person set if that's less; without a known
+    /// window, their size or `compactAt`.
+    public static func limit(window: Int?, set: Int?) -> Int {
+        guard let window else { return set ?? compactAt }
+        return min(set ?? .max, window * 9 / 10)
+    }
     /// The last reply was cut short, and how: told to the model with the next
     /// question, so it checks where things stand rather than assuming.
     @ObservationIgnored private var cutShort: String?
@@ -486,7 +499,7 @@ public final class Conversation: Identifiable {
 
     /// Whether the chat has grown long enough to summarise before the next turn.
     private var wantsCompacting: Bool {
-        (usage?.input ?? 0) >= Self.compactAt && messages.count - summarised > 4
+        (usage?.input ?? 0) >= Self.limit(window: contextWindow, set: summariseAt) && messages.count - summarised > 4
     }
 
     /// Summarises the chat so far (`/compact`): the model is sent the
@@ -757,6 +770,7 @@ public final class Conversation: Identifiable {
         case .usage(let spent):
             spending = nil
             usage = spent
+            if let window = spent.window { contextWindow = window }
             turnSpent = turnSpent + spent
             chatSpent = chatSpent + spent
         case .spending(let sofar):

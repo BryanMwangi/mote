@@ -198,18 +198,21 @@ public struct Usage: Equatable, Codable, Sendable {
     public var output: Int
     /// In US dollars, when the provider says.
     public var cost: Double?
+    /// The model's context window, when the provider says (Claude Code does).
+    public var window: Int?
 
-    public init(input: Int, output: Int, cost: Double? = nil) {
+    public init(input: Int, output: Int, cost: Double? = nil, window: Int? = nil) {
         self.input = input
         self.output = output
         self.cost = cost
+        self.window = window
     }
 
     /// Two spends together; the cost while either says it.
     public static func + (a: Usage?, b: Usage) -> Usage {
         guard let a else { return b }
         let cost = a.cost == nil && b.cost == nil ? nil : (a.cost ?? 0) + (b.cost ?? 0)
-        return Usage(input: a.input + b.input, output: a.output + b.output, cost: cost)
+        return Usage(input: a.input + b.input, output: a.output + b.output, cost: cost, window: b.window ?? a.window)
     }
 }
 
