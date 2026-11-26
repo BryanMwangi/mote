@@ -43,18 +43,6 @@ struct MarkdownView: View, Equatable {
         return blocks
     }
 
-    /// Lays a finished reply out ahead of being shown, so it comes into
-    /// view with its work done (see `MarkdownText.makeNSView`).
-    @MainActor static func prepare(_ text: String, cites: [String: String], reply: UUID) {
-        let runs = Blocks.Run.of(blocks(of: text, reply: reply))
-        for (index, run) in runs.enumerated() {
-            guard case .text(let blocks) = run else { continue }
-            let layout = ReplyLayout.kept("\(reply.uuidString)-\(index)")
-            layout.show(blocks, cites: cites, streaming: false)
-            _ = layout.height(for: ReplyLayout.width)
-        }
-    }
-
     /// Body text in replies: a little larger than the chrome's, for reading.
     static let size: CGFloat = 14
     static let leading: CGFloat = 4.5
@@ -200,17 +188,15 @@ private struct MarkdownText: NSViewRepresentable, Equatable {
     }
 
     func makeCoordinator() -> Coordinator { Coordinator(key: key) }
-    /// A finished reply shows the layout measured (and maybe made ahead,
-    /// see `prepare`), so it's never laid out twice; one streaming keeps its
-    /// own, as its size is asked for versions it hasn't shown yet.
-    func makeNSView(context: Context) -> ReplyTextView {
-        ReplyTextView(reply: streaming ? ReplyLayout() : context.coordinator.measure)
-    }
+    /// Its own layout: SwiftUI asks the size of versions other than the one
+    /// showing, which would change what shows if the two were one.
+    func makeNSView(context: Context) -> ReplyTextView { ReplyTextView(reply: ReplyLayout()) }
 
     func updateNSView(_ view: ReplyTextView, context: Context) {
         let open = context.environment.openURL
         view.open = { open($0) }
-        view.reply.show(blocks, cites: cites, streaming: streaming, like: context.coordinator.measure)
+        // SwiftUI keeps the size it was given until told it changed.
+        if view.reply.show(blocks, cites: cites, streaming: streaming, like: context.coordinator.measure) { view.invalidateIntrinsicContentSize() }
         view.fade(fresh)
     }
 
@@ -252,6 +238,8 @@ final class ReplyLayout {
     }
 
     init() {
+        // Laid out when it's measured or drawn, not again in idle time.
+        layout.backgroundLayoutEnabled = false
         storage.addLayoutManager(layout)
         container.lineFragmentPadding = 0
         container.widthTracksTextView = false

@@ -319,14 +319,23 @@ struct StepShots: View {
     @State private var over: StepShot?
     @Environment(\.chatRows) private var rows
     @Environment(\.message) private var message
-    /// Room in the chat under the line and over it, kept as the chat scrolls
-    /// without drawing again: only the larger look reads it, when it shows.
+    /// Room in the chat under the line and over it, taken as the pointer
+    /// comes onto the line: only the larger look reads it, when it shows.
     @State private var room = Room()
     @State private var cardHeight: CGFloat = 250
 
     private final class Room {
         var below = CGFloat.infinity
         var above = CGFloat.zero
+
+        /// From where the pointer is, on the line, in the part of the window
+        /// the chat shows (from the top left).
+        @MainActor func measure(in chat: CGRect?) {
+            guard let chat, chat.height > 0, let window = NSApp.keyWindow, let content = window.contentView else { return }
+            let y = content.bounds.height - window.convertPoint(fromScreen: NSEvent.mouseLocation).y
+            below = chat.maxY - StepShots.foot - y - StepShots.side
+            above = y - chat.minY
+        }
     }
 
     /// What the composer covers at the chat's foot.
@@ -348,7 +357,12 @@ struct StepShots: View {
             ForEach(shown) { shot in
                 StepFile(url: shot.url, all: shots.map(\.url), lit: over == shot)
                     .onHover { inside in
-                        if inside { over = shot } else if over == shot { over = nil }
+                        if inside {
+                            room.measure(in: rows?.visible)
+                            over = shot
+                        } else if over == shot {
+                            over = nil
+                        }
                     }
             }
         }
@@ -362,14 +376,6 @@ struct StepShots: View {
                     .allowsHitTesting(false)
                     .transition(.opacity)
             }
-        }
-        .onGeometryChange(for: CGRect.self) { proxy in
-            let view = proxy.bounds(of: .named("chat"))?.height ?? .infinity
-            let line = proxy.frame(in: .named("chat"))
-            return CGRect(x: 0, y: line.minY, width: 0, height: view - Self.foot - line.maxY)
-        } action: { [room] measured in
-            room.below = measured.height
-            room.above = measured.minY
         }
         // Its message over the ones after it while the larger look is up.
         .onChange(of: over != nil) { _, up in rows?.raise(message, up) }
