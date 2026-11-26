@@ -5,34 +5,23 @@ import SwiftUI
 
 /// The space's colours behind the window's frame: a
 /// gradient across it, as strong as the theme says, with an optional grain.
-/// A switch of space fades from one to the next.
+/// A switch of space fades from one space's to the next with the sidebar's
+/// pages, by the same driver (SwipeOffset): drawn by Core Animation, so a
+/// swipe or a switch's slide redraws nothing in SwiftUI.
 struct SpaceGround: View {
-    let theme: SpaceTheme?
-    let space: UUID
+    let spaces: [Space]
+    let here: UUID
+    let swipe: SwipeOffset
+    /// How far the pages move for one space: the sidebar's width.
+    let page: CGFloat
     /// A drag in the theme editor shows here alone, frame by frame.
     @ObservedObject private var drafts = ThemeDrafts.shared
 
-    init(theme: SpaceTheme?, space: UUID) {
-        self.theme = theme
-        self.space = space
-    }
-
     var body: some View {
-        let theme = drafts.bySpace[space] ?? theme
-        ZStack {
-            if let theme, !theme.colors.isEmpty {
-                LinearGradient(colors: theme.colors.compactMap(Color.init(hex:)), startPoint: .topLeading, endPoint: .bottomTrailing)
-                    .opacity(theme.opacity)
-                    .overlay {
-                        if theme.grain > 0 {
-                            Image(nsImage: Self.grain).resizable(resizingMode: .tile).opacity(0.2 * theme.grain).blendMode(.overlay)
-                        }
-                    }
-                    .id(space)
-                    .transition(.opacity)
-            }
-        }
-        .animation(.easeInOut(duration: 0.25), value: space)
+        GroundLayers(
+            themes: spaces.map { drafts.bySpace[$0.id] ?? $0.theme }, here: spaces.firstIndex { $0.id == here } ?? 0, swipe: swipe,
+            page: page
+        )
         .allowsHitTesting(false)
     }
 
@@ -48,6 +37,148 @@ struct SpaceGround: View {
         bitmap.map { image.addRepresentation($0) }
         return image
     }()
+}
+
+/// The two spaces' colours a switch goes between, each a layer: the one in
+/// front, and the one coming in over it as the pages move.
+private struct GroundLayers: NSViewRepresentable {
+    let themes: [SpaceTheme?]
+    let here: Int
+    let swipe: SwipeOffset
+    let page: CGFloat
+
+    func makeNSView(context: Context) -> Holder { Holder(swipe: swipe) }
+
+    func updateNSView(_ holder: Holder, context: Context) { holder.update(themes: themes, here: here, page: page) }
+
+    final class Holder: NSView {
+        private let swipe: SwipeOffset
+        private let front = Wash()
+        private let coming = Wash()
+        private var themes: [SpaceTheme?] = []
+        private var here = 0
+        private var page: CGFloat = 1
+        /// The space whose colours are coming in, and how far.
+        private var comingIndex: Int?
+        private var progress: CGFloat = 0
+        private var watch: AnyCancellable?
+
+        init(swipe: SwipeOffset) {
+            self.swipe = swipe
+            super.init(frame: .zero)
+            wantsLayer = true
+            layer?.addSublayer(front.layer)
+            layer?.addSublayer(coming.layer)
+            coming.layer.opacity = 0
+            watch = swipe.$value.sink { [weak self] x in MainActor.assumeIsolated { self?.follow(x) } }
+        }
+
+        @available(*, unavailable)
+        required init?(coder: NSCoder) { fatalError() }
+
+        override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+        override func layout() {
+            super.layout()
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            front.frame = bounds
+            coming.frame = bounds
+            CATransaction.commit()
+        }
+
+        func update(themes: [SpaceTheme?], here: Int, page: CGFloat) {
+            let changed = themes != self.themes || here != self.here
+            (self.themes, self.here, self.page) = (themes, here, max(page, 1))
+            // At rest, the space in front's own; mid-switch, its pages say.
+            guard changed, progress == 0 else { return }
+            front.show(theme(here))
+            comingIndex = nil
+        }
+
+        private func theme(_ index: Int) -> SpaceTheme? { themes.indices.contains(index) ? themes[index] : nil }
+
+        /// The pages moved: the coming space's colours as far in as they are,
+        /// eased by the pages' spring while they settle.
+        private func follow(_ x: CGFloat) {
+            // Landed on it: its colours are the ones in front now.
+            if x == 0, !swipe.easing, progress > 0.99, let comingIndex {
+                CATransaction.begin()
+                CATransaction.setDisableActions(true)
+                front.layer.removeAllAnimations()
+                coming.layer.removeAllAnimations()
+                front.show(theme(comingIndex))
+                front.layer.opacity = 1
+                coming.layer.opacity = 0
+                CATransaction.commit()
+                (here, progress, self.comingIndex) = (comingIndex, 0, nil)
+                return
+            }
+            let target = swipe.heading?.target ?? (x < 0 ? here + 1 : here - 1)
+            let p = x == 0 ? 0 : min(1, abs(x) / page)
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            if target != comingIndex {
+                coming.show(theme(target))
+                comingIndex = target
+            }
+            // Over the front's, or the front's fading where the next has none.
+            let fronts: Float = theme(target) == nil ? Float(1 - p) : 1
+            fade(front, to: fronts)
+            fade(coming, to: Float(p))
+            CATransaction.commit()
+            progress = p
+        }
+
+        private func fade(_ wash: Wash, to opacity: Float) {
+            let wash = wash.layer
+            let was = wash.presentation()?.opacity ?? wash.opacity
+            wash.removeAnimation(forKey: "fade")
+            wash.opacity = opacity
+            guard swipe.easing, window != nil, was != opacity else { return }
+            // The pages' spring (SwipeTrack.Holder.move): 0.25 s, critically damped.
+            let animation = CASpringAnimation(keyPath: "opacity")
+            animation.stiffness = pow(2 * .pi / 0.25, 2)
+            animation.damping = 4 * .pi / 0.25
+            animation.duration = animation.settlingDuration
+            animation.fromValue = was
+            wash.add(animation, forKey: "fade")
+        }
+    }
+
+    /// One space's colours: its gradient, as strong as its theme says, and
+    /// its grain over it, in a layer of their own that fades.
+    final class Wash {
+        let layer = CALayer()
+        private let gradient = CAGradientLayer()
+        private let grain = CALayer()
+
+        init() {
+            gradient.startPoint = CGPoint(x: 0, y: 1)
+            gradient.endPoint = CGPoint(x: 1, y: 0)
+            grain.backgroundColor = NSColor(patternImage: SpaceGround.grain).cgColor
+            grain.compositingFilter = "overlayBlendMode"
+            layer.addSublayer(gradient)
+            gradient.addSublayer(grain)
+        }
+
+        var frame: CGRect {
+            get { layer.frame }
+            set {
+                layer.frame = newValue
+                gradient.frame = layer.bounds
+                grain.frame = gradient.bounds
+            }
+        }
+
+        func show(_ theme: SpaceTheme?) {
+            let colours = (theme?.colors ?? []).compactMap(Color.init(hex:)).map { NSColor($0).cgColor }
+            gradient.isHidden = colours.isEmpty
+            gradient.colors = colours.count == 1 ? [colours[0], colours[0]] : colours
+            gradient.opacity = Float(theme?.opacity ?? 0)
+            grain.opacity = Float(0.2 * (theme?.grain ?? 0))
+        }
+    }
 }
 
 /// The space's own colour, which the chrome's lifted surfaces take a wash

@@ -90,7 +90,7 @@ struct SidebarFold: View {
             // The space's colours, as behind the docked one; the window keeps its look.
             .background {
                 Palette.frame.overlay {
-                    SpaceGround(theme: browser.spaces.first { $0.id == browser.spaceID }?.theme, space: browser.spaceID)
+                    SpaceGround(spaces: browser.spaces, here: browser.spaceID, swipe: browser.swipeOffset, page: browser.prefs.sideWidth)
                 }
             }
             .clipShape(shape)

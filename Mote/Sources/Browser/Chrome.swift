@@ -82,7 +82,7 @@ struct Chrome: View {
             .background(Palette.frame.opacity(0.35))
             // The space's own colours, under the frame's tint (see SpaceGround).
             .background {
-                SpaceGround(theme: browser.spaces.first { $0.id == browser.spaceID }?.theme, space: browser.spaceID)
+                SpaceGround(spaces: browser.spaces, here: browser.spaceID, swipe: browser.swipeOffset, page: browser.prefs.sideWidth)
                     .ignoresSafeArea()
             }
             .background { WindowMaterial().ignoresSafeArea() }
@@ -278,7 +278,7 @@ struct SpaceBand: View {
         ZStack {
             Palette.ground
             Palette.frame.opacity(0.35)
-            SpaceGround(theme: browser.spaces.first { $0.id == browser.spaceID }?.theme, space: browser.spaceID)
+            SpaceGround(spaces: browser.spaces, here: browser.spaceID, swipe: browser.swipeOffset, page: browser.prefs.sideWidth)
         }
     }
 }

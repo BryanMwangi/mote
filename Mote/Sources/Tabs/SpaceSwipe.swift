@@ -364,7 +364,7 @@ final class SwipeOffset: ObservableObject {
     /// Whether the neighbouring spaces' pages show.
     let shown = SwipeShown()
     /// Whether the change of `value` being made eases there, in the sidebar.
-    fileprivate private(set) var easing = false
+    private(set) var easing = false
     /// The page a switch is moving to, set before `value` is: the sidebar's
     /// track goes there in the same step as its offset, rather than when
     /// SwiftUI next draws. Apart, the offset measured from the old page showed
