@@ -325,20 +325,16 @@ extension Browser {
     func open(chat id: UUID) {
         if let tab = tabs.first(where: { $0.chat?.id == id && $0.isBlank }) { return select(tab) }
         let holder = tabs.first { $0.pageChat?.id == id }
+        // Read from disk once, if it isn't open already.
+        guard let chat = holder?.pageChat ?? Assistant.shared.reopen(id) else { return }
         // A chat from the chat sidebar opens there, beside the page in front,
         // rather than going off to the tab it was first about.
-        if holder != nil || Assistant.shared.chats.load(id)?.sidebar == true, let tab = active, !tab.isBlank, !tab.shy,
-            let chat = holder?.pageChat ?? Assistant.shared.reopen(id)
-        {
+        if holder != nil || chat.sidebar, let tab = active, !tab.isBlank, !tab.shy {
             tab.share(chat)
             return showSidebarChat(on: tab)
         }
         if let holder { return showSidebarChat(on: holder) }
-        if Assistant.shared.chats.load(id)?.sidebar == true {
-            guard let chat = Assistant.shared.reopen(id) else { return }
-            return reopenSidebarChat(chat)
-        }
-        guard let chat = Assistant.shared.reopen(id) else { return }
+        if chat.sidebar { return reopenSidebarChat(chat) }
         // From the list of chats, the chat takes the list's place.
         if let tab = active, tab.isBlank, tab.chat == nil, !tab.shy {
             tab.chats = false
