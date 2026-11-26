@@ -30,11 +30,31 @@ final class Browser: NSObject, ObservableObject {
                 // Tab sleep measures idle time from the moment a tab stops showing.
                 tab(old)?.touch()
             }
+            holdChat(from: oldValue)
             // A tab whose own panel is open shows the page it is on: coming to
             // it takes up its new page (see `syncPageChat`). A tab with a
             // closed panel is left alone.
             syncPageChat()
         }
+    }
+
+    /// With one chat for all tabs (or a site in the sidebar), the sidebar is
+    /// the window's, not each tab's: open, it stays open as the tab in front
+    /// changes, whatever changes it (a switch, a tab opened or closed by the
+    /// person or an agent), until the person closes it. Kept here as well as
+    /// on the tab in front, for when the tab left is already gone.
+    private var chatHeld = false
+    private weak var heldChat: Conversation?
+
+    /// The tab now in front takes the window's sidebar: its chat, and open or not.
+    private func holdChat(from left: Tab.ID?) {
+        guard prefs.oneChat || !prefs.chatSite.isEmpty, let tab = active else { return }
+        if let left = left.flatMap({ self.tab($0) }) {
+            chatHeld = left.chatOpen
+            heldChat = left.pageChat
+        }
+        if prefs.chatSite.isEmpty, let chat = heldChat { tab.share(chat) }
+        if tab.chatOpen != chatHeld { tab.chatOpen = chatHeld }
     }
 
     // Shared by every window (AppState).
@@ -1019,11 +1039,6 @@ final class Browser: NSObject, ObservableObject {
         floatActiveVideo()
         if let left, !left.isBlank { lastOpened = left.id }
         selectedAt = Date()
-        // A sidebar chat that belongs to the window goes along to the tab.
-        if let left, !prefs.chatSite.isEmpty || prefs.oneChat {
-            if prefs.chatSite.isEmpty, let chat = left.pageChat { tab.share(chat) }
-            if tab.chatOpen != left.chatOpen { tab.chatOpen = left.chatOpen }
-        }
         activeID = tab.id
         tab.touch()
         // Load a waiting tab now; only when there was nothing to wake, check
@@ -1525,7 +1540,17 @@ final class Browser: NSObject, ObservableObject {
         // The panel's open state lives on the tab, but the chrome, the toolbar
         // and the menu read it through this object (`chatting`); pass the tab's
         // changes on so they redraw when the active tab's panel opens or closes.
-        tab.$chatOpen.dropFirst().sink { [weak self] _ in self?.objectWillChange.send() }.store(in: &bag)
+        tab.$chatOpen.dropFirst()
+            .sink { [weak self, weak tab] open in
+                guard let self else { return }
+                // The tab in front's panel opened or closed: the window's, with one chat for all tabs.
+                if let tab, tab.id == self.activeID {
+                    self.chatHeld = open
+                    if open, let chat = tab.pageChat { self.heldChat = chat }
+                }
+                self.objectWillChange.send()
+            }
+            .store(in: &bag)
         tab.$title.dropFirst()
             .sink { [weak self, weak tab] title in
                 guard let tab, !tab.shy, let url = tab.address else { return }
