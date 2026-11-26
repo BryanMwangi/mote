@@ -61,6 +61,8 @@ struct ChatView<Accessory: View, Start: View>: View {
 
     static var column: CGFloat { 720 }
     static var end: String { "end" }
+    /// Two screens above the end, where the way down jumps to before it glides.
+    static var nearEnd: String { "near end" }
 
     var body: some View {
         ScrollViewReader { scroller in
@@ -75,16 +77,20 @@ struct ChatView<Accessory: View, Start: View>: View {
                         })
 
                 VStack(spacing: 10) {
-                    if distance == .far {
+                    if distance.offersWayDown {
                         JumpDown {
                             pinned = true
                             // Following waits for the glide down, then takes up from where it lands.
                             follower.jumping = true
+                            // From far up, straight to a screen or two above the end,
+                            // unseen, and glide only that: it feels as quick from the
+                            // top of a long chat, and the rows between are never built.
+                            if distance == .away { scroller.scrollTo(Self.nearEnd, anchor: .top) }
                             withAnimation(Motion.glide) {
                                 scroller.scrollTo(Self.end, anchor: .bottom)
                             } completion: {
                                 follower.jumping = false
-                                toEnd(scroller)
+                                settle(scroller)
                             }
                         }
                         .transition(.scale(scale: 0.8).combined(with: .opacity))
@@ -126,7 +132,7 @@ struct ChatView<Accessory: View, Start: View>: View {
                     .frame(height: overEnd + 46)
                     .allowsHitTesting(false)
                 }
-                .animation(Motion.quick, value: distance == .far)
+                .animation(Motion.quick, value: distance.offersWayDown)
             }
         }
         .background(ground)
@@ -205,6 +211,14 @@ struct ChatView<Accessory: View, Start: View>: View {
 
     private func grew(_ scroller: ScrollViewProxy) {
         if #unavailable(macOS 15), following { toEnd(scroller) }
+    }
+
+    /// Rows measured on the way down can leave a jump short of the end:
+    /// aimed at it again, a frame at a time, until it's there.
+    private func settle(_ scroller: ScrollViewProxy, tries: Int = 6) {
+        guard tries > 0, distance != .end, pinned else { return }
+        scroller.scrollTo(Self.end, anchor: .bottom)
+        DispatchQueue.main.async { settle(scroller, tries: tries - 1) }
     }
 
     /// To the end, once a turn of the run loop however many things grew it,
@@ -356,9 +370,12 @@ private struct Transcript<Start: View>: View, Equatable {
             }
             // Room for everything over the end; scrolling to it shows the last line above them.
             Color.clear.frame(height: endRoom).id(ChatView<EmptyView, EmptyView>.end)
+                .background(alignment: .bottom) {
+                    Color.clear.containerRelativeFrame(.vertical) { length, _ in length * 2 }.id(ChatView<EmptyView, EmptyView>.nearEnd)
+                }
                 .onGeometryChange(for: ScrollDistance.self) { proxy in
                     let view = proxy.bounds(of: .named("chat"))?.height ?? 0
-                    return ScrollDistance(below: proxy.frame(in: .named("chat")).maxY - view)
+                    return ScrollDistance(below: proxy.frame(in: .named("chat")).maxY - view, view: view)
                 } action: {
                     distance.wrappedValue = $0
                 }
@@ -367,6 +384,21 @@ private struct Transcript<Start: View>: View, Equatable {
         .padding(.horizontal, 28)
         .padding(.top, 32)
         .frame(maxWidth: .infinity)
+        .task(id: conversation.id) { await prepare() }
+    }
+
+    /// Older replies laid out ahead, newest first, one a frame or so:
+    /// scrolling up finds them done, rather than making each as it comes
+    /// into view. Waits while the chat is scrolled by hand.
+    private func prepare() async {
+        for message in conversation.messages.reversed() where message.role == .assistant && !message.text.isEmpty {
+            if conversation.busy, message.id == conversation.messages.last?.id { continue }
+            while ScrollHover.moving, !Task.isCancelled { try? await Task.sleep(for: .milliseconds(100)) }
+            guard !Task.isCancelled else { return }
+            let rendered = RenderedReply.of(message)
+            MarkdownView.prepare(rendered.text, cites: rendered.cites, reply: message.id)
+            try? await Task.sleep(for: .milliseconds(8))
+        }
     }
 
     @ViewBuilder
@@ -393,10 +425,14 @@ nonisolated enum ScrollDistance: Equatable, Sendable {
     case near
     /// Far enough up to offer the way back down.
     case far
+    /// More than two screens up: the way down jumps most of it.
+    case away
 
-    init(below: CGFloat) {
-        self = below < 24 ? .end : below < 240 ? .near : .far
+    init(below: CGFloat, view: CGFloat) {
+        self = below < 24 ? .end : below < 240 ? .near : below < view * 2 ? .far : .away
     }
+
+    var offersWayDown: Bool { self == .far || self == .away }
 }
 
 /// What a message's rows ask of the chat: asking again, and drawing one
@@ -568,7 +604,7 @@ private struct Answer: View {
             }
             // Kept from draw to draw (hovering redraws this): it reads the whole
             // reply for links and matches them against every source.
-            let rendered = RenderedReply.of(message, searched: searched)
+            let rendered = RenderedReply.of(message)
             let (text, entries) = (rendered.text, rendered.entries)
             if message.steps.contains(where: { $0.kind == .task || $0.kind == .phase }) {
                 ResearchProgress(steps: message.steps, live: streaming)
@@ -595,7 +631,6 @@ private struct Answer: View {
     }
 
     /// A reply that looked things up on the web, whose links are citations.
-    private var searched: Bool { !message.sources.isEmpty || message.steps.contains { $0.kind != .tool } }
 
     /// The model's thinking, folded away unless asked for.
     private var thoughts: some View {
@@ -1242,7 +1277,9 @@ struct RenderedReply {
 
     private static var kept: [UUID: (key: [Int], reply: RenderedReply)] = [:]
 
-    static func of(_ message: Message, searched: Bool) -> RenderedReply {
+    static func of(_ message: Message) -> RenderedReply {
+        // A reply that looked things up on the web, whose links are citations.
+        let searched = !message.sources.isEmpty || message.steps.contains { $0.kind != .tool }
         // The text only grows while it streams, so its length tells versions apart.
         let key = [message.text.utf8.count, message.sources.count, searched ? 1 : 0]
         if let kept = kept[message.id], kept.key == key { return kept.reply }
