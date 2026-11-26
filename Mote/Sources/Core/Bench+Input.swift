@@ -579,6 +579,9 @@ enum BenchInput {
             steps.append((-way * speed, 0, 2))
         }
         steps.append((0, 0, 3))
+        // To the view under its middle, found once as AppKit does for a
+        // gesture: what's drawn over the list (its text) has to pass it on.
+        let under = view.window?.contentView?.superview?.hitTest(view.convert(NSPoint(x: view.bounds.midX, y: view.bounds.midY), to: nil)) ?? view
         for (n, step) in steps.enumerated() {
             DispatchQueue.main.asyncAfter(deadline: .now() + Double(n) / 120) {
                 guard
@@ -596,7 +599,7 @@ enum BenchInput {
                         let point = window.convertPoint(toScreen: view.convert(middle, to: nil))
                         return CGPoint(x: point.x, y: (window.screen?.frame.maxY ?? 0) - point.y)
                     } ?? .zero
-                NSEvent(cgEvent: event).map(view.scrollWheel)
+                NSEvent(cgEvent: event).map(under.scrollWheel)
             }
         }
     }

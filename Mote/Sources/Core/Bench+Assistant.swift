@@ -137,6 +137,15 @@ extension Bench {
                 browser.field.clear()
             }
             call.answer(describe(browser))
+        case "open":
+            // A kept chat opened as the list of chats does, timed: the work on
+            // the main thread, and until the window has drawn after it.
+            guard call.testRun("it would open a chat in your browser") else { return }
+            guard let id = request.string("text").flatMap(UUID.init(uuidString:)) else { return call.fail("chat open needs a chat's id") }
+            let start = CACurrentMediaTime()
+            browser.open(chat: id)
+            let opened = (CACurrentMediaTime() - start) * 1000
+            BenchDrawn.next(in: browser.window) { call.answer(["openMs": opened, "drawnMs": (CACurrentMediaTime() - start) * 1000]) }
         case "providers":
             Task {
                 let assistant = Assistant.shared
@@ -249,5 +258,29 @@ private struct DemoReply: ChatService {
             if section % 4 == 0 { text += "```swift\nlet value = compute(section: \(section))\nprint(value)\n```\n\n" }
         }
         return text
+    }
+}
+
+/// Calls back on the first frame drawn after now: the main thread's work
+/// done and the window shown again.
+@MainActor
+private final class BenchDrawn: NSObject {
+    private var link: CADisplayLink?
+    private var done: (() -> Void)?
+
+    static func next(in window: NSWindow?, _ done: @escaping () -> Void) {
+        guard let view = window?.contentView else { return done() }
+        let drawn = BenchDrawn()
+        drawn.done = done
+        let link = view.displayLink(target: drawn, selector: #selector(fire))
+        drawn.link = link
+        link.add(to: .main, forMode: .common)
+    }
+
+    @objc private func fire() {
+        link?.invalidate()
+        link = nil
+        done?()
+        done = nil
     }
 }
