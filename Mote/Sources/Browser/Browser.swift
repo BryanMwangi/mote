@@ -1509,10 +1509,13 @@ final class Browser: NSObject, ObservableObject {
     func prepare(_ tab: Tab) {
         tab.delegate = self
         tab.owner = self
-        tab.$pageColor.dropFirst().sink { [weak self, weak tab] _ in
+        // Passed on only when they change: each is set at every step of a load
+        // (the failure to nil again and again), and every time the whole
+        // window drew again, its tab list for every space with it.
+        tab.$pageColor.dropFirst().removeDuplicates().sink { [weak self, weak tab] _ in
             if self?.activeID == tab?.id { self?.objectWillChange.send() }
         }.store(in: &bag)
-        tab.$failure.dropFirst().sink { [weak self, weak tab] _ in
+        tab.$failure.dropFirst().removeDuplicates().sink { [weak self, weak tab] _ in
             if self?.activeID == tab?.id { self?.objectWillChange.send() }
         }.store(in: &bag)
         tab.$address.dropFirst().sink { [weak self] _ in self?.saveSoon() }.store(in: &bag)
