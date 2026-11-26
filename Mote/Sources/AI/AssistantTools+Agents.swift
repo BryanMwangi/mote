@@ -276,7 +276,7 @@ final class AgentRuns {
             let reports = untold.map { "Agent \($0.id), on “\($0.task.prefix(80))”:\n\($0.report?.text ?? "")" }
             Assistant.shared.ask(
                 "Your sub-agents finished after your last reply. Their reports:\n\n" + reports.joined(separator: "\n\n")
-                    + "\n\nCarry on with the task from here.", in: conversation)
+                    + "\n\nCarry on with the task from here.", in: conversation, quiet: true)
         }
     }
 }

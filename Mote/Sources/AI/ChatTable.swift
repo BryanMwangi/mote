@@ -213,12 +213,18 @@ struct ChatTable: NSViewRepresentable {
         /// place, and the status line last.
         static func keys(_ messages: [Message], from: Int, summarised: Int, summary: String?) -> [Key] {
             var keys: [Key] = from > 0 ? [.older] : []
-            for index in messages.indices where index >= from {
-                if summary != nil, summarised > 0, index == summarised { keys.append(.summary(messages[index].id)) }
+            // Where the summary ends, before the first message shown from there.
+            var divider = summary != nil && summarised > 0 && summarised >= from
+            // Mote's own messages go to the model, not on screen.
+            for index in messages.indices where index >= from && messages[index].mote != true {
+                if divider, index >= summarised {
+                    keys.append(.summary(messages[index].id))
+                    divider = false
+                }
                 keys.append(.message(messages[index].id))
             }
             keys.append(.status)
-            if summary != nil, summarised > 0, summarised == messages.count { keys.append(.summary(nil)) }
+            if divider { keys.append(.summary(nil)) }
             return keys
         }
 

@@ -115,7 +115,7 @@ final class PageWatch {
             for _ in 0..<1800 {
                 guard let chat = Assistant.shared.conversation(watch.chat) else { return }
                 if !chat.busy {
-                    Assistant.shared.ask(news, in: chat, carrying: true)
+                    Assistant.shared.ask(news, in: chat, carrying: true, quiet: true)
                     return
                 }
                 try? await Task.sleep(for: .seconds(1))

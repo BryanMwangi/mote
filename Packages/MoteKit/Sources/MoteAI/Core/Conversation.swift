@@ -145,6 +145,8 @@ public final class Conversation: Identifiable {
         public var text: String
         /// Files attached with it.
         public var files: [Attachment]?
+        /// Mote's own, sent quietly.
+        public var quiet = false
         /// Handed to the reply under way, at its next step, rather than
         /// waiting for it to end.
         public var steering = false
@@ -343,21 +345,22 @@ public final class Conversation: Identifiable {
     public func send(_ text: String, via route: Route) { send(text, routing: { route }) }
 
     /// Sends `text`, or, while a reply is under way, queues it to go after;
-    /// while a question waits, it's the answer.
-    public func send(_ text: String, routing: @escaping Routing) {
+    /// while a question waits, it's the answer. `quiet`: Mote's own, not the
+    /// person's (see `Message.mote`): never an answer, never their files.
+    public func send(_ text: String, routing: @escaping Routing, quiet: Bool = false) {
         let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty || !attached.isEmpty else { return }
+        guard !text.isEmpty || (!quiet && !attached.isEmpty) else { return }
         self.routing = routing
-        if question != nil, attached.isEmpty { return answer(text) }
-        let files = attached.isEmpty ? nil : attached
-        attached = []
+        if !quiet, question != nil, attached.isEmpty { return answer(text) }
+        let files = quiet || attached.isEmpty ? nil : attached
+        if !quiet { attached = [] }
         if busy {
-            queued.append(Queued(id: UUID(), text: text, files: files))
+            queued.append(Queued(id: UUID(), text: text, files: files, quiet: quiet))
             return
         }
-        archived = false
-        messages.append(Message(role: .user, text: text, files: files))
-        if messages.count == 1 { title = SavedChat.title(of: messages) }
+        if !quiet { archived = false }
+        messages.append(Message(role: .user, text: text, files: files, mote: quiet ? true : nil))
+        if !quiet, !messages.dropLast().contains(where: { $0.role == .user && $0.mote != true }) { title = SavedChat.title(of: messages) }
         ask(routing: routing)
         touch()
     }
@@ -412,8 +415,8 @@ public final class Conversation: Identifiable {
         guard let index = queued.firstIndex(where: { $0.id == id }), let routing else { return }
         let next = queued.remove(at: index)
         stop()
-        attached = next.files ?? []
-        send(next.text, routing: routing)
+        if !next.quiet { attached = next.files ?? [] }
+        send(next.text, routing: routing, quiet: next.quiet)
     }
 
     /// Hands a queued message to the reply under way at its next step.
@@ -519,7 +522,7 @@ public final class Conversation: Identifiable {
         activities = [step]
         let earlier = summary.map { "Summary of the chat before this:\n\($0)\n\n" } ?? ""
         let transcript = messages[summarised..<through].map { message in
-            (message.role == .user ? "Person: " : "Assistant: ") + message.text + Self.stepsLine(message.steps)
+            (message.mote == true ? "Mote: " : message.role == .user ? "Person: " : "Assistant: ") + message.text + Self.stepsLine(message.steps)
         }.joined(separator: "\n\n")
         let request = ChatRequest(
             model: route.model,
@@ -678,8 +681,11 @@ public final class Conversation: Identifiable {
                 sent[index].text += "\n\n" + Instructions.attached(sent[index].files ?? [], in: folder)
             }
         }
+        // Mote's own messages say so, wherever they are in what's sent.
+        for index in sent.indices where sent[index].mote == true { sent[index].text = Instructions.fromMote + sent[index].text }
         if !told.isEmpty, let question = sent.lastIndex(where: { $0.role == .user }) {
-            sent[question].text = (told + [Instructions.question + sent[question].text]).joined(separator: "\n\n")
+            let lead = sent[question].mote == true ? "" : Instructions.question
+            sent[question].text = (told + [lead + sent[question].text]).joined(separator: "\n\n")
         }
         // An agent that carries a session on may not name it again.
         opened = carried?.id
@@ -784,8 +790,8 @@ public final class Conversation: Identifiable {
             // The next message waiting goes now.
             if !queued.isEmpty, let routing {
                 let next = queued.removeFirst()
-                attached = next.files ?? []
-                send(next.text, routing: routing)
+                if !next.quiet { attached = next.files ?? [] }
+                send(next.text, routing: routing, quiet: next.quiet)
             }
             return
         }

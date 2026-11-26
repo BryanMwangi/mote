@@ -25,10 +25,13 @@ public struct Message: Identifiable, Equatable, Codable, Sendable {
     public var steps: [Activity]
     /// Files the person attached, kept with the chat; nil when none.
     public var files: [Attachment]?
+    /// Mote wrote it, not the person (a sub-agent's report, a watch firing,
+    /// the nudge to carry on): sent to the model, never shown.
+    public var mote: Bool?
 
     public init(
         id: UUID = UUID(), role: Role, text: String, reasoning: String = "", author: String? = nil, interrupted: Bool = false,
-        sources: [Source] = [], steps: [Activity] = [], files: [Attachment]? = nil
+        sources: [Source] = [], steps: [Activity] = [], files: [Attachment]? = nil, mote: Bool? = nil
     ) {
         self.id = id
         self.role = role
@@ -39,6 +42,7 @@ public struct Message: Identifiable, Equatable, Codable, Sendable {
         self.sources = sources
         self.steps = steps
         self.files = files
+        self.mote = mote
     }
 }
 

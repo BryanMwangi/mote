@@ -410,6 +410,27 @@ struct ConversationTests {
         #expect(FileManager.default.contents(atPath: folder.appendingPathComponent(picture).path) == Data([1, 2, 3]))
     }
 
+    @Test("Mote's own messages reach the model, marked as Mote's, never as the person's: not the title, not their files, not an answer")
+    func quiet() async throws {
+        let service = ScriptedService()
+        service.events = [.session("s-1"), .text("Done.")]
+        let conversation = Conversation()
+        conversation.send("Book the train", via: route(service))
+        await settle(conversation)
+        conversation.attached = [Attachment(file: "cv.pdf", name: "cv.pdf", bytes: 1)]
+        conversation.send("Your sub-agents finished. Their reports: …", routing: { self.route(service) }, quiet: true)
+        await settle(conversation)
+        let told = said(service.requests.last)
+        #expect(told.contains(Instructions.fromMote + "Your sub-agents finished"))
+        #expect(!told.contains(Instructions.question + "Your sub-agents"))
+        let last = try #require(conversation.messages.last(where: { $0.role == .user }))
+        #expect(last.mote == true && last.files == nil)
+        // The person's files wait for their own message; the title stays theirs.
+        #expect(conversation.attached.map(\.name) == ["cv.pdf"])
+        #expect(conversation.title == "Book the train")
+        #expect(Conversation(saved: conversation.saved).messages.last(where: { $0.role == .user })?.mote == true)
+    }
+
     @Test("Escape on a question answers it as closed, and the reply goes on; Escape again stops it")
     func dismissed() async throws {
         let service = ScriptedService()

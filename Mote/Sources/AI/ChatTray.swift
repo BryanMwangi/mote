@@ -20,7 +20,7 @@ struct ChatTray: View {
             if conversation.tasks.contains(where: { $0.state == .open }) {
                 TaskStrip(tasks: conversation.tasks)
             }
-            ForEach(conversation.queued) { queued in
+            ForEach(conversation.queued.filter { !$0.quiet }) { queued in
                 QueuedRow(
                     queued: queued, busy: conversation.busy,
                     steer: { conversation.steer(queued.id) },

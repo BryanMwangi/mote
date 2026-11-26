@@ -370,7 +370,9 @@ final class Assistant {
     /// Sends `text` in `conversation` to the chosen provider.
     /// `carrying`: Mote's own nudge to go on with the task list, not the
     /// person's words, which start the count of nudges again.
-    func ask(_ text: String, in conversation: Conversation, carrying: Bool = false) {
+    /// `quiet`: Mote's own message (a report, a watch, the nudge), sent to
+    /// the model and never shown (`Message.mote`).
+    func ask(_ text: String, in conversation: Conversation, carrying: Bool = false, quiet: Bool = false) {
         answering[conversation.id] = WeakChat(conversation)
         if !carrying { carried[conversation.id] = nil }
         conversation.finished = { [weak self] chat in
@@ -380,7 +382,7 @@ final class Assistant {
             let name = self?.provider.name ?? "The assistant"
             Task { await WebNotifications.shared.tell(chat: chat.id, "Plan ready for review", "\(name) has a plan for “\(chat.title)”") }
         }
-        conversation.send(text, routing: { [self] in try await route(chat: conversation.id) })
+        conversation.send(text, routing: { [self] in try await route(chat: conversation.id) }, quiet: quiet)
     }
 
     // MARK: - Carrying on
@@ -410,7 +412,7 @@ final class Assistant {
             self.ask(
                 "Carry on with your task list: \(open) item\(open == 1 ? "" : "s") still open. "
                     + "(Mote carries on by itself in Auto, \(count) of \(Self.mostCarries) in a row; mark items as you go.)",
-                in: chat, carrying: true)
+                in: chat, carrying: true, quiet: true)
         }
     }
 

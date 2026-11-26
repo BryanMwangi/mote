@@ -50,7 +50,7 @@ public struct SavedChat: Codable, Equatable, Sendable {
 
     /// The first question, on one line and cut short.
     public static func title(of messages: [Message]) -> String {
-        guard let first = messages.first(where: { $0.role == .user }) else { return "New chat" }
+        guard let first = messages.first(where: { $0.role == .user && $0.mote != true }) else { return "New chat" }
         let line = first.text.split(whereSeparator: \.isWhitespace).joined(separator: " ")
         return line.count > 60 ? String(line.prefix(59)).trimmingCharacters(in: .whitespaces) + "…" : line
     }

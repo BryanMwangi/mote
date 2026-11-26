@@ -32,6 +32,9 @@ public enum Instructions {
     /// instructions without disturbing them.
     /// Before the person's own words, when Mote's notes come first.
     public static let question = "The person's message:\n"
+    /// Before what Mote itself says (a report, a watch, a nudge): the person
+    /// doesn't see it, so it's not theirs to have said.
+    public static let fromMote = "From Mote, not the person (they don't see this message):\n"
 
     /// Said once the page shared before no longer is.
     public static let unshared = "The person no longer shares the page from before."
