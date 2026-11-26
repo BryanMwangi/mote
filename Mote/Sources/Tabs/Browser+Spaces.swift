@@ -23,15 +23,19 @@ extension Browser {
     /// off for a swipe, whose pages are already where the fingers left them.
     func switchSpace(to id: UUID, gliding: Bool = true) {
         guard usesSpaces else { return }
+        // In the sidebar the pages move first and the space is taken once
+        // they stand on it (SpaceSwipe.go).
+        if gliding, prefs.sidebar, !makingSpace, let to = spaces.firstIndex(where: { $0.id == id }) {
+            return SpaceSwipe.shared.go(self, to: to)
+        }
         // From the new-space card, when it's open: a switch closes it.
         let card = makingSpace && gliding
-        let left = spaceID, to = spaces.firstIndex { $0.id == id }
+        let to = spaces.firstIndex { $0.id == id }
         let from = card ? spaces.count : spaces.firstIndex { $0.id == spaceID }
         let glides = gliding && from != to && spaceSwipe == 0 && from != nil && to != nil
         var still = Transaction()
         still.disablesAnimations = true
         withTransaction(still) {
-            if glides, !card { swipeOffset.shown.leaving = left }
             if card { makingSpace = false }
             enter(id)
         }
@@ -51,6 +55,10 @@ extension Browser {
         guard spaces.count > 1, let here = spaces.firstIndex(where: { $0.id == spaceID }) else { return }
         switchSpace(index: (here + by + spaces.count) % spaces.count)
     }
+
+    /// Takes space `id` at once, with nothing moving: the pages already
+    /// stand on it (SpaceSwipe.go).
+    func takeSpace(_ id: UUID) { enter(id) }
 
     /// Parks this space's tabs as they are (their media keeps playing) and
     /// shows the other's.

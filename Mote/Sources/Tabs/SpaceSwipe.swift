@@ -144,6 +144,7 @@ final class SpaceSwipe {
         let page = browser.prefs.sidebar ? browser.prefs.sideWidth : ChromeLayout.strip
         let forward = target > here, card = target == browser.spaces.count
         pager.switched(at: Date())
+        if browser.prefs.sidebar { return go(browser, to: target) }
         // The space switches now, as ⌃1–9 does; the sidebar's pages are put
         // back where they were in the same update, then ease the rest of the way.
         // Only what changes is set: each change in a transaction draws the
@@ -159,6 +160,62 @@ final class SpaceSwipe {
             browser.spaceSwipe += (forward ? 1 : -1) * page
         }
         browser.swipeOffset.ease()
+    }
+}
+
+extension SpaceSwipe {
+    /// To page `target` in the sidebar: a space, or `spaces.count`, the
+    /// new-space card. The pages move first, by the render server, and only
+    /// once they stand on it is the space taken, out of sight. Taken first,
+    /// its rows were made again before the first frame of the slide, and
+    /// waking its tab held the pages still, a keyboard switch for half a
+    /// second and a swipe for a second. Another switch on the way carries the
+    /// pages on from where they are; only the page they come to rest on is
+    /// taken.
+    func go(_ browser: Browser, to target: Int) {
+        let swipe = browser.swipeOffset
+        let base = swipe.base
+        // Where it sits from the page the track stands on: a neighbour in its
+        // own place; one from further along beside the base, or one past the
+        // page already coming, the way the pages are going.
+        let slot: Int
+        if target == base {
+            slot = 0
+        } else if let heading = swipe.heading, heading.target != base {
+            let step = target > heading.target ? 1 : -1
+            let next = target == heading.target ? heading.slot : heading.slot + step
+            slot = target > base ? max(1, next) : min(-1, next)
+        } else {
+            slot = abs(target - base) == 1 ? target - base : (target > base ? 1 : -1)
+        }
+        // Chained on, those already on their way keep their places.
+        var coming = swipe.heading != nil ? swipe.shown.coming : [:]
+        if slot != 0, browser.spaces.indices.contains(target), abs(target - base) != 1 || slot != target - base {
+            coming[browser.spaces[target].id] = slot
+        }
+        var instant = Transaction()
+        instant.disablesAnimations = true
+        withTransaction(instant) {
+            if swipe.shown.coming != coming { swipe.shown.coming = coming }
+        }
+        swipe.heading = (target, slot)
+        swipe.ease(to: -CGFloat(slot) * browser.prefs.sideWidth) { [weak browser] in
+            guard let browser else { return }
+            let card = target == browser.spaces.count
+            var instant = Transaction()
+            instant.disablesAnimations = true
+            withTransaction(instant) {
+                if browser.makingSpace != card { browser.makingSpace = card }
+                if card { browser.spaceStep = slot > 0 ? 1 : -1 }
+                if !card, target != base { browser.takeSpace(browser.spaces[target].id) }
+                swipe.shown.coming = [:]
+                // The track measured from the page it stands on: the same place.
+                swipe.target = target
+                swipe.value = 0
+            }
+        }
+        // To the render server now, before anything holds the main thread.
+        CATransaction.flush()
     }
 }
 
@@ -314,11 +371,24 @@ final class SwipeOffset: ObservableObject {
     /// the space on its other side until the redraw caught up.
     var target: Int?
 
+    /// Run once a settle onto another page lands (see `SpaceSwipe.go`);
+    /// until then the track keeps its place, whatever else is drawn.
+    fileprivate(set) var landing: (() -> Void)?
+    /// The page the track stands on: offsets are measured from it.
+    fileprivate(set) var base = 0
+    /// Where a settle under way is going, and its slot from `base`.
+    fileprivate(set) var heading: (target: Int, slot: Int)?
+
     /// Back to rest, the whole space at once: a
     /// spring without bounce over a quarter second.
-    func ease() {
+    func ease() { ease(to: 0) }
+
+    /// To `x` by the same spring, then `landed`.
+    func ease(to x: CGFloat, then landed: (() -> Void)? = nil) {
+        landing = landed
+        if landed == nil { heading = nil }
         easing = true
-        withAnimation(.spring(duration: 0.25, bounce: 0)) { value = 0 }
+        withAnimation(.spring(duration: 0.25, bounce: 0)) { value = x }
         easing = false
     }
 }
@@ -327,9 +397,10 @@ final class SwipeOffset: ObservableObject {
 @MainActor
 final class SwipeShown: ObservableObject {
     @Published var swiping = false
-    /// The space a switch is leaving, shown beside the one coming in however
-    /// far apart they are; during a swipe, none: the neighbours show.
-    @Published var leaving: UUID?
+    /// Spaces on their way in from further along, by their slot beside the
+    /// page the pages stand on (see `SpaceSwipe.go`); the neighbours show in
+    /// their own places otherwise.
+    @Published var coming: [UUID: Int] = [:]
 }
 
 /// The sidebar's spaces' pages, moved by a layer transform during a swipe, as
@@ -347,10 +418,11 @@ struct SwipeTrack: FillsRoom {
 
     func updateNSView(_ holder: Holder, context: Context) {
         holder.host.rootView = content
-        holder.place(here: here, count: count)
+        // A switch made while the pages settle onto it: placed once they land.
+        if swipe.landing == nil { holder.place(here: here, count: count) }
     }
 
-    final class Holder: NSView {
+    final class Holder: NSView, CAAnimationDelegate {
         let host: NSHostingView<AnyView>
         private let swipe: SwipeOffset
         private var watch: AnyCancellable?
@@ -372,6 +444,13 @@ struct SwipeTrack: FillsRoom {
 
         override var isFlipped: Bool { true }
 
+        /// A settle stopped: landed, or taken over by another (not finished),
+        /// which lands in its place.
+        nonisolated func animationDidStop(_ animation: CAAnimation, finished: Bool) {
+            guard finished else { return }
+            MainActor.assumeIsolated { landed() }
+        }
+
         private var here = 0
         private var count = 1
 
@@ -385,6 +464,7 @@ struct SwipeTrack: FillsRoom {
         func place(here: Int, count: Int) {
             self.here = here
             self.count = count
+            swipe.base = here
             let frame = NSRect(x: -CGFloat(here) * bounds.width, y: 0, width: bounds.width * CGFloat(max(count, 1)), height: bounds.height)
             guard host.frame != frame else { return }
             CATransaction.begin()
@@ -453,7 +533,7 @@ struct SwipeTrack: FillsRoom {
                 animation.damping = 4 * .pi / 0.25
                 animation.duration = animation.settlingDuration
                 animation.fromValue = was
-                CATransaction.setCompletionBlock { [weak self] in MainActor.assumeIsolated { self?.rested() } }
+                animation.delegate = self
                 layer.add(animation, forKey: "swipe")
             } else if x == 0 {
                 DispatchQueue.main.async { [weak self] in self?.rested() }
@@ -461,11 +541,22 @@ struct SwipeTrack: FillsRoom {
             CATransaction.commit()
         }
 
+        /// A settle done: onto another space, the track measured from it now;
+        /// else home and still.
+        private func landed() {
+            if let landing = swipe.landing {
+                swipe.landing = nil
+                swipe.heading = nil
+                return landing()
+            }
+            rested()
+        }
+
         /// Home and still: the neighbours hide again.
         private func rested() {
             guard swipe.value == 0, host.layer?.animation(forKey: "swipe") == nil, swipe.shown.swiping else { return }
             swipe.shown.swiping = false
-            swipe.shown.leaving = nil
+            if !swipe.shown.coming.isEmpty { swipe.shown.coming = [:] }
         }
     }
 }

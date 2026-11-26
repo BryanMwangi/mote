@@ -201,16 +201,17 @@ private struct SpacePages: View {
                     let live = index == here && !browser.makingSpace
                     // Its place from the page in front: the space a switch is
                     // leaving sits right beside it, as the one sliding out.
-                    let leaving = shown.leaving.map { $0 == space.id }
+                    let coming = shown.coming[space.id]
                     // Each page keeps its place along the track, which moves
                     // whole (SwipeTrack): moved one by one, every row of every
                     // page was placed again on each switch. Only a space
-                    // left from afar comes to sit beside this one.
-                    let place = leaving == true ? here + (index > here ? 1 : -1) : index
+                    // coming from afar sits beside this one (SpaceSwipe.go).
+                    let place = coming.map { here + $0 } ?? index
                     let slot = place - here
                     // The pages either side are drawn all along, out of sight past
-                    // the sidebar's edge, so a swipe starting draws nothing new.
-                    let seen = live || (shown.leaving == nil ? abs(slot) == 1 : leaving == true)
+                    // the sidebar's edge, so a swipe starting draws nothing new;
+                    // one coming from afar takes its neighbour's place.
+                    let seen = live || coming != nil || (abs(slot) == 1 && !shown.coming.values.contains(slot))
                     SpacePage(
                         browser: browser, prefs: prefs, space: space, live: live, room: room.size.height, drag: $drag, keptDrag: $keptDrag
                     )
