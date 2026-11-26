@@ -68,18 +68,19 @@ struct Quiet: View {
 /// A spinning arc while something loads.
 struct Ring: View {
     var size: CGFloat = 10
-    @State private var turned = false
 
     var body: some View {
-        Circle()
-            .trim(from: 0, to: 0.78)
-            .stroke(Palette.muted.opacity(0.7), style: StrokeStyle(lineWidth: 1.4, lineCap: .round))
-            .frame(width: size, height: size)
-            .rotationEffect(.degrees(turned ? 360 : 0))
-            // Set here rather than with withAnimation, so a parent that turns
-            // animations off for its content (the page area does) can't stop it.
-            .animation(.linear(duration: 0.85).repeatForever(autoreverses: false), value: turned)
-            .onAppear { turned = true }
+        // Turned by the clock, not a repeating animation: one started as its
+        // row was still settling (a chat's rows in their table) took that
+        // movement up too, and drifted off its line. No parent's animations,
+        // on or off, reach it either.
+        TimelineView(.animation) { time in
+            Circle()
+                .trim(from: 0, to: 0.78)
+                .stroke(Palette.muted.opacity(0.7), style: StrokeStyle(lineWidth: 1.4, lineCap: .round))
+                .frame(width: size, height: size)
+                .rotationEffect(.degrees(time.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 0.85) / 0.85 * 360))
+        }
     }
 }
 
