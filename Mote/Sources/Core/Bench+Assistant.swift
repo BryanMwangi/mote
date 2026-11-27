@@ -39,6 +39,14 @@ extension Bench {
             }
             Assistant.shared.ask(text, in: chat)
             call.answer(describe(browser))
+        case "archive":
+            // A kept chat archived or taken out, as its row's button does (test runs).
+            guard call.testRun("it would change your chats"), let id = request.string("text").flatMap(UUID.init(uuidString:)) else {
+                return call.fail("chat archive needs a chat id")
+            }
+            let on = request.string("mode") != "off"
+            Assistant.shared.archive(id, on)
+            call.answer(["archived": Assistant.shared.chats.entries.first { $0.id == id }?.archived == true])
         case "attach":
             // Files for the next message of the chat in front, as the paperclip attaches them.
             guard call.testRun("it would attach files in your browser") else { return }

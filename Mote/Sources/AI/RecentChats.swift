@@ -210,8 +210,11 @@ struct ChatRow: View {
                         .help("Delete this chat")
                         .accessibilityLabel("Delete")
                 }
+                // Always taking clicks, and keeping the row lit: the row's own
+                // hover can drop as the pointer crosses onto them, which hid
+                // them under the pointer. Only a pointer on the row reaches them.
+                .onHover { if $0 { hovering = true } }
                 .opacity(hovering ? 1 : 0)
-                .allowsHitTesting(hovering)
             }
         }
         .padding(.horizontal, 10)

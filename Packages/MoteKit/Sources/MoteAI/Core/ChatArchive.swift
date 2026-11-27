@@ -133,10 +133,18 @@ public final class ChatArchive {
     }
 
     /// Puts a chat away, or back among the rest.
+    /// The list changes at once; the chat's file after any write still
+    /// queued for it, so a quick archive and back never reads a stale copy.
     public func archive(_ id: UUID, _ on: Bool = true) {
-        guard var chat = load(id) else { return }
-        chat.archived = on ? true : nil
-        save(chat)
+        guard let at = entries.firstIndex(where: { $0.id == id }) else { return }
+        entries[at].archived = on ? true : nil
+        let (file, index, listed) = (file(id), index, entries)
+        writer.async {
+            guard let data = try? Data(contentsOf: file), var chat = try? JSONDecoder().decode(SavedChat.self, from: data) else { return }
+            chat.archived = on ? true : nil
+            Self.write(chat, to: file)
+            Self.write(listed, to: index)
+        }
     }
 
     /// Deletes a chat; its files wait until the next launch in case it's

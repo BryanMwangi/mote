@@ -262,6 +262,8 @@ def read_chat(args):
         return {"action": action, "mode": rest[0]}
     if action == "lead" and len(rest) == 1 and rest[0] in ("search", "ask"):
         return {"action": action, "mode": rest[0]}
+    if action == "archive" and 1 <= len(rest) <= 2:
+        return {"action": action, "text": rest[0], "mode": rest[1] if len(rest) == 2 else "on"}
     if action == "attach" and rest:
         return {"action": action, "text": "\n".join(os.path.abspath(path) for path in rest)}
     if action == "open" and len(rest) == 1:
