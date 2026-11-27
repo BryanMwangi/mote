@@ -112,6 +112,9 @@ public final class Conversation: Identifiable {
     @ObservationIgnored public var contextWindow: Int?
     /// A size the person set to summarise at (Settings › AI); nil for Auto.
     @ObservationIgnored public var summariseAt: Int?
+    /// Notes for the model with the next question (the chat's mode changed,
+    /// say), kept until a reply gets through.
+    @ObservationIgnored public var tellNext: [String] = []
 
     /// How far a chat grows before it's summarised: 90% of the model's
     /// window, or the size the person set if that's less; without a known
@@ -677,7 +680,7 @@ public final class Conversation: Identifiable {
         // What changes from turn to turn goes with the question, never in the
         // standing instructions, which stay the same and so stay cached.
         // The note stays until a reply gets through, so a try made again tells it too.
-        var told = cutShort.map { [$0] } ?? []
+        var told = (cutShort.map { [$0] } ?? []) + tellNext
         // The task list when it changed, or when the session starts afresh (after summarising, say).
         if !tasks.isEmpty, carried == nil || tasksTold != tasks {
             told.append(TaskList.told(tasks))
@@ -798,6 +801,7 @@ public final class Conversation: Identifiable {
         guard let failure, !(failure is CancellationError) else {
             if let provider, let opened { sessions[provider] = (opened, messages.count, searched, openedShared) }
             cutShort = nil
+            tellNext = []
             finished?(self)
             phase = .idle
             touch()

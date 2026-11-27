@@ -355,6 +355,29 @@ final class Assistant {
         for their answer.
         """
 
+    /// The mode each chat's agent was last told it's in.
+    private var toldModes: [UUID: ChatMode] = [:]
+
+    /// The chat's mode changed since its agent last heard (or Mote opened
+    /// since): told with the next question. An agent told its instructions
+    /// only as its session began (opencode) would otherwise go on by the old.
+    private func tellMode(_ conversation: Conversation) {
+        let mode = ChatModes.shared.mode(of: conversation.id)
+        let before = toldModes[conversation.id]
+        toldModes[conversation.id] = mode
+        let heardBefore = conversation.messages.contains { $0.role == .assistant }
+        guard before != mode, before != nil || heardBefore else { return }
+        let note: String =
+            switch mode {
+            case .plan: Self.planning
+            case .auto:
+                "The person has this chat in Auto mode now, not Plan: do what they ask without waiting for a go-ahead. Mote still asks them itself before anything that can't be undone."
+            case .asks:
+                "The person has this chat in Asks mode now, not Plan: do what they ask. Mote asks them itself before acting on a site the first time."
+            }
+        conversation.tellNext.append(note)
+    }
+
     /// Told to the model while the chat is in Plan.
     static let planning = """
         The person has this chat in Plan mode: don't act yet. Look around as much as you need with the tools that only \
@@ -412,6 +435,7 @@ final class Assistant {
         // The person's size to summarise at, if they set one (Settings › AI).
         let set = Storage.settings.integer(forKey: "ai.summariseAt")
         conversation.summariseAt = set > 0 ? set : nil
+        tellMode(conversation)
         conversation.send(text, routing: { [self] in try await route(chat: conversation.id) }, quiet: quiet)
     }
 
