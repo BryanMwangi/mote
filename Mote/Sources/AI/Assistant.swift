@@ -308,6 +308,8 @@ final class Assistant {
         let mode = mode(with: provider)
         let search = mode != .chat
         var service = try connector.service(for: provider, setup: setup(for: provider), key: secrets.key(for: provider.id), search: search)
+        // An agent on the Mac with Mote's tools: told its own way of asking doesn't reach the person.
+        var overMote = false
         // Research runs many replies of the provider's: a plan, researchers
         // that search, a writer that doesn't. Only researchers get the search method.
         if mode == .research {
@@ -316,6 +318,7 @@ final class Assistant {
             // Mote's own tools: the model asks, Mote does it, the model goes on.
             // An agent on the Mac runs them itself, from Mote over MCP.
             let overMCP = provider.agent != nil
+            overMote = overMCP && chat != nil
             let server = overMCP ? await MoteMCP.shared.server(for: tools) : nil
             // Sub-agents run on the same model, without the tools loop around it.
             let (base, driver) = (service, provider.name)
@@ -336,11 +339,21 @@ final class Assistant {
             provider: provider.id, model: model, author: author, service: service,
             instructions: [
                 Instructions.compose(search: mode == .search, thorough: mode == .research), Memories.shared.note,
+                overMote ? Self.askingThroughMote : nil,
                 chat.flatMap { ChatModes.shared.mode(of: $0) == .plan ? Self.planning : nil },
             ]
             .compactMap { $0 }.joined(separator: "\n\n"),
             search: search)
     }
+
+    /// Told to an agent on the Mac given Mote's tools: it runs without a
+    /// terminal, so its own ways of asking (opencode's question tool, say)
+    /// never reach the person; Mote's do, in the chat.
+    static let askingThroughMote = """
+        You run inside Mote, the person's browser, without a terminal: your own tools for asking the person something \
+        (a question tool, a prompt) don't reach them. To ask, use Mote's ask_person; it shows in their chat and waits \
+        for their answer.
+        """
 
     /// Told to the model while the chat is in Plan.
     static let planning = """
