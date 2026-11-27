@@ -222,6 +222,19 @@ final class Assistant {
 
     func model(for provider: Provider) -> String { connector.model(for: provider, setup: setup(for: provider)) }
 
+    /// Each model's context window, as its replies have said it, by provider
+    /// and model: Settings › AI's sizes to summarise at go up to 90% of it.
+    private(set) var windows: [String: Int] = Storage.settings.dictionary(forKey: "ai.windows") as? [String: Int] ?? [:]
+
+    func window(for provider: Provider) -> Int? { windows[provider.id + "/" + model(for: provider)] }
+
+    private func learn(window: Int) {
+        let key = provider.id + "/" + model(for: provider)
+        guard windows[key] != window else { return }
+        windows[key] = window
+        Storage.settings.set(windows, forKey: "ai.windows")
+    }
+
     /// The name of the model in use, as its provider lists it.
     func modelName(for provider: Provider) -> String {
         let id = model(for: provider)
@@ -376,6 +389,7 @@ final class Assistant {
         answering[conversation.id] = WeakChat(conversation)
         if !carrying { carried[conversation.id] = nil }
         conversation.finished = { [weak self] chat in
+            if let window = chat.contextWindow { self?.learn(window: window) }
             self?.carryOn(chat)
             // A plan done while the person is elsewhere: macOS tells them it's ready.
             guard ChatModes.shared.mode(of: chat.id) == .plan, !WebNotifications.sees(chat: chat.id) else { return }

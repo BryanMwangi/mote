@@ -45,18 +45,12 @@ struct AISettings: View {
                 "Show token count", "While a reply works, the tokens it has spent so far; /usage shows the chat's",
                 symbol: "number", tint: Tint.gray, keywords: ["tokens", "usage", "cost"], on: $prefs.showsTokens)
             RowRule()
+            let window = assistant.window(for: provider)
             SettingRow(
-                "Summarise long chats at", "Larger means fewer summaries, but each call late in a long chat reads more and costs more",
-                symbol: "text.append", tint: Tint.gray, keywords: ["summary", "compact", "context", "tokens"]
+                "Summarise long chats at", SummariseAt.detail(prefs.summariseAt, window: window),
+                symbol: "text.append", tint: Tint.gray, keywords: ["summary", "compact", "context", "tokens", "window"]
             ) {
-                Picker("", selection: $prefs.summariseAt) {
-                    Text("Auto (90% of the model's window)").tag(0)
-                    Text("100k tokens").tag(100_000)
-                    Text("200k tokens").tag(200_000)
-                    Text("500k tokens").tag(500_000)
-                }
-                .labelsHidden()
-                .fixedSize()
+                SummariseAt(value: $prefs.summariseAt, window: window)
             }
             RowRule()
             SettingRow(
@@ -654,5 +648,72 @@ private struct MemoryRow: View {
         .padding(.horizontal, 12).padding(.vertical, 9)
         .contentShape(Rectangle())
         .onHover { hovering = $0 }
+    }
+}
+
+/// Where long chats are summarised: Auto (90% of the model's window) at the
+/// left, then sizes up to under that, on a stepped slider with each stop
+/// named under it. A size the model can't reach goes back to Auto.
+struct SummariseAt: View {
+    @Binding var value: Int
+    /// The chosen model's window, once a reply has said it.
+    let window: Int?
+
+    /// Assumed before a reply has said the window.
+    static let assumed = 200_000
+    static let sizes = [100_000, 200_000, 300_000, 500_000, 750_000]
+
+    private var stops: [Int] {
+        let most = (window ?? Self.assumed) * 9 / 10
+        return [0] + Self.sizes.filter { $0 < most }
+    }
+
+    var body: some View {
+        let stops = stops
+        Group {
+            if stops.count < 2 {
+                Text("Auto").foregroundStyle(.secondary)
+            } else {
+                VStack(spacing: 3) {
+                    Slider(
+                        value: Binding(
+                            get: { Double(stops.firstIndex(of: value) ?? 0) },
+                            set: { value = stops[min(stops.count - 1, max(0, Int($0.rounded())))] }),
+                        in: 0...Double(stops.count - 1), step: 1)
+                    names(stops)
+                }
+                .frame(width: CGFloat(stops.count - 1) * 48 + 40)
+            }
+        }
+        // A size this model can't reach (another model's) goes back to Auto.
+        .task(id: window) { if value != 0, !stops.contains(value) { value = 0 } }
+    }
+
+    /// Each stop's name, under its place on the slider.
+    private func names(_ stops: [Int]) -> some View {
+        GeometryReader { box in
+            // The knob's centre runs from half its width in from each end.
+            let inset: CGFloat = 10, run = box.size.width - inset * 2
+            ForEach(Array(stops.enumerated()), id: \.offset) { index, stop in
+                Text(stop == 0 ? "Auto" : Self.short(stop))
+                    .font(.system(size: 10.5, weight: stop == value ? .semibold : .regular))
+                    .foregroundStyle(stop == value ? Palette.ink : Palette.muted)
+                    .fixedSize()
+                    .position(x: inset + run * CGFloat(index) / CGFloat(stops.count - 1), y: 6)
+            }
+        }
+        .frame(height: 12)
+    }
+
+    static func short(_ tokens: Int) -> String {
+        tokens >= 1_000_000 && tokens % 100_000 == 0
+            ? String(format: tokens % 1_000_000 == 0 ? "%.0fM" : "%.1fM", Double(tokens) / 1_000_000) : "\(tokens / 1000)k"
+    }
+
+    /// The row's note: what applies now.
+    static func detail(_ value: Int, window: Int?) -> String {
+        guard value == 0 else { return "At \(short(value)) tokens. Larger means fewer summaries; each call late in a long chat costs more" }
+        guard let window else { return "Auto: at 90% of the model's context window, once a reply has said it" }
+        return "Auto: at \(short(window * 9 / 10)), 90% of this model's \(short(window)) window"
     }
 }
