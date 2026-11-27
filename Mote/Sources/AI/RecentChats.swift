@@ -77,10 +77,11 @@ struct ChatsPage: View {
                         }
                     }
                 }
-                .frame(maxWidth: 640)
+                // The same centred column as the title and search over it.
+                .frame(maxWidth: 640, alignment: .leading)
                 .padding(.horizontal, inPanel ? 14 : 32)
                 .padding(.bottom, inPanel ? 18 : 40)
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .frame(maxWidth: .infinity)
             }
         }
         .background(inPanel ? .clear : Palette.ground)
