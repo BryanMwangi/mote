@@ -23,6 +23,8 @@ final class Memories: ObservableObject {
     private static let onKey = "ai.memory"
     /// The most kept; the oldest go first.
     static let most = 100
+    /// The longest one memory may be: every chat is told them all.
+    static let longest = 2000
 
     private init() {
         all = file.load() ?? []
@@ -31,7 +33,7 @@ final class Memories: ObservableObject {
 
     @discardableResult
     func remember(_ text: String) -> Memory {
-        let memory = Memory(text: String(text.prefix(500)))
+        let memory = Memory(text: String(text.prefix(Self.longest)))
         all.append(memory)
         if all.count > Self.most { all.removeFirst(all.count - Self.most) }
         file.save(all)

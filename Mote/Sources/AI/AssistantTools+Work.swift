@@ -25,7 +25,7 @@ extension AssistantTools {
             Tool(
                 name: "remember",
                 description:
-                    "Keeps something for every chat from now on: what the person asks you to remember, or a plainly lasting preference they state. Not passing details, never passwords or secrets.",
+                    "Keeps something for every chat from now on: what the person asks you to remember, or a plainly lasting preference they state. Not passing details, never passwords or secrets. Up to 2000 characters each: every chat is told them all, so keep them short, and split a long one.",
                 schema: #"{"type":"object","properties":{"text":{"type":"string"}},"required":["text"]}"#),
             Tool(name: "forget", description: "Forgets something remembered, by its id.", schema: #"{"type":"object","properties":{"id":{"type":"string"}},"required":["id"]}"#),
             Tool(name: "memories", description: "What's remembered, with ids.", schema: #"{"type":"object","properties":{}}"#),
@@ -44,6 +44,10 @@ extension AssistantTools {
             guard !outside, !browser.isPrivate else { return "Nothing is remembered from a private window." }
             guard Memories.shared.on else { return "Memory is off: the person can turn it on in Settings › AI › Memory." }
             guard let text = input["text"]?.string?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty else { return "Say what to remember." }
+            // Refused whole rather than kept cut short, unseen.
+            guard text.count <= Memories.longest else {
+                return "That's \(text.count) characters; a memory takes up to \(Memories.longest). Shorten it, or split it into a few, and remember them again."
+            }
             let memory = Memories.shared.remember(text)
             return "Remembered [\(memory.id)]: \(memory.text)" + record("Remembered “\(memory.text.prefix(60))”") {
                 _ = Memories.shared.forget(memory.id)
