@@ -609,7 +609,9 @@ private struct MemorySheet: View {
             Text("Memories").font(.title3.weight(.semibold))
             Text("What you asked the assistant to remember. Every chat is told these.")
                 .font(.callout).foregroundStyle(.secondary).multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
-            LazyVStack(spacing: 0) {
+            // Not lazy: a lazy stack keeps a row's first height, so one opened
+            // whole ran over the next. Memories are few.
+            VStack(spacing: 0) {
                 ForEach(memories.all) { memory in
                     MemoryRow(memory: memory) { _ = memories.forget(memory.id) }
                     if memory.id != memories.all.last?.id { Divider().padding(.leading, 12) }
