@@ -98,7 +98,9 @@ extension ChatsPage {
         } delete: {
             undo.delete(entry.id)
         } archive: {
-            Assistant.shared.archive(entry.id, entry.archived != true)
+            // By where it is now, not as the row was made.
+            let archived = Assistant.shared.chats.entries.first { $0.id == entry.id }?.archived == true
+            Assistant.shared.archive(entry.id, !archived)
         }
     }
 }
@@ -180,6 +182,11 @@ struct ChatRow: View {
     var archive: (() -> Void)? = nil
     @State private var hovering = false
 
+    /// Archived now, read from the archive itself (which this watches), not
+    /// the entry as the row was made: its button and menu said the old state
+    /// after the chat was taken out of the archive.
+    private var archived: Bool { (Assistant.shared.chats.entries.first { $0.id == entry.id } ?? entry).archived == true }
+
     var body: some View {
         HStack(spacing: 10) {
             Image(systemName: "bubble.left")
@@ -204,8 +211,8 @@ struct ChatRow: View {
                 }
                 HStack(spacing: 0) {
                     if let archive {
-                        icon(entry.archived == true ? "tray.and.arrow.up" : "archivebox", act: archive)
-                            .help(entry.archived == true ? "Take out of the archive" : "Archive this chat")
+                        icon(archived ? "tray.and.arrow.up" : "archivebox", act: archive)
+                            .help(archived ? "Take out of the archive" : "Archive this chat")
                     }
                     icon("trash", act: delete)
                         .help("Delete this chat")
@@ -230,7 +237,7 @@ struct ChatRow: View {
         }
         .contextMenu {
             Button("Open", action: open)
-            if let archive { Button(entry.archived == true ? "Unarchive" : "Archive", action: archive) }
+            if let archive { Button(archived ? "Unarchive" : "Archive", action: archive) }
             Divider()
             Button("Delete", role: .destructive, action: delete)
         }
