@@ -634,7 +634,16 @@ private struct MemoryRow: View {
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
             VStack(alignment: .leading, spacing: 4) {
-                Text(memory.text).lineLimit(whole ? nil : 3).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
+                // Two texts, not one whose line limit changes: selectable text
+                // kept its folded height when opened, running over the rows below.
+                Group {
+                    if whole {
+                        Text(memory.text).textSelection(.enabled)
+                    } else {
+                        Text(memory.text).lineLimit(3)
+                    }
+                }
+                .fixedSize(horizontal: false, vertical: true)
                 Text(memory.made.formatted(date: .abbreviated, time: .omitted)).font(.caption).foregroundStyle(.secondary)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
