@@ -83,10 +83,21 @@ final class AssistantTools {
     /// Sites this chat may act on without asking again.
     private static var trusted: [UUID: Set<String>] = [:]
 
-    /// The tools on now for the window in front, or nil with none on.
+    /// The tools on now, for the chat's own window (the one with a tab
+    /// showing it, in any of its spaces), so its agents and theirs stay
+    /// there whichever window is in front; the window in front for a chat
+    /// that isn't in one. Nil with none on.
     static func current(chat: UUID?, driver: String = "Assistant") -> AssistantTools? {
-        guard let browser = Browser.front ?? Windows.shared.main, browser.prefs.aiReads else { return nil }
+        guard let browser = window(of: chat) ?? Browser.front ?? Windows.shared.main, browser.prefs.aiReads else { return nil }
         return AssistantTools(browser: browser, acts: browser.prefs.aiActs, chat: chat, driver: driver, outside: false)
+    }
+
+    /// The window a chat is in: a tab there shows it, as a chat tab or in its sidebar.
+    static func window(of chat: UUID?) -> Browser? {
+        guard let chat else { return nil }
+        return Windows.shared.all.first { window in
+            (window.tabs + window.parkedTabs).contains { $0.chat?.id == chat || $0.pageChat?.id == chat }
+        }
     }
 
     /// For a coding agent from outside (Settings › General › Let coding agents use Mote).

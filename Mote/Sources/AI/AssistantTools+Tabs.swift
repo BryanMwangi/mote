@@ -25,8 +25,10 @@ extension AssistantTools {
                 schema: object(#""window":{"type":"integer"},"space":{"type":"string"}"#, [])),
             Tool(name: "select_tab", description: "Brings a tab to the front, in its window and space.", schema: object(tab, ["tab"])),
             Tool(
-                name: "open_tab", description: "Opens an address in a new tab, and gives its id. Asks the person first, per site.",
-                schema: object(#""url":{"type":"string"},"background":{"type":"boolean"}"#, ["url"])),
+                name: "open_tab",
+                description:
+                    "Opens an address in a new tab, and gives its id. Asks the person first, per site. It opens in this chat's own window; give window (its number from list_tabs) only when the person asks for another.",
+                schema: object(#""url":{"type":"string"},"background":{"type":"boolean"},"window":{"type":"string","description":"Only when the person asks: the window's number from list_tabs"}"#, ["url"])),
             Tool(
                 name: "close_tabs",
                 description:
@@ -82,8 +84,15 @@ extension AssistantTools {
             guard let url = target else { return refusal ?? "That isn't a web address, or a file:// one." }
             // A local page's folder is allowed already; a site is asked about.
             if !url.isFileURL, !(await permit(.inPage(url), "Open \(url.absoluteString) in a new tab?")) { return refused }
-            let tab = browser.open(url, foreground: input["background"]?.bool != true)
-            let undo = record("Opened \(url.absoluteString)") { [weak browser] in
+            // This chat's window, unless the person asked for another by number.
+            var into = browser
+            if let number = input["window"]?.string {
+                let windows = Windows.shared.all
+                guard let index = Int(number), windows.indices.contains(index - 1) else { return "There's no window \(number); there are \(windows.count)." }
+                into = windows[index - 1]
+            }
+            let tab = into.open(url, foreground: input["background"]?.bool != true)
+            let undo = record("Opened \(url.absoluteString)") { [weak browser = into] in
                 guard let browser, browser.tab(tab.id) != nil else { return "It was already closed." }
                 browser.closeTogether([tab])
                 return "Closed it again."
