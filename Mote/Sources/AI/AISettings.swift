@@ -552,6 +552,7 @@ private struct FoldersRow: View {
 
 private struct MemorySection: View {
     @ObservedObject private var memories = Memories.shared
+    @State private var managing = false
 
     var body: some View {
         SettingsSection(
@@ -559,26 +560,88 @@ private struct MemorySection: View {
             note: "What you ask the assistant to remember, told to every chat. Never from a private window."
         ) {
             SettingRow("Remember things", "Across chats, when you ask it to", symbol: "brain", tint: Tint.purple, on: $memories.on)
-            ForEach(memories.all) { memory in
-                RowRule()
-                HStack(spacing: 10) {
-                    Text(memory.text).font(TextStyle.body.font).lineLimit(3).textSelection(.enabled)
-                    Spacer(minLength: 8)
-                    Door(icon: "xmark", help: "Forget") { _ = memories.forget(memory.id) }
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
+            RowRule()
+            SettingRow(
+                "Memories", memories.all.isEmpty ? "None kept yet" : "\(memories.all.count) kept", symbol: "list.bullet.rectangle",
+                tint: Tint.gray, keywords: ["memory", "forget", "remember"]
+            ) {
+                Pill("Manage") { managing = true }
             }
-            if !memories.all.isEmpty {
-                RowRule()
-                SettingRow("Forget everything", "\(memories.all.count) kept", symbol: "trash", tint: Tint.gray) {
-                    Pill("Forget All") {
-                        guard Dialogs.confirm("Forget everything?", "The assistant forgets all it kept about you.", button: "Forget All")
+        }
+        .sheet(isPresented: $managing) { MemorySheet() }
+    }
+}
+
+/// Settings › AI › Memories › Manage: what the assistant keeps about the
+/// person, each to read whole or forget, and forgetting all of it.
+private struct MemorySheet: View {
+    @ObservedObject private var memories = Memories.shared
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(spacing: 0) {
+            ScrollView { content.padding(20) }
+            Divider()
+            HStack {
+                if !memories.all.isEmpty {
+                    Button("Forget Everything…", role: .destructive) {
+                        guard
+                            Dialogs.confirm(
+                                "Forget everything?", "The assistant forgets all \(memories.all.count) things it kept about you. This can't be undone.",
+                                button: "Forget Everything")
                         else { return }
                         memories.forgetAll()
                     }
                 }
+                Spacer()
+                Button("Done") { dismiss() }.keyboardShortcut(.defaultAction)
             }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 14)
         }
+        .frame(width: 520, height: 560)
+    }
+
+    private var content: some View {
+        VStack(spacing: 14) {
+            Image(systemName: "brain").font(.system(size: 24, weight: .regular)).foregroundStyle(Palette.ink.opacity(0.8))
+                .frame(width: 52, height: 52).background(Palette.wash, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            Text("Memories").font(.title3.weight(.semibold))
+            Text("What you asked the assistant to remember. Every chat is told these.")
+                .font(.callout).foregroundStyle(.secondary).multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
+            LazyVStack(spacing: 0) {
+                ForEach(memories.all) { memory in
+                    MemoryRow(memory: memory) { _ = memories.forget(memory.id) }
+                    if memory.id != memories.all.last?.id { Divider().padding(.leading, 12) }
+                }
+            }
+            .frame(maxWidth: .infinity, minHeight: 60)
+            .overlay { if memories.all.isEmpty { Text("Nothing kept.").foregroundStyle(.secondary) } }
+            .background(Palette.wash.opacity(0.6), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        }
+    }
+}
+
+/// A memory: when it was kept, three lines that open to the whole, Forget on hover.
+private struct MemoryRow: View {
+    let memory: Memories.Memory
+    let forget: () -> Void
+    @State private var whole = false
+    @State private var hovering = false
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(memory.text).lineLimit(whole ? nil : 3).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
+                Text(memory.made.formatted(date: .abbreviated, time: .omitted)).font(.caption).foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+            .onTapGesture { withAnimation(Motion.quick) { whole.toggle() } }
+            Button("Forget", action: forget).buttonStyle(.borderless).controlSize(.small).opacity(hovering ? 1 : 0)
+        }
+        .padding(.horizontal, 12).padding(.vertical, 9)
+        .contentShape(Rectangle())
+        .onHover { hovering = $0 }
     }
 }
