@@ -136,7 +136,7 @@ struct AgentCommandTests {
         let fresh = OpenCodeAgent().command(
             for: ChatRequest(model: "opencode/big-pickle", messages: [Message(role: .user, text: "Hi")], instructions: "Be brief"),
             executable: claude, workspace: workspace)
-        #expect(fresh.arguments.starts(with: ["run", "--format", "json"]))
+        #expect(fresh.arguments.starts(with: ["run", "--standalone", "--format", "json"]))
         // Read-only: opencode's plan agent neither writes nor runs commands.
         #expect(pair("--agent", in: fresh) == "plan")
         #expect(pair("--model", in: fresh) == "opencode/big-pickle")

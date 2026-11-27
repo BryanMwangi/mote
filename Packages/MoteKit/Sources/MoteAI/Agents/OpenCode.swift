@@ -11,7 +11,9 @@ public struct OpenCodeAgent: AgentWire {
     public init() {}
 
     public func command(for request: ChatRequest, executable: URL, workspace: URL) -> Command {
-        var arguments = ["run", "--format", "json", "--thinking", "--agent", "plan"]
+        // Its own server for the run: opencode 2's background service, shared
+        // by every run, never sees the configuration given here (Mote's tools).
+        var arguments = ["run", "--standalone", "--format", "json", "--thinking", "--agent", "plan"]
         if !request.model.isEmpty { arguments += ["--model", request.model] }
         let prompt: String
         if let session = request.resume {
@@ -23,14 +25,14 @@ public struct OpenCodeAgent: AgentWire {
         }
         // opencode's own web search, which it only offers when asked.
         var environment = request.search ? ["OPENCODE_ENABLE_EXA": "1"] : [:]
-        // Mote's tools, over MCP from Mote, added to its configuration.
+        // Mote's tools, over MCP from Mote, added to its configuration (opencode
+        // 2 keeps servers under mcp.servers). The token goes in the environment,
+        // not the process list.
         if let server = request.mcp {
             let remote: [String: Any] = [
-                "type": "remote", "url": server.url.absoluteString, "enabled": true,
-                "headers": ["Authorization": "Bearer {env:\(ToolServer.tokenVariable)}"],
+                "type": "remote", "url": server.url.absoluteString, "headers": ["Authorization": "Bearer \(server.token)"],
             ]
-            environment["OPENCODE_CONFIG_CONTENT"] = JSON.encode(["mcp": [ToolServer.name: remote]])
-            environment[ToolServer.tokenVariable] = server.token
+            environment["OPENCODE_CONFIG_CONTENT"] = JSON.encode(["mcp": ["servers": [ToolServer.name: remote]]])
         }
         return Command(executable: executable, arguments: arguments, environment: environment, directory: workspace, input: prompt)
     }

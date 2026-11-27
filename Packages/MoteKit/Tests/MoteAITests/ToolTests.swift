@@ -156,7 +156,7 @@ struct AgentToolTests {
             GeminiCLIAgent().command(for: Self.request(), executable: Self.program, workspace: Self.folder),
         ]
         for command in commands {
-            #expect(command.environment[ToolServer.tokenVariable] == "secret")
+            #expect(command.environment.values.contains { $0.contains("secret") })
             #expect(!command.arguments.joined(separator: " ").contains("secret"))
             let said = command.arguments.joined(separator: " ") + (command.environment["OPENCODE_CONFIG_CONTENT"] ?? "")
                 + command.files.values.joined()
@@ -168,6 +168,9 @@ struct AgentToolTests {
         #expect(commands[1].arguments.contains("mcp_servers.mote.tool_timeout_sec=3600"))
         #expect(commands[3].files.values.joined().contains("3600000"))
         #expect(commands[3].files.keys.first?.path == "/tmp/mote-agent/.gemini/settings.json")
+        // opencode 2: a run's own server, which reads the configuration given; servers under mcp.servers.
+        #expect(commands[2].arguments.contains("--standalone"))
+        #expect(commands[2].environment["OPENCODE_CONFIG_CONTENT"]?.contains(#"{"mcp":{"servers":{"mote""#) == true)
     }
 
     @Test("Without tools, no server")
